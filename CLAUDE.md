@@ -32,6 +32,10 @@ Frontend (`frontend/`):
 - `src/features/{containers,hosts,stacks}/index.ts`: empty feature entry points
 - `src/test/setup.ts`: jest-dom matchers for Vitest
 
+Repo tooling:
+- `.claude/agents/implementer-{sonnet,haiku}.md`: implementation subagents (see Model Policy)
+- `.claude/skills/text-to-task/SKILL.md`: `/text-to-task`, turns a text request into a beads epic + child tasks after a scope check
+
 ## Git Commits & Attribution
 
 - **Never add Claude/AI attribution to git history.** No `Co-Authored-By: Claude ...` trailers, no "Generated with Claude Code" lines, no session links, in commit messages or PR descriptions. Only the user (or whoever is configured as the git committer) appears as author.
