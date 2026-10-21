@@ -44,6 +44,7 @@ Once the answers are in, re-run the check, then continue.
 - Name the files or packages to touch, taken from the Code Map or the architecture tree (for new files: the intended path).
 - Have testable acceptance criteria as a bullet list.
 - Carry a model label per the Model Policy: `model:haiku` for small, well-specified, low-risk changes; `model:sonnet` for everything else and **always** for auth, permissions, remote host access, audit, subprocess execution, path handling and streaming.
+- For frontend UI children: name `apple-design` in the description and add an acceptance criterion such as "UI follows the apple-design skill: instant press feedback, reduced-motion handled, consistent typography and spacing". If the work needs a new library (e.g. `motion` for springs), say so explicitly in the child.
 - Respect the build order in HANDOFF.md and the architecture rules (e.g. a Flyway migration is its own child, ahead of the entity/repository that needs it).
 
 Wire ordering with dependencies between children (`bd dep add <later> <earlier>`) only where one truly needs the other first, so independent children stay parallelizable in `bd ready`.

@@ -12,6 +12,11 @@ Current state: project skeleton in place. Backend in `backend/` with Maven, base
 - **Do not guess open decisions** (listed in `HANDOFF.md`). Ask the user.
 - **Out of scope for now:** SaaS control plane with customer-side agent, hosting for third parties (Proxmox provisioning), AI assistant (LLM chat). Don't build them, and don't design in a way that blocks them. Concretely: all Docker access goes through the `docker/` abstraction so another connection type (agent over a tunnel) can be added later. Nothing more than that (YAGNI).
 
+## Frontend UI
+
+- **All new or changed frontend UI follows the `apple-design` skill** (`.claude/skills/apple-design/SKILL.md`). Read it before building or reviewing UI: instant press feedback, springs for anything the user can touch, restraint, typography, materials, and `prefers-reduced-motion`.
+- New UI libraries (e.g. `motion` for springs) are added only when a bead calls for them, not ad hoc.
+
 ## Code Map
 
 **Read this section first when implementing.** Use it to find the exact files to change, and only open code when the map isn't enough.
@@ -34,6 +39,7 @@ Frontend (`frontend/`):
 
 Repo tooling:
 - `.claude/agents/implementer-{sonnet,haiku}.md`: implementation subagents (see Model Policy); follow `next-task-implement`, never commit or close beads
+- `.claude/skills/apple-design/SKILL.md`: design and motion guidelines every frontend UI change follows
 - `.claude/skills/text-to-task/SKILL.md`: `/text-to-task`, turns a text request into a beads epic + child tasks after a scope check
 - `.claude/skills/next-task/SKILL.md`: `/next-task <epic-id>`, orchestrates an epic: branch → deps → plan → sub-agents → finish
 - `.claude/skills/next-task-{branch,deps,plan,finish}/SKILL.md`: orchestrator steps of `/next-task`

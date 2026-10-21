@@ -27,7 +27,7 @@ Each step lives in its own skill under `.claude/skills/`. Read that skill's `SKI
    5. report back as finished
 6. **After each sub-agent reports:** verify the result yourself before accepting it:
    - re-run `next-task-test` for its area
-   - check the diff against the acceptance criteria and the CLAUDE.md rules (architecture, security)
+   - check the diff against the acceptance criteria and the CLAUDE.md rules (architecture, security, and `apple-design` for frontend UI)
    - commit only that child's files: `git commit -m "<child title> (<child-id>)"`
 
    If it fails or is incomplete, send the agent the concrete findings once (SendMessage). If it still isn't right, stop and report. Don't start the next wave until every child in the current wave is committed.
