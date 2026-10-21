@@ -1,10 +1,10 @@
-# Shipr
+# Shipir
 
-Web platform for managing Docker containers and Compose stacks, similar to a simplified Portainer, with a UI non-experts can use (forms instead of mandatory YAML). Includes editing config files and creating/editing Compose files. Working title in the handoff: "DockerPanel". The final project name and base package are open decisions (see `HANDOFF.md`).
+Web platform for managing Docker containers and Compose stacks, similar to a simplified Portainer, with a UI non-experts can use (forms instead of mandatory YAML). Includes editing config files and creating/editing Compose files.
 
 **Purpose: learning and portfolio project for Java backend job applications (Germany/Europe).** Code quality, clean architecture, meaningful tests and traceable decisions matter more than the number of features. No shortcuts that couldn't be explained in an interview. Write clear, focused commits.
 
-Current state: no application code yet. The packages under `src/main/java/org/example/` are empty placeholders from the IDE template. `HANDOFF.md` holds the planning context, open decisions and the first-pass task.
+Current state: project skeleton in place. Backend in `backend/` with Maven, base package `dev.bethge.shipir`. The Java classes are empty placeholders; Spring Boot integration is planned. Frontend in `frontend/` with React, TypeScript and Vite. `HANDOFF.md` holds remaining planning context and open decisions.
 
 ## Working Rules
 
@@ -100,7 +100,32 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 ## Build & Test
 
-_Not set up yet. `mvn` is not on PATH and there is no Maven wrapper. Maven vs. Gradle is still an open decision. Add the build, test and run commands here once the skeleton exists._
+### Backend
+
+Verify compilation:
+```bash
+javac --release 25 -d /tmp/shipir-classes $(find backend/src/main/java -name '*.java')
+```
+
+Once Maven is installed locally:
+```bash
+mvn -f backend/pom.xml compile    # Compile
+mvn -f backend/pom.xml test       # Run tests
+```
+
+Maven wrapper is planned. Spring Boot integration and the app runner come next.
+
+### Frontend
+
+From `frontend/`:
+```bash
+pnpm install                       # Install dependencies
+pnpm dev                           # Run dev server
+pnpm test                          # Run tests once
+pnpm test:watch                    # Run tests in watch mode
+pnpm lint                          # Lint with oxlint
+pnpm build                         # Build for production
+```
 
 Local dev database: `docker-compose.dev.yml` with `postgres:16-alpine`, DB and user `dockerpanel`, port 5432, named volume (planned).
 
@@ -109,8 +134,8 @@ Local dev database: `docker-compose.dev.yml` with `postgres:16-alpine`, DB and u
 **Package-by-feature**, not `controller/service/repository` at the top level. Each feature contains its own entity, repository, service, DTOs and controller.
 
 ```
-<base package>
-├── <App>Application.java
+dev.bethge.shipir
+├── ShipirApplication.java
 ├── common/
 │   ├── config/        SecurityConfig, WebSocketConfig, AsyncConfig, OpenApiConfig
 │   ├── exception/     ApiException, GlobalExceptionHandler, ErrorResponse

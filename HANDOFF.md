@@ -16,7 +16,7 @@ This file holds the parts of the original planning handoff that aren't permanent
 - [ ] Java version and Spring Boot version (current LTS / stable release). The current `pom.xml` targets Java 25.
 - [ ] Auth: JWT or server-side session?
 - [ ] Reactive (WebFlux) or classic Spring MVC + WebSocket/STOMP? Recommendation: MVC + STOMP.
-- [ ] Base package name and project name ("Shipr" vs. the "DockerPanel" working title). The placeholders currently live in `org.example`.
+- [x] **DECIDED:** Project name is "Shipir". Base package is `dev.bethge.shipir`. Repo layout: `backend/` (Java/Maven) and `frontend/` (React/TypeScript).
 - [ ] Where do stack directories live on the host, and how is the config editor's base directory configured?
 
 ## Recommended build order

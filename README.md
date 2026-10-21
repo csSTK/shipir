@@ -1,8 +1,8 @@
-# Shipr
+# Shipir
 
 A web platform for managing Docker containers and Compose stacks. Think of it as a simplified Portainer, built so non-experts can use it: forms instead of mandatory YAML, with a raw editor for those who want one.
 
-> **Status:** planning complete, implementation not started. The name "Shipr" and the working title "DockerPanel" are both placeholders until the final name is decided.
+> **Status:** early development. The repo skeleton (backend + frontend) is set up; features are not implemented yet.
 
 ## Why this project
 
@@ -54,8 +54,76 @@ A few deliberate design choices:
 
 ## Getting started
 
-_Setup instructions will be added once the project skeleton exists._
+### Prerequisites
 
-## Development workflow
+- **JDK 25** — any OpenJDK 25 distribution, e.g. [Eclipse Temurin](https://adoptium.net/).
+- **Maven** — download from [apache.org](https://maven.apache.org/download.cgi) or `brew install maven`. (A Maven wrapper is planned; for now, a local installation is required.)
+- **Node.js 24+** — download from [nodejs.org](https://nodejs.org) or `brew install node`.
+- **pnpm 9** — run `corepack enable` to install it via corepack, or `npm install -g pnpm@9.14.4`.
+- **Docker** — install [Docker Desktop](https://www.docker.com/products/docker-desktop) or Docker Engine. Needed for running containers and later integration tests.
+- **git** — to clone the repository.
 
-Tasks are tracked with [beads](https://github.com/steveyegge/beads) (`bd ready` lists available work). Agent-specific instructions are in [`CLAUDE.md`](CLAUDE.md).
+### Clone and build
+
+```bash
+git clone https://github.com/csSTK/shipir.git
+cd shipir
+```
+
+### Backend (Java, Spring Boot skeleton coming soon)
+
+```bash
+# Verify the backend compiles
+javac --release 25 -d /tmp/shipir-classes $(find backend/src/main/java -name '*.java')
+
+# Once Maven is set up locally:
+mvn -f backend/pom.xml compile
+```
+
+The backend is organized package-by-feature under `backend/src/main/java/dev/bethge/shipir/`.
+
+### Frontend (React + TypeScript + Vite)
+
+```bash
+cd frontend
+
+# Install dependencies
+pnpm install
+
+# Run the dev server (http://localhost:5173)
+# The frontend proxies /api requests to http://localhost:8080 and WebSocket /ws to ws://localhost:8080
+pnpm dev
+
+# Run tests once
+pnpm test
+
+# Run tests in watch mode
+pnpm test:watch
+
+# Build for production
+pnpm build
+
+# Lint with oxlint
+pnpm lint
+```
+
+### Repository layout
+
+```
+shipir/
+├── backend/                          # Java backend (Spring Boot coming soon)
+│   ├── pom.xml                       # Maven configuration (groupId: dev.bethge, artifactId: shipir)
+│   └── src/main/java/dev/bethge/shipir/  # Organized package-by-feature
+├── frontend/                         # React + TypeScript + Vite
+│   ├── src/app/                      # Root, providers, React Query client
+│   ├── src/features/                 # Feature folders (containers, hosts, stacks)
+│   └── src/shared/                   # Shared (api, ui, lib)
+├── README.md                         # This file
+├── CLAUDE.md                         # Development rules and architecture
+└── HANDOFF.md                        # Planning context
+```
+
+### Tasks
+
+Tasks are tracked with [beads](https://github.com/steveyegge/beads). Run `bd ready` to see available work, or see [`CLAUDE.md`](CLAUDE.md) for agent-specific instructions.
+
