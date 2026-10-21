@@ -33,8 +33,11 @@ Frontend (`frontend/`):
 - `src/test/setup.ts`: jest-dom matchers for Vitest
 
 Repo tooling:
-- `.claude/agents/implementer-{sonnet,haiku}.md`: implementation subagents (see Model Policy)
+- `.claude/agents/implementer-{sonnet,haiku}.md`: implementation subagents (see Model Policy); follow `next-task-implement`, never commit or close beads
 - `.claude/skills/text-to-task/SKILL.md`: `/text-to-task`, turns a text request into a beads epic + child tasks after a scope check
+- `.claude/skills/next-task/SKILL.md`: `/next-task <epic-id>`, orchestrates an epic: branch → deps → plan → sub-agents → finish
+- `.claude/skills/next-task-{branch,deps,plan,finish}/SKILL.md`: orchestrator steps of `/next-task`
+- `.claude/skills/next-task-implement/SKILL.md`: sub-agent sequence, calling `next-task-{write-tests,code,e2e,test}` (also usable on their own)
 
 ## Git Commits & Attribution
 

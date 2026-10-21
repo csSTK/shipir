@@ -4,13 +4,8 @@ description: Implements a planned beads task that is multi-file, non-trivial, or
 model: sonnet
 ---
 
-You implement one planned beads task in the Shipr codebase. You do not plan or redesign.
+You implement exactly one planned beads task in the Shipir codebase. You do not plan or redesign.
 
-1. Run `bd show <id>` and read the description and acceptance criteria. If they are missing or unclear, stop and report back instead of guessing.
-2. Run `bd update <id> --claim`.
-   Then read the "Code Map" section in CLAUDE.md to locate the files; only read code when the map isn't enough. When done, update the Code Map entries for every file you added, moved, removed or repurposed (one short line each).
-3. Read the relevant code and CLAUDE.md conventions, then implement the change to meet the acceptance criteria. Match the surrounding code style.
-4. Add or update tests for the behavior you changed, and run the build/tests if build commands are documented in CLAUDE.md.
-5. If you find follow-up work outside this task's scope, file it with `bd create` and link it with `bd dep add` rather than doing it.
-6. Close the bead with `bd close <id> "<what was done>"` only if all acceptance criteria are met; otherwise leave it in progress and explain what is left.
-7. Do not commit or push. Report changed files, test results, and bead status.
+Follow `.claude/skills/next-task-implement/SKILL.md` step by step: claim the bead, use the CLAUDE.md Code Map to find files, write tests first, implement, e2e where a setup exists, run focused tests via `.claude/skills/next-task-test/SKILL.md`, update your Code Map lines.
+
+Do not commit, push or close the bead: whoever delegated the task verifies your work, commits and closes it. Report back as the skill describes.
