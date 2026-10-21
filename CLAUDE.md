@@ -37,9 +37,10 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `audit/AuditLogEntry.java`, `auth/User.java`, `compose/Stack.java`, `compose/generator/ComposeGeneratorService.java`, `config_editor/ConfigFile.java`, `docker/DockerHostConnectionManager.java`, `host/DockerHost.java`, `permission/Permission.java`, `streaming/LogStreamHandler.java`: empty placeholders
 - `backend/pom.xml`: Maven build, Java 25, Spring Boot 4.1.1 parent, starters web/websocket/validation/data-jpa/flyway/test, flyway-database-postgresql, postgresql driver, Testcontainers (test)
 - `backend/mvnw`, `backend/.mvn/wrapper/`: Maven wrapper
-- `backend/src/main/resources/application.yml`: app name, datasource (shipir DB, `${DB_PASSWORD}`), JPA validate/no OSIV, Flyway
+- `backend/src/main/resources/application.yml`: app name, datasource (`DB_HOST/PORT/NAME/USER` with local defaults, `${DB_PASSWORD}` no default), JPA validate/no OSIV, Flyway
 - `backend/src/main/resources/db/migration/V{1..4}__create_{users,docker_hosts,stacks,stack_versions}.sql`: Flyway schema (TIMESTAMPTZ, FKs to users RESTRICT, host/stack FKs CASCADE)
 - `backend/src/test/java/dev/bethge/shipir/ShipirApplicationTests.java`: context-load + Postgres 16 test
+- `backend/src/test/java/dev/bethge/shipir/DatasourcePropertiesTest.java`: resolves application.yml datasource defaults and `DB_*` overrides (no context, no DB)
 - `backend/src/test/java/dev/bethge/shipir/migration/SchemaMigrationTest.java`: V1-V4 schema test (timestamptz, unique, cascade, restrict), `@Transactional` rollback
 - `backend/src/test/java/dev/bethge/shipir/PostgresTestConfiguration.java`: reusable `@TestConfiguration`, `@ServiceConnection` postgres:16-alpine; integration tests `@Import` it
 
@@ -53,8 +54,8 @@ Frontend (`frontend/`):
 - `src/test/setup.ts`: jest-dom matchers for Vitest
 
 Repo root:
-- `docker-compose.dev.yml`: local PostgreSQL 16 for development (healthcheck, password from `.env`)
-- `.env.example`: template for `.env` (`DB_PASSWORD`); `.env` is gitignored
+- `docker-compose.dev.yml`: local PostgreSQL 16 for development (healthcheck, `DB_*` from `.env`)
+- `.env.example`: documents the five `DB_*` variables (`DB_PASSWORD` required, others with defaults); `.env` is gitignored
 
 Repo tooling:
 - `.claude/agents/implementer-{sonnet,haiku}.md`: implementation subagents (see Model Policy); follow `next-task-implement`, never commit or close beads
@@ -175,7 +176,7 @@ pnpm lint                          # Lint with oxlint
 pnpm build                         # Build for production
 ```
 
-Local dev database: `docker compose -f docker-compose.dev.yml up -d` (`postgres:16-alpine`, DB and user `shipir`, port 5432, named volume, password from `.env`).
+Local dev database: `docker compose -f docker-compose.dev.yml up -d` (`postgres:16-alpine`, named volume, `DB_NAME`/`DB_USER`/`DB_PORT`/`DB_PASSWORD` from `.env`, defaults `shipir`/`shipir`/`5432`). The app reads the same `DB_*` variables from its environment (export `.env` first, the app does not read `.env`); use `DB_PORT=5433` if a native Postgres occupies 5432.
 
 ## Architecture
 

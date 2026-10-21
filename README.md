@@ -80,14 +80,36 @@ docker compose -f docker-compose.dev.yml up -d         # start PostgreSQL on loc
 docker compose -f docker-compose.dev.yml ps            # wait until the status shows "healthy"
 ```
 
-Database `shipir`, user `shipir`, password from `DB_PASSWORD`. Stop it with `docker compose -f docker-compose.dev.yml down` (add `-v` only if you want to delete the data).
+The connection is configured with five variables, all listed in `.env.example`:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `DB_PASSWORD` | none (required) | Password of the database user. Set it in `.env`, never commit it |
+| `DB_HOST` | `localhost` | Host the backend connects to |
+| `DB_PORT` | `5432` | Port on the host, also the published port of the container |
+| `DB_NAME` | `shipir` | Database name |
+| `DB_USER` | `shipir` | Database user |
+
+The compose file reads `DB_NAME`, `DB_USER` and `DB_PORT` from `.env` as well, so the container and the backend always agree.
+
+**Port clash:** if a native PostgreSQL (e.g. Postgres.app) already listens on `127.0.0.1:5432`, it shadows the Docker database. Set `DB_PORT=5433` in `.env` and restart the container; the backend then needs `DB_PORT=5433` too (see below).
+
+Stop the database with `docker compose -f docker-compose.dev.yml down` (add `-v` only if you want to delete the data).
 
 ### Backend (Java 25, Spring Boot 4.1.1)
 
 ```bash
 ./backend/mvnw -f backend/pom.xml verify          # Compile and run tests
-./backend/mvnw -f backend/pom.xml spring-boot:run # Run the app on http://localhost:8080
 ```
+
+To run the app against the local database, export the variables from `.env` into your shell first. The Spring app does not read `.env` itself:
+
+```bash
+set -a; source .env; set +a                       # export DB_* and DB_PASSWORD from .env
+./backend/mvnw -f backend/pom.xml spring-boot:run # Run the app on http://localhost:8080 (runs Flyway migrations)
+```
+
+Tests don't need these variables: they start their own throwaway PostgreSQL via Testcontainers.
 
 The backend is organized package-by-feature under `backend/src/main/java/dev/bethge/shipir/`.
 
