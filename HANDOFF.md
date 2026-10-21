@@ -17,11 +17,12 @@ This file holds the parts of the original planning handoff that aren't permanent
 - [ ] Auth: JWT or server-side session?
 - [x] **DECIDED:** Classic Spring MVC + WebSocket/STOMP (no WebFlux).
 - [x] **DECIDED:** Project name is "Shipir". Base package is `dev.bethge.shipir`. Repo layout: `backend/` (Java/Maven) and `frontend/` (React/TypeScript).
+- [x] **DECIDED:** Database and user are named `shipir`. The connection is configured via `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER` (defaults `localhost`/`5432`/`shipir`/`shipir`) and `DB_PASSWORD` (no default), shared by `application.yml` and `docker-compose.dev.yml`. Reason: a native Postgres on 5432 must be able to coexist with the Docker dev DB (`DB_PORT=5433`).
 - [ ] Where do stack directories live on the host, and how is the config editor's base directory configured?
 
 ## Recommended build order
 
-1. **Project setup:** build tool, Spring Boot skeleton, package structure, `docker-compose.dev.yml`, Flyway V1–V4, Testcontainers baseline.
+1. ~~**Project setup:**~~ **done** (epic shipr-yy7): build tool, Spring Boot skeleton, package structure, `docker-compose.dev.yml`, Flyway V1–V4, Testcontainers baseline.
 2. **`docker/` module + simple REST endpoints** (list, start, stop containers) against the local socket. A quick win that tests the basic connection.
 3. **`auth` + `host`:** basic protection and host management before things get complex.
 4. **`streaming`:** live logs over WebSocket early. Retrofitting it is painful.
@@ -33,80 +34,15 @@ This file holds the parts of the original planning handoff that aren't permanent
 ## Task for the first pass
 
 1. Ask the open-decision questions above before generating any code.
-2. Create the project skeleton (build order step 1), and make sure it builds and the tests run.
+2. ~~Create the project skeleton (build order step 1), and make sure it builds and the tests run.~~ Done (shipr-yy7).
 3. Implement step 2 (`docker/` module with container list/start/stop), including an integration test with Testcontainers.
 4. At the end, briefly summarize what was built, what is tested and what comes next.
-
-## Draft `application.yml`
-
-```yaml
-spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5432/dockerpanel
-    username: dockerpanel
-    password: ${DB_PASSWORD}
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    open-in-view: false
-  flyway:
-    enabled: true
-    locations: classpath:db/migration
-    baseline-on-migrate: false
-    validate-on-migrate: true
-```
 
 ## Planned migrations
 
 `V1__create_users`, `V2__create_docker_hosts`, `V3__create_stacks`, `V4__create_stack_versions`, `V5__create_config_files`, `V6__create_permissions`, `V7__create_audit_log`.
 
-### Draft for V1–V4
-
-```sql
--- V1__create_users.sql
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    username VARCHAR(50) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(20) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT now()
-);
-
--- V2__create_docker_hosts.sql
-CREATE TABLE docker_hosts (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) NOT NULL,
-    connection_type VARCHAR(20) NOT NULL,   -- LOCAL / TCP
-    host VARCHAR(255),
-    port INTEGER,
-    tls_cert_ref VARCHAR(255),
-    owner_user_id UUID NOT NULL REFERENCES users(id),
-    created_at TIMESTAMP NOT NULL DEFAULT now()
-);
-
--- V3__create_stacks.sql
-CREATE TABLE stacks (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) NOT NULL,
-    host_id UUID NOT NULL REFERENCES docker_hosts(id) ON DELETE CASCADE,
-    compose_file_path VARCHAR(500) NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'STOPPED',
-    created_by UUID NOT NULL REFERENCES users(id),
-    last_deployed_at TIMESTAMP,
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
-    UNIQUE (host_id, name)
-);
-
--- V4__create_stack_versions.sql
-CREATE TABLE stack_versions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    stack_id UUID NOT NULL REFERENCES stacks(id) ON DELETE CASCADE,
-    yaml_content TEXT NOT NULL,
-    created_by UUID NOT NULL REFERENCES users(id),
-    created_at TIMESTAMP NOT NULL DEFAULT now()
-);
-CREATE INDEX idx_stack_versions_stack_id ON stack_versions(stack_id);
-```
+V1–V4 are implemented in `backend/src/main/resources/db/migration/` (drafts removed; see the decided review notes below).
 
 ### Rough model for the remaining tables
 
