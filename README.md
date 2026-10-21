@@ -60,7 +60,7 @@ A few deliberate design choices:
 - **Maven** — not needed locally; the Maven wrapper (`backend/mvnw`) downloads it on first use.
 - **Node.js 24+** — download from [nodejs.org](https://nodejs.org) or `brew install node`.
 - **pnpm 9** — run `corepack enable` to install it via corepack, or `npm install -g pnpm@9.14.4`.
-- **Docker** — install [Docker Desktop](https://www.docker.com/products/docker-desktop) or Docker Engine. Needed for running containers and later integration tests.
+- **Docker** — install [Docker Desktop](https://www.docker.com/products/docker-desktop) or Docker Engine. Needed for running containers, and **must be running for the backend tests**: they start a throwaway PostgreSQL 16 via Testcontainers (no local Postgres or `DB_PASSWORD` required).
 - **git** — to clone the repository.
 
 ### Clone and build

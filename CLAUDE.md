@@ -35,10 +35,12 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `ShipirApplication.java`: Spring Boot entry point
 - `**/package-info.java`: one-line Javadoc per package of the architecture tree
 - `audit/AuditLogEntry.java`, `auth/User.java`, `compose/Stack.java`, `compose/generator/ComposeGeneratorService.java`, `config_editor/ConfigFile.java`, `docker/DockerHostConnectionManager.java`, `host/DockerHost.java`, `permission/Permission.java`, `streaming/LogStreamHandler.java`: empty placeholders
-- `backend/pom.xml`: Maven build, Java 25, Spring Boot 4.1.1 parent, starters web/websocket/validation/test
+- `backend/pom.xml`: Maven build, Java 25, Spring Boot 4.1.1 parent, starters web/websocket/validation/data-jpa/flyway/test, flyway-database-postgresql, postgresql driver, Testcontainers (test)
 - `backend/mvnw`, `backend/.mvn/wrapper/`: Maven wrapper
-- `backend/src/main/resources/application.yml`: app config (name only so far)
-- `backend/src/test/java/dev/bethge/shipir/ShipirApplicationTests.java`: context-load test
+- `backend/src/main/resources/application.yml`: app name, datasource (shipir DB, `${DB_PASSWORD}`), JPA validate/no OSIV, Flyway
+- `backend/src/main/resources/db/migration/`: Flyway migrations (empty, `.gitkeep`)
+- `backend/src/test/java/dev/bethge/shipir/ShipirApplicationTests.java`: context-load + Postgres 16 test
+- `backend/src/test/java/dev/bethge/shipir/PostgresTestConfiguration.java`: reusable `@TestConfiguration`, `@ServiceConnection` postgres:16-alpine; integration tests `@Import` it
 
 Frontend (`frontend/`):
 - `vite.config.ts`: dev proxy (`/api`, `/ws` → :8080), Vitest config
@@ -158,6 +160,7 @@ Maven wrapper, no local Maven needed:
 ./backend/mvnw -f backend/pom.xml test      # Run tests
 ./backend/mvnw -f backend/pom.xml verify    # Full build incl. tests
 ```
+**Docker must be running for backend tests** (Testcontainers starts a throwaway Postgres 16). No local Postgres or `DB_PASSWORD` needed.
 
 ### Frontend
 

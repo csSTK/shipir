@@ -1,3 +1,16 @@
 spring:
   application:
     name: shipir
+  datasource:
+    url: jdbc:postgresql://localhost:5432/shipir
+    username: shipir
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    validate-on-migrate: true
