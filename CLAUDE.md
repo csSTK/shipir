@@ -12,6 +12,26 @@ Current state: project skeleton in place. Backend in `backend/` with Maven, base
 - **Do not guess open decisions** (listed in `HANDOFF.md`). Ask the user.
 - **Out of scope for now:** SaaS control plane with customer-side agent, hosting for third parties (Proxmox provisioning), AI assistant (LLM chat). Don't build them, and don't design in a way that blocks them. Concretely: all Docker access goes through the `docker/` abstraction so another connection type (agent over a tunnel) can be added later. Nothing more than that (YAGNI).
 
+## Code Map
+
+**Read this section first when implementing.** Use it to find the exact files to change, and only open code when the map isn't enough.
+
+**Keep it current:** whenever you add, move or remove a file or change what it does, update its entry here in the same change. As short as possible: one line per file or folder, `path: what it is`. No narrative, no history, no change logs.
+
+Backend (`backend/src/main/java/dev/bethge/shipir/`):
+- `Main.java`: IDE template entry point, to be replaced by `ShipirApplication`
+- `audit/AuditLogEntry.java`, `auth/User.java`, `compose/Stack.java`, `compose/generator/ComposeGeneratorService.java`, `config_editor/ConfigFile.java`, `docker/DockerHostConnectionManager.java`, `host/DockerHost.java`, `permission/Permission.java`, `streaming/LogStreamHandler.java`: empty placeholders
+- `backend/pom.xml`: Maven build, Java 25, no dependencies yet
+
+Frontend (`frontend/`):
+- `vite.config.ts`: dev proxy (`/api`, `/ws` → :8080), Vitest config
+- `src/main.tsx`: entry, mounts `App`
+- `src/app/App.tsx`: root component, wraps content in `Providers` (placeholder UI)
+- `src/app/providers.tsx`, `src/app/queryClient.ts`: React Query setup
+- `src/shared/api/client.ts`: `apiFetch<T>` + `ApiError`, JSON fetch against `/api`
+- `src/features/{containers,hosts,stacks}/index.ts`: empty feature entry points
+- `src/test/setup.ts`: jest-dom matchers for Vitest
+
 ## Git Commits & Attribution
 
 - **Never add Claude/AI attribution to git history.** No `Co-Authored-By: Claude ...` trailers, no "Generated with Claude Code" lines, no session links, in commit messages or PR descriptions. Only the user (or whoever is configured as the git committer) appears as author.

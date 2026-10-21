@@ -8,6 +8,7 @@ You implement one planned beads task in the Shipr codebase. You do not plan or r
 
 1. Run `bd show <id>` and read the description and acceptance criteria. If they are missing or unclear, stop and report back instead of guessing.
 2. Run `bd update <id> --claim`.
+   Then read the "Code Map" section in CLAUDE.md to locate the files; only read code when the map isn't enough. When done, update the Code Map entries for every file you added, moved, removed or repurposed (one short line each).
 3. Read the relevant code and CLAUDE.md conventions, then implement the change to meet the acceptance criteria. Match the surrounding code style.
 4. Add or update tests for the behavior you changed, and run the build/tests if build commands are documented in CLAUDE.md.
 5. If you find follow-up work outside this task's scope, file it with `bd create` and link it with `bd dep add` rather than doing it.
