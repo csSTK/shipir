@@ -12,6 +12,14 @@ Current state: project skeleton in place. Backend in `backend/` with Maven, base
 - **Do not guess open decisions** (listed in `HANDOFF.md`). Ask the user.
 - **Out of scope for now:** SaaS control plane with customer-side agent, hosting for third parties (Proxmox provisioning), AI assistant (LLM chat). Don't build them, and don't design in a way that blocks them. Concretely: all Docker access goes through the `docker/` abstraction so another connection type (agent over a tunnel) can be added later. Nothing more than that (YAGNI).
 
+## Database Access
+
+- **Reading is allowed** (e.g. `psql -c "SELECT ..."`, `\d`, `pg_dump`).
+- **Writing never happens without the user's explicit consent.** That covers `INSERT`/`UPDATE`/`DELETE`, DDL, running migrations or starting the app against a real database (`spring-boot:run` runs Flyway), restoring dumps, SQL from files or stdin, and deleting database volumes (`docker compose down -v`). Ask first, say exactly what will be written and to which database, and wait for a yes.
+- Throwaway Testcontainers databases in tests (`./mvnw test`/`verify`) and the beads tracker (`bd`) are exempt.
+- Sub-agents never write to a database. If a task needs a write, they stop and report it so the orchestrator can ask the user.
+- Enforced by `.claude/hooks/db-write-guard.py` (PreToolUse on Bash): suspected writes always trigger a permission prompt. It can't see writes hidden inside scripts or app code, so the rule applies regardless of the hook.
+
 ## Frontend UI
 
 - **All new or changed frontend UI follows the `apple-design` skill** (`.claude/skills/apple-design/SKILL.md`). Read it before building or reviewing UI: instant press feedback, springs for anything the user can touch, restraint, typography, materials, and `prefers-reduced-motion`.
@@ -39,6 +47,7 @@ Frontend (`frontend/`):
 
 Repo tooling:
 - `.claude/agents/implementer-{sonnet,haiku}.md`: implementation subagents (see Model Policy); follow `next-task-implement`, never commit or close beads
+- `.claude/hooks/db-write-guard.py`: PreToolUse hook, forces a permission prompt for database writes
 - `.claude/skills/apple-design/SKILL.md`: design and motion guidelines every frontend UI change follows
 - `.claude/skills/text-to-task/SKILL.md`: `/text-to-task`, turns a text request into a beads epic + child tasks after a scope check
 - `.claude/skills/next-task/SKILL.md`: `/next-task <epic-id>`, orchestrates an epic: branch → deps → plan → sub-agents → finish
