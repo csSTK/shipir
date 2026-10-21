@@ -44,3 +44,6 @@ build/
 .beads-credential-key
 .beads/proxieddb/
 *.gate.lock*
+
+# Local secrets (copy from .env.example)
+.env

@@ -70,6 +70,18 @@ git clone https://github.com/csSTK/shipir.git
 cd shipir
 ```
 
+### Local database (PostgreSQL 16)
+
+The backend needs a local PostgreSQL. It runs in Docker via `docker-compose.dev.yml`:
+
+```bash
+cp .env.example .env                                   # then set DB_PASSWORD in .env (.env is gitignored)
+docker compose -f docker-compose.dev.yml up -d         # start PostgreSQL on localhost:5432
+docker compose -f docker-compose.dev.yml ps            # wait until the status shows "healthy"
+```
+
+Database `shipir`, user `shipir`, password from `DB_PASSWORD`. Stop it with `docker compose -f docker-compose.dev.yml down` (add `-v` only if you want to delete the data).
+
 ### Backend (Java 25, Spring Boot 4.1.1)
 
 ```bash

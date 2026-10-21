@@ -49,6 +49,10 @@ Frontend (`frontend/`):
 - `src/features/{containers,hosts,stacks}/index.ts`: empty feature entry points
 - `src/test/setup.ts`: jest-dom matchers for Vitest
 
+Repo root:
+- `docker-compose.dev.yml`: local PostgreSQL 16 for development (healthcheck, password from `.env`)
+- `.env.example`: template for `.env` (`DB_PASSWORD`); `.env` is gitignored
+
 Repo tooling:
 - `.claude/agents/implementer-{sonnet,haiku}.md`: implementation subagents (see Model Policy); follow `next-task-implement`, never commit or close beads
 - `.claude/hooks/db-write-guard.py`: PreToolUse hook, forces a permission prompt for database writes
@@ -167,7 +171,7 @@ pnpm lint                          # Lint with oxlint
 pnpm build                         # Build for production
 ```
 
-Local dev database: `docker-compose.dev.yml` with `postgres:16-alpine`, DB and user `dockerpanel`, port 5432, named volume (planned).
+Local dev database: `docker compose -f docker-compose.dev.yml up -d` (`postgres:16-alpine`, DB and user `shipir`, port 5432, named volume, password from `.env`).
 
 ## Architecture
 
