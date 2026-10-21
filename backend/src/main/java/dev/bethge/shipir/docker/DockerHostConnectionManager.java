@@ -1,4 +1,4 @@
-package org.example.docker;
+package dev.bethge.shipir.docker;
 
 public class DockerHostConnectionManager {
 }

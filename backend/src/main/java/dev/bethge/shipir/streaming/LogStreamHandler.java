@@ -1,4 +1,4 @@
-package org.example.streaming;
+package dev.bethge.shipir.streaming;
 
 public class LogStreamHandler {
 }
