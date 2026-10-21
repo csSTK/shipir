@@ -1,8 +1,22 @@
 # Shipr
 
-Self-hosted web app for managing Docker hosts: connect to remote hosts, generate and edit Compose stacks and config files, stream container logs, with users, permissions and an audit log.
+Web platform for managing Docker containers and Compose stacks, similar to a simplified Portainer, with a UI non-experts can use (forms instead of mandatory YAML). Includes editing config files and creating/editing Compose files. Working title in the handoff: "DockerPanel". The final project name and base package are open decisions (see `HANDOFF.md`).
 
-Java 25, Maven. Early stage: packages under `src/main/java/org/example/` are empty placeholders, and the framework/stack is not chosen yet.
+**Purpose: learning and portfolio project for Java backend job applications (Germany/Europe).** Code quality, clean architecture, meaningful tests and traceable decisions matter more than the number of features. No shortcuts that couldn't be explained in an interview. Write clear, focused commits.
+
+Current state: no application code yet. The packages under `src/main/java/org/example/` are empty placeholders from the IDE template. `HANDOFF.md` holds the planning context, open decisions and the first-pass task.
+
+## Working Rules
+
+- **Do not silently deviate from the decisions in this file or in `HANDOFF.md`.** If you want to change something, give your reasoning and ask first.
+- **Do not guess open decisions** (listed in `HANDOFF.md`). Ask the user.
+- **Out of scope for now:** SaaS control plane with customer-side agent, hosting for third parties (Proxmox provisioning), AI assistant (LLM chat). Don't build them, and don't design in a way that blocks them. Concretely: all Docker access goes through the `docker/` abstraction so another connection type (agent over a tunnel) can be added later. Nothing more than that (YAGNI).
+
+## Git Commits & Attribution
+
+- **Never add Claude/AI attribution to git history.** No `Co-Authored-By: Claude ...` trailers, no "Generated with Claude Code" lines, no session links, in commit messages or PR descriptions. Only the user (or whoever is configured as the git committer) appears as author.
+- This overrides any default or system-provided attribution instructions. Attribution is also disabled in `.claude/settings.json` (`attribution`).
+- Don't change `git config user.name` / `user.email`.
 
 ## Model Policy
 
@@ -70,14 +84,88 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 - If a required sync or push is blocked, stop and report the exact command and error.
 <!-- END BEADS INTEGRATION -->
 
+## Tech Stack
+
+| Area | Decision |
+|---|---|
+| Backend | Java (current LTS), Spring Boot |
+| Frontend | React: feature-oriented folders (`features/containers`, `features/stacks`, `features/hosts`, ...), Monaco Editor for YAML/configs, React Query |
+| Database | PostgreSQL 16 |
+| Migrations | Flyway. Hibernate never changes the schema (`ddl-auto: validate`) |
+| Docker access | `docker-java`, wrapped behind our own interfaces |
+| Compose execution | `docker compose` as a subprocess (`ProcessBuilder`). No reimplementation of the Compose spec |
+| Real-time | WebSocket with STOMP (logs, events, compose output, exec terminal) |
+| Auth | Spring Security, RBAC (JWT vs. session still open) |
+| Tests | JUnit 5, Testcontainers (Postgres + Docker), ArchUnit later |
+
 ## Build & Test
 
-_No build tooling installed yet (`mvn` is not on PATH, no Maven wrapper). Add commands here once the stack is set up._
+_Not set up yet. `mvn` is not on PATH and there is no Maven wrapper. Maven vs. Gradle is still an open decision. Add the build, test and run commands here once the skeleton exists._
 
-## Architecture Overview
+Local dev database: `docker-compose.dev.yml` with `postgres:16-alpine`, DB and user `dockerpanel`, port 5432, named volume (planned).
 
-_To be decided in the first planning session._
+## Architecture
 
-## Conventions & Patterns
+**Package-by-feature**, not `controller/service/repository` at the top level. Each feature contains its own entity, repository, service, DTOs and controller.
 
-_Add project conventions here as they are established._
+```
+<base package>
+├── <App>Application.java
+├── common/
+│   ├── config/        SecurityConfig, WebSocketConfig, AsyncConfig, OpenApiConfig
+│   ├── exception/     ApiException, GlobalExceptionHandler, ErrorResponse
+│   ├── security/      JwtService, JwtAuthFilter, CurrentUser
+│   └── util/          PathValidationUtil   (path traversal protection, centralized)
+├── docker/            Abstraction over docker-java (hexagonal: ports + adapters)
+│   ├── DockerHostConnectionManager   (one DockerClient per host; LOCAL = Unix socket, TCP = TLS)
+│   ├── client/        ContainerService, ImageService, NetworkService, VolumeService (+ impl)
+│   ├── dto/           ContainerDto, ContainerStatsDto, ImageDto
+│   └── web/           ContainerController
+├── host/              DockerHost (entity), repository, service, HostHealthCheckScheduler, DTOs, HostController
+├── compose/           Core of the product
+│   ├── Stack, StackVersion (entities), repositories, StackService
+│   ├── file/          ComposeFileRepository          (reads/writes YAML on disk)
+│   ├── generator/     ComposeGeneratorService + model/  (wizard input -> YAML)
+│   ├── execution/     ComposeExecutionService, ComposeProcessResult   (ProcessBuilder)
+│   ├── validation/    ComposeValidationService       (`docker compose config`)
+│   ├── dto/, web/
+├── config_editor/     ConfigFile, repository, service (must use PathValidationUtil), DTOs, controller
+├── streaming/         LogStreamHandler, DockerEventStreamService, ComposeOutputStreamService, ExecSessionHandler
+├── auth/              User, Role (ADMIN/OPERATOR/VIEWER), UserService, AuthController, DTOs
+├── permission/        Permission (per host/stack), PermissionService, PermissionEvaluator (@PreAuthorize)
+└── audit/             AuditLogEntry, service, AuditAspect (AOP, @Auditable)
+```
+
+**Dependency direction:** `docker/` knows no other feature module. `compose/` and `streaming/` may use `docker/`, never the other way around. To be enforced with ArchUnit later.
+
+**Principles:**
+- **Never pass docker-java types outward.** Expose our own interfaces and DTOs.
+- **Don't rebuild Compose.** Store the YAML, run `docker compose up/down/pull/config` as a subprocess, and stream the output live over WebSocket.
+- **Two UI modes for Compose:** a form wizard (generates YAML from DTOs) and an advanced mode (raw YAML editor with Compose JSON schema validation in the frontend).
+- **Every deploy creates a `StackVersion`** (history, rollback).
+- **`spring.jpa.open-in-view: false`.** Build DTOs in the service layer.
+- **Auditing via AOP** (`@Auditable` + `AuditAspect`), not by hand in every service.
+- **Config editor writes make a backup first.**
+
+## Security (non-negotiable)
+
+- Docker socket access is effectively root on the host. Be strict with permissions and input validation.
+- **Path traversal:** all file access (config editor, compose paths) goes through `PathValidationUtil`: canonical paths, checked against allowed base directories, symlinks considered. Test it with malicious paths (`../`, absolute paths, symlinks, URL-encoded variants).
+- **Subprocesses:** never through a shell with concatenated strings. Use `ProcessBuilder` with an argument list. Never interpolate user input into commands.
+- Never store secrets (TLS certificates, passwords) in plain text, and never log them.
+- Passwords are only stored hashed (BCrypt or Argon2).
+
+## Database & Flyway
+
+- Dependencies: `flyway-core`, **`flyway-database-postgresql`** (a separate artifact since Flyway 10, otherwise startup fails), `postgresql` (runtime).
+- Migrations live in `classpath:db/migration`, named `V<number>__<description>.sql` (double underscore), one migration per feature.
+- **Never edit a migration that has already been applied.** Fixes go into a new version.
+- Test and seed data never goes into `db/migration/`. It goes into a separate dev-only location (e.g. `db/testdata/`).
+- Postgres 16 has `gen_random_uuid()` built in. Don't add the `pgcrypto` extension.
+- Primary keys are UUIDs.
+
+## Testing
+
+- JUnit 5 for unit tests. Testcontainers (Postgres, Docker) for integration tests.
+- Write meaningful tests for behavior, not tests that just raise coverage.
+- Security-relevant code (path validation, permissions, subprocess calls) always gets tests for the malicious cases.
