@@ -57,7 +57,7 @@ A few deliberate design choices:
 ### Prerequisites
 
 - **JDK 25** — any OpenJDK 25 distribution, e.g. [Eclipse Temurin](https://adoptium.net/).
-- **Maven** — download from [apache.org](https://maven.apache.org/download.cgi) or `brew install maven`. (A Maven wrapper is planned; for now, a local installation is required.)
+- **Maven** — not needed locally; the Maven wrapper (`backend/mvnw`) downloads it on first use.
 - **Node.js 24+** — download from [nodejs.org](https://nodejs.org) or `brew install node`.
 - **pnpm 9** — run `corepack enable` to install it via corepack, or `npm install -g pnpm@9.14.4`.
 - **Docker** — install [Docker Desktop](https://www.docker.com/products/docker-desktop) or Docker Engine. Needed for running containers and later integration tests.
@@ -70,14 +70,11 @@ git clone https://github.com/csSTK/shipir.git
 cd shipir
 ```
 
-### Backend (Java, Spring Boot skeleton coming soon)
+### Backend (Java 25, Spring Boot 4.1.1)
 
 ```bash
-# Verify the backend compiles
-javac --release 25 -d /tmp/shipir-classes $(find backend/src/main/java -name '*.java')
-
-# Once Maven is set up locally:
-mvn -f backend/pom.xml compile
+./backend/mvnw -f backend/pom.xml verify          # Compile and run tests
+./backend/mvnw -f backend/pom.xml spring-boot:run # Run the app on http://localhost:8080
 ```
 
 The backend is organized package-by-feature under `backend/src/main/java/dev/bethge/shipir/`.
@@ -111,7 +108,8 @@ pnpm lint
 
 ```
 shipir/
-├── backend/                          # Java backend (Spring Boot coming soon)
+├── backend/                          # Java backend (Spring Boot)
+│   ├── mvnw, .mvn/                   # Maven wrapper
 │   ├── pom.xml                       # Maven configuration (groupId: dev.bethge, artifactId: shipir)
 │   └── src/main/java/dev/bethge/shipir/  # Organized package-by-feature
 ├── frontend/                         # React + TypeScript + Vite

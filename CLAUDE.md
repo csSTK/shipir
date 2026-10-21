@@ -4,7 +4,7 @@ Web platform for managing Docker containers and Compose stacks, similar to a sim
 
 **Purpose: learning and portfolio project for Java backend job applications (Germany/Europe).** Code quality, clean architecture, meaningful tests and traceable decisions matter more than the number of features. No shortcuts that couldn't be explained in an interview. Write clear, focused commits.
 
-Current state: project skeleton in place. Backend in `backend/` with Maven, base package `dev.bethge.shipir`. The Java classes are empty placeholders; Spring Boot integration is planned. Frontend in `frontend/` with React, TypeScript and Vite. `HANDOFF.md` holds remaining planning context and open decisions.
+Current state: project skeleton in place. Backend in `backend/` with Maven and Spring Boot, base package `dev.bethge.shipir`. Most feature classes are still empty placeholders. Frontend in `frontend/` with React, TypeScript and Vite. `HANDOFF.md` holds remaining planning context and open decisions.
 
 ## Working Rules
 
@@ -32,9 +32,13 @@ Current state: project skeleton in place. Backend in `backend/` with Maven, base
 **Keep it current:** whenever you add, move or remove a file or change what it does, update its entry here in the same change. As short as possible: one line per file or folder, `path: what it is`. No narrative, no history, no change logs.
 
 Backend (`backend/src/main/java/dev/bethge/shipir/`):
-- `Main.java`: IDE template entry point, to be replaced by `ShipirApplication`
+- `ShipirApplication.java`: Spring Boot entry point
+- `**/package-info.java`: one-line Javadoc per package of the architecture tree
 - `audit/AuditLogEntry.java`, `auth/User.java`, `compose/Stack.java`, `compose/generator/ComposeGeneratorService.java`, `config_editor/ConfigFile.java`, `docker/DockerHostConnectionManager.java`, `host/DockerHost.java`, `permission/Permission.java`, `streaming/LogStreamHandler.java`: empty placeholders
-- `backend/pom.xml`: Maven build, Java 25, no dependencies yet
+- `backend/pom.xml`: Maven build, Java 25, Spring Boot 4.1.1 parent, starters web/websocket/validation/test
+- `backend/mvnw`, `backend/.mvn/wrapper/`: Maven wrapper
+- `backend/src/main/resources/application.yml`: app config (name only so far)
+- `backend/src/test/java/dev/bethge/shipir/ShipirApplicationTests.java`: context-load test
 
 Frontend (`frontend/`):
 - `vite.config.ts`: dev proxy (`/api`, `/ws` → :8080), Vitest config
@@ -144,18 +148,12 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 ### Backend
 
-Verify compilation:
+Maven wrapper, no local Maven needed:
 ```bash
-javac --release 25 -d /tmp/shipir-classes $(find backend/src/main/java -name '*.java')
+./backend/mvnw -f backend/pom.xml compile   # Compile
+./backend/mvnw -f backend/pom.xml test      # Run tests
+./backend/mvnw -f backend/pom.xml verify    # Full build incl. tests
 ```
-
-Once Maven is installed locally:
-```bash
-mvn -f backend/pom.xml compile    # Compile
-mvn -f backend/pom.xml test       # Run tests
-```
-
-Maven wrapper is planned. Spring Boot integration and the app runner come next.
 
 ### Frontend
 

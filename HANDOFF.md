@@ -12,10 +12,10 @@ This file holds the parts of the original planning handoff that aren't permanent
 
 ## Open decisions (ask the user, do not guess)
 
-- [ ] Maven or Gradle? (The repo currently has a bare Maven `pom.xml` from the IDE template.)
-- [ ] Java version and Spring Boot version (current LTS / stable release). The current `pom.xml` targets Java 25.
+- [x] **DECIDED:** Maven, with the Maven wrapper (`backend/mvnw`).
+- [x] **DECIDED:** Java 25 (LTS), Spring Boot 4.1.1 (pinned via `spring-boot-starter-parent`).
 - [ ] Auth: JWT or server-side session?
-- [ ] Reactive (WebFlux) or classic Spring MVC + WebSocket/STOMP? Recommendation: MVC + STOMP.
+- [x] **DECIDED:** Classic Spring MVC + WebSocket/STOMP (no WebFlux).
 - [x] **DECIDED:** Project name is "Shipir". Base package is `dev.bethge.shipir`. Repo layout: `backend/` (Java/Maven) and `frontend/` (React/TypeScript).
 - [ ] Where do stack directories live on the host, and how is the config editor's base directory configured?
 
