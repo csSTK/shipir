@@ -114,7 +114,7 @@ CREATE INDEX idx_stack_versions_stack_id ON stack_versions(stack_id);
 - `Permission (id, userId, hostId nullable, stackId nullable, permissionLevel)`
 - `AuditLogEntry (id, userId, action, targetType, targetId, timestamp, details)`
 
-## Review notes (not decided, raise before writing the migrations)
+## Review notes (decided)
 
-- The drafts use `TIMESTAMP` (without time zone). `TIMESTAMPTZ` is the usual recommendation in PostgreSQL to avoid time-zone ambiguity, and it maps cleanly to `Instant`/`OffsetDateTime` in Java.
-- The `created_by` / `owner_user_id` foreign keys have no `ON DELETE` rule, so deleting a user who created stacks or versions will fail. That may be intended (keep history), but it should be a conscious choice.
+- **Decided:** all timestamp columns use `TIMESTAMPTZ` (implemented in V1-V4). The drafts used `TIMESTAMP`; `TIMESTAMPTZ` is the usual recommendation in PostgreSQL to avoid time-zone ambiguity, and it maps cleanly to `Instant`/`OffsetDateTime` in Java.
+- **Decided:** the `created_by` / `owner_user_id` foreign keys keep no `ON DELETE` rule (RESTRICT), so a user who owns or created hosts, stacks or versions cannot be deleted (history is kept). `stacks.host_id` and `stack_versions.stack_id` stay `ON DELETE CASCADE`.

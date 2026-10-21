@@ -1,0 +1,141 @@
+package dev.bethge.shipir.migration;
+
+import dev.bethge.shipir.PostgresTestConfiguration;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+/**
+ * Verifies the V1-V4 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ */
+@SpringBootTest
+@Import(PostgresTestConfiguration.class)
+@Transactional
+class SchemaMigrationTest {
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    @Test
+    void flywayAppliedVersions1To4Successfully() {
+        List<String> versions = jdbc.queryForList(
+                "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
+        assertThat(versions).containsExactly("1", "2", "3", "4");
+    }
+
+    @Test
+    void allTimestampColumnsAreTimestamptz() {
+        List<String> wrong = jdbc.queryForList("""
+                SELECT table_name || '.' || column_name FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name IN ('users','docker_hosts','stacks','stack_versions')
+                  AND (column_name LIKE '%\\_at' ESCAPE '\\')
+                  AND data_type <> 'timestamp with time zone'
+                """, String.class);
+        assertThat(wrong).isEmpty();
+
+        Integer count = jdbc.queryForObject("""
+                SELECT count(*) FROM information_schema.columns
+                WHERE table_schema = 'public' AND data_type = 'timestamp with time zone'
+                  AND table_name IN ('users','docker_hosts','stacks','stack_versions')
+                """, Integer.class);
+        assertThat(count).isEqualTo(5); // 1 users + 1 hosts + 2 stacks + 1 versions
+    }
+
+    @Test
+    void usernameIsUnique() {
+        insertUser("alice");
+        assertThatThrownBy(() -> insertUser("alice")).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void stackNameIsUniquePerHostButNotAcrossHosts() {
+        UUID user = insertUser("alice");
+        UUID host1 = insertHost(user);
+        UUID host2 = insertHost(user);
+        insertStack(host1, user, "web");
+        insertStack(host2, user, "web");
+        assertThatThrownBy(() -> insertStack(host1, user, "web"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void deletingHostCascadesToStacksAndVersions() {
+        UUID user = insertUser("alice");
+        UUID host = insertHost(user);
+        UUID stack = insertStack(host, user, "web");
+        insertVersion(stack, user);
+
+        jdbc.update("DELETE FROM docker_hosts WHERE id = ?", host);
+
+        assertThat(count("stacks")).isZero();
+        assertThat(count("stack_versions")).isZero();
+        assertThat(count("users")).isEqualTo(1);
+    }
+
+    @Test
+    void deletingUserOwningHostFails() {
+        UUID user = insertUser("alice");
+        insertHost(user);
+        assertThatThrownBy(() -> jdbc.update("DELETE FROM users WHERE id = ?", user))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void deletingUserWhoCreatedStackFails() {
+        UUID owner = insertUser("owner");
+        UUID creator = insertUser("creator");
+        UUID host = insertHost(owner);
+        insertStack(host, creator, "web");
+        assertThatThrownBy(() -> jdbc.update("DELETE FROM users WHERE id = ?", creator))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void deletingUserWhoCreatedVersionFails() {
+        UUID owner = insertUser("owner");
+        UUID author = insertUser("author");
+        UUID stack = insertStack(insertHost(owner), owner, "web");
+        insertVersion(stack, author);
+        assertThatThrownBy(() -> jdbc.update("DELETE FROM users WHERE id = ?", author))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    private int count(String table) {
+        return jdbc.queryForObject("SELECT count(*) FROM " + table, Integer.class);
+    }
+
+    private UUID insertUser(String username) {
+        return jdbc.queryForObject(
+                "INSERT INTO users (username, password_hash, role) VALUES (?, 'hash', 'ADMIN') RETURNING id",
+                UUID.class, username);
+    }
+
+    private UUID insertHost(UUID owner) {
+        return jdbc.queryForObject(
+                "INSERT INTO docker_hosts (name, connection_type, owner_user_id) VALUES ('h', 'LOCAL', ?) RETURNING id",
+                UUID.class, owner);
+    }
+
+    private UUID insertStack(UUID host, UUID creator, String name) {
+        return jdbc.queryForObject("""
+                INSERT INTO stacks (name, host_id, compose_file_path, created_by)
+                VALUES (?, ?, '/stacks/x/compose.yml', ?) RETURNING id
+                """, UUID.class, name, host, creator);
+    }
+
+    private void insertVersion(UUID stack, UUID creator) {
+        jdbc.update("INSERT INTO stack_versions (stack_id, yaml_content, created_by) VALUES (?, 'services: {}', ?)",
+                stack, creator);
+    }
+}
