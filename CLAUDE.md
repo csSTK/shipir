@@ -1,8 +1,20 @@
-# Project Instructions for AI Agents
+# Shipr
 
-This file provides instructions and context for AI coding agents working on this project.
+Self-hosted web app for managing Docker hosts: connect to remote hosts, generate and edit Compose stacks and config files, stream container logs, with users, permissions and an audit log.
 
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:1105d646 -->
+Java 25, Maven. Early stage: packages under `src/main/java/org/example/` are empty placeholders, and the framework/stack is not chosen yet.
+
+## Model Policy
+
+- **Planning uses Opus.** Planning means architecture and stack decisions, breaking work into epics and tasks, writing issue descriptions and acceptance criteria, and setting dependencies. Run planning sessions on Opus (`/model opus`).
+- **Implementation is done only by Sonnet or Haiku.** Opus does not write production code. When the session runs on Opus, delegate each implementation task to the `implementer-sonnet` or `implementer-haiku` subagent (`.claude/agents/`), passing the bead ID.
+- **Pick the implementation model by scope:**
+  - **Haiku**: small, well-specified, low-risk changes, such as boilerplate, renames, simple DTOs or entities, config tweaks, docs, and straightforward tests.
+  - **Sonnet**: everything else, such as multi-file features, non-trivial logic, debugging, refactors, concurrency/streaming, and anything touching auth, permissions, remote host access or the audit log.
+  - When unsure, use Sonnet.
+- Before starting implementation, a task should have a bead with clear acceptance criteria. If it doesn't, stop and plan it (on Opus) first.
+
+<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:46cd31e7 -->
 ## Beads Issue Tracker
 
 This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
@@ -46,6 +58,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
    # Team-maintainer opt-in only, unless current instructions forbid it:
    git pull --rebase
+   bd dolt push
    git push
    git status
    ```
@@ -57,21 +70,14 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 - If a required sync or push is blocked, stop and report the exact command and error.
 <!-- END BEADS INTEGRATION -->
 
-
 ## Build & Test
 
-_Add your build and test commands here_
-
-```bash
-# Example:
-# npm install
-# npm test
-```
+_No build tooling installed yet (`mvn` is not on PATH, no Maven wrapper). Add commands here once the stack is set up._
 
 ## Architecture Overview
 
-_Add a brief overview of your project architecture_
+_To be decided in the first planning session._
 
 ## Conventions & Patterns
 
-_Add your project-specific conventions here_
+_Add project conventions here as they are established._
