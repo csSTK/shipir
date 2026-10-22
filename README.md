@@ -136,6 +136,15 @@ pnpm build
 
 # Lint with oxlint
 pnpm lint
+
+# One-time: install the Chromium browser used by the e2e tests
+pnpm exec playwright install chromium
+
+# Run the Playwright e2e tests (in e2e/, with /api mocked)
+pnpm e2e
+
+# Run the e2e tests in Playwright's UI mode
+pnpm e2e:ui
 ```
 
 ### Repository layout
@@ -149,7 +158,8 @@ shipir/
 ├── frontend/                         # React + TypeScript + Vite
 │   ├── src/app/                      # Root, providers, React Query client
 │   ├── src/features/                 # Feature folders (containers, hosts, stacks)
-│   └── src/shared/                   # Shared (api, ui, lib)
+│   ├── src/shared/                   # Shared (api, ui, lib)
+│   └── e2e/                          # Playwright e2e specs; fixtures/api.ts mocks /api
 ├── README.md                         # This file
 ├── CLAUDE.md                         # Development rules and architecture
 └── HANDOFF.md                        # Planning context

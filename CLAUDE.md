@@ -178,6 +178,9 @@ pnpm test                          # Run tests once
 pnpm test:watch                    # Run tests in watch mode
 pnpm lint                          # Lint with oxlint
 pnpm build                         # Build for production
+pnpm exec playwright install chromium   # One-time: browser for e2e tests
+pnpm e2e                           # Run Playwright e2e tests
+pnpm e2e:ui                        # Run e2e tests in Playwright UI mode
 ```
 
 Local dev database: `docker compose -f docker-compose.dev.yml up -d` (`postgres:16-alpine`, named volume, `DB_NAME`/`DB_USER`/`DB_PORT`/`DB_PASSWORD` from `.env`, defaults `shipir`/`shipir`/`5432`). The app reads the same `DB_*` variables from its environment (export `.env` first, the app does not read `.env`); use `DB_PORT=5433` if a native Postgres occupies 5432.
@@ -247,3 +250,4 @@ dev.bethge.shipir
 - JUnit 5 for unit tests. Testcontainers (Postgres, Docker) for integration tests.
 - Write meaningful tests for behavior, not tests that just raise coverage.
 - Security-relevant code (path validation, permissions, subprocess calls) always gets tests for the malicious cases.
+- Browser e2e with Playwright (Chromium) against the Vite frontend with `/api` mocked. Conventions in `.claude/skills/next-task-e2e/SKILL.md`.

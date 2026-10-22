@@ -47,7 +47,7 @@ Work out the changed area with `git status --porcelain` plus `git diff --name-on
 
 ## E2E
 
-Only if `frontend/playwright.config.ts` exists. From `frontend/`:
+Only if `frontend/playwright.config.ts` exists. Needs the one-time `pnpm exec playwright install chromium`. From `frontend/`:
 - Focused: `pnpm e2e e2e/<feature>.spec.ts` for the changed features. Run the full e2e suite if `src/app/`, `src/shared/` or `e2e/fixtures/` changed.
 - Full: `pnpm e2e`
 
