@@ -1,0 +1,19 @@
+# Build output from the host (the image builds its own)
+target/
+
+# Local configuration and secrets: never copy into the image
+.env
+.env.*
+!.env.example
+**/*.pem
+**/*.key
+
+# IDE and OS files
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.DS_Store
+.git/
+.gitignore
