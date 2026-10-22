@@ -102,9 +102,12 @@ Stop the database with `docker compose -f docker-compose.dev.yml down` (add `-v`
 
 ```bash
 cp .env.example .env                                   # then set DB_PASSWORD and DB_HOST (external database) in .env
+docker login ghcr.io                                   # once per host: GitHub user + token with read:packages
 docker compose -f docker-compose.yml pull              # pull ghcr.io/csstk/shipir-*:${SHIPIR_TAG:-latest}
 docker compose -f docker-compose.yml up -d             # app on http://localhost:${SHIPIR_PORT:-8080}
 ```
+
+The images on ghcr.io are private, so `docker login ghcr.io` is required before the pull; without it, the pull fails with `unauthorized`. Use a personal access token (classic) with the `read:packages` scope as the password.
 
 Without a pull (or when the images don't exist on ghcr.io yet), `docker compose -f docker-compose.yml build` builds both images locally, and `up` uses them.
 
