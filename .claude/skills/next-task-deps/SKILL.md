@@ -16,9 +16,8 @@ The goal is a working install with current patch and minor versions, without mix
 
 ## Backend (`backend/`, only if it exists)
 
-1. Install and compile: `./mvnw -f backend/pom.xml -q dependency:resolve test-compile`.
-   - If there's no `mvnw` yet, note it and skip the backend. The project skeleton epic adds the wrapper.
-2. Report available updates: `./mvnw -f backend/pom.xml -q versions:display-dependency-updates versions:display-plugin-updates`.
+1. Install and compile: `./backend/mvnw -f backend/pom.xml -q dependency:resolve test-compile`.
+2. Report available updates: `./backend/mvnw -f backend/pom.xml -q versions:display-dependency-updates versions:display-plugin-updates`.
    - Apply only patch and minor bumps of versions pinned directly in `pom.xml`.
    - Leave versions managed by the Spring Boot parent alone. Bumping the parent itself, including a minor bump, is a separate decision.
 
@@ -26,7 +25,7 @@ The goal is a working install with current patch and minor versions, without mix
 
 - If anything changed, run the full checks once:
   - `pnpm lint && pnpm test && pnpm build` in `frontend/`
-  - `./mvnw -f backend/pom.xml verify`
+  - `./backend/mvnw -f backend/pom.xml verify`
 - If they pass, commit only the dependency files (`package.json`, `pnpm-lock.yaml`, `pom.xml`) as `Update dependencies (patch/minor)`.
 - If they fail, revert the updates (`git checkout -- <files>`), keep the plain install, and mention it in the report.
 - **Major updates** and Spring Boot parent bumps are listed in the report, never applied here. Offer to file a bead for them.

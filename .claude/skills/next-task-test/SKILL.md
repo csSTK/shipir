@@ -12,7 +12,7 @@ Work out the changed area with `git status --porcelain` plus `git diff --name-on
 - **Focused:** collect the feature packages that were touched, e.g. `docker`, `compose`. Run:
 
   ```bash
-  ./mvnw -f backend/pom.xml verify -Dtest='dev.bethge.shipir.<pkg>.**' -Dsurefire.failIfNoSpecifiedTests=false
+  ./backend/mvnw -f backend/pom.xml verify -Dtest='dev.bethge.shipir.<pkg>.**' -Dsurefire.failIfNoSpecifiedTests=false
   ```
 
   Join several packages with commas. Run the full backend suite instead if any of these changed:
@@ -22,9 +22,8 @@ Work out the changed area with `git status --porcelain` plus `git diff --name-on
   - `common/`
   - a test base class or configuration
 
-- **Full:** `./mvnw -f backend/pom.xml verify`
+- **Full:** `./backend/mvnw -f backend/pom.xml verify`
 - Docker must be running for Testcontainers. If it isn't, report that. Don't skip the tests.
-- If there's no `mvnw` yet, run `javac --release 25 -d "$TMPDIR/shipir-classes" $(find backend/src/main/java -name '*.java')` and report "backend: compile-only".
 
 ## Frontend: files under `frontend/`
 

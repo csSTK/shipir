@@ -16,7 +16,7 @@ Current state: project skeleton in place. Backend in `backend/` with Maven and S
 
 - **Reading is allowed** (e.g. `psql -c "SELECT ..."`, `\d`, `pg_dump`).
 - **Writing never happens without the user's explicit consent.** That covers `INSERT`/`UPDATE`/`DELETE`, DDL, running migrations or starting the app against a real database (`spring-boot:run` runs Flyway), restoring dumps, SQL from files or stdin, and deleting database volumes (`docker compose down -v`). Ask first, say exactly what will be written and to which database, and wait for a yes.
-- Throwaway Testcontainers databases in tests (`./mvnw test`/`verify`) and the beads tracker (`bd`) are exempt.
+- Throwaway Testcontainers databases in tests (`./backend/mvnw test`/`verify`) and the beads tracker (`bd`) are exempt.
 - Sub-agents never write to a database. If a task needs a write, they stop and report it so the orchestrator can ask the user.
 - Enforced by `.claude/hooks/db-write-guard.py` (PreToolUse on Bash): suspected writes always trigger a permission prompt. It can't see writes hidden inside scripts or app code, so the rule applies regardless of the hook.
 

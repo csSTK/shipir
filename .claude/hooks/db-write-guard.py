@@ -9,7 +9,7 @@ Mentions in commit messages, grep patterns or bd text are ignored.
 Read-only database access passes through to the normal permission flow.
 Anything that writes, or that can't be shown to be read-only, gets
 permissionDecision "ask" so the user has to approve it. Testcontainers
-databases (via ./mvnw test/verify) and beads (bd) are not affected.
+databases (via ./backend/mvnw test/verify) and beads (bd) are not affected.
 """
 import json
 import os
