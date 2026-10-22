@@ -1,6 +1,6 @@
 ---
 name: next-task-finish
-description: Final step of /next-task once all sub-agents are finished. Runs the full test gate, closes the beads, writes short documentation, merges the epic branch into main, pushes and deletes the local branch. Normally invoked by the next-task skill, not directly.
+description: Final step of /next-task once all sub-agents are finished. Runs the full test gate, closes the beads, writes short documentation, merges the epic branch into dev, pushes and deletes the local branch. Normally invoked by the next-task skill, not directly.
 ---
 
 # next-task-finish
@@ -18,17 +18,17 @@ Docs and bead closing happen **before** the merge, so they're included in the pu
    - CLAUDE.md: update Build & Test or the rules only if they changed.
    - HANDOFF.md: tick any decisions this epic settled. Remove items that are now fully covered.
    - Commit as `Document <epic title> (<epic-id>)`, including `.beads/issues.jsonl`.
-4. **Merge into main and push.**
+4. **Merge into dev and push.**
    - `git fetch origin`
-   - `git switch main`
-   - `git pull --ff-only origin main`
-   - `git rebase main <branch>`. If there are conflicts, stop and report. Don't resolve them by guessing.
-   - `git switch main`
+   - `git switch dev`
+   - `git pull --ff-only origin dev`
+   - `git rebase dev <branch>`. If there are conflicts, stop and report. Don't resolve them by guessing.
+   - `git switch dev`
    - `git merge --ff-only <branch>`
-   - `git push origin main`
+   - `git push origin dev`
 
    Never use `--force` or `--force-with-lease` here. If the push is rejected, stop and report.
 5. **Clean up** after a successful push:
    - `git branch -d <branch>`. Use the lowercase `-d`: it refuses to delete unmerged work.
-   - Confirm `git status` is clean and `main` matches `origin/main`.
+   - Confirm `git status` is clean and `dev` matches `origin/dev`.
 6. **CI** is not part of this skill. The optional `watch-ci` step is step 8 of `next-task`.

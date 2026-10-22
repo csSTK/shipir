@@ -1,6 +1,6 @@
 ---
 name: next-task
-description: Implement a whole beads epic end to end. Takes an epic ID, creates a branch, prepares dependencies, plans the work, hands each child task to an implementer sub-agent (tests first, implementation, e2e, focused test runs), then closes the beads, updates docs, merges to main, pushes and deletes the branch. Use when the user says "next-task <epic-id>" or asks to implement an epic.
+description: Implement a whole beads epic end to end. Takes an epic ID, creates a branch, prepares dependencies, plans the work, hands each child task to an implementer sub-agent (tests first, implementation, e2e, focused test runs), then closes the beads, updates docs, merges to dev, pushes and deletes the branch. Use when the user says "next-task <epic-id>" or asks to implement an epic.
 ---
 
 # next-task
@@ -9,13 +9,13 @@ Orchestrates one epic from branch to push. You coordinate; the implementer sub-a
 
 **Input:** an epic ID, optionally followed by `--watch-ci` (`$ARGUMENTS`). Remove the flag, then take the rest as the epic ID. If the ID is missing, or `bd show <id>` says it isn't an epic, stop and ask for one, whether or not `--watch-ci` was passed. Never pick an epic yourself.
 
-**By invoking this skill the user authorizes** for this epic: creating and deleting its branch, committing, merging into `main` and pushing `main`. Nothing else: never force-push, never rewrite pushed history, never add attribution lines (see CLAUDE.md).
+**By invoking this skill the user authorizes** for this epic: creating and deleting its branch, committing, merging into `dev` and pushing `dev`. Nothing else: never force-push, never rewrite pushed history, never add attribution lines (see CLAUDE.md).
 
 ## Steps
 
 Each step lives in its own skill under `.claude/skills/`. Read that skill's `SKILL.md` and follow it. Stop and report to the user whenever a step says to stop. Don't skip ahead.
 
-1. **Branch:** `next-task-branch`. Creates `epic/<epic-id>-<slug>` from an up-to-date `main`.
+1. **Branch:** `next-task-branch`. Creates `epic/<epic-id>-<slug>` from an up-to-date `dev`.
 2. **Check beads:** `next-task-plan`, part 1. Validates the epic and its children.
 3. **Dependencies:** `next-task-deps`. Installs packages and applies safe updates as their own commit.
 4. **Plan implementation:** `next-task-plan`, part 2. Orders the children into waves, with the model and file set for each.
@@ -31,9 +31,9 @@ Each step lives in its own skill under `.claude/skills/`. Read that skill's `SKI
    - commit only that child's files: `git commit -m "<child title> (<child-id>)"`
 
    If it fails or is incomplete, send the agent the concrete findings once (SendMessage). If it still isn't right, stop and report. Don't start the next wave until every child in the current wave is committed.
-7. **When all sub-agents are finished:** `next-task-finish`. Final full test run, close the beads, write the documentation, merge into `main` and push, then delete the local branch.
-8. **Watch CI (optional):** only after step 7 has pushed `main` successfully.
-   - With `--watch-ci`: run the `watch-ci` skill for `main` (branch argument `main`) right away.
+7. **When all sub-agents are finished:** `next-task-finish`. Final full test run, close the beads, write the documentation, merge into `dev` and push, then delete the local branch.
+8. **Watch CI (optional):** only after step 7 has pushed `dev` successfully.
+   - With `--watch-ci`: run the `watch-ci` skill for `dev` (branch argument `dev`) right away.
    - Without it: ask once with AskUserQuestion, "Skip" as the first and default option, and "Watch CI" second. On "Skip", don't watch.
    - A CI failure never reopens beads, reverts or re-merges anything. Report it; `watch-ci` then offers its bug bead. Don't fix or re-run anything here.
 

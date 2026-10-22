@@ -1,11 +1,11 @@
 name: Images
 
 # Builds the backend and frontend images. Pull requests only build; pushes to
-# main and v* tags also publish to ghcr.io.
+# dev (tag `dev`), prd (tag `latest`) and v* tags also publish to ghcr.io.
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [dev, prd]
     tags: ["v*"]
 
 permissions:
@@ -45,7 +45,8 @@ jobs:
           images: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}
           tags: |
             type=sha,format=long
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/prd' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}

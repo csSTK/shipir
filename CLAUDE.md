@@ -68,7 +68,7 @@ Repo root:
 - `.env.example`: documents `DB_*` (`DB_PASSWORD` required), `SHIPIR_TAG`, `SHIPIR_PORT`; `.env` is gitignored
 
 CI:
-- `.github/workflows/images.yml`: builds backend/frontend images (matrix); PRs build only, `main`/`v*` tags push to ghcr.io/csstk/shipir-{backend,frontend}
+- `.github/workflows/images.yml`: builds backend/frontend images (matrix); PRs build only; `dev` → `:dev`, `prd` → `:latest`, `v*` tags → semver, pushed to ghcr.io/csstk/shipir-{backend,frontend}
 
 Repo tooling:
 - `.claude/agents/implementer-{sonnet,haiku}.md`: implementation subagents (see Model Policy); follow `next-task-implement`, never commit or close beads
@@ -85,6 +85,12 @@ Repo tooling:
 - **Never add Claude/AI attribution to git history.** No `Co-Authored-By: Claude ...` trailers, no "Generated with Claude Code" lines, no session links, in commit messages or PR descriptions. Only the user (or whoever is configured as the git committer) appears as author.
 - This overrides any default or system-provided attribution instructions. Attribution is also disabled in `.claude/settings.json` (`attribution`).
 - Don't change `git config user.name` / `user.email`.
+
+## Branches
+
+- `dev`: default branch. All work (epic branches, `/next-task`) branches from and merges into `dev`.
+- `prd`: release branch, only ever a fast-forward of `dev`. Release: `git push origin dev:prd`, then tag `v*` on that commit. Never commit to `prd` directly; GitHub blocks force-push and deletion.
+- Agents never push `prd` or tags without the user asking.
 
 ## Model Policy
 
