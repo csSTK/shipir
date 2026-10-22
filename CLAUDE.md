@@ -52,6 +52,10 @@ Frontend (`frontend/`):
 - `src/shared/api/client.ts`: `apiFetch<T>` + `ApiError`, JSON fetch against `/api`
 - `src/features/{containers,hosts,stacks}/index.ts`: empty feature entry points
 - `src/test/setup.ts`: jest-dom matchers for Vitest
+- `playwright.config.ts`: Playwright config (Chromium, `e2e/` dir, starts Vite dev server)
+- `tsconfig.e2e.json`: type-checks `e2e/` and `playwright.config.ts` (referenced from `tsconfig.json`)
+- `e2e/fixtures/api.ts`: Playwright `test` with auto `api` fixture: mocks `/api/**` per method+path, fails on unmocked calls (own spec: `api.spec.ts`)
+- `e2e/app.spec.ts`: smoke spec, Shipir heading
 
 Repo root:
 - `docker-compose.dev.yml`: local PostgreSQL 16 for development (healthcheck, `DB_*` from `.env`)
