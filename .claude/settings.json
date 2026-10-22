@@ -1,4 +1,18 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(pnpm *)",
+      "Bash(./backend/mvnw *)",
+      "Bash(bd *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git fetch*)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
