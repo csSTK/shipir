@@ -64,7 +64,8 @@ Frontend (`frontend/`):
 
 Repo root:
 - `docker-compose.dev.yml`: local PostgreSQL 16 for development (healthcheck, `DB_*` from `.env`)
-- `.env.example`: documents the five `DB_*` variables (`DB_PASSWORD` required, others with defaults); `.env` is gitignored
+- `docker-compose.yml`: hosting stack, backend + frontend (`ghcr.io/csstk/shipir-*` or local build), external PostgreSQL, only frontend port published
+- `.env.example`: documents `DB_*` (`DB_PASSWORD` required), `SHIPIR_TAG`, `SHIPIR_PORT`; `.env` is gitignored
 
 Repo tooling:
 - `.claude/agents/implementer-{sonnet,haiku}.md`: implementation subagents (see Model Policy); follow `next-task-implement`, never commit or close beads

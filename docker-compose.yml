@@ -1,0 +1,28 @@
+# Hosting stack: Shipir backend and frontend. PostgreSQL is NOT part of this file;
+# point DB_HOST/DB_PORT in .env at an existing PostgreSQL 16 server.
+# Usage: copy .env.example to .env, set DB_PASSWORD and DB_HOST, then run:
+#   docker compose -f docker-compose.yml up -d
+# Images are pulled from ghcr.io (SHIPIR_TAG, default latest); without a pull they are built locally.
+services:
+  backend:
+    image: ghcr.io/csstk/shipir-backend:${SHIPIR_TAG:-latest}
+    build: ./backend
+    environment:
+      DB_HOST: ${DB_HOST:?Set DB_HOST in .env to the external PostgreSQL host (see .env.example)}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-shipir}
+      DB_USER: ${DB_USER:-shipir}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env (see .env.example)}
+    # No ports: the backend is reachable only from the frontend on the compose network.
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/csstk/shipir-frontend:${SHIPIR_TAG:-latest}
+    build: ./frontend
+    environment:
+      BACKEND_URL: http://backend:8080
+    ports:
+      - "${SHIPIR_PORT:-8080}:8080"
+    depends_on:
+      - backend
+    restart: unless-stopped

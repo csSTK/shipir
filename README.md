@@ -96,6 +96,24 @@ The compose file reads `DB_NAME`, `DB_USER` and `DB_PORT` from `.env` as well, s
 
 Stop the database with `docker compose -f docker-compose.dev.yml down` (add `-v` only if you want to delete the data).
 
+### Hosting with Docker
+
+`docker-compose.yml` runs the backend and the frontend (nginx, serving the built app and proxying `/api` and `/ws`). PostgreSQL is **not** part of this file: point the app at an existing PostgreSQL 16 server.
+
+```bash
+cp .env.example .env                                   # then set DB_PASSWORD and DB_HOST (external database) in .env
+docker compose -f docker-compose.yml pull              # pull ghcr.io/csstk/shipir-*:${SHIPIR_TAG:-latest}
+docker compose -f docker-compose.yml up -d             # app on http://localhost:${SHIPIR_PORT:-8080}
+```
+
+Without a pull (or when the images don't exist on ghcr.io yet), `docker compose -f docker-compose.yml build` builds both images locally, and `up` uses them.
+
+Required in `.env`: `DB_PASSWORD` and `DB_HOST`. Compose stops with a message if either is missing. Optional: `DB_PORT`, `DB_NAME`, `DB_USER`, `SHIPIR_TAG` (image tag) and `SHIPIR_PORT` (host port, default `8080`).
+
+Only the frontend port is published. The backend is reachable only from the frontend on the compose network. The frontend starts even if the backend is not up yet; it reconnects on the next request.
+
+Stop the stack with `docker compose -f docker-compose.yml down`. This does not touch the external database.
+
 ### Backend (Java 25, Spring Boot 4.1.1)
 
 ```bash
