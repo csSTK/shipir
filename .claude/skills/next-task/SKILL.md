@@ -7,7 +7,7 @@ description: Implement a whole beads epic end to end. Takes an epic ID, creates 
 
 Orchestrates one epic from branch to push. You coordinate; the implementer sub-agents write the code. Run this on Opus (Model Policy in CLAUDE.md); if the session isn't on Opus, say so and suggest `/model opus`.
 
-**Input:** an epic ID (`$ARGUMENTS`). If it's missing, or `bd show <id>` says it isn't an epic, stop and ask for one. Never pick an epic yourself.
+**Input:** an epic ID, optionally followed by `--watch-ci` (`$ARGUMENTS`). Remove the flag, then take the rest as the epic ID. If the ID is missing, or `bd show <id>` says it isn't an epic, stop and ask for one, whether or not `--watch-ci` was passed. Never pick an epic yourself.
 
 **By invoking this skill the user authorizes** for this epic: creating and deleting its branch, committing, merging into `main` and pushing `main`. Nothing else: never force-push, never rewrite pushed history, never add attribution lines (see CLAUDE.md).
 
@@ -32,6 +32,10 @@ Each step lives in its own skill under `.claude/skills/`. Read that skill's `SKI
 
    If it fails or is incomplete, send the agent the concrete findings once (SendMessage). If it still isn't right, stop and report. Don't start the next wave until every child in the current wave is committed.
 7. **When all sub-agents are finished:** `next-task-finish`. Final full test run, close the beads, write the documentation, merge into `main` and push, then delete the local branch.
+8. **Watch CI (optional):** only after step 7 has pushed `main` successfully.
+   - With `--watch-ci`: run the `watch-ci` skill for `main` (branch argument `main`) right away.
+   - Without it: ask once with AskUserQuestion, "Skip" as the first and default option, and "Watch CI" second. On "Skip", don't watch.
+   - A CI failure never reopens beads, reverts or re-merges anything. Report it; `watch-ci` then offers its bug bead. Don't fix or re-run anything here.
 
 ## Report
 
@@ -40,5 +44,6 @@ At the end, keep it short:
 - the test results
 - anything deferred or newly filed as a bead
 - the push result
+- the CI result from `watch-ci` (run conclusions and URLs), or "CI not watched"
 
 If the run stopped early, say which step stopped it, why, and what state the branch is in.

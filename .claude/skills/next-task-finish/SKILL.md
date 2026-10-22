@@ -31,3 +31,4 @@ Docs and bead closing happen **before** the merge, so they're included in the pu
 5. **Clean up** after a successful push:
    - `git branch -d <branch>`. Use the lowercase `-d`: it refuses to delete unmerged work.
    - Confirm `git status` is clean and `main` matches `origin/main`.
+6. **CI** is not part of this skill. The optional `watch-ci` step is step 8 of `next-task`.
