@@ -112,6 +112,8 @@ Required in `.env`: `DB_PASSWORD` and `DB_HOST`. Compose stops with a message if
 
 Only the frontend port is published. The backend is reachable only from the frontend on the compose network. The frontend starts even if the backend is not up yet; it reconnects on the next request.
 
+Images are published to GitHub Container Registry by `.github/workflows/images.yml`: `ghcr.io/csstk/shipir-backend` and `ghcr.io/csstk/shipir-frontend`. A push to `main` publishes `latest` and the commit sha (`sha-<full sha>`); a `v*` tag (e.g. `v1.2.3`) publishes the semver tags (`1.2.3`, `1.2`, `1`). Pull requests only build, nothing is pushed. Set `SHIPIR_TAG` to pick one.
+
 Stop the stack with `docker compose -f docker-compose.yml down`. This does not touch the external database.
 
 ### Backend (Java 25, Spring Boot 4.1.1)

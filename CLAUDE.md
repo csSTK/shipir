@@ -67,6 +67,9 @@ Repo root:
 - `docker-compose.yml`: hosting stack, backend + frontend (`ghcr.io/csstk/shipir-*` or local build), external PostgreSQL, only frontend port published
 - `.env.example`: documents `DB_*` (`DB_PASSWORD` required), `SHIPIR_TAG`, `SHIPIR_PORT`; `.env` is gitignored
 
+CI:
+- `.github/workflows/images.yml`: builds backend/frontend images (matrix); PRs build only, `main`/`v*` tags push to ghcr.io/csstk/shipir-{backend,frontend}
+
 Repo tooling:
 - `.claude/agents/implementer-{sonnet,haiku}.md`: implementation subagents (see Model Policy); follow `next-task-implement`, never commit or close beads
 - `.claude/hooks/db-write-guard.py`: PreToolUse hook, forces a permission prompt for database writes
