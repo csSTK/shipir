@@ -78,6 +78,7 @@ Repo tooling:
 - `.claude/skills/next-task/SKILL.md`: `/next-task <epic-id>`, orchestrates an epic: branch → deps → plan → sub-agents → finish
 - `.claude/skills/next-task-{branch,deps,plan,finish}/SKILL.md`: orchestrator steps of `/next-task`
 - `.claude/skills/next-task-implement/SKILL.md`: sub-agent sequence, calling `next-task-{write-tests,code,e2e,test}` (also usable on their own)
+- `.claude/skills/watch-ci/SKILL.md`: `/watch-ci [run-id|branch]`, read-only: watches GitHub Actions runs via `gh`, reports result, offers a bug bead on failure
 
 ## Git Commits & Attribution
 
