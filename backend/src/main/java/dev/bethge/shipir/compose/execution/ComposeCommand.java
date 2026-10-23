@@ -6,6 +6,7 @@ import java.util.List;
 public enum ComposeCommand {
     UP("up", "-d", "--remove-orphans"),
     DOWN("down"),
+    DOWN_VOLUMES("down", "-v"),
     PULL("pull"),
     CONFIG("config", "--quiet");
 

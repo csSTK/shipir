@@ -222,4 +222,23 @@ class ComposeExecutionServiceTest {
                     .isInstanceOf(ComposeExecutionException.class);
         }
     }
+
+    @Test
+    void executeProjectRunsOnlyProjectNameAndCommandWithoutComposeFile() {
+        ComposeProcessResult result = service(Duration.ofSeconds(10))
+                .executeProject("legacy", ComposeCommand.DOWN, local(), line -> { });
+
+        assertThat(result.output()).contains("ARGS:-p legacy down");
+        assertThat(service(Duration.ofSeconds(10)).executeProject("legacy", ComposeCommand.DOWN_VOLUMES, local(), line -> { })
+                .output()).contains("ARGS:-p legacy down -v");
+    }
+
+    @Test
+    void executeProjectRejectsInvalidNamesBeforeStartingAnything() {
+        for (String name : List.of("../x", "A", "a b", "-x", "x;y", "")) {
+            assertThatThrownBy(() -> service(Duration.ofSeconds(10))
+                    .executeProject(name, ComposeCommand.DOWN, local(), line -> { }))
+                    .isInstanceOf(PathValidationException.class);
+        }
+    }
 }

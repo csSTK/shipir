@@ -59,4 +59,45 @@ class ComposeExecutionIntegrationTest {
         assertThat(r.exitCode()).isNotZero();
         assertThat(r.success()).isFalse();
     }
+
+    @Test
+    void executeProjectRemovesContainersAndNetworkOfAProjectWithoutFiles() throws IOException, InterruptedException {
+        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(), "No Docker daemon available");
+        Process p = new ProcessBuilder("docker", "compose", "version").redirectErrorStream(true).start();
+        p.getInputStream().readAllBytes();
+        Assumptions.assumeTrue(p.waitFor() == 0, "docker compose CLI not available");
+
+        var files = new ComposeFileRepository(new DeploymentProperties(tmp.resolve("deployments3")));
+        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofMinutes(3)));
+        UUID hostId = UUID.randomUUID();
+        String name = "shipir-it-" + UUID.randomUUID().toString().substring(0, 8);
+        files.write(hostId, name, "services:\n  sleeper:\n    image: busybox:1.36\n    command: sleep 300\n", null);
+        String socket = "unix://" + DockerClientFactory.instance().getRemoteDockerUnixSocketPath();
+        var endpoint = new DockerEndpoint.Local(socket);
+        try {
+            assertThat(service.execute(hostId, name, ComposeCommand.UP, endpoint, l -> { }).success()).isTrue();
+            assertThat(dockerLines(socket, "ps", "-aq", "--filter", "label=com.docker.compose.project=" + name)).isNotEmpty();
+            assertThat(dockerLines(socket, "network", "ls", "-q", "--filter", "label=com.docker.compose.project=" + name))
+                    .isNotEmpty();
+
+            // the project is treated as unmanaged: no compose file involved
+            ComposeProcessResult down = service.executeProject(name, ComposeCommand.DOWN, endpoint, l -> { });
+            assertThat(down.success()).as(String.join("\n", down.output())).isTrue();
+
+            assertThat(dockerLines(socket, "ps", "-aq", "--filter", "label=com.docker.compose.project=" + name)).isEmpty();
+            assertThat(dockerLines(socket, "network", "ls", "-q", "--filter", "label=com.docker.compose.project=" + name))
+                    .isEmpty();
+        } finally {
+            service.execute(hostId, name, ComposeCommand.DOWN, endpoint, l -> { });
+        }
+    }
+
+    private static List<String> dockerLines(String socket, String... args) throws IOException, InterruptedException {
+        List<String> cmd = new ArrayList<>(List.of("docker", "-H", socket));
+        cmd.addAll(List.of(args));
+        Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
+        String out = new String(p.getInputStream().readAllBytes());
+        p.waitFor();
+        return out.lines().filter(l -> !l.isBlank()).toList();
+    }
 }

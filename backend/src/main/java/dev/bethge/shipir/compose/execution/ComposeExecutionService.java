@@ -114,6 +114,31 @@ public class ComposeExecutionService {
         }
     }
 
+    /**
+     * Runs {@code docker compose -p <project> <command>} without any compose file, for a live project Shipir does not
+     * manage (Compose finds the containers by their project label). The name is validated like a deployment name.
+     *
+     * @throws dev.bethge.shipir.common.util.PathValidationException for an invalid project name
+     * @throws ComposeExecutionException if the process cannot be started
+     */
+    public ComposeProcessResult executeProject(String projectName, ComposeCommand command, DockerEndpoint endpoint,
+                                               Consumer<String> onLine) {
+        dev.bethge.shipir.common.util.PathValidationUtil.validateDeploymentName(projectName);
+        List<String> cmd = new ArrayList<>(executable);
+        cmd.addAll(List.of("-p", projectName));
+        cmd.addAll(command.args());
+        Path certDir = null;
+        try {
+            ProcessBuilder builder = new ProcessBuilder(cmd).redirectErrorStream(true);
+            Map<String, String> env = builder.environment();
+            DOCKER_ENV.forEach(env::remove);
+            certDir = applyEndpoint(env, endpoint);
+            return run(builder, onLine);
+        } finally {
+            deleteRecursively(certDir);
+        }
+    }
+
     /** The compose file must be inside the deployment directory, also after resolving symlinks. */
     private static Path requireInside(Path deploymentDir, Path composeFile) {
         Path normalized = composeFile.toAbsolutePath().normalize();
