@@ -1,0 +1,84 @@
+.env-row__actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 10px 10px 0;
+}
+
+.env-btn--danger-text {
+  color: var(--env-down);
+}
+
+.env-btn--danger {
+  background: var(--env-down);
+  border-color: transparent;
+  color: #fff;
+}
+
+.env-dialog--narrow {
+  width: min(26rem, 100%);
+}
+
+.env-dialog__title {
+  margin: 0 0 12px;
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
+}
+
+.env-dialog__text {
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+.env-dialog__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.env-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.875rem;
+}
+
+.env-field input {
+  font: inherit;
+  font-size: 1rem;
+  padding: 8px 12px;
+  border: 1px solid var(--env-border);
+  border-radius: 10px;
+  background: var(--env-surface);
+  color: inherit;
+}
+
+.env-field input:focus-visible {
+  outline: 2px solid AccentColor;
+  outline-offset: 2px;
+}
+
+.env-dialog__error {
+  margin: 0 0 12px;
+  font-size: 0.875rem;
+  color: var(--env-down);
+}
+
+.env-dialog__form .env-dialog__error {
+  margin: 0;
+}
+
+.env-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 600px) {
+  .env-row {
+    flex-direction: column;
+  }
+  .env-row__actions {
+    padding: 0 10px 10px;
+  }
+}

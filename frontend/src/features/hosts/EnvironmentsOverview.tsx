@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { EnvironmentActions } from './EnvironmentActions.tsx'
 import { EnvironmentForm } from './EnvironmentForm.tsx'
 import { describeError, formatMemory, plural } from './format.ts'
 import { useHostsOverview, type HostOverview } from './api.ts'
@@ -7,7 +8,7 @@ import './EnvironmentsOverview.css'
 
 type Role = 'ADMIN' | 'OPERATOR' | 'VIEWER'
 
-function EnvironmentRow({ env }: { env: HostOverview }) {
+function EnvironmentRow({ env, isAdmin }: { env: HostOverview; isAdmin: boolean }) {
   const up = env.status === 'UP'
   const message = up ? null : describeError(env.error)
   return (
@@ -45,7 +46,7 @@ function EnvironmentRow({ env }: { env: HostOverview }) {
           </dl>
         )}
       </Link>
-      {/* Row actions (rename, delete) go here, next to the link, not inside it. */}
+      {isAdmin && <EnvironmentActions env={env} />}
     </li>
   )
 }
@@ -158,7 +159,7 @@ export function EnvironmentsOverview({ role }: { role: Role }) {
       {rows.length > 0 && (
         <ul className="envs__list">
           {rows.map((env) => (
-            <EnvironmentRow key={env.id} env={env} />
+            <EnvironmentRow key={env.id} env={env} isAdmin={isAdmin} />
           ))}
         </ul>
       )}

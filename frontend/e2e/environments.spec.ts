@@ -89,3 +89,50 @@ test('opens the placeholder page and navigates back', async ({ page, api }) => {
   await expect(page).toHaveURL(/\/$/)
   await expect(page.getByRole('link', { name: /Local/ })).toBeVisible()
 })
+
+test('admin renames and deletes an environment', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', { body: user('ADMIN') })
+  api.mock('GET', '/api/hosts/overview', { body: [local] })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Rename Local' }).click()
+  const rename = page.getByRole('dialog', { name: 'Rename environment' })
+  await rename.getByLabel('Name').fill('Production')
+  api.mock('PATCH', '/api/hosts/a', { body: { id: 'a', name: 'Production' } })
+  api.mock('GET', '/api/hosts/overview', { body: [{ ...local, name: 'Production' }] })
+  await rename.getByRole('button', { name: 'Save' }).click()
+  await expect(rename).toHaveCount(0)
+  await expect(page.getByRole('link', { name: /Production/ })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Delete Production' }).click()
+  const confirm = page.getByRole('dialog', { name: 'Delete environment' })
+  await expect(confirm).toContainText('Production')
+  await expect(confirm).toContainText('stacks')
+  api.mock('DELETE', '/api/hosts/a', { status: 204 })
+  api.mock('GET', '/api/hosts/overview', { body: [] })
+  await confirm.getByRole('button', { name: 'Delete' }).click()
+  await expect(confirm).toHaveCount(0)
+  await expect(page.getByText('No environments yet. Add your first Docker environment.')).toBeVisible()
+})
+
+test('rename shows a taken name inline', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', { body: user('ADMIN') })
+  api.mock('GET', '/api/hosts/overview', { body: [local] })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Rename Local' }).click()
+  const rename = page.getByRole('dialog', { name: 'Rename environment' })
+  await rename.getByLabel('Name').fill('Staging')
+  api.mock('PATCH', '/api/hosts/a', { status: 409, body: { code: 'HOST_NAME_TAKEN' } })
+  await rename.getByRole('button', { name: 'Save' }).click()
+  await expect(rename.getByRole('alert')).toContainText('already in use')
+})
+
+test('operator sees no rename or delete actions', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', { body: user('OPERATOR') })
+  api.mock('GET', '/api/hosts/overview', { body: [local] })
+  await page.goto('/')
+
+  await expect(page.getByRole('link', { name: /Local/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Rename|Delete/ })).toHaveCount(0)
+})
