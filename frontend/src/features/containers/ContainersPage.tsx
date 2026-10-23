@@ -70,6 +70,20 @@ const baseColumns: ResourceColumn<Container>[] = [
   },
 ]
 
+/** ADMIN-only link to the interactive console; only running containers can have one. */
+const consoleColumn: ResourceColumn<Container> = {
+  id: 'console',
+  header: 'Console',
+  render: (c) =>
+    c.state === 'running' ? (
+      <Link className="sk-btn sk-btn--plain containers__btn" to={`${c.id}/console`} aria-label={`Console of ${c.name}`}>
+        Console
+      </Link>
+    ) : (
+      '–'
+    ),
+}
+
 const LABELS: Record<ContainerAction, [label: string, pending: string]> = {
   start: ['Start', 'Starting…'],
   stop: ['Stop', 'Stopping…'],
@@ -147,8 +161,9 @@ export function ContainersPage() {
       },
     )
   }
+  const isAdmin = user?.role === 'ADMIN'
   const tableColumns = canWrite
-    ? [...baseColumns, actionColumn(pending, (c, a) => (a === 'kill' ? setKillTarget(c) : run(c, a))), deleteColumn<Container>('container', (c) => c.name, setTarget)]
+    ? [...baseColumns, ...(isAdmin ? [consoleColumn] : []), actionColumn(pending, (c, a) => (a === 'kill' ? setKillTarget(c) : run(c, a))), deleteColumn<Container>('container', (c) => c.name, setTarget)]
     : baseColumns
 
   const rows = deployment ? data?.filter((c) => c.composeProject === deployment) : data

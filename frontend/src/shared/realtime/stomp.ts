@@ -20,12 +20,18 @@ function brokerUrl(): string {
   return `${scheme}//${window.location.host}/ws`
 }
 
+export interface TopicChannel {
+  /** Publishes a frame (STOMP SEND). Dropped silently while not connected. */
+  publish: (destination: string, body: Uint8Array | string) => void
+  /** Tears down the subscription and the connection. */
+  close: () => void
+}
+
 /**
- * Subscribes to a STOMP topic on the backend (`/ws`, session cookie + CSRF header on CONNECT).
- * Reconnects automatically and re-subscribes; the server replays buffered frames on every
- * subscribe, so callers de-duplicate. Returns the function that tears everything down.
+ * Like {@link subscribeToTopic}, but also lets the caller SEND frames over the same connection
+ * (needed where one connection must both receive and send, e.g. the exec console).
  */
-export function subscribeToTopic(destination: string, handlers: TopicHandlers, options: SubscribeOptions = {}): () => void {
+export function openTopicChannel(destination: string, handlers: TopicHandlers, options: SubscribeOptions = {}): TopicChannel {
   const client = new Client({
     brokerURL: brokerUrl(),
     reconnectDelay: RECONNECT_DELAY_MS,
@@ -43,7 +49,23 @@ export function subscribeToTopic(destination: string, handlers: TopicHandlers, o
   })
   handlers.onState('connecting')
   client.activate()
-  return () => {
-    void client.deactivate()
+  return {
+    publish: (dest, body) => {
+      if (!client.connected) return
+      if (typeof body === 'string') client.publish({ destination: dest, body })
+      else client.publish({ destination: dest, binaryBody: body, headers: { 'content-type': 'application/octet-stream' } })
+    },
+    close: () => {
+      void client.deactivate()
+    },
   }
+}
+
+/**
+ * Subscribes to a STOMP topic on the backend (`/ws`, session cookie + CSRF header on CONNECT).
+ * Reconnects automatically and re-subscribes; the server replays buffered frames on every
+ * subscribe, so callers de-duplicate. Returns the function that tears everything down.
+ */
+export function subscribeToTopic(destination: string, handlers: TopicHandlers, options: SubscribeOptions = {}): () => void {
+  return openTopicChannel(destination, handlers, options).close
 }

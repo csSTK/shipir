@@ -3,7 +3,7 @@ import { EnvironmentDashboard, EnvironmentsOverview } from '../features/hosts/in
 import { AccountPage } from '../features/account/index.ts'
 import { AiSettingsPage, AuditLogPage, GitCredentialsSettingsPage, RetentionSettingsPage, SharedChatSessionsPage, UsersSettingsPage, WebhooksSettingsPage } from '../features/settings/index.ts'
 import { ChatPage } from '../features/ai-chat/index.ts'
-import { ContainersPage, ContainerLogsPage } from '../features/containers/index.ts'
+import { ContainersPage, ContainerLogsPage, ContainerConsolePage } from '../features/containers/index.ts'
 import { ImagesPage } from '../features/images/index.ts'
 import { NetworksPage } from '../features/networks/index.ts'
 import { VolumesPage } from '../features/volumes/index.ts'
@@ -46,6 +46,7 @@ function AuthGate() {
         <Route path="/environments/:id/stacks/:deploymentId" element={<LegacyStacksRedirect />} />
         <Route path="/environments/:id/containers" element={<ContainersPage />} />
         <Route path="/environments/:id/containers/:cid/logs" element={<ContainerLogsPage />} />
+        <Route path="/environments/:id/containers/:cid/console" element={isAdmin ? <ContainerConsolePage /> : <NotAllowedPage />} />
         <Route path="/environments/:id/images" element={<ImagesPage />} />
         <Route path="/environments/:id/networks" element={<NetworksPage />} />
         <Route path="/environments/:id/volumes" element={<VolumesPage />} />
