@@ -97,7 +97,7 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 Frontend (`frontend/`):
 - `vite.config.ts`: dev proxy (`/api`, `/ws` → :8080), Vitest config
 - `src/main.tsx`: entry, mounts `App`
-- `src/app/App.tsx`: root component, `Providers` + `BrowserRouter` + auth gate (loading, `LoginPage` on 401, `SetupPage` while `setupRequired`, routes `/` overview, `/environments/:id` dashboard, one `ResourcePlaceholder` route line per `/environments/:id/<resource>` to swap for real pages, sign out)
+- `src/app/App.tsx`: root component, `Providers` + `BrowserRouter` + auth gate (loading, `LoginPage` on 401, `SetupPage` while `setupRequired`, routes `/` overview, `/environments/:id` dashboard and `/environments/:id/{stacks,containers,images,networks,volumes}` pages, sign out)
 - `src/app/providers.tsx`, `src/app/queryClient.ts`: React Query setup
 - `src/shared/api/client.ts`: `apiFetch<T>` + `ApiError` (status, code, violations, details), JSON fetch against `/api`, same-origin credentials, `X-XSRF-TOKEN` from cookie on non-GET
 - `src/features/auth/{api.ts,LoginPage.tsx,LoginPage.css,index.ts}`: `useCurrentUser/useLogin/useLogout/useChangePassword/useRequestPasswordReset/useConfirmPasswordReset` hooks, login form with `Forgot password?` view switch + success notice
@@ -120,7 +120,7 @@ Frontend (`frontend/`):
 - `src/features/hosts/EnvironmentDashboard.{tsx,css,test.tsx}`: `/environments/:id`: status, Docker version, resource tiles (counts from overview) linking to resource routes; DOWN error, not-found
 - `src/features/hosts/resources.ts`: `ENV_RESOURCES` (stacks/containers/images/networks/volumes) for sidebar, tiles
 - `src/features/hosts/format.ts`: memory/plural formatting, overview error code to message, `describeResourceError(err)` for `/hosts/{id}/...` failures
-- `src/features/hosts/index.ts`: exports form, overview, page, hooks, types
+- `src/features/hosts/index.ts`: exports form, overview, dashboard, `ENV_RESOURCES`, hooks, types
 - `src/test/setup.ts`: jest-dom matchers for Vitest
 - `playwright.config.ts`: Playwright config (Chromium, `e2e/` dir, starts Vite dev server)
 - `tsconfig.e2e.json`: type-checks `e2e/` and `playwright.config.ts` (referenced from `tsconfig.json`)
