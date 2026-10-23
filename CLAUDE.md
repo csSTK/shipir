@@ -40,6 +40,8 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `host/{HostOverviewService,HostOverviewProperties}.java`: `GET /api/hosts/overview` (in `HostController`): parallel live `info` per host on virtual threads, shared deadline `shipir.host.overview-timeout` (5s), failures -> DOWN + error code (docker codes, TIMEOUT, DECRYPTION_FAILED, ENCRYPTION_KEY_MISSING, UNKNOWN)
 - `host/{HostHealthCheckScheduler,HostStatusChangedEvent}.java`: `@Scheduled` (`shipir.host.health-check-interval`=60s, `health-check-enabled`=true; test properties disable it) reuses `HostOverviewService`, in-memory last status per host (first observation = baseline), publishes `HostStatusChangedEvent` on UP/DOWN flips, forgets deleted hosts
 - `common/config/SchedulingConfig.java`: `@EnableScheduling`
+- `host/{HostResourcesController,HostResourcesService}.java`: read-only `GET /api/hosts/{id}/{stacks,containers,images,networks,volumes}` (all roles) via docker/ services; 404 HOST_NOT_FOUND, 502 with DockerErrorCode / DECRYPTION_FAILED / ENCRYPTION_KEY_MISSING (errors via `HostExceptionHandler`)
+- `backend/src/test/java/dev/bethge/shipir/host/HostResources{Api,Resilience,NoKey}Test.java`: resource endpoints (real local socket; stubbed services for 502 codes; missing key)
 - `host/HostEndpointResolver.java`: public, builds `DockerEndpoint` from a `DockerHost` (decrypts TLS)
 - `host/HostEncryptionStartupCheck.java`: fails startup if TCP hosts exist without `shipir.encryption-key`
 - `host/dto/*.java`: create/test/update requests (toString hides PEMs), `HostResponse` (`tls` boolean only), `HostOverviewResponse` (stats null when DOWN)
