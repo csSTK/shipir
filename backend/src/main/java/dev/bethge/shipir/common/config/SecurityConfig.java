@@ -77,6 +77,7 @@ class SecurityConfig {
                         // environments: every role reads, only ADMIN writes (create, test, rename, delete)
                         .requestMatchers(HttpMethod.GET, "/api/hosts", "/api/hosts/**").authenticated()
                         .requestMatchers("/api/hosts", "/api/hosts/**").hasRole("ADMIN")
+                        .requestMatchers("/api/compose/generate").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers("/api/audit-log", "/api/audit-log/**").hasRole("ADMIN")
                         .requestMatchers("/api/notifications/webhooks", "/api/notifications/webhooks/**").hasRole("ADMIN")
                         .requestMatchers("/api/settings/retention").hasRole("ADMIN")

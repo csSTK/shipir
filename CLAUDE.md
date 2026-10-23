@@ -34,7 +34,9 @@ Current state: project skeleton in place. Backend in `backend/` with Maven and S
 Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `ShipirApplication.java`: Spring Boot entry point
 - `**/package-info.java`: one-line Javadoc per package of the architecture tree
-- `compose/Stack.java`, `compose/generator/ComposeGeneratorService.java`, `config_editor/ConfigFile.java`, `permission/Permission.java`, `streaming/LogStreamHandler.java`: empty placeholders
+- `compose/Stack.java`, `config_editor/ConfigFile.java`, `permission/Permission.java`, `streaming/LogStreamHandler.java`: empty placeholders
+- `compose/generator/{ComposeGeneratorService,ComposeGeneratorController,GenerateRequest,GenerateResponse,InvalidComposeSpecException}.java`, `compose/generator/model/*`: wizard model (`ComposeSpec`/`ServiceSpec`/ports/env/mounts/networks/volumes records) to Compose YAML (Jackson YAML, fixed key order); `POST /api/compose/generate` (ADMIN/OPERATOR via SecurityConfig matcher), 400 INVALID_COMPOSE_SPEC with all violations; bind paths via `PathValidationUtil`
+- `backend/src/test/java/dev/bethge/shipir/compose/generator/`: golden/invalid-input unit tests, API roles test, `docker compose config` check (skipped without CLI)
 - `audit/{AuditLogEntry,AuditRecord,AuditLogRepository,AuditService}.java`: `audit_log` entity (details JSONB), input record, repository, `record` in REQUIRES_NEW tx
 - `audit/{Auditable,AuditAspect}.java`: `@Auditable(action, targetType, targetId SpEL, username SpEL)`; aspect writes SUCCESS/FAILURE (error-status `ResponseEntity` = FAILURE, exceptions rethrown), user from SecurityContext, recording errors swallowed; used on `AuthController` login/logout/password/reset-confirm and `HostService` create/rename/delete
 - `audit/{AuditLogController,AuditLogQueryService,InvalidAuditQueryException}.java`, `audit/dto/{AuditLogEntryResponse,AuditLogPageResponse}.java`: ADMIN-only `GET /api/audit-log?page&size&action&username&from&to` (newest first, size 1..100 else 400 INVALID_PARAMETER, ISO instants)
