@@ -1,4 +1,303 @@
 package dev.bethge.shipir.streaming;
 
+import dev.bethge.shipir.docker.DockerConnectionException;
+import dev.bethge.shipir.docker.client.ContainerLogService;
+import dev.bethge.shipir.docker.dto.LogLine;
+import dev.bethge.shipir.host.DockerHostRepository;
+import dev.bethge.shipir.host.HostEndpointResolver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.stereotype.Service;
+
+import java.io.Closeable;
+import java.time.Clock;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.regex.Pattern;
+
+/**
+ * Live container logs on {@code /topic/hosts/{hostId}/containers/{containerId}/logs}.
+ *
+ * <p>Subscriptions are reference counted per (host, container): the first SUBSCRIBE starts one Docker follow
+ * (on a virtual thread, so the STOMP thread never waits for Docker), later subscribers share it and get a
+ * bounded replay of recent lines, the last UNSUBSCRIBE or disconnect closes it. Frames go directly to each
+ * subscription under the stream lock, so replay and live delivery stay ordered. When the container stops, a
+ * STATUS ENDED frame is sent. Lines are capped in length and in rate.
+ */
+@Service
+@EnableConfigurationProperties(LogStreamProperties.class)
 public class LogStreamHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(LogStreamHandler.class);
+
+    static final String TOPIC_PREFIX = "/topic/hosts/";
+    private static final Pattern TOPIC = Pattern.compile(
+            "^" + Pattern.quote(TOPIC_PREFIX) + "([0-9a-fA-F-]{36})/containers/([A-Za-z0-9][A-Za-z0-9_.-]{0,127})/logs$");
+
+    /** A parsed log topic. */
+    record Target(UUID hostId, String containerId) {
+    }
+
+    private record Subscription(String sessionId, String subscriptionId) {
+    }
+
+    private static final class Stream {
+        final Target target;
+        final Deque<LogStreamMessage> buffer = new ArrayDeque<>();
+        final List<Subscription> subscribers = new ArrayList<>();
+        long nextSeq = 1;
+        boolean ended;
+        boolean closed;
+        Closeable follow;
+        long windowSecond = Long.MIN_VALUE;
+        int windowLines;
+        int dropped;
+
+        Stream(Target target) {
+            this.target = target;
+        }
+    }
+
+    private final Map<Target, Stream> streams = new HashMap<>();
+    private final ContainerLogService logs;
+    private final DockerHostRepository hosts;
+    private final HostEndpointResolver endpoints;
+    private final StompFrameSender sender;
+    private final LogStreamProperties properties;
+    private final Clock clock;
+
+    LogStreamHandler(ContainerLogService logs, DockerHostRepository hosts, HostEndpointResolver endpoints,
+                     StompFrameSender sender, LogStreamProperties properties, Clock clock) {
+        this.logs = logs;
+        this.hosts = hosts;
+        this.endpoints = endpoints;
+        this.sender = sender;
+        this.properties = properties;
+        this.clock = clock;
+    }
+
+    /** Parses a destination; null if it is not a log topic. */
+    static Target parse(String destination) {
+        var m = TOPIC.matcher(destination);
+        if (!m.matches()) {
+            return null;
+        }
+        try {
+            return new Target(UUID.fromString(m.group(1)), m.group(2));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Permission hook: may this user follow the logs of this container? Today every authenticated user may
+     * (read access); the permissions epic narrows it per host here.
+     */
+    boolean mayFollow(String username, Target target) {
+        return true;
+    }
+
+    /** Registers a subscription, replays the buffer and starts the Docker follow for the first subscriber. */
+    void subscribe(Target target, String sessionId, String subscriptionId) {
+        Stream stream;
+        boolean first;
+        while (true) {
+            synchronized (streams) {
+                stream = streams.get(target);
+                first = stream == null;
+                if (first) {
+                    stream = new Stream(target);
+                    streams.put(target, stream);
+                }
+            }
+            synchronized (stream) {
+                if (stream.closed) {
+                    continue; // released concurrently, start over with a fresh stream
+                }
+                Subscription sub = new Subscription(sessionId, subscriptionId);
+                stream.subscribers.add(sub);
+                for (LogStreamMessage m : stream.buffer) {
+                    send(stream, sub, m);
+                }
+                break;
+            }
+        }
+        if (first) {
+            Stream started = stream;
+            Thread.ofVirtual().name("log-follow-" + target.containerId()).start(() -> startFollow(started));
+        }
+    }
+
+    void unsubscribe(String sessionId, String subscriptionId) {
+        List<Stream> all;
+        synchronized (streams) {
+            all = new ArrayList<>(streams.values());
+        }
+        for (Stream stream : all) {
+            boolean empty;
+            synchronized (stream) {
+                stream.subscribers.removeIf(s -> s.sessionId.equals(sessionId)
+                        && (subscriptionId == null || s.subscriptionId.equals(subscriptionId)));
+                empty = stream.subscribers.isEmpty();
+            }
+            if (empty) {
+                release(stream);
+            }
+        }
+    }
+
+    int subscriberCount(Target target) {
+        Stream stream;
+        synchronized (streams) {
+            stream = streams.get(target);
+        }
+        if (stream == null) {
+            return 0;
+        }
+        synchronized (stream) {
+            return stream.subscribers.size();
+        }
+    }
+
+    int activeStreams() {
+        synchronized (streams) {
+            return streams.size();
+        }
+    }
+
+    private void release(Stream stream) {
+        Closeable follow;
+        synchronized (streams) {
+            synchronized (stream) {
+                if (!stream.subscribers.isEmpty() || stream.closed) {
+                    return;
+                }
+                stream.closed = true;
+                follow = stream.follow;
+                stream.follow = null;
+            }
+            streams.remove(stream.target, stream);
+        }
+        closeQuietly(follow);
+    }
+
+    private void startFollow(Stream stream) {
+        Target target = stream.target;
+        try {
+            var host = hosts.findById(target.hostId())
+                    .orElseThrow(() -> new DockerConnectionException(
+                            dev.bethge.shipir.docker.DockerErrorCode.NOT_FOUND, "Host not found", null));
+            var endpoint = endpoints.endpointOf(host);
+            Closeable follow = logs.follow(target.hostId(), endpoint, target.containerId(), properties.tail(), false,
+                    line -> onLine(stream, line), failure -> onEnd(stream, failure));
+            boolean stop;
+            synchronized (stream) {
+                stop = stream.closed;
+                if (!stop) {
+                    stream.follow = follow;
+                }
+            }
+            if (stop) {
+                closeQuietly(follow);
+            }
+        } catch (DockerConnectionException e) {
+            fail(stream, e.getCode().name());
+        } catch (RuntimeException e) {
+            // e.g. undecryptable TLS material or missing encryption key: no detail to the client
+            log.warn("Starting log follow for container {} failed: {}", target.containerId(), e.getClass().getSimpleName());
+            fail(stream, "UNAVAILABLE");
+        }
+    }
+
+    private void onLine(Stream stream, LogLine line) {
+        synchronized (stream) {
+            if (stream.ended || stream.closed) {
+                return;
+            }
+            long second = clock.millis() / 1000;
+            if (second != stream.windowSecond) {
+                stream.windowSecond = second;
+                stream.windowLines = 0;
+                if (stream.dropped > 0) {
+                    publish(stream, LogStreamMessage.Type.LINE, "STDERR",
+                            "[" + stream.dropped + " lines skipped: rate limit]", null);
+                    stream.dropped = 0;
+                }
+            }
+            if (stream.windowLines >= properties.maxLinesPerSecond()) {
+                stream.dropped++;
+                return;
+            }
+            stream.windowLines++;
+            String text = line.text();
+            if (text.length() > properties.maxLineLength()) {
+                text = text.substring(0, properties.maxLineLength()) + " [truncated]";
+            }
+            publish(stream, LogStreamMessage.Type.LINE, line.stream().name(), text, null);
+        }
+    }
+
+    private void onEnd(Stream stream, Throwable failure) {
+        if (failure instanceof DockerConnectionException e) {
+            fail(stream, e.getCode().name());
+        } else if (failure != null) {
+            fail(stream, "UNAVAILABLE");
+        } else {
+            synchronized (stream) {
+                finish(stream, LogStreamMessage.Status.ENDED, null);
+            }
+        }
+    }
+
+    private void fail(Stream stream, String code) {
+        synchronized (stream) {
+            finish(stream, LogStreamMessage.Status.ERROR, code);
+        }
+    }
+
+    private void finish(Stream stream, LogStreamMessage.Status status, String code) {
+        if (stream.ended || stream.closed) {
+            return;
+        }
+        stream.ended = true;
+        publish(stream, LogStreamMessage.Type.STATUS, null, code, status);
+    }
+
+    /** Caller holds the stream lock. */
+    private void publish(Stream stream, LogStreamMessage.Type type, String streamName, String line,
+                         LogStreamMessage.Status status) {
+        var message = new LogStreamMessage(stream.nextSeq++, type, streamName, line, status);
+        stream.buffer.addLast(message);
+        while (stream.buffer.size() > properties.bufferLines() && stream.buffer.peekFirst().type() == LogStreamMessage.Type.LINE) {
+            stream.buffer.removeFirst();
+        }
+        for (Subscription s : stream.subscribers) {
+            send(stream, s, message);
+        }
+    }
+
+    private void send(Stream stream, Subscription sub, LogStreamMessage message) {
+        sender.send(sub.sessionId, sub.subscriptionId, destination(stream.target), message);
+    }
+
+    static String destination(Target t) {
+        return TOPIC_PREFIX + t.hostId() + "/containers/" + t.containerId() + "/logs";
+    }
+
+    private static void closeQuietly(Closeable c) {
+        if (c == null) {
+            return;
+        }
+        try {
+            c.close();
+        } catch (Exception e) {
+            // closing is best effort, the stream is gone either way
+        }
+    }
 }

@@ -19,7 +19,8 @@ import java.util.regex.Pattern;
  * Inbound STOMP frame policy: CONNECT needs an authenticated handshake principal and the CSRF token (header
  * {@code X-XSRF-TOKEN} equal to the {@code XSRF-TOKEN} cookie of the handshake, see {@link CsrfHandshakeInterceptor}),
  * SUBSCRIBE only to {@code /topic/deployments/{id}} (registers the subscription for replay) and
- * {@code /topic/chat/{sessionId}} (owner only, via {@link ChatTopicAccess}), clients may not SEND.
+ * {@code /topic/chat/{sessionId}} (owner only, via {@link ChatTopicAccess}) and container logs
+ * {@code /topic/hosts/{hostId}/containers/{id}/logs} (any authenticated user, see {@link LogStreamHandler}), clients may not SEND.
  */
 @Component
 public class StompSecurityInterceptor implements ChannelInterceptor {
@@ -33,10 +34,13 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
 
     private final ComposeOutputStreamService streams;
     private final ChatTopicAccess chatAccess;
+    private final LogStreamHandler logStreams;
 
-    StompSecurityInterceptor(ComposeOutputStreamService streams, ChatTopicAccess chatAccess) {
+    StompSecurityInterceptor(ComposeOutputStreamService streams, ChatTopicAccess chatAccess,
+                             LogStreamHandler logStreams) {
         this.streams = streams;
         this.chatAccess = chatAccess;
+        this.logStreams = logStreams;
     }
 
     @Override
@@ -59,13 +63,24 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                     }
                     break;
                 }
+                var logTarget = LogStreamHandler.parse(destination);
+                if (logTarget != null) {
+                    if (!logStreams.mayFollow(accessor.getUser().getName(), logTarget)) {
+                        throw new MessageDeliveryException("Subscription destination not allowed");
+                    }
+                    logStreams.subscribe(logTarget, accessor.getSessionId(), accessor.getSubscriptionId());
+                    break;
+                }
                 var m = DEPLOYMENT_TOPIC.matcher(destination);
                 if (!m.matches()) {
                     throw new MessageDeliveryException("Subscription destination not allowed");
                 }
                 streams.subscribe(m.group(1), accessor.getSessionId(), accessor.getSubscriptionId());
             }
-            case UNSUBSCRIBE -> streams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
+            case UNSUBSCRIBE -> {
+                streams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
+                logStreams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
+            }
             case SEND -> throw new MessageDeliveryException("Sending is not allowed");
             default -> {
                 // DISCONNECT, heartbeats and the like need no checks
@@ -94,5 +109,6 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
     @EventListener
     void onDisconnect(SessionDisconnectEvent event) {
         streams.unsubscribe(event.getSessionId(), null);
+        logStreams.unsubscribe(event.getSessionId(), null);
     }
 }
