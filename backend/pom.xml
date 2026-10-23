@@ -19,6 +19,7 @@
     <properties>
         <java.version>25</java.version>
         <bouncycastle.version>1.86</bouncycastle.version>
+        <docker-java.version>3.7.1</docker-java.version>
     </properties>
 
     <dependencies>
@@ -38,6 +39,16 @@
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcprov-jdk18on</artifactId>
             <version>${bouncycastle.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.docker-java</groupId>
+            <artifactId>docker-java-core</artifactId>
+            <version>${docker-java.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.docker-java</groupId>
+            <artifactId>docker-java-transport-httpclient5</artifactId>
+            <version>${docker-java.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
