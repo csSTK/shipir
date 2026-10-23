@@ -234,7 +234,18 @@ public class StackService {
     @Auditable(action = "STACK_UPDATE", targetType = "STACK", targetId = "#id")
     public StackDetailResponse update(UUID hostId, UUID id, StackUpdateRequest request, String username) {
         DockerHost host = requireHost(hostId);
-        Stack stack = requireStack(hostId, id);
+        Stack found = requireStack(hostId, id);
+        locks.acquire(found.getId());
+        try {
+            // re-read under the lock: a deployment that just finished may have changed the current version
+            return updateLocked(hostId, host, requireStack(hostId, id), request, username);
+        } finally {
+            locks.release(found.getId());
+        }
+    }
+
+    private StackDetailResponse updateLocked(UUID hostId, DockerHost host, Stack stack, StackUpdateRequest request,
+                                             String username) {
         String name = stack.getName();
         StackVersion version = currentVersion(stack);
         boolean gitManaged = stack.getSourceType() == StackSource.GIT;

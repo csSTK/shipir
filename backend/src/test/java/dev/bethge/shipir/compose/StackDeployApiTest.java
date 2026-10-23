@@ -135,6 +135,33 @@ class StackDeployApiTest extends StackTestBase {
     }
 
     @Test
+    void updateWhileDeployingIsRejectedWith409AndLeavesStateUntouched() throws Exception {
+        Login admin = login("admin");
+        String id = create(admin);
+        CountDownLatch gate = new CountDownLatch(1);
+        upGate = gate;
+        deploy(admin, id);
+        String composeBefore = files.readCompose(hostId, "web").orElseThrow();
+        int versionsBefore = jdbc.queryForObject("SELECT count(*) FROM stack_versions", Integer.class);
+
+        mvc.perform(admin.write(put(url() + "/" + id)).contentType(APPLICATION_JSON)
+                        .content(updateJson(YAML + "# edited\n", "[{\"key\":\"NEW\",\"value\":\"v\"}]")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DEPLOYMENT_IN_PROGRESS"));
+
+        assertThat(files.readCompose(hostId, "web")).contains(composeBefore);
+        assertThat(files.readEnv(hostId, "web").orElseThrow()).contains("MODE").doesNotContain("NEW");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM stack_versions", Integer.class))
+                .isEqualTo(versionsBefore);
+
+        gate.countDown();
+        awaitIdle(id);
+        mvc.perform(admin.write(put(url() + "/" + id)).contentType(APPLICATION_JSON)
+                        .content(updateJson(YAML + "# edited\n", null)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void rollbackCreatesRollbackVersionWithOldContentAndDeploysIt() throws Exception {
         Login admin = login("admin");
         String id = create(admin);
