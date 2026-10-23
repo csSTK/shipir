@@ -78,6 +78,7 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/hosts", "/api/hosts/**").authenticated()
                         .requestMatchers("/api/hosts", "/api/hosts/**").hasRole("ADMIN")
                         .requestMatchers("/api/audit-log", "/api/audit-log/**").hasRole("ADMIN")
+                        .requestMatchers("/api/notifications/webhooks", "/api/notifications/webhooks/**").hasRole("ADMIN")
                         .anyRequest().authenticated());
         return http.build();
     }
