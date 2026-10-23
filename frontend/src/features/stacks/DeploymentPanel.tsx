@@ -1,19 +1,19 @@
+import { DeployOutput } from './deploy-output/DeployOutput.tsx'
+import type { DeploymentResult } from './deploy-output/useDeploymentStream.ts'
+
 export interface StartedDeployment {
   kind: 'Deploy' | 'Rollback'
   deploymentId: string
 }
 
-/**
- * Seam for shipr-e42.16: the live output panel replaces the body of this component
- * and subscribes to `/topic/deployments/{deploymentId}`. For now it only confirms the start.
- */
-export function DeploymentPanel({ deployment }: { deployment: StartedDeployment }) {
-  return (
-    <div className="sd-deploy" role="status">
-      <strong>{deployment.kind === 'Deploy' ? 'Deployment started' : 'Rollback started'}</strong>
-      <span className="sd-muted">
-        Deployment ID <code>{deployment.deploymentId}</code>
-      </span>
-    </div>
-  )
+/** Live output of a started deploy or rollback (STOMP `/topic/deployments/{id}`). */
+export function DeploymentPanel({
+  deployment,
+  onFinished,
+}: {
+  deployment: StartedDeployment
+  onFinished?: (result: DeploymentResult) => void
+}) {
+  const title = deployment.kind === 'Deploy' ? 'Deployment' : 'Rollback'
+  return <DeployOutput title={title} deploymentId={deployment.deploymentId} onFinished={onFinished} />
 }

@@ -57,12 +57,12 @@ test('operator creates, deploys, rolls back and deletes a stack', async ({ page,
   await expect(page.getByRole('heading', { name: 'shop' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Deploy' }).click()
-  await expect(page.getByRole('status')).toContainText('dep-1')
+  await expect(page.getByLabel('Deployment output')).toContainText('dep-1')
 
   await page.getByRole('button', { name: /Roll back to/ }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Roll back' }).click()
-  await expect(page.getByRole('status')).toContainText('Rollback started')
-  await expect(page.getByRole('status')).toContainText('dep-2')
+  await expect(page.getByLabel('Deployment output')).toContainText('Rollback')
+  await expect(page.getByLabel('Deployment output')).toContainText('dep-2')
 
   await page.getByRole('button', { name: 'Delete' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click()

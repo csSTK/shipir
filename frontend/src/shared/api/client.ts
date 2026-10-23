@@ -33,7 +33,7 @@ interface RequestOptions {
   signal?: AbortSignal
 }
 
-function readCookie(name: string): string | undefined {
+export function readCookie(name: string): string | undefined {
   const prefix = `${name}=`
   const entry = document.cookie.split('; ').find((part) => part.startsWith(prefix))
   return entry ? decodeURIComponent(entry.slice(prefix.length)) : undefined

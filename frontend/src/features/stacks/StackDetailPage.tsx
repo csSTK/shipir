@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../shared/api/client.ts'
@@ -38,6 +39,7 @@ type Dialog = { kind: 'delete' } | { kind: 'stop' } | { kind: 'rollback'; versio
 export function StackDetailPage() {
   const { id: hostId = '', stackId = '' } = useParams()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { data: user } = useCurrentUser()
   const canWrite = user?.role === 'ADMIN' || user?.role === 'OPERATOR'
 
@@ -166,7 +168,13 @@ export function StackDetailPage() {
           {actionError}
         </p>
       )}
-      {started && <DeploymentPanel deployment={started} />}
+      {started && (
+        <DeploymentPanel
+          key={started.deploymentId}
+          deployment={started}
+          onFinished={() => void queryClient.invalidateQueries({ queryKey: ['hosts', hostId] })}
+        />
+      )}
 
       <StackContentPanel stack={data} hostId={hostId} canWrite={canWrite} />
 

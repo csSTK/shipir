@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../shared/api/client.ts'
 import { StackDetailPage } from './StackDetailPage.tsx'
 
+vi.mock('../../shared/realtime/stomp.ts', () => ({ subscribeToTopic: () => () => {} }))
+
 const apiFetch = vi.fn()
 vi.mock('../../shared/api/client.ts', async (importActual) => ({
   ...(await importActual<typeof import('../../shared/api/client.ts')>()),
@@ -108,7 +110,7 @@ describe('StackDetailPage', () => {
     serve('OPERATOR', { [`POST ${BASE}/deploy`]: () => ({ deploymentId: 'd-42', versionId: 'v3' }) })
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Deploy' }))
-    expect(await screen.findByText('Deployment started')).toBeInTheDocument()
+    expect(await screen.findByLabelText('Deployment output')).toBeInTheDocument()
     expect(screen.getByText('d-42')).toBeInTheDocument()
   })
 
@@ -129,7 +131,7 @@ describe('StackDetailPage', () => {
     expect(rollback).not.toHaveBeenCalled()
     const dialog = screen.getByRole('dialog', { name: 'Roll back stack' })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Roll back' }))
-    expect(await screen.findByText('Rollback started')).toBeInTheDocument()
+    expect(await screen.findByLabelText('Deployment output')).toBeInTheDocument()
     expect(rollback).toHaveBeenCalled()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
