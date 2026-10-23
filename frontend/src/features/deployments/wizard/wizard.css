@@ -1,4 +1,4 @@
-/* Compose wizard: calm cards, instant press feedback (from StackUi), no decorative motion. */
+/* Compose wizard: calm cards, instant press feedback (from DeploymentUi), no decorative motion. */
 .wz {
   display: flex;
   flex-direction: column;

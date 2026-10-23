@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react'
-import { StackDialog } from './StackDialog.tsx'
+import { DeploymentDialog } from './DeploymentDialog.tsx'
 
 interface Props {
   title: string
@@ -17,7 +17,7 @@ interface Props {
 export function ConfirmDialog({ title, confirmLabel, danger = false, pending = false, error = null, onConfirm, onClose, children }: Props) {
   const titleId = useId()
   return (
-    <StackDialog title={title} titleId={titleId} onClose={onClose}>
+    <DeploymentDialog title={title} titleId={titleId} onClose={onClose}>
       <p className="sk-dialog__text">{children}</p>
       {error && (
         <p role="alert" className="sk-error">
@@ -32,6 +32,6 @@ export function ConfirmDialog({ title, confirmLabel, danger = false, pending = f
           {confirmLabel}
         </button>
       </div>
-    </StackDialog>
+    </DeploymentDialog>
   )
 }

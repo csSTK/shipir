@@ -9,7 +9,7 @@ const ISSUE_TEXT: Record<EnvIssue, string> = {
 }
 
 /**
- * Key/value editor for stack variables. Values are masked until revealed; a `.env` text can be pasted
+ * Key/value editor for deployment variables. Values are masked until revealed; a `.env` text can be pasted
  * and is merged into the rows. Problems are shown per row, saving is up to the caller (see `validateEnv`).
  */
 export function EnvEditor({ value, onChange }: { value: EnvEntry[]; onChange: (next: EnvEntry[]) => void }) {

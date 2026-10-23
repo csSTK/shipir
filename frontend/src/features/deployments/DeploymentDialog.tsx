@@ -1,8 +1,8 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import './StackUi.css'
+import './DeploymentUi.css'
 
 /** Modal dialog shell: focus moves in and is restored, Escape and scrim click close it. */
-export function StackDialog({ title, titleId, onClose, children }: { title: string; titleId: string; onClose: () => void; children: ReactNode }) {
+export function DeploymentDialog({ title, titleId, onClose, children }: { title: string; titleId: string; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null

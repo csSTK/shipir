@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useSetAutoUpdate, type GitInfo } from './api.ts'
-import { describePollError, describeStackError } from './stackErrors.ts'
+import { describePollError, describeDeploymentError } from './deploymentErrors.ts'
 
 const DEFAULT_INTERVAL_MINUTES = 5
 
-/** Repository, ref, commit and auto-update settings of a Git stack. Pull & redeploy lives in the header actions. */
-export function GitSourcePanel({ stackId, hostId, git, canWrite }: { stackId: string; hostId: string; git: GitInfo; canWrite: boolean }) {
+/** Repository, ref, commit and auto-update settings of a Git deployment. Pull & redeploy lives in the header actions. */
+export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploymentId: string; hostId: string; git: GitInfo; canWrite: boolean }) {
   const save = useSetAutoUpdate(hostId)
   const [enabled, setEnabled] = useState(git.autoUpdateEnabled)
   const [minutes, setMinutes] = useState(String(Math.round((git.autoUpdateIntervalSeconds ?? DEFAULT_INTERVAL_MINUTES * 60) / 60)))
@@ -21,17 +21,17 @@ export function GitSourcePanel({ stackId, hostId, git, canWrite }: { stackId: st
     }
     setProblem(null)
     save.mutate(
-      { stackId, enabled, intervalSeconds: value * 60 },
+      { deploymentId, enabled, intervalSeconds: value * 60 },
       {
         onSuccess: () => setSaved(true),
-        onError: (err) => setProblem(describeStackError(err, 'Could not save the auto-update settings. Try again.')),
+        onError: (err) => setProblem(describeDeploymentError(err, 'Could not save the auto-update settings. Try again.')),
       },
     )
   }
 
   return (
-    <section className="sd-panel" aria-labelledby={`git-${stackId}`}>
-      <h3 className="sd-panel__title" id={`git-${stackId}`}>
+    <section className="sd-panel" aria-labelledby={`git-${deploymentId}`}>
+      <h3 className="sd-panel__title" id={`git-${deploymentId}`}>
         Git source
       </h3>
       <dl className="sd-git">

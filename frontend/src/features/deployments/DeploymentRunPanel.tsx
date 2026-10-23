@@ -1,19 +1,19 @@
 import { DeployOutput } from './deploy-output/DeployOutput.tsx'
-import type { DeploymentResult } from './deploy-output/useDeploymentStream.ts'
+import type { RunResult } from './deploy-output/useRunStream.ts'
 
-export interface StartedDeployment {
+export interface StartedRun {
   kind: 'Deploy' | 'Rollback' | 'Pull & redeploy'
-  deploymentId: string
+  runId: string
 }
 
 /** Live output of a started deploy or rollback (STOMP `/topic/deployments/{id}`). */
-export function DeploymentPanel({
-  deployment,
+export function DeploymentRunPanel({
+  run,
   onFinished,
 }: {
-  deployment: StartedDeployment
-  onFinished?: (result: DeploymentResult) => void
+  run: StartedRun
+  onFinished?: (result: RunResult) => void
 }) {
-  const title = deployment.kind === 'Rollback' ? 'Rollback' : 'Deployment'
-  return <DeployOutput title={title} deploymentId={deployment.deploymentId} onFinished={onFinished} />
+  const title = run.kind === 'Rollback' ? 'Rollback' : 'Deployment'
+  return <DeployOutput title={title} runId={run.runId} onFinished={onFinished} />
 }

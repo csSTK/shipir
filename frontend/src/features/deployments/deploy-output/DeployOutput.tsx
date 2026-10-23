@@ -1,19 +1,19 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Badge } from '../../../shared/ui/index.ts'
-import { useDeploymentStream, type DeploymentResult } from './useDeploymentStream.ts'
+import { useRunStream, type RunResult } from './useRunStream.ts'
 import './DeployOutput.css'
 
 const BOTTOM_TOLERANCE_PX = 24
 
 interface Props {
   title: string
-  deploymentId: string
-  onFinished?: (result: DeploymentResult) => void
+  runId: string
+  onFinished?: (result: RunResult) => void
 }
 
 /** Monospace live log of a deployment: follows new lines until the user scrolls up. */
-export function DeployOutput({ title, deploymentId, onFinished }: Props) {
-  const { lines, result, connection } = useDeploymentStream(deploymentId, onFinished)
+export function DeployOutput({ title, runId, onFinished }: Props) {
+  const { lines, result, connection } = useRunStream(runId, onFinished)
   const logRef = useRef<HTMLDivElement>(null)
   const [following, setFollowing] = useState(true)
   const followingRef = useRef(true)
@@ -53,7 +53,7 @@ export function DeployOutput({ title, deploymentId, onFinished }: Props) {
         <div className="do__title">
           <strong>{title}</strong>
           <span className="do__id">
-            Deployment ID <code>{deploymentId}</code>
+            Run ID <code>{runId}</code>
           </span>
         </div>
         <div role="status" className="do__state">

@@ -1,4 +1,4 @@
-/* Shared stack UI: buttons, dialogs. Press feedback is instant; motion is transform/opacity only. */
+/* Shared deployment UI: buttons, dialogs. Press feedback is instant; motion is transform/opacity only. */
 .sk-btn {
   --sk-border: color-mix(in srgb, currentColor 12%, transparent);
   font: inherit;

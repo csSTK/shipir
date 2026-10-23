@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../shared/api/client.ts'
-import { StacksPage } from './StacksPage.tsx'
+import { DeploymentsPage } from './DeploymentsPage.tsx'
 
 const apiFetch = vi.fn()
 vi.mock('../../shared/api/client.ts', async (importActual) => ({
@@ -16,7 +16,7 @@ afterEach(() => {
   apiFetch.mockReset()
 })
 
-const stacks = [
+const deployments = [
   { name: 'shop', containerCount: 3, runningCount: 3, status: 'RUNNING', workingDir: '/srv/shop' },
   { name: 'blog', containerCount: 2, runningCount: 1, status: 'PARTIAL', workingDir: null },
   { name: 'old', containerCount: 1, runningCount: 0, status: 'STOPPED', workingDir: '/srv/old' },
@@ -28,8 +28,8 @@ const me = (role: string) => ({ username: 'u', role, setupRequired: false })
 function serve(live: unknown, opts: { role?: string; managed?: unknown[] } = {}) {
   apiFetch.mockImplementation((path: string) => {
     if (path === '/auth/me') return Promise.resolve(me(opts.role ?? 'VIEWER'))
-    if (path === '/hosts/h1/stacks') return live instanceof Error ? Promise.reject(live) : Promise.resolve(live)
-    if (path === '/hosts/h1/managed-stacks') return Promise.resolve(opts.managed ?? [])
+    if (path === '/hosts/h1/deployments') return live instanceof Error ? Promise.reject(live) : Promise.resolve(live)
+    if (path === '/hosts/h1/managed-deployments') return Promise.resolve(opts.managed ?? [])
     return Promise.reject(new ApiError(404, 'x', 'NOT_FOUND'))
   })
 }
@@ -42,11 +42,11 @@ function Where() {
 function renderPage() {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <MemoryRouter initialEntries={['/environments/h1/stacks']}>
+      <MemoryRouter initialEntries={['/environments/h1/deployments']}>
         <Routes>
-          <Route path="/environments/:id/stacks" element={<StacksPage />} />
+          <Route path="/environments/:id/deployments" element={<DeploymentsPage />} />
           <Route path="/environments/:id/containers" element={<Where />} />
-          <Route path="/environments/:id/stacks/:stackId" element={<Where />} />
+          <Route path="/environments/:id/deployments/:deploymentId" element={<Where />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -60,13 +60,13 @@ function names() {
     .map((r) => within(r).getAllByRole('cell')[0].textContent)
 }
 
-describe('StacksPage', () => {
-  it('lists stacks with status, running/total and working directory', async () => {
-    serve(stacks)
+describe('DeploymentsPage', () => {
+  it('lists deployments with status, running/total and working directory', async () => {
+    serve(deployments)
     renderPage()
-    expect(screen.getByRole('status', { name: 'Loading stacks' })).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'Loading deployments' })).toBeInTheDocument()
     await screen.findByText('/srv/shop')
-    expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/stacks')
+    expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/deployments')
     expect(names()).toEqual(['blog', 'old', 'shop'])
     const row = screen.getByRole('row', { name: /blog/ })
     expect(within(row).getByText('Partial')).toBeInTheDocument()
@@ -74,7 +74,7 @@ describe('StacksPage', () => {
   })
 
   it('searches and sorts by name', async () => {
-    serve(stacks)
+    serve(deployments)
     renderPage()
     await screen.findByText('/srv/shop')
     fireEvent.click(screen.getByRole('button', { name: 'Name' }))
@@ -83,12 +83,12 @@ describe('StacksPage', () => {
     expect(names()).toEqual(['blog'])
   })
 
-  it('opens the containers page filtered by the clicked stack', async () => {
-    serve(stacks)
+  it('opens the containers page filtered by the clicked deployment', async () => {
+    serve(deployments)
     renderPage()
     await screen.findByText('/srv/shop')
     fireEvent.click(screen.getByRole('link', { name: 'shop' }))
-    expect(screen.getByTestId('where')).toHaveTextContent('/environments/h1/containers?stack=shop')
+    expect(screen.getByTestId('where')).toHaveTextContent('/environments/h1/containers?deployment=shop')
   })
 
   it('shows a message for UNREACHABLE', async () => {
@@ -100,11 +100,11 @@ describe('StacksPage', () => {
   it('shows the empty state', async () => {
     serve([])
     renderPage()
-    expect(await screen.findByText('No stacks in this environment.')).toBeInTheDocument()
+    expect(await screen.findByText('No deployments in this environment.')).toBeInTheDocument()
   })
 
-  it('shows managed stacks, including ones never deployed, and links them to the detail page', async () => {
-    serve(stacks, {
+  it('shows managed deployments, including ones never deployed, and links them to the detail page', async () => {
+    serve(deployments, {
       managed: [
         { id: 'm1', name: 'shop', status: 'RUNNING', source: 'FILE', lastDeployedAt: null, createdAt: '2026-10-01T10:00:00Z' },
         { id: 'm2', name: 'draft', status: 'STOPPED', source: 'FILE', lastDeployedAt: null, createdAt: '2026-10-01T10:00:00Z' },
@@ -115,36 +115,36 @@ describe('StacksPage', () => {
     expect(names()).toEqual(['blog', 'draft', 'old', 'shop'])
     expect(within(screen.getByRole('row', { name: /draft/ })).getByText('Not deployed')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('link', { name: 'draft' }))
-    expect(screen.getByTestId('where')).toHaveTextContent('/environments/h1/stacks/m2')
+    expect(screen.getByTestId('where')).toHaveTextContent('/environments/h1/deployments/m2')
   })
 
-  it('hides Add stack and row actions from viewers', async () => {
-    serve(stacks, { managed: [{ id: 'm1', name: 'shop', status: 'RUNNING', source: 'FILE', lastDeployedAt: null, createdAt: 'x' }] })
+  it('hides Add deployment and row actions from viewers', async () => {
+    serve(deployments, { managed: [{ id: 'm1', name: 'shop', status: 'RUNNING', source: 'FILE', lastDeployedAt: null, createdAt: 'x' }] })
     renderPage()
     await screen.findByText('/srv/shop')
-    expect(screen.queryByRole('button', { name: 'Add stack' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add deployment' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Deploy shop' })).not.toBeInTheDocument()
   })
 
-  it('lets operators add a stack and deploy a managed one', async () => {
-    serve(stacks, { role: 'OPERATOR', managed: [{ id: 'm1', name: 'shop', status: 'RUNNING', source: 'FILE', lastDeployedAt: null, createdAt: 'x' }] })
+  it('lets operators add a deployment and deploy a managed one', async () => {
+    serve(deployments, { role: 'OPERATOR', managed: [{ id: 'm1', name: 'shop', status: 'RUNNING', source: 'FILE', lastDeployedAt: null, createdAt: 'x' }] })
     renderPage()
     await screen.findByText('/srv/shop')
-    expect(screen.getByRole('button', { name: 'Add stack' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add deployment' })).toBeInTheDocument()
     apiFetch.mockImplementation((path: string, init?: { method?: string }) =>
-      path === '/hosts/h1/managed-stacks/m1/deploy' && init?.method === 'POST'
-        ? Promise.resolve({ deploymentId: 'd-1', versionId: 'v1' })
+      path === '/hosts/h1/managed-deployments/m1/deploy' && init?.method === 'POST'
+        ? Promise.resolve({ runId: 'd-1', versionId: 'v1' })
         : Promise.resolve([]),
     )
     fireEvent.click(screen.getByRole('button', { name: 'Deploy shop' }))
     expect(await screen.findByRole('status')).toHaveTextContent('d-1')
   })
 
-  it('creates a stack and opens its detail page', async () => {
-    serve(stacks, { role: 'ADMIN' })
+  it('creates a deployment and opens its detail page', async () => {
+    serve(deployments, { role: 'ADMIN' })
     renderPage()
     await screen.findByText('/srv/shop')
-    fireEvent.click(screen.getByRole('button', { name: 'Add stack' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add deployment' }))
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'web' } })
     fireEvent.change(await screen.findByLabelText('Compose file'), { target: { value: 'services: {}' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add variable' }))
@@ -153,46 +153,46 @@ describe('StacksPage', () => {
     apiFetch.mockImplementation((_path: string, init?: { method?: string }) =>
       init?.method === 'POST' ? Promise.resolve({ id: 'new1' }) : Promise.resolve([]),
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Create stack' }))
-    await vi.waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/environments/h1/stacks/new1'))
-    expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/managed-stacks', {
+    fireEvent.click(screen.getByRole('button', { name: 'Create deployment' }))
+    await vi.waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/environments/h1/deployments/new1'))
+    expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/managed-deployments', {
       method: 'POST',
       body: { name: 'web', yaml: 'services: {}', env: [{ key: 'A', value: 'b' }] },
     })
   })
 
   it('shows server errors in the add dialog', async () => {
-    serve(stacks, { role: 'ADMIN' })
+    serve(deployments, { role: 'ADMIN' })
     renderPage()
     await screen.findByText('/srv/shop')
-    fireEvent.click(screen.getByRole('button', { name: 'Add stack' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add deployment' }))
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'web' } })
     fireEvent.change(await screen.findByLabelText('Compose file'), { target: { value: 'x' } })
-    apiFetch.mockRejectedValue(new ApiError(409, 'taken', 'STACK_NAME_TAKEN'))
-    fireEvent.click(screen.getByRole('button', { name: 'Create stack' }))
+    apiFetch.mockRejectedValue(new ApiError(409, 'taken', 'DEPLOYMENT_NAME_TAKEN'))
+    fireEvent.click(screen.getByRole('button', { name: 'Create deployment' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('already exists')
   })
 
   it('rejects an invalid name before calling the server', async () => {
-    serve(stacks, { role: 'ADMIN' })
+    serve(deployments, { role: 'ADMIN' })
     renderPage()
     await screen.findByText('/srv/shop')
-    fireEvent.click(screen.getByRole('button', { name: 'Add stack' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add deployment' }))
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Bad Name' } })
     fireEvent.change(await screen.findByLabelText('Compose file'), { target: { value: 'x' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create stack' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create deployment' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('lowercase')
   })
 
   it('shows INVALID_COMPOSE details at the editor in the add dialog', async () => {
-    serve(stacks, { role: 'ADMIN' })
+    serve(deployments, { role: 'ADMIN' })
     renderPage()
     await screen.findByText('/srv/shop')
-    fireEvent.click(screen.getByRole('button', { name: 'Add stack' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add deployment' }))
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'web' } })
     fireEvent.change(await screen.findByLabelText('Compose file'), { target: { value: 'x' } })
     apiFetch.mockRejectedValue(new ApiError(400, 'bad', 'INVALID_COMPOSE', undefined, ['line 1: not a mapping']))
-    fireEvent.click(screen.getByRole('button', { name: 'Create stack' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create deployment' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('line 1: not a mapping')
   })
 
@@ -200,10 +200,10 @@ describe('StacksPage', () => {
     const generated = 'services:\n  web:\n    image: nginx\n'
 
     async function openWizard() {
-      serve(stacks, { role: 'ADMIN' })
+      serve(deployments, { role: 'ADMIN' })
       renderPage()
       await screen.findByText('/srv/shop')
-      fireEvent.click(screen.getByRole('button', { name: 'Add stack' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Add deployment' }))
       fireEvent.click(screen.getByRole('radio', { name: 'Form wizard' }))
     }
 
@@ -214,7 +214,7 @@ describe('StacksPage', () => {
       fireEvent.change(screen.getByLabelText('Service 1 image'), { target: { value: 'nginx' } })
       fireEvent.click(screen.getByRole('button', { name: 'Add env var to service 1' }))
       fireEvent.change(screen.getByLabelText('Service 1 env 1 name'), { target: { value: 'TOKEN' } })
-      fireEvent.click(screen.getByLabelText('From stack variable'))
+      fireEvent.click(screen.getByLabelText('From deployment variable'))
       fireEvent.change(screen.getByLabelText('Service 1 env 1 reference'), { target: { value: 'API_TOKEN' } })
       apiFetch.mockResolvedValue({ yaml: generated })
       fireEvent.click(screen.getByRole('button', { name: 'Preview YAML' }))

@@ -104,7 +104,7 @@ function DeleteDialog({ env, onClose }: { env: HostOverview; onClose: () => void
   return (
     <Modal title="Delete environment" titleId={titleId} onClose={onClose}>
       <p className="env-dialog__text">
-        Delete <strong>{env.name}</strong>? Its stacks are removed from Shipir as well. Containers already running on the Docker host are not touched.
+        Delete <strong>{env.name}</strong>? Its deployments are removed from Shipir as well. Containers already running on the Docker host are not touched.
       </p>
       {problem && (
         <p role="alert" className="env-dialog__error">

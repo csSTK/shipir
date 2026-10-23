@@ -130,3 +130,27 @@ describe('App auth gate', () => {
     window.history.pushState({}, '', '/')
   })
 })
+
+describe('legacy stack URLs', () => {
+  afterEach(() => window.history.pushState({}, '', '/'))
+
+  it.each([
+    ['/environments/h1/stacks', '/environments/h1/deployments'],
+    ['/environments/h1/stacks/d9', '/environments/h1/deployments/d9'],
+  ])('redirects %s to %s', async (from, to) => {
+    window.history.pushState({}, '', from)
+    route({
+      'GET /auth/me': () => ({ username: 'admin', role: 'ADMIN', setupRequired: false }),
+      'GET /hosts/overview': () => [],
+      'GET /hosts': () => [],
+      'GET /notifications/unread-count': () => ({ count: 0 }),
+      'GET /hosts/h1/deployments': () => [],
+      'GET /hosts/h1/managed-deployments': () => [],
+      'GET /hosts/h1/managed-deployments/d9': () => new Promise(() => {}),
+      'GET /hosts/h1/managed-deployments/d9/versions': () => new Promise(() => {}),
+    })
+    render(<App />)
+
+    await waitFor(() => expect(window.location.pathname).toBe(to))
+  })
+})

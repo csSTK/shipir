@@ -2,42 +2,42 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../shared/api/client.ts'
 import type { ComposeSpecPayload } from './wizard/model.ts'
 
-export type StackStatus = 'RUNNING' | 'PARTIAL' | 'STOPPED'
+export type DeploymentStatus = 'RUNNING' | 'PARTIAL' | 'STOPPED'
 
-/** One Compose project of `GET /api/hosts/{id}/stacks`. */
-export interface StackSummary {
+/** One Compose project of `GET /api/hosts/{id}/deployments`. */
+export interface DeploymentSummary {
   name: string
   containerCount: number
   runningCount: number
-  status: StackStatus
+  status: DeploymentStatus
   workingDir: string | null
   /** True when Shipir manages this project; optional for older servers. */
   managed?: boolean
-  managedStackId?: string | null
+  managedDeploymentId?: string | null
 }
 
-export function useStacks(hostId: string) {
+export function useDeployments(hostId: string) {
   return useQuery({
-    queryKey: ['hosts', hostId, 'stacks'],
-    queryFn: () => apiFetch<StackSummary[]>(`/hosts/${hostId}/stacks`),
+    queryKey: ['hosts', hostId, 'deployments'],
+    queryFn: () => apiFetch<DeploymentSummary[]>(`/hosts/${hostId}/deployments`),
   })
 }
 
-export type ManagedStackStatus = 'STOPPED' | 'RUNNING' | 'ERROR'
-export type StackSource = 'FILE' | 'GIT'
+export type ManagedDeploymentStatus = 'STOPPED' | 'RUNNING' | 'ERROR'
+export type DeploymentSource = 'FILE' | 'GIT'
 export type VersionSource = 'MANUAL' | 'GIT' | 'ROLLBACK'
 
-/** `GET /api/hosts/{id}/managed-stacks` item. */
-export interface ManagedStack {
+/** `GET /api/hosts/{id}/managed-deployments` item. */
+export interface ManagedDeployment {
   id: string
   name: string
-  status: ManagedStackStatus
-  source: StackSource
+  status: ManagedDeploymentStatus
+  source: DeploymentSource
   lastDeployedAt: string | null
   createdAt: string
 }
 
-/** Git source of a stack (`null` for FILE stacks); never contains a token. */
+/** Git source of a deployment (`null` for FILE deployments); never contains a token. */
 export interface GitInfo {
   repoUrl: string
   ref: string
@@ -51,7 +51,7 @@ export interface GitInfo {
   lastPollError: string | null
 }
 
-export interface ManagedStackDetail extends ManagedStack {
+export interface ManagedDeploymentDetail extends ManagedDeployment {
   yaml: string
   git?: GitInfo | null
   /** Variable names only; values are never part of this response. */
@@ -63,7 +63,7 @@ export interface EnvEntry {
   value: string
 }
 
-export interface StackVersion {
+export interface DeploymentVersion {
   id: string
   source: VersionSource
   commitSha: string | null
@@ -74,19 +74,19 @@ export interface StackVersion {
   deployed: boolean
 }
 
-/** Deploy and rollback answer 202; output streams on `/topic/deployments/{deploymentId}`. */
-export interface Deployment {
-  deploymentId: string
+/** Deploy and rollback answer 202; output streams on `/topic/deployments/{runId}`. */
+export interface DeploymentRun {
+  runId: string
   versionId: string
 }
 
-export interface CreateStackInput {
+export interface CreateDeploymentInput {
   name: string
   yaml: string
   env: EnvEntry[]
 }
 
-export interface CreateGitStackInput {
+export interface CreateGitDeploymentInput {
   source: 'GIT'
   name: string
   repoUrl: string
@@ -96,100 +96,100 @@ export interface CreateGitStackInput {
   env: EnvEntry[]
 }
 
-const managedBase = (hostId: string) => `/hosts/${hostId}/managed-stacks`
-const managedKey = (hostId: string) => ['hosts', hostId, 'managed-stacks'] as const
+const managedBase = (hostId: string) => `/hosts/${hostId}/managed-deployments`
+const managedKey = (hostId: string) => ['hosts', hostId, 'managed-deployments'] as const
 
-export function useManagedStacks(hostId: string) {
-  return useQuery({ queryKey: managedKey(hostId), queryFn: () => apiFetch<ManagedStack[]>(managedBase(hostId)) })
+export function useManagedDeployments(hostId: string) {
+  return useQuery({ queryKey: managedKey(hostId), queryFn: () => apiFetch<ManagedDeployment[]>(managedBase(hostId)) })
 }
 
-export function useManagedStack(hostId: string, stackId: string) {
+export function useManagedDeployment(hostId: string, deploymentId: string) {
   return useQuery({
-    queryKey: [...managedKey(hostId), stackId],
-    queryFn: () => apiFetch<ManagedStackDetail>(`${managedBase(hostId)}/${stackId}`),
+    queryKey: [...managedKey(hostId), deploymentId],
+    queryFn: () => apiFetch<ManagedDeploymentDetail>(`${managedBase(hostId)}/${deploymentId}`),
   })
 }
 
-export function useStackVersions(hostId: string, stackId: string) {
+export function useDeploymentVersions(hostId: string, deploymentId: string) {
   return useQuery({
-    queryKey: [...managedKey(hostId), stackId, 'versions'],
-    queryFn: () => apiFetch<StackVersion[]>(`${managedBase(hostId)}/${stackId}/versions`),
+    queryKey: [...managedKey(hostId), deploymentId, 'versions'],
+    queryFn: () => apiFetch<DeploymentVersion[]>(`${managedBase(hostId)}/${deploymentId}/versions`),
   })
 }
 
-/** Refreshes everything that shows this host's stacks (managed list, details, versions, live list). */
-function useInvalidateStacks(hostId: string) {
+/** Refreshes everything that shows this host's deployments (managed list, details, versions, live list). */
+function useInvalidateDeployments(hostId: string) {
   const queryClient = useQueryClient()
   return () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: managedKey(hostId) }),
-      queryClient.invalidateQueries({ queryKey: ['hosts', hostId, 'stacks'] }),
+      queryClient.invalidateQueries({ queryKey: ['hosts', hostId, 'deployments'] }),
     ])
 }
 
-export function useCreateStack(hostId: string) {
-  const invalidate = useInvalidateStacks(hostId)
+export function useCreateDeployment(hostId: string) {
+  const invalidate = useInvalidateDeployments(hostId)
   return useMutation({
-    mutationFn: (input: CreateStackInput | CreateGitStackInput) =>
-      apiFetch<ManagedStackDetail>(managedBase(hostId), { method: 'POST', body: input }),
+    mutationFn: (input: CreateDeploymentInput | CreateGitDeploymentInput) =>
+      apiFetch<ManagedDeploymentDetail>(managedBase(hostId), { method: 'POST', body: input }),
     onSuccess: () => void invalidate(),
   })
 }
 
-export interface UpdateStackInput {
-  stackId: string
+export interface UpdateDeploymentInput {
+  deploymentId: string
   yaml: string
   /** `null` keeps the stored variables, `[]` clears them. */
   env: EnvEntry[] | null
 }
 
 /** Saves a draft version (PUT). Does not deploy. */
-export function useUpdateStack(hostId: string) {
-  const invalidate = useInvalidateStacks(hostId)
+export function useUpdateDeployment(hostId: string) {
+  const invalidate = useInvalidateDeployments(hostId)
   return useMutation({
-    mutationFn: ({ stackId, yaml, env }: UpdateStackInput) =>
-      apiFetch<ManagedStackDetail>(`${managedBase(hostId)}/${stackId}`, { method: 'PUT', body: { yaml, env } }),
+    mutationFn: ({ deploymentId, yaml, env }: UpdateDeploymentInput) =>
+      apiFetch<ManagedDeploymentDetail>(`${managedBase(hostId)}/${deploymentId}`, { method: 'PUT', body: { yaml, env } }),
     onSuccess: () => void invalidate(),
   })
 }
 
 /** Reads the stored variable values (ADMIN/OPERATOR). A mutation, so secrets never enter the query cache. */
-export function useLoadStackEnv(hostId: string) {
+export function useLoadDeploymentEnv(hostId: string) {
   return useMutation({
-    mutationFn: (stackId: string) => apiFetch<{ entries: EnvEntry[] }>(`${managedBase(hostId)}/${stackId}/env`),
+    mutationFn: (deploymentId: string) => apiFetch<{ entries: EnvEntry[] }>(`${managedBase(hostId)}/${deploymentId}/env`),
   })
 }
 
-export function useDeleteStack(hostId: string) {
-  const invalidate = useInvalidateStacks(hostId)
+export function useDeleteDeployment(hostId: string) {
+  const invalidate = useInvalidateDeployments(hostId)
   return useMutation({
-    mutationFn: (stackId: string) => apiFetch<void>(`${managedBase(hostId)}/${stackId}`, { method: 'DELETE' }),
+    mutationFn: (deploymentId: string) => apiFetch<void>(`${managedBase(hostId)}/${deploymentId}`, { method: 'DELETE' }),
     onSuccess: () => void invalidate(),
   })
 }
 
-export function useDeployStack(hostId: string) {
-  const invalidate = useInvalidateStacks(hostId)
+export function useDeployDeployment(hostId: string) {
+  const invalidate = useInvalidateDeployments(hostId)
   return useMutation({
-    mutationFn: (stackId: string) =>
-      apiFetch<Deployment>(`${managedBase(hostId)}/${stackId}/deploy`, { method: 'POST' }),
+    mutationFn: (deploymentId: string) =>
+      apiFetch<DeploymentRun>(`${managedBase(hostId)}/${deploymentId}/deploy`, { method: 'POST' }),
     onSuccess: () => void invalidate(),
   })
 }
 
-export function useStopStack(hostId: string) {
-  const invalidate = useInvalidateStacks(hostId)
+export function useStopDeployment(hostId: string) {
+  const invalidate = useInvalidateDeployments(hostId)
   return useMutation({
-    mutationFn: (stackId: string) => apiFetch<ManagedStack>(`${managedBase(hostId)}/${stackId}/stop`, { method: 'POST' }),
+    mutationFn: (deploymentId: string) => apiFetch<ManagedDeployment>(`${managedBase(hostId)}/${deploymentId}/stop`, { method: 'POST' }),
     onSuccess: () => void invalidate(),
   })
 }
 
-export function useRollbackStack(hostId: string) {
-  const invalidate = useInvalidateStacks(hostId)
+export function useRollbackDeployment(hostId: string) {
+  const invalidate = useInvalidateDeployments(hostId)
   return useMutation({
-    mutationFn: ({ stackId, versionId }: { stackId: string; versionId: string }) =>
-      apiFetch<Deployment>(`${managedBase(hostId)}/${stackId}/versions/${versionId}/rollback`, { method: 'POST' }),
+    mutationFn: ({ deploymentId, versionId }: { deploymentId: string; versionId: string }) =>
+      apiFetch<DeploymentRun>(`${managedBase(hostId)}/${deploymentId}/versions/${versionId}/rollback`, { method: 'POST' }),
     onSuccess: () => void invalidate(),
   })
 }
@@ -204,26 +204,26 @@ export function useGenerateCompose() {
 
 /** Pulls the repository and redeploys (`POST .../git/redeploy`, 202); output streams like a normal deploy. */
 export function useGitRedeploy(hostId: string) {
-  const invalidate = useInvalidateStacks(hostId)
+  const invalidate = useInvalidateDeployments(hostId)
   return useMutation({
-    mutationFn: (stackId: string) =>
-      apiFetch<Deployment>(`${managedBase(hostId)}/${stackId}/git/redeploy`, { method: 'POST' }),
+    mutationFn: (deploymentId: string) =>
+      apiFetch<DeploymentRun>(`${managedBase(hostId)}/${deploymentId}/git/redeploy`, { method: 'POST' }),
     onSuccess: () => void invalidate(),
   })
 }
 
 export interface AutoUpdateInput {
-  stackId: string
+  deploymentId: string
   enabled: boolean
   /** Seconds, at least 60. */
   intervalSeconds: number
 }
 
 export function useSetAutoUpdate(hostId: string) {
-  const invalidate = useInvalidateStacks(hostId)
+  const invalidate = useInvalidateDeployments(hostId)
   return useMutation({
-    mutationFn: ({ stackId, enabled, intervalSeconds }: AutoUpdateInput) =>
-      apiFetch<ManagedStackDetail>(`${managedBase(hostId)}/${stackId}/git/auto-update`, {
+    mutationFn: ({ deploymentId, enabled, intervalSeconds }: AutoUpdateInput) =>
+      apiFetch<ManagedDeploymentDetail>(`${managedBase(hostId)}/${deploymentId}/git/auto-update`, {
         method: 'PUT',
         body: { enabled, intervalSeconds },
       }),

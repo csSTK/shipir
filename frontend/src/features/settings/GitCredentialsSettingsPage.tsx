@@ -17,7 +17,7 @@ function errorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
     if (error.code === 'CREDENTIAL_NAME_TAKEN') return 'This name is already in use.'
     if (error.code === 'CREDENTIAL_IN_USE')
-      return 'This credential is still used by one or more stacks. Detach it there first.'
+      return 'This credential is still used by one or more deployments. Detach it there first.'
     if (error.code === 'ENCRYPTION_KEY_MISSING')
       return 'The server has no encryption key. Set SHIPIR_ENCRYPTION_KEY to store access tokens.'
     if (error.code === 'TOKEN_REQUIRED') return 'Enter the access token.'
@@ -241,7 +241,7 @@ export function GitCredentialsSettingsPage() {
           Add credential
         </button>
       </div>
-      <p className="gc-muted">Access tokens for stacks deployed from private Git repositories. Saved tokens are never shown again.</p>
+      <p className="gc-muted">Access tokens for deployments deployed from private Git repositories. Saved tokens are never shown again.</p>
       {isPending && <div aria-busy="true" className="gc-muted">Loading…</div>}
       {isError && <p role="alert" className="gc-error">Could not load credentials.</p>}
       {data && data.length === 0 && <p className="gc-muted">No credentials yet.</p>}

@@ -5,25 +5,25 @@ import { ApiError } from '../../shared/api/client.ts'
 import { Badge } from '../../shared/ui/index.ts'
 import { useCurrentUser } from '../auth/index.ts'
 import {
-  useDeleteStack,
-  useDeployStack,
+  useDeleteDeployment,
+  useDeployDeployment,
   useGitRedeploy,
-  useManagedStack,
-  useRollbackStack,
-  useStackVersions,
-  useStopStack,
-  type ManagedStackStatus,
-  type StackVersion,
+  useManagedDeployment,
+  useRollbackDeployment,
+  useDeploymentVersions,
+  useStopDeployment,
+  type ManagedDeploymentStatus,
+  type DeploymentVersion,
 } from './api.ts'
 import { ConfirmDialog } from './ConfirmDialog.tsx'
-import { DeploymentPanel, type StartedDeployment } from './DeploymentPanel.tsx'
+import { DeploymentRunPanel, type StartedRun } from './DeploymentRunPanel.tsx'
 import { GitSourcePanel } from './GitSourcePanel.tsx'
-import { StackContentPanel } from './StackContentPanel.tsx'
-import { describeStackError } from './stackErrors.ts'
-import './StackUi.css'
-import './StackDetailPage.css'
+import { DeploymentContentPanel } from './DeploymentContentPanel.tsx'
+import { describeDeploymentError } from './deploymentErrors.ts'
+import './DeploymentUi.css'
+import './DeploymentDetailPage.css'
 
-const STATUS: Record<ManagedStackStatus, { label: string; tone: 'ok' | 'bad' | 'muted' }> = {
+const STATUS: Record<ManagedDeploymentStatus, { label: string; tone: 'ok' | 'bad' | 'muted' }> = {
   RUNNING: { label: 'Running', tone: 'ok' },
   STOPPED: { label: 'Stopped', tone: 'muted' },
   ERROR: { label: 'Error', tone: 'bad' },
@@ -35,57 +35,57 @@ function formatDate(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString() : 'Never'
 }
 
-type Dialog = { kind: 'delete' } | { kind: 'stop' } | { kind: 'rollback'; version: StackVersion } | null
+type Dialog = { kind: 'delete' } | { kind: 'stop' } | { kind: 'rollback'; version: DeploymentVersion } | null
 
-/** `/environments/:id/stacks/:stackId`: status, actions, content and version history of a managed stack. */
-export function StackDetailPage() {
-  const { id: hostId = '', stackId = '' } = useParams()
+/** `/environments/:id/deployments/:deploymentId`: status, actions, content and version history of a managed deployment. */
+export function DeploymentDetailPage() {
+  const { id: hostId = '', deploymentId = '' } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { data: user } = useCurrentUser()
   const canWrite = user?.role === 'ADMIN' || user?.role === 'OPERATOR'
 
-  const stack = useManagedStack(hostId, stackId)
-  const versions = useStackVersions(hostId, stackId)
-  const deploy = useDeployStack(hostId)
+  const deployment = useManagedDeployment(hostId, deploymentId)
+  const versions = useDeploymentVersions(hostId, deploymentId)
+  const deploy = useDeployDeployment(hostId)
   const redeploy = useGitRedeploy(hostId)
-  const stop = useStopStack(hostId)
-  const rollback = useRollbackStack(hostId)
-  const remove = useDeleteStack(hostId)
+  const stop = useStopDeployment(hostId)
+  const rollback = useRollbackDeployment(hostId)
+  const remove = useDeleteDeployment(hostId)
 
   const [dialog, setDialog] = useState<Dialog>(null)
-  const [started, setStarted] = useState<StartedDeployment | null>(null)
+  const [started, setStarted] = useState<StartedRun | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [dialogError, setDialogError] = useState<string | null>(null)
 
-  const listPath = `/environments/${hostId}/stacks`
+  const listPath = `/environments/${hostId}/deployments`
   const closeDialog = () => {
     setDialog(null)
     setDialogError(null)
   }
 
-  if (stack.isPending) {
+  if (deployment.isPending) {
     return (
       <section className="sd" aria-busy="true">
-        <div role="status" aria-label="Loading stack" className="sd-skeleton" />
+        <div role="status" aria-label="Loading deployment" className="sd-skeleton" />
       </section>
     )
   }
 
-  if (stack.error) {
-    const notFound = stack.error instanceof ApiError && stack.error.code === 'STACK_NOT_FOUND'
+  if (deployment.error) {
+    const notFound = deployment.error instanceof ApiError && deployment.error.code === 'DEPLOYMENT_NOT_FOUND'
     return (
       <section className="sd">
         <Link className="sd-back" to={listPath}>
-          Stacks
+          Deployments
         </Link>
-        <h2 className="sd-title">{notFound ? 'Stack not found' : 'Could not load the stack'}</h2>
+        <h2 className="sd-title">{notFound ? 'Deployment not found' : 'Could not load the deployment'}</h2>
         <p role="alert" className="sd-muted">
-          {notFound ? 'This stack does not exist or was deleted.' : describeStackError(stack.error, 'Something went wrong. Try again.')}
+          {notFound ? 'This deployment does not exist or was deleted.' : describeDeploymentError(deployment.error, 'Something went wrong. Try again.')}
         </p>
         {!notFound && (
           <div>
-            <button type="button" className="sk-btn" onClick={() => void stack.refetch()}>
+            <button type="button" className="sk-btn" onClick={() => void deployment.refetch()}>
               Retry
             </button>
           </div>
@@ -94,52 +94,52 @@ export function StackDetailPage() {
     )
   }
 
-  const data = stack.data
+  const data = deployment.data
   const busy = deploy.isPending || redeploy.isPending || stop.isPending || rollback.isPending
 
   function startDeploy() {
     setActionError(null)
-    deploy.mutate(stackId, {
-      onSuccess: (d) => setStarted({ kind: 'Deploy', deploymentId: d.deploymentId }),
-      onError: (err) => setActionError(describeStackError(err, 'Could not start the deployment. Try again.')),
+    deploy.mutate(deploymentId, {
+      onSuccess: (d) => setStarted({ kind: 'Deploy', runId: d.runId }),
+      onError: (err) => setActionError(describeDeploymentError(err, 'Could not start the deployment. Try again.')),
     })
   }
 
   function startRedeploy() {
     setActionError(null)
-    redeploy.mutate(stackId, {
-      onSuccess: (d) => setStarted({ kind: 'Pull & redeploy', deploymentId: d.deploymentId }),
-      onError: (err) => setActionError(describeStackError(err, 'Could not start the redeployment. Try again.')),
+    redeploy.mutate(deploymentId, {
+      onSuccess: (d) => setStarted({ kind: 'Pull & redeploy', runId: d.runId }),
+      onError: (err) => setActionError(describeDeploymentError(err, 'Could not start the redeployment. Try again.')),
     })
   }
 
   function confirmStop() {
     setDialogError(null)
-    stop.mutate(stackId, {
+    stop.mutate(deploymentId, {
       onSuccess: closeDialog,
-      onError: (err) => setDialogError(describeStackError(err, 'Could not stop the stack. Try again.')),
+      onError: (err) => setDialogError(describeDeploymentError(err, 'Could not stop the deployment. Try again.')),
     })
   }
 
-  function confirmRollback(version: StackVersion) {
+  function confirmRollback(version: DeploymentVersion) {
     setDialogError(null)
     rollback.mutate(
-      { stackId, versionId: version.id },
+      { deploymentId, versionId: version.id },
       {
         onSuccess: (d) => {
-          setStarted({ kind: 'Rollback', deploymentId: d.deploymentId })
+          setStarted({ kind: 'Rollback', runId: d.runId })
           closeDialog()
         },
-        onError: (err) => setDialogError(describeStackError(err, 'Could not start the rollback. Try again.')),
+        onError: (err) => setDialogError(describeDeploymentError(err, 'Could not start the rollback. Try again.')),
       },
     )
   }
 
   function confirmDelete() {
     setDialogError(null)
-    remove.mutate(stackId, {
+    remove.mutate(deploymentId, {
       onSuccess: () => navigate(listPath),
-      onError: (err) => setDialogError(describeStackError(err, 'Could not delete the stack. Try again.')),
+      onError: (err) => setDialogError(describeDeploymentError(err, 'Could not delete the deployment. Try again.')),
     })
   }
 
@@ -148,7 +148,7 @@ export function StackDetailPage() {
   return (
     <section className="sd">
       <Link className="sd-back" to={listPath}>
-        Stacks
+        Deployments
       </Link>
       <header className="sd-head">
         <div className="sd-head__main">
@@ -185,16 +185,16 @@ export function StackDetailPage() {
         </p>
       )}
       {started && (
-        <DeploymentPanel
-          key={started.deploymentId}
-          deployment={started}
+        <DeploymentRunPanel
+          key={started.runId}
+          run={started}
           onFinished={() => void queryClient.invalidateQueries({ queryKey: ['hosts', hostId] })}
         />
       )}
 
-      {data.git && <GitSourcePanel key={`${data.git.autoUpdateEnabled}-${data.git.autoUpdateIntervalSeconds}`} stackId={stackId} hostId={hostId} git={data.git} canWrite={canWrite} />}
+      {data.git && <GitSourcePanel key={`${data.git.autoUpdateEnabled}-${data.git.autoUpdateIntervalSeconds}`} deploymentId={deploymentId} hostId={hostId} git={data.git} canWrite={canWrite} />}
 
-      <StackContentPanel stack={data} hostId={hostId} canWrite={canWrite} />
+      <DeploymentContentPanel deployment={data} hostId={hostId} canWrite={canWrite} />
 
       <div className="sd-panel">
         <h3 className="sd-panel__title">Versions</h3>
@@ -202,10 +202,10 @@ export function StackDetailPage() {
           <p className="sd-muted">Loading versions…</p>
         ) : versions.error ? (
           <p role="alert" className="sk-error">
-            {describeStackError(versions.error, 'Could not load the versions.')}
+            {describeDeploymentError(versions.error, 'Could not load the versions.')}
           </p>
         ) : versions.data.length === 0 ? (
-          <p className="sd-muted">No versions yet. Deploy the stack to create one.</p>
+          <p className="sd-muted">No versions yet. Deploy the deployment to create one.</p>
         ) : (
           <ul className="sd-versions" aria-label="Versions">
             {versions.data.map((v) => (
@@ -236,18 +236,18 @@ export function StackDetailPage() {
       </div>
 
       {dialog?.kind === 'stop' && (
-        <ConfirmDialog title="Stop stack" confirmLabel="Stop" pending={stop.isPending} error={dialogError} onConfirm={confirmStop} onClose={closeDialog}>
-          Stop <strong>{data.name}</strong>? Its containers are stopped and removed. The stack and its versions stay in Shipir.
+        <ConfirmDialog title="Stop deployment" confirmLabel="Stop" pending={stop.isPending} error={dialogError} onConfirm={confirmStop} onClose={closeDialog}>
+          Stop <strong>{data.name}</strong>? Its containers are stopped and removed. The deployment and its versions stay in Shipir.
         </ConfirmDialog>
       )}
       {dialog?.kind === 'delete' && (
-        <ConfirmDialog title="Delete stack" confirmLabel="Delete" danger pending={remove.isPending} error={dialogError} onConfirm={confirmDelete} onClose={closeDialog}>
-          Delete <strong>{data.name}</strong>? Its containers are stopped and the stack with all its versions is removed from Shipir. This cannot be undone.
+        <ConfirmDialog title="Delete deployment" confirmLabel="Delete" danger pending={remove.isPending} error={dialogError} onConfirm={confirmDelete} onClose={closeDialog}>
+          Delete <strong>{data.name}</strong>? Its containers are stopped and the deployment with all its versions is removed from Shipir. This cannot be undone.
         </ConfirmDialog>
       )}
       {dialog?.kind === 'rollback' && (
         <ConfirmDialog
-          title="Roll back stack"
+          title="Roll back deployment"
           confirmLabel="Roll back"
           pending={rollback.isPending}
           error={dialogError}

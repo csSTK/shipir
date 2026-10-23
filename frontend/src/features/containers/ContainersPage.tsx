@@ -32,7 +32,7 @@ const columns: ResourceColumn<Container>[] = [
     render: (c) => (c.health ? <Badge tone={healthTone(c.health)}>{c.health}</Badge> : '–'),
   },
   { id: 'image', header: 'Image', sortValue: (c) => c.image, render: (c) => c.image },
-  { id: 'stack', header: 'Stack', sortValue: (c) => c.composeProject, render: (c) => c.composeProject ?? '–' },
+  { id: 'deployment', header: 'Deployment', sortValue: (c) => c.composeProject, render: (c) => c.composeProject ?? '–' },
   {
     id: 'ports',
     header: 'Ports',
@@ -55,14 +55,14 @@ const columns: ResourceColumn<Container>[] = [
   },
 ]
 
-/** `/environments/:id/containers`: all containers of one environment, optionally `?stack=<project>`. */
+/** `/environments/:id/containers`: all containers of one environment, optionally `?deployment=<project>`. */
 export function ContainersPage() {
   const { id = '' } = useParams()
   const [params, setParams] = useSearchParams()
-  const stack = params.get('stack')
+  const deployment = params.get('deployment')
   const { data, isPending, error, refetch } = useContainers(id)
 
-  const rows = stack ? data?.filter((c) => c.composeProject === stack) : data
+  const rows = deployment ? data?.filter((c) => c.composeProject === deployment) : data
 
   return (
     <section className="containers">
@@ -74,14 +74,14 @@ export function ContainersPage() {
         rowKey={(c) => c.id}
         searchText={(c) => `${c.name} ${c.image} ${c.composeProject ?? ''}`}
         defaultSort="name"
-        emptyMessage={stack ? `No containers in stack ${stack}.` : 'No containers in this environment.'}
+        emptyMessage={deployment ? `No containers in deployment ${deployment}.` : 'No containers in this environment.'}
         isPending={isPending}
         error={error ? describeResourceError(error) : null}
         onRetry={() => void refetch()}
         toolbar={
-          stack && (
+          deployment && (
             <button type="button" className="containers__chip" onClick={() => setParams({})}>
-              Stack: {stack} <span aria-hidden="true">×</span>
+              Deployment: {deployment} <span aria-hidden="true">×</span>
             </button>
           )
         }

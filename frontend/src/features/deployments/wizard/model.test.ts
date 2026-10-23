@@ -19,7 +19,7 @@ describe('validatePort', () => {
 })
 
 describe('validateWizard', () => {
-  it('accepts a minimal valid stack', () => {
+  it('accepts a minimal valid deployment', () => {
     const p = validateWizard(state([service({})]))
     expect(p.fields.size).toBe(0)
     expect(p.general).toEqual([])

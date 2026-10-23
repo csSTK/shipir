@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../shared/api/client.ts'
-import { StackDetailPage } from './StackDetailPage.tsx'
+import { DeploymentDetailPage } from './DeploymentDetailPage.tsx'
 
 vi.mock('../../shared/realtime/stomp.ts', () => ({ subscribeToTopic: () => () => {} }))
 
@@ -18,8 +18,8 @@ afterEach(() => {
   apiFetch.mockReset()
 })
 
-const BASE = '/hosts/h1/managed-stacks/s1'
-const stack = {
+const BASE = '/hosts/h1/managed-deployments/s1'
+const deployment = {
   id: 's1',
   name: 'shop',
   status: 'RUNNING',
@@ -44,7 +44,7 @@ function serve(role: string, overrides: Record<string, Handler> = {}) {
       return r instanceof Error ? Promise.reject(r) : Promise.resolve(r)
     }
     if (path === '/auth/me') return Promise.resolve({ username: 'u', role, setupRequired: false })
-    if (path === BASE) return Promise.resolve(stack)
+    if (path === BASE) return Promise.resolve(deployment)
     if (path === `${BASE}/versions`) return Promise.resolve(versions)
     return Promise.reject(new ApiError(404, 'x', 'NOT_FOUND'))
   })
@@ -57,21 +57,21 @@ function Where() {
 function renderPage() {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <MemoryRouter initialEntries={['/environments/h1/stacks/s1']}>
+      <MemoryRouter initialEntries={['/environments/h1/deployments/s1']}>
         <Routes>
-          <Route path="/environments/:id/stacks/:stackId" element={<StackDetailPage />} />
-          <Route path="/environments/:id/stacks" element={<Where />} />
+          <Route path="/environments/:id/deployments/:deploymentId" element={<DeploymentDetailPage />} />
+          <Route path="/environments/:id/deployments" element={<Where />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   )
 }
 
-describe('StackDetailPage', () => {
+describe('DeploymentDetailPage', () => {
   it('shows status, content and versions with current and draft markers', async () => {
     serve('ADMIN')
     renderPage()
-    expect(screen.getByRole('status', { name: 'Loading stack' })).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'Loading deployment' })).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'shop' })).toBeInTheDocument()
     expect(screen.getByText('Running')).toBeInTheDocument()
     expect(await screen.findByLabelText('Compose file')).toHaveDisplayValue(/image: nginx/)
@@ -94,10 +94,10 @@ describe('StackDetailPage', () => {
     expect(screen.queryByRole('button', { name: /Roll back/ })).not.toBeInTheDocument()
   })
 
-  it('shows not found for an unknown stack', async () => {
-    serve('ADMIN', { [`GET ${BASE}`]: () => new ApiError(404, 'x', 'STACK_NOT_FOUND') })
+  it('shows not found for an unknown deployment', async () => {
+    serve('ADMIN', { [`GET ${BASE}`]: () => new ApiError(404, 'x', 'DEPLOYMENT_NOT_FOUND') })
     renderPage()
-    expect(await screen.findByRole('heading', { name: 'Stack not found' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Deployment not found' })).toBeInTheDocument()
   })
 
   it('shows an error with retry for other failures', async () => {
@@ -107,7 +107,7 @@ describe('StackDetailPage', () => {
   })
 
   it('deploys and shows the started deployment', async () => {
-    serve('OPERATOR', { [`POST ${BASE}/deploy`]: () => ({ deploymentId: 'd-42', versionId: 'v3' }) })
+    serve('OPERATOR', { [`POST ${BASE}/deploy`]: () => ({ runId: 'd-42', versionId: 'v3' }) })
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Deploy' }))
     expect(await screen.findByLabelText('Deployment output')).toBeInTheDocument()
@@ -118,18 +118,18 @@ describe('StackDetailPage', () => {
     serve('OPERATOR', { [`POST ${BASE}/deploy`]: () => new ApiError(409, 'busy', 'DEPLOYMENT_IN_PROGRESS') })
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Deploy' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('already running')
+    expect(await screen.findByRole('alert')).toHaveTextContent('already in progress')
   })
 
   it('offers rollback only for deployed, non-current versions and confirms first', async () => {
-    const rollback = vi.fn(() => ({ deploymentId: 'd-9', versionId: 'v1' }))
+    const rollback = vi.fn(() => ({ runId: 'd-9', versionId: 'v1' }))
     serve('ADMIN', { [`POST ${BASE}/versions/v1/rollback`]: rollback })
     renderPage()
     await screen.findByRole('list', { name: 'Versions' })
     expect(screen.getAllByRole('button', { name: /Roll back to/ })).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: /Roll back to/ }))
     expect(rollback).not.toHaveBeenCalled()
-    const dialog = screen.getByRole('dialog', { name: 'Roll back stack' })
+    const dialog = screen.getByRole('dialog', { name: 'Roll back deployment' })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Roll back' }))
     expect(await screen.findByLabelText('Deployment output')).toBeInTheDocument()
     expect(rollback).toHaveBeenCalled()
@@ -137,7 +137,7 @@ describe('StackDetailPage', () => {
   })
 
   it('stops after confirmation', async () => {
-    const stop = vi.fn(() => ({ ...stack, status: 'STOPPED' }))
+    const stop = vi.fn(() => ({ ...deployment, status: 'STOPPED' }))
     serve('ADMIN', { [`POST ${BASE}/stop`]: stop })
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Stop' }))
@@ -151,7 +151,7 @@ describe('StackDetailPage', () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
-    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/environments/h1/stacks'))
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/environments/h1/deployments'))
   })
 
   it('keeps the dialog open with a message when compose down fails', async () => {
@@ -181,7 +181,7 @@ describe('StackDetailPage', () => {
     }
 
     it('saves a changed Compose file and keeps stored variables (env null)', async () => {
-      const put = vi.fn(() => stack)
+      const put = vi.fn(() => deployment)
       serve('OPERATOR', { [putKey]: put })
       await startEdit()
       fireEvent.change(await screen.findByLabelText('Compose file'), { target: { value: 'services: {}' } })
@@ -191,7 +191,7 @@ describe('StackDetailPage', () => {
     })
 
     it('loads values on request, masks them and sends the edited list', async () => {
-      const put = vi.fn(() => stack)
+      const put = vi.fn(() => deployment)
       serve('ADMIN', { [putKey]: put, [envKey]: () => ({ entries: [{ key: 'DB_PASSWORD', value: 's3cret' }] }) })
       await startEdit()
       fireEvent.click(screen.getByRole('button', { name: 'Edit variables' }))
@@ -204,7 +204,7 @@ describe('StackDetailPage', () => {
       await waitFor(() =>
         expect(apiFetch).toHaveBeenCalledWith(BASE, {
           method: 'PUT',
-          body: { yaml: stack.yaml, env: [{ key: 'DB_PASSWORD', value: 'new' }] },
+          body: { yaml: deployment.yaml, env: [{ key: 'DB_PASSWORD', value: 'new' }] },
         }),
       )
     })

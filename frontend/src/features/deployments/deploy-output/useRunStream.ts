@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { subscribeToTopic, type ConnectionState } from '../../../shared/realtime/stomp.ts'
 
-export type DeploymentResult = 'DONE' | 'FAILED'
+export type RunResult = 'DONE' | 'FAILED'
 
 export interface OutputLine {
   seq: number
@@ -12,7 +12,7 @@ interface Frame {
   seq: number
   type: 'LINE' | 'STATUS'
   line?: string
-  status?: DeploymentResult
+  status?: RunResult
 }
 
 function parseFrame(body: string): Frame | null {
@@ -27,9 +27,9 @@ function parseFrame(body: string): Frame | null {
 }
 
 /** Live output of one deployment. Frames are de-duplicated by `seq` (the server replays on reconnect). */
-export function useDeploymentStream(deploymentId: string, onFinished?: (result: DeploymentResult) => void) {
+export function useRunStream(runId: string, onFinished?: (result: RunResult) => void) {
   const [lines, setLines] = useState<OutputLine[]>([])
-  const [result, setResult] = useState<DeploymentResult | null>(null)
+  const [result, setResult] = useState<RunResult | null>(null)
   const [connection, setConnection] = useState<ConnectionState>('connecting')
   const finished = useRef(onFinished)
   useEffect(() => {
@@ -39,7 +39,7 @@ export function useDeploymentStream(deploymentId: string, onFinished?: (result: 
   useEffect(() => {
     let lastSeq = -1
     let done = false
-    const unsubscribe = subscribeToTopic(`/topic/deployments/${deploymentId}`, {
+    const unsubscribe = subscribeToTopic(`/topic/deployments/${runId}`, {
       onState: (state) => {
         if (!done) setConnection(state)
       },
@@ -62,7 +62,7 @@ export function useDeploymentStream(deploymentId: string, onFinished?: (result: 
       done = true
       unsubscribe()
     }
-  }, [deploymentId])
+  }, [runId])
 
   return { lines, result, connection }
 }

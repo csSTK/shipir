@@ -3,8 +3,8 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../shared/api/client.ts'
-import { AddStackDialog } from './AddStackDialog.tsx'
-import { StackDetailPage } from './StackDetailPage.tsx'
+import { AddDeploymentDialog } from './AddDeploymentDialog.tsx'
+import { DeploymentDetailPage } from './DeploymentDetailPage.tsx'
 
 vi.mock('../../shared/realtime/stomp.ts', () => ({ subscribeToTopic: () => () => {} }))
 
@@ -19,7 +19,7 @@ afterEach(() => {
   apiFetch.mockReset()
 })
 
-const BASE = '/hosts/h1/managed-stacks'
+const BASE = '/hosts/h1/managed-deployments'
 const credentials = [{ id: 'c1', name: 'GitHub bot', username: 'bot', tokenHint: '…abcd', createdAt: '', updatedAt: '' }]
 
 const git = {
@@ -33,7 +33,7 @@ const git = {
   lastPolledAt: null,
   lastPollError: null,
 }
-const gitStack = {
+const gitDeployment = {
   id: 's1',
   name: 'shop',
   status: 'RUNNING',
@@ -49,7 +49,7 @@ const versions = [
 ]
 
 type Handler = (init?: { method?: string; body?: unknown }) => unknown
-function serve(role: string, overrides: Record<string, Handler> = {}, detail: unknown = gitStack) {
+function serve(role: string, overrides: Record<string, Handler> = {}, detail: unknown = gitDeployment) {
   apiFetch.mockImplementation((path: string, init?: { method?: string; body?: unknown }) => {
     const key = `${init?.method ?? 'GET'} ${path}`
     if (overrides[key]) {
@@ -75,13 +75,13 @@ const wrap = (ui: React.ReactNode, path = '/') => (
   </QueryClientProvider>
 )
 
-describe('AddStackDialog, Git source', () => {
+describe('AddDeploymentDialog, Git source', () => {
   function renderDialog() {
     render(
       wrap(
         <Routes>
-          <Route path="/" element={<AddStackDialog hostId="h1" onClose={() => {}} />} />
-          <Route path="/environments/h1/stacks/:stackId" element={<Where />} />
+          <Route path="/" element={<AddDeploymentDialog hostId="h1" onClose={() => {}} />} />
+          <Route path="/environments/h1/deployments/:deploymentId" element={<Where />} />
         </Routes>,
       ),
     )
@@ -97,8 +97,8 @@ describe('AddStackDialog, Git source', () => {
     fireEvent.change(screen.getByLabelText('File path in repository'), { target: { value: 'deploy/compose.yaml' } })
   }
 
-  it('creates a stack from a repository with a credential and navigates to it', async () => {
-    const post = vi.fn(() => gitStack)
+  it('creates a deployment from a repository with a credential and navigates to it', async () => {
+    const post = vi.fn(() => gitDeployment)
     serve('ADMIN', { [`POST ${BASE}`]: post })
     renderDialog()
     await pickGit()
@@ -106,8 +106,8 @@ describe('AddStackDialog, Git source', () => {
     const select = await screen.findByLabelText('Credential')
     await within(select).findByRole('option', { name: 'GitHub bot' })
     fireEvent.change(select, { target: { value: 'c1' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create stack' }))
-    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/environments/h1/stacks/s1'))
+    fireEvent.click(screen.getByRole('button', { name: 'Create deployment' }))
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/environments/h1/deployments/s1'))
     expect(post).toHaveBeenCalledWith({
       method: 'POST',
       body: {
@@ -122,15 +122,15 @@ describe('AddStackDialog, Git source', () => {
     })
   })
 
-  it('lets an operator create a public-repo stack and explains the missing credential list', async () => {
-    const post = vi.fn((_init?: { body?: unknown }) => gitStack)
+  it('lets an operator create a public-repo deployment and explains the missing credential list', async () => {
+    const post = vi.fn((_init?: { body?: unknown }) => gitDeployment)
     serve('OPERATOR', { [`POST ${BASE}`]: post })
     renderDialog()
     await pickGit()
     fillGit()
     expect(screen.queryByLabelText('Credential')).not.toBeInTheDocument()
     expect(screen.getByText(/Only administrators can pick a credential/)).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Create stack' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create deployment' }))
     await waitFor(() => expect(post).toHaveBeenCalled())
     expect(post.mock.calls[0][0]?.body as object).not.toHaveProperty('credentialId')
     expect(apiFetch).not.toHaveBeenCalledWith('/git/credentials')
@@ -141,7 +141,7 @@ describe('AddStackDialog, Git source', () => {
     renderDialog()
     await pickGit()
     fillGit()
-    fireEvent.click(screen.getByRole('button', { name: 'Create stack' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create deployment' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('rejected the credentials')
     expect(screen.getByLabelText('Repository URL')).toHaveValue('https://github.com/acme/shop.git')
   })
@@ -151,20 +151,20 @@ describe('AddStackDialog, Git source', () => {
     renderDialog()
     await pickGit()
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'shop' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create stack' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create deployment' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Enter the repository URL')
     expect(apiFetch).not.toHaveBeenCalledWith(BASE, expect.anything())
   })
 })
 
-describe('StackDetailPage, Git stack', () => {
+describe('DeploymentDetailPage, Git deployment', () => {
   function renderPage() {
     render(
       wrap(
         <Routes>
-          <Route path="/environments/:id/stacks/:stackId" element={<StackDetailPage />} />
+          <Route path="/environments/:id/deployments/:deploymentId" element={<DeploymentDetailPage />} />
         </Routes>,
-        '/environments/h1/stacks/s1',
+        '/environments/h1/deployments/s1',
       ),
     )
   }
@@ -180,8 +180,8 @@ describe('StackDetailPage, Git stack', () => {
     expect(await screen.findByLabelText('Compose file')).toHaveAttribute('readonly')
   })
 
-  it('does not show a Git panel for file stacks', async () => {
-    serve('ADMIN', {}, { ...gitStack, source: 'FILE', git: null })
+  it('does not show a Git panel for file deployments', async () => {
+    serve('ADMIN', {}, { ...gitDeployment, source: 'FILE', git: null })
     renderPage()
     await screen.findByRole('heading', { name: 'shop' })
     expect(screen.queryByRole('region', { name: 'Git source' })).not.toBeInTheDocument()
@@ -191,11 +191,11 @@ describe('StackDetailPage, Git stack', () => {
     let sha = 'abcdef1234567'
     const redeploy = vi.fn(() => {
       sha = '9999999aaaaaa'
-      return { deploymentId: 'd-7', versionId: 'v2' }
+      return { runId: 'd-7', versionId: 'v2' }
     })
     serve('OPERATOR', { [`POST ${BASE}/s1/git/redeploy`]: redeploy })
     apiFetch.mockImplementation(((impl) => (path: string, init?: { method?: string }) => {
-      if (path === `${BASE}/s1` && !init?.method) return Promise.resolve({ ...gitStack, git: { ...git, lastCommitSha: sha } })
+      if (path === `${BASE}/s1` && !init?.method) return Promise.resolve({ ...gitDeployment, git: { ...git, lastCommitSha: sha } })
       return impl(path, init)
     })(apiFetch.getMockImplementation()!))
     renderPage()
@@ -220,7 +220,7 @@ describe('StackDetailPage, Git stack', () => {
   })
 
   it('saves auto-update with the interval in minutes converted to seconds', async () => {
-    const put = vi.fn(() => gitStack)
+    const put = vi.fn(() => gitDeployment)
     serve('OPERATOR', { [`PUT ${BASE}/s1/git/auto-update`]: put })
     renderPage()
     const panel = await screen.findByRole('region', { name: 'Git source' })
@@ -246,7 +246,7 @@ describe('StackDetailPage, Git stack', () => {
 
   it('shows the last poll error and time', async () => {
     serve('ADMIN', {}, {
-      ...gitStack,
+      ...gitDeployment,
       git: { ...git, autoUpdateEnabled: true, lastPolledAt: '2026-10-03T10:00:00Z', lastPollError: 'GIT_AUTH_FAILED' },
     })
     renderPage()

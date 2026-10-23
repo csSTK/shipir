@@ -66,7 +66,7 @@ describe('EnvironmentDashboard', () => {
     expect(containers).toHaveAttribute('href', '/environments/a/containers')
     expect(screen.getByRole('link', { name: /Images/ })).toHaveTextContent('12')
     expect(screen.getByRole('link', { name: /Volumes/ })).toHaveTextContent('4')
-    for (const name of ['Stacks', 'Networks']) {
+    for (const name of ['Deployments', 'Networks']) {
       expect(screen.getByRole('link', { name: new RegExp(name) })).toHaveAttribute(
         'href',
         `/environments/a/${name.toLowerCase()}`,

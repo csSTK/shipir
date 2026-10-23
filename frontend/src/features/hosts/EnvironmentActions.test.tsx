@@ -96,12 +96,12 @@ describe('environment row actions', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
-  it('delete names the environment, warns about stacks and DELETEs on confirm', async () => {
+  it('delete names the environment, warns about deployments and DELETEs on confirm', async () => {
     renderOverview('ADMIN')
     fireEvent.click(await screen.findByRole('button', { name: 'Delete Local' }))
     const dialog = screen.getByRole('dialog', { name: 'Delete environment' })
     expect(dialog).toHaveTextContent('Local')
-    expect(dialog).toHaveTextContent(/stacks/i)
+    expect(dialog).toHaveTextContent(/deployments/i)
     expect(mutationCalls()).toEqual([])
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
 

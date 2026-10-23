@@ -23,7 +23,7 @@ beforeEach(() => {
 
 describe('DeployOutput', () => {
   it('subscribes to the deployment topic and appends lines in order', () => {
-    render(<DeployOutput title="Deployment" deploymentId="dep-1" />)
+    render(<DeployOutput title="Deployment" runId="dep-1" />)
     expect(subscribe).toHaveBeenCalledWith('/topic/deployments/dep-1', expect.anything())
     send({ seq: 1, type: 'LINE', line: 'Pulling web' })
     send({ seq: 2, type: 'LINE', line: 'Started web' })
@@ -33,7 +33,7 @@ describe('DeployOutput', () => {
   })
 
   it('ignores replayed frames after a reconnect', () => {
-    render(<DeployOutput title="Deployment" deploymentId="dep-1" />)
+    render(<DeployOutput title="Deployment" runId="dep-1" />)
     send({ seq: 1, type: 'LINE', line: 'one' })
     send({ seq: 2, type: 'LINE', line: 'two' })
     act(() => handlers.onState('reconnecting'))
@@ -50,7 +50,7 @@ describe('DeployOutput', () => {
     ['FAILED', 'Failed'],
   ])('shows the final %s status, notifies and stops listening', (status, label) => {
     const onFinished = vi.fn()
-    render(<DeployOutput title="Deployment" deploymentId="dep-1" onFinished={onFinished} />)
+    render(<DeployOutput title="Deployment" runId="dep-1" onFinished={onFinished} />)
     send({ seq: 1, type: 'STATUS', status })
     expect(screen.getByRole('status')).toHaveTextContent(label)
     expect(onFinished).toHaveBeenCalledWith(status)
@@ -58,13 +58,13 @@ describe('DeployOutput', () => {
   })
 
   it('unsubscribes on unmount', () => {
-    const { unmount } = render(<DeployOutput title="Deployment" deploymentId="dep-1" />)
+    const { unmount } = render(<DeployOutput title="Deployment" runId="dep-1" />)
     unmount()
     expect(unsubscribe).toHaveBeenCalled()
   })
 
   it('pauses autoscroll when scrolled up and offers Jump to latest', () => {
-    render(<DeployOutput title="Deployment" deploymentId="dep-1" />)
+    render(<DeployOutput title="Deployment" runId="dep-1" />)
     const log = screen.getByRole('log')
     Object.defineProperty(log, 'scrollHeight', { configurable: true, value: 1000 })
     Object.defineProperty(log, 'clientHeight', { configurable: true, value: 200 })

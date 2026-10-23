@@ -2,11 +2,11 @@ import { useId, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ApiError } from '../../shared/api/client.ts'
 import { useCurrentUser } from '../auth/index.ts'
-import { useCreateStack, type EnvEntry } from './api.ts'
+import { useCreateDeployment, type EnvEntry } from './api.ts'
 import { EnvEditor, toPayload, validateEnv, YamlEditor } from './editor/index.ts'
-import { describeStackError } from './stackErrors.ts'
+import { describeDeploymentError } from './deploymentErrors.ts'
 import { GitSourceFields, type GitFormValue } from './GitSourceFields.tsx'
-import { StackDialog } from './StackDialog.tsx'
+import { DeploymentDialog } from './DeploymentDialog.tsx'
 import { ComposeWizard } from './wizard/index.ts'
 import './wizard/wizard.css'
 
@@ -17,10 +17,10 @@ const NAME_PATTERN = /^[a-z0-9][a-z0-9_-]*$/
  * Create form: name, then either the Compose file (Monaco) or the form wizard, plus environment variables.
  * The wizard hands its generated YAML to the editor ("Continue in editor"); it is one-way.
  */
-export function AddStackDialog({ hostId, onClose }: { hostId: string; onClose: () => void }) {
+export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClose: () => void }) {
   const titleId = useId()
   const navigate = useNavigate()
-  const create = useCreateStack(hostId)
+  const create = useCreateDeployment(hostId)
   const [name, setName] = useState('')
   const [yaml, setYaml] = useState('')
   const [env, setEnv] = useState<EnvEntry[]>([])
@@ -59,8 +59,8 @@ export function AddStackDialog({ hostId, onClose }: { hostId: string; onClose: (
       create.mutate(
         { source: 'GIT', name: trimmed, repoUrl, ref, composePath, ...(git.credentialId ? { credentialId: git.credentialId } : {}), env: toPayload(env) },
         {
-          onSuccess: (stack) => navigate(`/environments/${hostId}/stacks/${stack.id}`),
-          onError: (err) => setProblem(describeStackError(err, 'Could not create the stack. Try again.')),
+          onSuccess: (deployment) => navigate(`/environments/${hostId}/deployments/${deployment.id}`),
+          onError: (err) => setProblem(describeDeploymentError(err, 'Could not create the deployment. Try again.')),
         },
       )
       return
@@ -79,12 +79,12 @@ export function AddStackDialog({ hostId, onClose }: { hostId: string; onClose: (
     create.mutate(
       { name: trimmed, yaml, env: entries },
       {
-        onSuccess: (stack) => navigate(`/environments/${hostId}/stacks/${stack.id}`),
+        onSuccess: (deployment) => navigate(`/environments/${hostId}/deployments/${deployment.id}`),
         onError: (err) => {
           if (err instanceof ApiError && err.code === 'INVALID_COMPOSE') {
             setYamlError({ message: 'The Compose file is not valid.', details: err.details })
           } else {
-            setProblem(describeStackError(err, 'Could not create the stack. Try again.'))
+            setProblem(describeDeploymentError(err, 'Could not create the deployment. Try again.'))
           }
         },
       },
@@ -92,7 +92,7 @@ export function AddStackDialog({ hostId, onClose }: { hostId: string; onClose: (
   }
 
   return (
-    <StackDialog title="Add stack" titleId={titleId} onClose={onClose}>
+    <DeploymentDialog title="Add deployment" titleId={titleId} onClose={onClose}>
       <form onSubmit={submit} className="sk-form">
         <label className="sk-field">
           <span>Name</span>
@@ -101,7 +101,7 @@ export function AddStackDialog({ hostId, onClose }: { hostId: string; onClose: (
         <div className="wz-modes" role="radiogroup" aria-label="Source">
           {([['file', 'New file'], ['git', 'Git repository']] as const).map(([value, label]) => (
             <label key={value} className="wz-mode">
-              <input type="radio" name="stack-source" checked={source === value} onChange={() => setSource(value)} />
+              <input type="radio" name="deployment-source" checked={source === value} onChange={() => setSource(value)} />
               {label}
             </label>
           ))}
@@ -140,10 +140,10 @@ export function AddStackDialog({ hostId, onClose }: { hostId: string; onClose: (
             Cancel
           </button>
           <button type="submit" className="sk-btn sk-btn--primary" disabled={create.isPending} hidden={source === 'file' && mode !== 'yaml'}>
-            Create stack
+            Create deployment
           </button>
         </div>
       </form>
-    </StackDialog>
+    </DeploymentDialog>
   )
 }

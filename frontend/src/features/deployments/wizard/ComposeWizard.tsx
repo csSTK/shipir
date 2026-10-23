@@ -184,12 +184,12 @@ function ServiceCard({
             <Field label="Variable name" error={err(`env.${j}.key`)}>
               <input aria-label={`Service ${n} env ${j + 1} name`} value={r.key} placeholder="NAME" onChange={(e) => onChange({ env: patchAt(service.env, j, { key: e.target.value }) })} autoComplete="off" spellCheck={false} />
             </Field>
-            <Field label={r.ref ? 'Stack variable' : 'Value'} error={err(`env.${j}.value`)}>
+            <Field label={r.ref ? 'Deployment variable' : 'Value'} error={err(`env.${j}.value`)}>
               <input aria-label={`Service ${n} env ${j + 1} ${r.ref ? 'reference' : 'value'}`} value={r.value} onChange={(e) => onChange({ env: patchAt(service.env, j, { value: e.target.value }) })} autoComplete="off" spellCheck={false} />
             </Field>
             <label className="wz-check">
               <input type="checkbox" checked={r.ref} onChange={(e) => onChange({ env: patchAt(service.env, j, { ref: e.target.checked }) })} />
-              <span>From stack variable</span>
+              <span>From deployment variable</span>
             </label>
             <button type="button" className="sk-btn sk-btn--plain" aria-label={`Remove service ${n} env ${j + 1}`} onClick={() => onChange({ env: remove(service.env, j) })}>
               Remove
@@ -233,7 +233,7 @@ function ServiceCard({
 
 /**
  * Form wizard for a Compose file. One-way: the form generates YAML on the server, it never reads YAML back.
- * `onContinue` receives the YAML and the stack variables the form references (to be filled in the env editor).
+ * `onContinue` receives the YAML and the deployment variables the form references (to be filled in the env editor).
  */
 export function ComposeWizard({ onContinue }: { onContinue: (yaml: string, envKeys: string[]) => void }) {
   const previewId = useId()
@@ -258,7 +258,7 @@ export function ComposeWizard({ onContinue }: { onContinue: (yaml: string, envKe
     generate.mutate(buildSpec(state), {
       onSuccess: (r) => setYaml(r.yaml),
       onError: (err) => {
-        if (err instanceof ApiError && err.code === 'INVALID_COMPOSE_SPEC') setProblems(err.details?.length ? err.details : ['The stack is not valid.'])
+        if (err instanceof ApiError && err.code === 'INVALID_COMPOSE_SPEC') setProblems(err.details?.length ? err.details : ['The deployment is not valid.'])
         else setProblems(['Could not generate the Compose file. Try again.'])
       },
     })
@@ -296,7 +296,7 @@ export function ComposeWizard({ onContinue }: { onContinue: (yaml: string, envKe
       )}
       {problems.length > 0 && (
         <div role="alert" className="sk-error">
-          <p>The stack is not valid.</p>
+          <p>The deployment is not valid.</p>
           <ul className="wz-list">
             {problems.map((m, i) => (
               <li key={i}>{m}</li>
