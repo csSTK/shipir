@@ -56,3 +56,15 @@
 .containers__btn:disabled {
   opacity: 0.6;
 }
+.containers__name {
+  color: inherit;
+  text-decoration: none;
+}
+.containers__name:hover strong {
+  text-decoration: underline;
+}
+.containers__name:focus-visible {
+  outline: 2px solid AccentColor;
+  outline-offset: 2px;
+  border-radius: 4px;
+}

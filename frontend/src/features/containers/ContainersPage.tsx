@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { useSearchParams, useParams } from 'react-router-dom'
+import { Link, useSearchParams, useParams } from 'react-router-dom'
 import { useCurrentUser } from '../auth/index.ts'
 import { useDeployments } from '../deployments/api.ts'
 import { deleteColumn } from '../hosts/deleteColumn.tsx'
@@ -24,7 +24,16 @@ function healthTone(health: string): 'ok' | 'warn' | 'bad' {
 }
 
 const baseColumns: ResourceColumn<Container>[] = [
-  { id: 'name', header: 'Name', sortValue: (c) => c.name, render: (c) => <strong>{c.name}</strong> },
+  {
+    id: 'name',
+    header: 'Name',
+    sortValue: (c) => c.name,
+    render: (c) => (
+      <Link className="containers__name" to={`${c.id}/logs`} aria-label={`Logs of ${c.name}`}>
+        <strong>{c.name}</strong>
+      </Link>
+    ),
+  },
   {
     id: 'state',
     header: 'State',

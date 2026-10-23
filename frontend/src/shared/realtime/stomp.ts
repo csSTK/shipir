@@ -8,6 +8,11 @@ export interface TopicHandlers {
   onState: (state: ConnectionState) => void
 }
 
+export interface SubscribeOptions {
+  /** Extra SUBSCRIBE headers (e.g. per-subscription options the server reads). */
+  headers?: Record<string, string>
+}
+
 const RECONNECT_DELAY_MS = 3000
 
 function brokerUrl(): string {
@@ -20,7 +25,7 @@ function brokerUrl(): string {
  * Reconnects automatically and re-subscribes; the server replays buffered frames on every
  * subscribe, so callers de-duplicate. Returns the function that tears everything down.
  */
-export function subscribeToTopic(destination: string, handlers: TopicHandlers): () => void {
+export function subscribeToTopic(destination: string, handlers: TopicHandlers, options: SubscribeOptions = {}): () => void {
   const client = new Client({
     brokerURL: brokerUrl(),
     reconnectDelay: RECONNECT_DELAY_MS,
@@ -32,7 +37,7 @@ export function subscribeToTopic(destination: string, handlers: TopicHandlers): 
     },
     onConnect: () => {
       handlers.onState('connected')
-      client.subscribe(destination, (frame) => handlers.onMessage(frame.body))
+      client.subscribe(destination, (frame) => handlers.onMessage(frame.body), options.headers)
     },
     onWebSocketClose: () => handlers.onState('reconnecting'),
   })
