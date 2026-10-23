@@ -45,6 +45,8 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `host/{HostOverviewService,HostOverviewProperties}.java`: `GET /api/hosts/overview` (in `HostController`): parallel live `info` per host on virtual threads, shared deadline `shipir.host.overview-timeout` (5s), failures -> DOWN + error code (docker codes, TIMEOUT, DECRYPTION_FAILED, ENCRYPTION_KEY_MISSING, UNKNOWN)
 - `host/{HostHealthCheckScheduler,HostStatusChangedEvent}.java`: `@Scheduled` (`shipir.host.health-check-interval`=60s, `health-check-enabled`=true; test properties disable it) reuses `HostOverviewService`, in-memory last status per host (first observation = baseline), publishes `HostStatusChangedEvent` on UP/DOWN flips, forgets deleted hosts
 - `common/config/SchedulingConfig.java`: `@EnableScheduling`
+- `host/{HostResourcesController,HostResourcesService}.java`: read-only `GET /api/hosts/{id}/{stacks,containers,images,networks,volumes}` (all roles) via docker/ services; 404 HOST_NOT_FOUND, 502 with DockerErrorCode / DECRYPTION_FAILED / ENCRYPTION_KEY_MISSING (errors via `HostExceptionHandler`)
+- `backend/src/test/java/dev/bethge/shipir/host/HostResources{Api,Resilience,NoKey}Test.java`: resource endpoints (real local socket; stubbed services for 502 codes; missing key)
 - `host/HostEndpointResolver.java`: public, builds `DockerEndpoint` from a `DockerHost` (decrypts TLS)
 - `host/HostEncryptionStartupCheck.java`: fails startup if TCP hosts exist without `shipir.encryption-key`
 - `host/dto/*.java`: create/test/update requests (toString hides PEMs), `HostResponse` (`tls` boolean only), `HostOverviewResponse` (stats null when DOWN)
@@ -88,6 +90,10 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `docker/{DockerClientFactory,DefaultDockerClientFactory}.java`: package-private seam + httpclient5 factory (Local socket; Tcp, with `PemSslConfig` when TLS material is set)
 - `docker/tls/{PemSslConfig,TlsMaterialParser,TlsMaterialValidator}.java`: in-memory PEM (CA, client chain, RSA/EC key PKCS#8/PKCS#1/SEC1) to docker-java `SSLConfig`; invalid PEM -> `DockerConnectionException(INVALID_TLS_MATERIAL)`; `TlsMaterialValidator.validate` for host/
 - `docker/client/DockerSystemService{,Impl}.java`: `ping(endpoint)` (uncached, never throws) and `info(hostId, endpoint)`; enforces read timeout itself (Unix transport ignores it)
+- `docker/client/Container{Service,ServiceImpl}.java`: `listContainers` (all states) and `listStacks` (grouped by `com.docker.compose.project`, RUNNING/PARTIAL/STOPPED); `docker/client/DockerCallSupport.java`: package-private read-timeout deadline + `DockerConnectionException` mapping, shared by docker/client services
+- `docker/dto/{ContainerDto,StackSummaryDto}.java`: container (health from status text, ports `pub:priv/type`, compose labels) and stack summary
+- `docker/client/{Image,Network,Volume}Service{,Impl}.java`: `list(hostId, endpoint)`; inUse/containerCount derived from the container list in the same call; dangling image = empty `repoTags`; volume `created` is currently always null (docker-java drops `CreatedAt`)
+- `docker/dto/{ImageDto,NetworkDto,VolumeDto}.java`: image (id, repoTags, size, created, inUse), network (subnet, internal, containerCount), volume (mountpoint, created, inUse)
 - `docker/dto/{ConnectionTestResult,DockerSystemInfoDto}.java`: ping result, host overview counts incl. healthy/unhealthy
 - `backend/src/test/java/dev/bethge/shipir/docker/**`: endpoint, manager (fake factory), properties defaults, no-docker-java-in-API check, service unit (missing/hanging socket), Docker integration tests, dind TLS integration test, PEM parsing (`tls/PemSslConfigTest`, `tls/TestPki` generates certs)
 - `backend/pom.xml`: Maven build, Java 25, Spring Boot 4.1.1 parent, docker-java 3.7.1 (core + httpclient5), starters web/websocket/security/validation/data-jpa/flyway/test, spring-security-test, flyway-database-postgresql, postgresql driver, Testcontainers (test)
@@ -108,13 +114,13 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 Frontend (`frontend/`):
 - `vite.config.ts`: dev proxy (`/api`, `/ws` → :8080), Vitest config
 - `src/main.tsx`: entry, mounts `App`
-- `src/app/App.tsx`: root component, `Providers` + `BrowserRouter` + auth gate (loading, `LoginPage` on 401, `SetupPage` while `setupRequired`, routes `/` overview and `/environments/:id`, sign out)
+- `src/app/App.tsx`: root component, `Providers` + `BrowserRouter` + auth gate (loading, `LoginPage` on 401, `SetupPage` while `setupRequired`, routes `/` overview, `/account`, `/notifications`, `/settings/*`, `/environments/:id` dashboard and `/environments/:id/{stacks,containers,images,networks,volumes}` pages, sign out)
 - `src/app/providers.tsx`, `src/app/queryClient.ts`: React Query setup
 - `src/shared/api/client.ts`: `apiFetch<T>` + `ApiError` (status, code, violations, details), JSON fetch against `/api`, same-origin credentials, `X-XSRF-TOKEN` from cookie on non-GET
 - `src/features/auth/{api.ts,LoginPage.tsx,LoginPage.css,index.ts}`: `useCurrentUser/useLogin/useLogout/useChangePassword/useRequestPasswordReset/useConfirmPasswordReset` hooks, login form with `Forgot password?` view switch + success notice
 - `src/features/auth/PasswordResetPage.{tsx,css,test.tsx}`: reset flow (username -> neutral message + 6-digit code, new password with live rules; INVALID_RESET_CODE / PASSWORD_POLICY inline)
 - `src/features/auth/{SetupPage.tsx,SetupPage.css,passwordPolicy.ts}`: first-start setup, 2 steps with indicator (`step` prop = `setupStep`: PASSWORD form, ENVIRONMENT embeds hosts `EnvironmentForm` then refetches me); client mirror of backend password rules
-- `src/app/layout/{AppShell,Sidebar,UserMenu}.tsx` (+ `.css`, `AppShell.test.tsx`): app shell: top bar (brand, user menu with Settings -> /account and Sign out), sidebar (Environments, Notifications, ADMIN-only Settings group), narrow-screen toggle
+- `src/app/layout/{AppShell,Sidebar,UserMenu}.tsx` (+ `.css`, `AppShell.test.tsx`): app shell: top bar (brand, user menu with Settings -> /account and Sign out), sidebar (Environments, Notifications, env section with Dashboard + resources while on `/environments/:id/*`, ADMIN-only Settings group), narrow-screen toggle
 - `src/app/layout/PlaceholderPages.tsx`: `PlaceholderPage`, `NotAllowedPage` (non-ADMIN on /settings/*)
 - `e2e/shell.spec.ts`: sidebar/user menu navigation, viewer not allowed on settings
 - `src/features/notifications/{api.ts,NotificationsPage.tsx,.css,index.ts}`: `useNotifications(unreadOnly)`, `useUnreadCount` (30 s + focus), `useMarkRead/useMarkAllRead`; `/notifications` page (assumed API: Page `{content,totalElements}`, `{count}`, POST `/{id}/read`, `/read-all`); Sidebar shows the unread badge
@@ -124,14 +130,20 @@ Frontend (`frontend/`):
 - `src/features/settings/{RetentionSettingsPage.tsx,.css,.test.tsx}`: ADMIN retention form at `/settings/retention` (audit log / notification days 1-3650, client check, inline errors); hooks `useRetentionSettings`/`useSaveRetentionSettings` in `api.ts`
 - `src/features/settings/AuditLogPage.{tsx,css,test.tsx}`: ADMIN audit log at `/settings/audit-log` (table, action/user/date filters + page in URL query, empty/error states); `useAuditLog`, `AUDIT_ACTION_LABELS` in `api.ts`
 - `e2e/webhooks.spec.ts`: admin creates webhook + test, operator blocked
-- `src/features/{containers,stacks}/index.ts`: empty feature entry points
+- `src/shared/ui/{ResourceTable.tsx,.css,index.ts}`: shared list table for environment resources: `ResourceTable<T>` (columns with optional `sortValue`, search, loading skeleton, error + Retry, empty/no-match states; props `label`, `rows`, `isPending`, `error` (mapped message), `toolbar`) and `Badge` (tone ok/warn/bad/muted); reuse for images/networks/volumes
+- `src/features/containers/{api.ts,ContainersPage.tsx,.css,index.ts}`: `useContainers(hostId)`; `/environments/:id/containers` table, `?stack=<project>` filter chip
+- `src/features/{images,networks,volumes}/{api.ts,*Page.tsx,.css,index.ts}`: `useImages/useNetworks/useVolumes(hostId)`; `/environments/:id/{images,networks,volumes}` tables on `ResourceTable` (usage/internal badges, missing values as `–`); `formatSize` in `hosts/format.ts`
+- `e2e/images-networks-volumes.spec.ts`: images/networks/volumes pages (search, sort, badges, error + retry)
+- `src/features/stacks/{api.ts,StacksPage.tsx,.css,index.ts}`: `useStacks(hostId)`; `/environments/:id/stacks` table, stack name links to containers filtered by stack
+- `e2e/resources.spec.ts`: stacks/containers pages: search, sort, stack filter, UNREACHABLE/TIMEOUT, empty
 - `src/features/hosts/api.ts`: host types, `HOSTS_KEY`/`HOSTS_OVERVIEW_KEY`, `useHosts/useHostsOverview` (30 s + focus refetch, `HostOverview`), `useCreateHost/useTestConnection/useRenameHost/useDeleteHost` (create/delete also invalidate current user)
 - `src/features/hosts/EnvironmentForm.{tsx,css}`: Local / Remote (TCP+TLS) form, PEM file pickers (names only shown), connection test, inline server errors; props `onCreated`, `submitLabel`
 - `src/features/hosts/{EnvironmentsOverview.tsx,.css}`: home screen: environment rows (status, stats), search, refresh, skeleton/error/empty states, ADMIN add dialog, renders `EnvironmentActions` per row for ADMIN
 - `src/features/hosts/EnvironmentActions.{tsx,css}`: ADMIN row Rename/Delete buttons + dialogs (HOST_NAME_TAKEN inline, delete warns about stacks)
-- `src/features/hosts/EnvironmentPage.tsx`: `/environments/:id` placeholder with back link
-- `src/features/hosts/format.ts`: memory/plural formatting, overview error code to message
-- `src/features/hosts/index.ts`: exports form, overview, page, hooks, types
+- `src/features/hosts/EnvironmentDashboard.{tsx,css,test.tsx}`: `/environments/:id`: status, Docker version, resource tiles (counts from overview) linking to resource routes; DOWN error, not-found
+- `src/features/hosts/resources.ts`: `ENV_RESOURCES` (stacks/containers/images/networks/volumes) for sidebar, tiles
+- `src/features/hosts/format.ts`: memory/plural formatting, overview error code to message, `describeResourceError(err)` for `/hosts/{id}/...` failures
+- `src/features/hosts/index.ts`: exports form, overview, dashboard, `ENV_RESOURCES`, hooks, types
 - `src/test/setup.ts`: jest-dom matchers for Vitest
 - `playwright.config.ts`: Playwright config (Chromium, `e2e/` dir, starts Vite dev server)
 - `tsconfig.e2e.json`: type-checks `e2e/` and `playwright.config.ts` (referenced from `tsconfig.json`)
@@ -141,7 +153,8 @@ Frontend (`frontend/`):
 - `e2e/audit-log.spec.ts`: admin filters by action and pages, operator not allowed
 - `e2e/app.spec.ts`: smoke spec, Shipir heading (signed in)
 - `e2e/auth.spec.ts`: login happy path + sign out, wrong password
-- `e2e/environments.spec.ts`: overview list/search, viewer vs admin add, admin rename/delete, taken name, operator no actions, error, placeholder navigation
+- `e2e/environments.spec.ts`: overview list/search, viewer vs admin add, admin rename/delete, taken name, operator no actions, error, dashboard navigation
+- `e2e/environment-dashboard.spec.ts`: overview -> dashboard -> sidebar items, tile counts, DOWN, not found, narrow screen
 - `e2e/password-reset.spec.ts`: forgot password happy path, invalid code, unknown user neutral message
 - `e2e/setup.spec.ts`: setup flow (password -> environment step -> app), reload on step 2, connection failure, server error, no setup when done
 - `Dockerfile`: multi-stage image (pnpm build, nginx-unprivileged on :8080; `BACKEND_URL`, `NGINX_RESOLVER`)

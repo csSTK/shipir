@@ -1,3 +1,5 @@
+import { ApiError } from '../../shared/api/client.ts'
+
 const GIB = 1024 ** 3
 const MIB = 1024 ** 2
 
@@ -23,8 +25,22 @@ const ERROR_MESSAGES: Record<string, string> = {
   INVALID_TLS_MATERIAL: 'The stored certificate or key is invalid.',
   DECRYPTION_FAILED: 'The stored certificates could not be decrypted.',
   ENCRYPTION_KEY_MISSING: 'The server has no encryption key configured.',
+  HOST_NOT_FOUND: 'This environment does not exist or was deleted.',
 }
 
 export function describeError(code: string | null): string {
   return (code && ERROR_MESSAGES[code]) || 'The environment is not reachable.'
+}
+
+/** Message for a failed resource request (`/api/hosts/{id}/...`): maps the 404/502 error code. */
+export function describeResourceError(error: unknown): string {
+  return describeError(error instanceof ApiError ? (error.code ?? null) : null)
+}
+
+/** Byte size for image lists: B, KiB, MiB or GiB with one decimal at most. */
+export function formatSize(bytes: number): string {
+  if (bytes >= GIB) return `${trim(bytes / GIB)} GiB`
+  if (bytes >= MIB) return `${trim(bytes / MIB)} MiB`
+  if (bytes >= 1024) return `${trim(bytes / 1024)} KiB`
+  return `${bytes} B`
 }

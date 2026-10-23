@@ -1,5 +1,6 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useMatch } from 'react-router-dom'
 import type { CurrentUser } from '../../features/auth/index.ts'
+import { ENV_RESOURCES, useHostsOverview } from '../../features/hosts/index.ts'
 import { useUnreadCount } from '../../features/notifications/index.ts'
 import './Sidebar.css'
 
@@ -12,9 +13,31 @@ interface Props {
 const link = ({ isActive }: { isActive: boolean }) =>
   isActive ? 'sidebar__link sidebar__link--active' : 'sidebar__link'
 
+/** Resource links of the environment in the URL. Mounted only on environment routes. */
+function EnvironmentSection({ envId, onNavigate }: { envId: string; onNavigate: () => void }) {
+  const { data: envs } = useHostsOverview()
+  const envName = envs?.find((e) => e.id === envId)?.name
+  return (
+    <div role="group" aria-labelledby="sidebar-env" className="sidebar__group">
+      <span id="sidebar-env" className="sidebar__heading sidebar__heading--env">
+        {envName ?? 'Environment'}
+      </span>
+      <NavLink to={`/environments/${envId}`} end className={link} onClick={onNavigate}>
+        Dashboard
+      </NavLink>
+      {ENV_RESOURCES.map(({ slug, label }) => (
+        <NavLink key={slug} to={`/environments/${envId}/${slug}`} className={link} onClick={onNavigate}>
+          {label}
+        </NavLink>
+      ))}
+    </div>
+  )
+}
+
 /** Primary navigation. The Settings group is ADMIN-only; collapses on narrow screens. */
 export function Sidebar({ role, open, onNavigate }: Props) {
   const unread = useUnreadCount().data?.count ?? 0
+  const envId = useMatch('/environments/:id/*')?.params.id
   return (
     <nav
       id="app-sidebar"
@@ -32,6 +55,7 @@ export function Sidebar({ role, open, onNavigate }: Props) {
           </span>
         )}
       </NavLink>
+      {envId && <EnvironmentSection envId={envId} onNavigate={onNavigate} />}
       {role === 'ADMIN' && (
         <div role="group" aria-labelledby="sidebar-settings" className="sidebar__group">
           <span id="sidebar-settings" className="sidebar__heading">

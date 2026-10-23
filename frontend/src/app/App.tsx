@@ -1,7 +1,12 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
-import { EnvironmentPage, EnvironmentsOverview } from '../features/hosts/index.ts'
+import { EnvironmentDashboard, EnvironmentsOverview } from '../features/hosts/index.ts'
 import { AccountPage } from '../features/account/index.ts'
 import { AuditLogPage, RetentionSettingsPage, WebhooksSettingsPage } from '../features/settings/index.ts'
+import { ContainersPage } from '../features/containers/index.ts'
+import { ImagesPage } from '../features/images/index.ts'
+import { NetworksPage } from '../features/networks/index.ts'
+import { VolumesPage } from '../features/volumes/index.ts'
+import { StacksPage } from '../features/stacks/index.ts'
 import { NotificationsPage } from '../features/notifications/index.ts'
 import { LoginPage, SetupPage, useCurrentUser, useLogout } from '../features/auth/index.ts'
 import { AppShell } from './layout/AppShell.tsx'
@@ -25,7 +30,13 @@ function AuthGate() {
     <AppShell user={user} onSignOut={() => logout.mutate()} signingOut={logout.isPending}>
       <Routes>
         <Route path="/" element={<EnvironmentsOverview role={user.role} />} />
-        <Route path="/environments/:id" element={<EnvironmentPage />} />
+        <Route path="/environments/:id" element={<EnvironmentDashboard />} />
+        {/* One line per resource: later tasks swap the placeholder for the real list page. */}
+        <Route path="/environments/:id/stacks" element={<StacksPage />} />
+        <Route path="/environments/:id/containers" element={<ContainersPage />} />
+        <Route path="/environments/:id/images" element={<ImagesPage />} />
+        <Route path="/environments/:id/networks" element={<NetworksPage />} />
+        <Route path="/environments/:id/volumes" element={<VolumesPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/account" element={<AccountPage user={user} />} />
         <Route path="/settings/notifications" element={isAdmin ? <WebhooksSettingsPage /> : <NotAllowedPage />} />

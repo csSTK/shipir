@@ -24,7 +24,7 @@ This file holds the parts of the original planning handoff that aren't permanent
 ## Recommended build order
 
 1. ~~**Project setup:**~~ **done** (epic shipr-yy7): build tool, Spring Boot skeleton, package structure, `docker-compose.dev.yml`, Flyway V1–V4, Testcontainers baseline.
-2. **`docker/` module + simple REST endpoints** (list, start, stop containers) against the local socket. A quick win that tests the basic connection. The `docker/` abstraction (per-host clients, LOCAL socket + TCP/TLS, system info) is **done** (epic shipr-406); container list/start/stop endpoints remain.
+2. **`docker/` module + simple REST endpoints** (list, start, stop containers) against the local socket. A quick win that tests the basic connection. The `docker/` abstraction (per-host clients, LOCAL socket + TCP/TLS, system info) is **done** (epic shipr-406); read-only lists of containers, Compose stacks, images, networks and volumes are **done** (epic shipr-zlq); container start/stop endpoints remain.
 3. **`auth` + `host`:** basic protection and host management before things get complex. Login, session auth and the first-start setup are **done** (epic shipr-a1h); `host` (environments CRUD, live overview, environment setup step) is **done** (epic shipr-406); user management remains.
 4. **`streaming`:** live logs over WebSocket early. Retrofitting it is painful.
 5. **`compose`, incrementally:** first raw YAML upload + deploy (+ validation), then the form wizard on top, then versioning and rollback.

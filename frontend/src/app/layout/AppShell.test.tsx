@@ -8,7 +8,9 @@ import { AppShell } from './AppShell.tsx'
 
 vi.mock('../../shared/api/client.ts', async (importActual) => ({
   ...(await importActual<typeof import('../../shared/api/client.ts')>()),
-  apiFetch: vi.fn(async () => ({ count: 3 })),
+  apiFetch: vi.fn(async (path: string) =>
+    path.startsWith('/hosts/overview') ? [{ id: 'h1', name: 'Prod' }] : { count: 3 },
+  ),
 }))
 
 afterEach(cleanup)
@@ -23,10 +25,10 @@ function Where() {
   return <p data-testid="where">{useLocation().pathname}</p>
 }
 
-function renderShell(role: CurrentUser['role'], onSignOut = vi.fn()) {
+function renderShell(role: CurrentUser['role'], onSignOut = vi.fn(), path = '/') {
   render(
     <QueryClientProvider client={queryClient}>
-    <MemoryRouter initialEntries={['/']}>
+    <MemoryRouter initialEntries={[path]}>
       <AppShell user={user(role)} onSignOut={onSignOut}>
         <Routes>
           <Route path="*" element={<Where />} />
@@ -105,5 +107,20 @@ describe('AppShell', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
     expect(screen.getByTestId('where')).toHaveTextContent('/account')
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
+
+  it('shows the environment section only on environment routes', async () => {
+    renderShell('VIEWER')
+    expect(screen.queryByRole('group', { name: 'Prod' })).not.toBeInTheDocument()
+    cleanup()
+    renderShell('VIEWER', vi.fn(), '/environments/h1/images')
+    const group = await screen.findByRole('group', { name: 'Prod' })
+    for (const name of ['Dashboard', 'Stacks', 'Containers', 'Images', 'Networks', 'Volumes']) {
+      expect(within(group).getByRole('link', { name })).toBeInTheDocument()
+    }
+    expect(within(group).getByRole('link', { name: 'Images' })).toHaveAttribute('aria-current', 'page')
+    expect(within(group).getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current')
+    fireEvent.click(within(group).getByRole('link', { name: 'Volumes' }))
+    expect(screen.getByTestId('where')).toHaveTextContent('/environments/h1/volumes')
   })
 })
