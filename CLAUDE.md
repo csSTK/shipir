@@ -89,6 +89,7 @@ Repo root:
 
 CI:
 - `.github/workflows/tests.yml`: reusable tests (`workflow_call`/`workflow_dispatch`, inputs `backend`/`frontend`/`e2e`): Maven verify, pnpm lint/test/build, Playwright (report artifact on failure)
+- `.github/workflows/ci.yml`: push to `dev` and PRs: paths-filter (`backend/**`, `frontend/**`, CI files) calls `tests.yml` with `e2e: false`; concurrency cancels superseded runs
 - `.github/workflows/images.yml`: builds backend/frontend images (matrix); PRs build only; `dev` → `:dev`, `prd` → `:latest`, `v*` tags → semver, pushed to ghcr.io/csstk/shipir-{backend,frontend}
 
 Repo tooling:
