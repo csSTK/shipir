@@ -16,6 +16,8 @@ This is a learning and portfolio project focused on Java backend development. Th
   - Create stacks with a form wizard that generates the YAML, or write it yourself in an advanced editor with schema validation.
   - Deploy, stop and pull, with live output.
   - Every deploy is versioned, so you can see history and roll back.
+  - Environment variables per stack, stored encrypted.
+  - Stacks from a (private) Git repository with an access token: Pull & redeploy, and optional polling that redeploys on new commits.
 - **Config editor:** edit a stack's config files in the browser, with protection against path traversal and an automatic backup before every write.
 - **Live streaming:** container logs, Docker events, Compose output and an exec terminal over WebSocket.
 - **Access control:** users with roles (Admin, Operator, Viewer) plus fine-grained permissions per host and stack.
