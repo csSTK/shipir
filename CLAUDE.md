@@ -88,6 +88,9 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `backend/src/test/java/dev/bethge/shipir/auth/PasswordResetEndpointsTest.java`: reset endpoints (MockMvc, capturing sender, CSRF, errors, toString)
 - `backend/src/test/java/dev/bethge/shipir/auth/InitialAdminSeeder{,Startup}Test.java`: seeding, no-op rerun, missing password, no password in logs
 - `backend/src/test/java/dev/bethge/shipir/auth/PasswordResetServiceTest.java`: reset flow (Testcontainers, capturing sender, mutable clock, hash-only row, log capture)
+- `compose/execution/{ComposeExecutionService,ComposeCommand,ComposeProcessResult,ComposeProperties,ComposeExecutionException}.java`: `docker compose -p -f --project-directory` subprocess (args list, no shell), `DOCKER_HOST` per `DockerEndpoint`, TLS PEMs in 0700 temp dir deleted in finally, line callback, `shipir.compose.timeout` (10m) kills process tree
+- `compose/validation/{ComposeValidationService,ValidationResult}.java`: `config --quiet` -> `{valid, errors}`
+- `backend/src/test/java/dev/bethge/shipir/compose/{execution,validation}/`: fake-script unit tests, real `docker compose` integration (up/down, config)
 - `docker/{DockerEndpoint,DockerErrorCode,DockerConnectionException,DockerProperties}.java`: own types: `Local|Tcp(TlsMaterial, toString hides PEMs)`, UNREACHABLE/TIMEOUT/TLS_ERROR/PERMISSION_DENIED/INVALID_TLS_MATERIAL, `shipir.docker.{local-socket,connect-timeout,read-timeout}`
 - `docker/DockerHostConnectionManager.java`: cached docker-java client per host id (`client`/`createClient` internal to docker/), `evict(hostId)`, `localEndpoint()`, `readTimeout()`
 - `docker/{DockerClientFactory,DefaultDockerClientFactory}.java`: package-private seam + httpclient5 factory (Local socket; Tcp, with `PemSslConfig` when TLS material is set)
