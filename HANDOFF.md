@@ -22,7 +22,7 @@ This file holds the parts of the original planning handoff that aren't permanent
 - [x] **DECIDED (shipr-r3w):** 'Stack' is renamed to 'deployment' everywhere (UI, API, code, DB via V16); a single deploy execution is a 'run' (`runId`). The `shipir.stacks.base-dir` / `SHIPIR_STACKS_BASE_DIR` setting, on-disk layout and compose project names are kept. Historic `STACK_*` audit rows are not rewritten.
 - [x] **DECIDED (shipr-e42):** Stack directories live under `shipir.stacks.base-dir` (env `SHIPIR_STACKS_BASE_DIR`, `/data/stacks` on the `shipir-stacks` volume in hosting), one dir per `<host-id>/<stack-name>`; the DB (`stack_versions`) is the source of truth and files are rewritten on deploy.
 - [x] **DECIDED (shipr-9sm):** AI chat assistant is in scope (was out of scope). Decisions are recorded in CLAUDE.md under "AI assistant".
-- [ ] How is the config editor's base directory configured?
+- [x] **DECIDED (shipr-6ta):** The config editor works inside managed deployment directories (`<stacks-base>/<hostId>/<name>/`), no separate setting. `compose.yaml`/`.env` are excluded and the Git checkout `repo/` is read-only.
 
 ## Recommended build order
 
