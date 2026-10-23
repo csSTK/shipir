@@ -48,6 +48,9 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `auth/PasswordPolicy.java`: 15-128 chars (String.length), upper/lower/digit/symbol, not username (case-insens.), not current; returns all `Violation` codes
 - `auth/UserService.java`: `changePassword` (current check, policy, new hash + `passwordChangedAt`), package-private exceptions
 - `auth/UserSetupStatus.java`: implements `SetupStatus`: step PASSWORD (password unchanged) / ENVIRONMENT (ADMIN, no host via `EnvironmentPresence`) / none
+- `auth/{PasswordResetCode,PasswordResetCodeRepository}.java`: reset code entity (SHA-256 hex hash only) + `findLatestOpen`/`invalidateOpenCodes`
+- `auth/{PasswordResetCodeSender,NoOpPasswordResetCodeSender,PasswordResetProperties}.java`: delivery port (default drops code), `shipir.password-reset.{code-ttl=5m,max-attempts=5}`
+- `auth/{PasswordResetService,InvalidResetCodeException}.java`: `requestReset` (unknown user no-op), `confirmReset` (constant-time compare, attempt counter, policy, single use; one uniform exception)
 - `auth/DatabaseUserDetailsService.java`: `UserDetailsService` backed by `UserRepository` (`ROLE_<role>`)
 - `auth/dto/{LoginRequest,PasswordChangeRequest,CurrentUserResponse,PasswordPolicyErrorResponse}.java`: request bodies (toString hides passwords), `{username, role, setupRequired, setupStep}`, `{code, message, violations}`
 - `common/config/SecurityConfig.java`: session-based filter chain: cookie CSRF (`XSRF-TOKEN` on every response), JSON 401/403, `/api/**` authenticated except login/logout, `/api/hosts` writes ADMIN-only, `AuthenticationManager`, wires `SetupGateFilter`
@@ -58,10 +61,12 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `common/security/{EncryptionKeyMissing,InvalidEncryptionKey,SecretDecryption}Exception.java`: cipher exceptions, messages never contain key or plaintext
 - `backend/src/test/java/dev/bethge/shipir/common/security/SecretCipherTest.java`: round trip, tamper, wrong key, key validation, empty key, no logging
 - `common/config/PasswordEncoderConfig.java`: Argon2id `PasswordEncoder` bean (DelegatingPasswordEncoder, bcrypt match-only)
+- `common/config/ClockConfig.java`: `Clock` bean (system UTC)
 - `backend/src/test/resources/application.properties`: test initial-admin password
 - `backend/src/test/java/dev/bethge/shipir/auth/AuthEndpointsTest.java`: MockMvc + Testcontainers: login/me/logout, CSRF, session fixation, identical 401, JSON 401
 - `backend/src/test/java/dev/bethge/shipir/auth/PasswordPolicyTest.java`, `PasswordChangeTest.java`, `SetupEnvironmentStepTest.java`: policy rules (unit); setup gate + password change flow, PASSWORD/ENVIRONMENT steps (MockMvc, own DB via `@DirtiesContext`)
 - `backend/src/test/java/dev/bethge/shipir/auth/InitialAdminSeeder{,Startup}Test.java`: seeding, no-op rerun, missing password, no password in logs
+- `backend/src/test/java/dev/bethge/shipir/auth/PasswordResetServiceTest.java`: reset flow (Testcontainers, capturing sender, mutable clock, hash-only row, log capture)
 - `docker/{DockerEndpoint,DockerErrorCode,DockerConnectionException,DockerProperties}.java`: own types: `Local|Tcp(TlsMaterial, toString hides PEMs)`, UNREACHABLE/TIMEOUT/TLS_ERROR/PERMISSION_DENIED/INVALID_TLS_MATERIAL, `shipir.docker.{local-socket,connect-timeout,read-timeout}`
 - `docker/DockerHostConnectionManager.java`: cached docker-java client per host id (`client`/`createClient` internal to docker/), `evict(hostId)`, `localEndpoint()`, `readTimeout()`
 - `docker/{DockerClientFactory,DefaultDockerClientFactory}.java`: package-private seam + httpclient5 factory (Local socket; Tcp, with `PemSslConfig` when TLS material is set)
