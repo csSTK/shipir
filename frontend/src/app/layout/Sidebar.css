@@ -71,3 +71,13 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+
+/* The environment name is data, not a label: keep its case. */
+.sidebar__heading--env {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

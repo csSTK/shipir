@@ -9,7 +9,8 @@ export {
   useTestConnection,
 } from './api.ts'
 export type { ConnectionTestResult, ConnectionType, Host, HostRequest } from './api.ts'
-export { EnvironmentPage } from './EnvironmentPage.tsx'
+export { EnvironmentDashboard } from './EnvironmentDashboard.tsx'
+export { ENV_RESOURCES } from './resources.ts'
 export { EnvironmentsOverview } from './EnvironmentsOverview.tsx'
 export { useHostsOverview } from './api.ts'
 export type { HostOverview } from './api.ts'

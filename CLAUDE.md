@@ -93,13 +93,13 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 Frontend (`frontend/`):
 - `vite.config.ts`: dev proxy (`/api`, `/ws` → :8080), Vitest config
 - `src/main.tsx`: entry, mounts `App`
-- `src/app/App.tsx`: root component, `Providers` + `BrowserRouter` + auth gate (loading, `LoginPage` on 401, `SetupPage` while `setupRequired`, routes `/` overview and `/environments/:id`, sign out)
+- `src/app/App.tsx`: root component, `Providers` + `BrowserRouter` + auth gate (loading, `LoginPage` on 401, `SetupPage` while `setupRequired`, routes `/` overview, `/environments/:id` dashboard, one `ResourcePlaceholder` route line per `/environments/:id/<resource>` to swap for real pages, sign out)
 - `src/app/providers.tsx`, `src/app/queryClient.ts`: React Query setup
 - `src/shared/api/client.ts`: `apiFetch<T>` + `ApiError` (status, code, violations, details), JSON fetch against `/api`, same-origin credentials, `X-XSRF-TOKEN` from cookie on non-GET
 - `src/features/auth/{api.ts,LoginPage.tsx,LoginPage.css,index.ts}`: `useCurrentUser/useLogin/useLogout/useChangePassword/useRequestPasswordReset/useConfirmPasswordReset` hooks, login form with `Forgot password?` view switch + success notice
 - `src/features/auth/PasswordResetPage.{tsx,css,test.tsx}`: reset flow (username -> neutral message + 6-digit code, new password with live rules; INVALID_RESET_CODE / PASSWORD_POLICY inline)
 - `src/features/auth/{SetupPage.tsx,SetupPage.css,passwordPolicy.ts}`: first-start setup, 2 steps with indicator (`step` prop = `setupStep`: PASSWORD form, ENVIRONMENT embeds hosts `EnvironmentForm` then refetches me); client mirror of backend password rules
-- `src/app/layout/{AppShell,Sidebar,UserMenu}.tsx` (+ `.css`, `AppShell.test.tsx`): app shell: top bar (brand, user menu with Settings -> /account and Sign out), sidebar (Environments, Notifications, ADMIN-only Settings group), narrow-screen toggle
+- `src/app/layout/{AppShell,Sidebar,UserMenu}.tsx` (+ `.css`, `AppShell.test.tsx`): app shell: top bar (brand, user menu with Settings -> /account and Sign out), sidebar (Environments, Notifications, env section with Dashboard + resources while on `/environments/:id/*`, ADMIN-only Settings group), narrow-screen toggle
 - `src/app/layout/PlaceholderPages.tsx`: `PlaceholderPage`, `NotAllowedPage` (non-ADMIN on /settings/*)
 - `e2e/shell.spec.ts`: sidebar/user menu navigation, viewer not allowed on settings
 - `src/features/notifications/{api.ts,NotificationsPage.tsx,.css,index.ts}`: `useNotifications(unreadOnly)`, `useUnreadCount` (30 s + focus), `useMarkRead/useMarkAllRead`; `/notifications` page (assumed API: Page `{content,totalElements}`, `{count}`, POST `/{id}/read`, `/read-all`); Sidebar shows the unread badge
@@ -108,7 +108,8 @@ Frontend (`frontend/`):
 - `src/features/hosts/EnvironmentForm.{tsx,css}`: Local / Remote (TCP+TLS) form, PEM file pickers (names only shown), connection test, inline server errors; props `onCreated`, `submitLabel`
 - `src/features/hosts/{EnvironmentsOverview.tsx,.css}`: home screen: environment rows (status, stats), search, refresh, skeleton/error/empty states, ADMIN add dialog, renders `EnvironmentActions` per row for ADMIN
 - `src/features/hosts/EnvironmentActions.{tsx,css}`: ADMIN row Rename/Delete buttons + dialogs (HOST_NAME_TAKEN inline, delete warns about stacks)
-- `src/features/hosts/EnvironmentPage.tsx`: `/environments/:id` placeholder with back link
+- `src/features/hosts/EnvironmentDashboard.{tsx,css,test.tsx}`: `/environments/:id`: status, Docker version, resource tiles (counts from overview) linking to resource routes; DOWN error, not-found
+- `src/features/hosts/resources.ts`: `ENV_RESOURCES` (stacks/containers/images/networks/volumes) for sidebar, tiles
 - `src/features/hosts/format.ts`: memory/plural formatting, overview error code to message
 - `src/features/hosts/index.ts`: exports form, overview, page, hooks, types
 - `src/test/setup.ts`: jest-dom matchers for Vitest
@@ -117,7 +118,8 @@ Frontend (`frontend/`):
 - `e2e/fixtures/api.ts`: Playwright `test` with auto `api` fixture: mocks `/api/**` per method+path, fails on unmocked calls (own spec: `api.spec.ts`)
 - `e2e/app.spec.ts`: smoke spec, Shipir heading (signed in)
 - `e2e/auth.spec.ts`: login happy path + sign out, wrong password
-- `e2e/environments.spec.ts`: overview list/search, viewer vs admin add, admin rename/delete, taken name, operator no actions, error, placeholder navigation
+- `e2e/environments.spec.ts`: overview list/search, viewer vs admin add, admin rename/delete, taken name, operator no actions, error, dashboard navigation
+- `e2e/environment-dashboard.spec.ts`: overview -> dashboard -> sidebar items, tile counts, DOWN, not found, narrow screen
 - `e2e/password-reset.spec.ts`: forgot password happy path, invalid code, unknown user neutral message
 - `e2e/setup.spec.ts`: setup flow (password -> environment step -> app), reload on step 2, connection failure, server error, no setup when done
 - `Dockerfile`: multi-stage image (pnpm build, nginx-unprivileged on :8080; `BACKEND_URL`, `NGINX_RESOLVER`)

@@ -76,14 +76,14 @@ test('shows an error when the overview cannot be loaded', async ({ page, api }) 
   await expect(page.getByRole('alert')).toContainText('Could not load the environments')
 })
 
-test('opens the placeholder page and navigates back', async ({ page, api }) => {
+test('opens the dashboard and navigates back', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: user('OPERATOR') })
   api.mock('GET', '/api/hosts/overview', { body: [local] })
   await page.goto('/')
 
   await page.getByRole('link', { name: /Local/ }).click()
   await expect(page).toHaveURL(/\/environments\/a$/)
-  await expect(page.getByText('Coming soon')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Local' })).toBeVisible()
 
   await page.getByRole('link', { name: '‹ Environments' }).click()
   await expect(page).toHaveURL(/\/$/)

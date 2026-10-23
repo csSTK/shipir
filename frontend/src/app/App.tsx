@@ -1,10 +1,15 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
-import { EnvironmentPage, EnvironmentsOverview } from '../features/hosts/index.ts'
+import { ENV_RESOURCES, EnvironmentDashboard, EnvironmentsOverview } from '../features/hosts/index.ts'
 import { NotificationsPage } from '../features/notifications/index.ts'
 import { LoginPage, SetupPage, useCurrentUser, useLogout } from '../features/auth/index.ts'
 import { AppShell } from './layout/AppShell.tsx'
 import { NotAllowedPage, PlaceholderPage } from './layout/PlaceholderPages.tsx'
 import { Providers } from './providers.tsx'
+
+function ResourcePlaceholder({ slug }: { slug: (typeof ENV_RESOURCES)[number]['slug'] }) {
+  const label = ENV_RESOURCES.find((r) => r.slug === slug)?.label ?? slug
+  return <PlaceholderPage title={label} />
+}
 
 function AuthGate() {
   const { data: user, isPending, isError } = useCurrentUser()
@@ -25,7 +30,13 @@ function AuthGate() {
     <AppShell user={user} onSignOut={() => logout.mutate()} signingOut={logout.isPending}>
       <Routes>
         <Route path="/" element={<EnvironmentsOverview role={user.role} />} />
-        <Route path="/environments/:id" element={<EnvironmentPage />} />
+        <Route path="/environments/:id" element={<EnvironmentDashboard />} />
+        {/* One line per resource: later tasks swap the placeholder for the real list page. */}
+        <Route path="/environments/:id/stacks" element={<ResourcePlaceholder slug="stacks" />} />
+        <Route path="/environments/:id/containers" element={<ResourcePlaceholder slug="containers" />} />
+        <Route path="/environments/:id/images" element={<ResourcePlaceholder slug="images" />} />
+        <Route path="/environments/:id/networks" element={<ResourcePlaceholder slug="networks" />} />
+        <Route path="/environments/:id/volumes" element={<ResourcePlaceholder slug="volumes" />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/account" element={<PlaceholderPage title="Account" />} />
         <Route path="/settings/notifications" element={settings('Notification settings')} />
