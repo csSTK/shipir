@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V9 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V10 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To9Successfully() {
+    void flywayAppliedVersions1To10Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10");
     }
 
     @Test
@@ -559,6 +559,94 @@ class SchemaMigrationTest {
                 WHERE schemaname = 'public' AND tablename = 'notifications'
                 """, String.class);
         assertThat(definitions).anyMatch(d -> d.contains("(user_id, read_at, created_at DESC)"));
+    }
+
+    @Test
+    void notificationWebhooksHasExpectedColumnsAndTypes() {
+        List<Map<String, Object>> columns = jdbc.queryForList("""
+                SELECT column_name, data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'notification_webhooks'
+                """);
+        Map<String, Map<String, Object>> byName = columns.stream()
+                .collect(java.util.stream.Collectors.toMap(c -> (String) c.get("column_name"), c -> c));
+        assertThat(byName.keySet()).containsExactlyInAnyOrder(
+                "id", "name", "url_encrypted", "url_hint", "event_types", "enabled", "created_by",
+                "created_at", "updated_at", "last_delivery_at", "last_delivery_status");
+
+        assertThat(byName.get("id").get("data_type")).isEqualTo("uuid");
+        assertThat(byName.get("name").get("data_type")).isEqualTo("character varying");
+        assertThat(byName.get("name").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("url_encrypted").get("data_type")).isEqualTo("bytea");
+        assertThat(byName.get("url_encrypted").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("url_hint").get("data_type")).isEqualTo("character varying");
+        assertThat(byName.get("url_hint").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("event_types").get("data_type")).isEqualTo("ARRAY");
+        assertThat(byName.get("event_types").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("enabled").get("data_type")).isEqualTo("boolean");
+        assertThat(byName.get("enabled").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("created_by").get("data_type")).isEqualTo("uuid");
+        assertThat(byName.get("created_by").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("created_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("created_at").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("updated_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("updated_at").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("last_delivery_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("last_delivery_at").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("last_delivery_status").get("data_type")).isEqualTo("character varying");
+        assertThat(byName.get("last_delivery_status").get("is_nullable")).isEqualTo("YES");
+    }
+
+    @Test
+    void notificationWebhooksHasNoPlaintextUrlColumn() {
+        Integer count = jdbc.queryForObject("""
+                SELECT count(*) FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'notification_webhooks'
+                  AND (column_name LIKE '%url%' AND column_name <> 'url_encrypted' AND column_name <> 'url_hint')
+                """, Integer.class);
+        assertThat(count).isZero();
+    }
+
+    @Test
+    void notificationWebhookNameIsUnique() {
+        UUID user = insertUser("alice");
+        insertWebhook("ops-hook", user);
+        assertThatThrownBy(() -> insertWebhook("ops-hook", user))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("notification_webhooks_name_key");
+    }
+
+    @Test
+    void notificationWebhookEnabledDefaultsToTrue() {
+        UUID user = insertUser("alice");
+        insertWebhook("ops-hook", user);
+        Boolean enabled = jdbc.queryForObject(
+                "SELECT enabled FROM notification_webhooks WHERE name = 'ops-hook'", Boolean.class);
+        assertThat(enabled).isTrue();
+    }
+
+    @Test
+    void notificationWebhookWithoutEncryptedUrlIsRejected() {
+        UUID user = insertUser("alice");
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO notification_webhooks (name, url_encrypted, url_hint, event_types, created_by)
+                VALUES ('ops-hook', NULL, 'https://example.com', ARRAY['HOST_DOWN'], ?)
+                """, user))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void deletingUserWhoCreatedWebhookFails() {
+        UUID creator = insertUser("creator");
+        insertWebhook("ops-hook", creator);
+        assertThatThrownBy(() -> jdbc.update("DELETE FROM users WHERE id = ?", creator))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    private void insertWebhook(String name, UUID creator) {
+        jdbc.update("""
+                INSERT INTO notification_webhooks (name, url_encrypted, url_hint, event_types, created_by)
+                VALUES (?, ?, 'https://example.com', ARRAY['HOST_DOWN'], ?)
+                """, name, new byte[] {1, 2, 3}, creator);
     }
 
     private int count(String table) {
