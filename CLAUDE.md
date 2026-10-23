@@ -319,6 +319,8 @@ dev.bethge.shipir
 │   ├── dto/, web/
 ├── config_editor/     ConfigFile, repository, service (must use PathValidationUtil), DTOs, controller
 ├── streaming/         LogStreamHandler, DockerEventStreamService, ComposeOutputStreamService, ExecSessionHandler
+├── notification/      in-app notifications (HostStatusChangedEvent listener), per-user preferences, webhooks
+├── retention/         retention settings, daily purge of audit log and notifications
 ├── auth/              User, Role (ADMIN/OPERATOR/VIEWER), UserService, AuthController, DTOs
 ├── permission/        Permission (per host/stack), PermissionService, PermissionEvaluator (@PreAuthorize)
 └── audit/             AuditLogEntry, service, AuditAspect (AOP, @Auditable)

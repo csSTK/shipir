@@ -29,7 +29,7 @@ This file holds the parts of the original planning handoff that aren't permanent
 4. **`streaming`:** live logs over WebSocket early. Retrofitting it is painful.
 5. **`compose`, incrementally:** first raw YAML upload + deploy (+ validation), then the form wizard on top, then versioning and rollback.
 6. **`config_editor`** with `PathValidationUtil` and a backup before every write.
-7. **`audit` + fine-grained `permission`.**
+7. **`audit` + fine-grained `permission`.** `audit` (log, `@Auditable`, ADMIN page) is **done** (epic shipr-46j), together with in-app notifications, webhooks and retention rules; `permission` remains.
 8. **Frontend** in parallel, feature by feature (`features/containers`, `features/stacks`, `features/hosts`, ...).
 
 ## Task for the first pass
@@ -41,15 +41,14 @@ This file holds the parts of the original planning handoff that aren't permanent
 
 ## Planned migrations
 
-Implemented in `backend/src/main/resources/db/migration/`: `V1__create_users`, `V2__create_docker_hosts`, `V3__create_stacks`, `V4__create_stack_versions`, `V5__add_users_password_changed_at`, `V6__add_docker_hosts_tls_columns`, `V7__create_password_reset_codes` (drafts removed; see the decided review notes below).
+Implemented in `backend/src/main/resources/db/migration/`: `V1__create_users`, `V2__create_docker_hosts`, `V3__create_stacks`, `V4__create_stack_versions`, `V5__add_users_password_changed_at`, `V6__add_docker_hosts_tls_columns`, `V7__create_password_reset_codes`, `V8__create_audit_log`, `V9__create_notifications`, `V10__create_notification_webhooks`, `V11__create_retention_settings` (drafts removed; see the decided review notes below).
 
-Still planned, numbered from V8 on: `create_config_files`, `create_permissions`, `create_audit_log`.
+Still planned, numbered from V12 on: `create_config_files`, `create_permissions`.
 
 ### Rough model for the remaining tables
 
 - `ConfigFile (id, stackId, relativePath, description)`
 - `Permission (id, userId, hostId nullable, stackId nullable, permissionLevel)`
-- `AuditLogEntry (id, userId, action, targetType, targetId, timestamp, details)`
 
 ## Review notes (decided)
 
