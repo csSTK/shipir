@@ -80,6 +80,9 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `retention/{RetentionPurgeService,RetentionPurgeJob}.java`: purge (rows strictly older than now-days, audit_log + notifications via bulk deletes, writes RETENTION_PURGE audit entry as `system`); cron `shipir.retention.purge-cron` (03:00 UTC), off with `shipir.retention.purge-enabled=false`
 - `backend/src/test/java/dev/bethge/shipir/retention/`: `RetentionTestBase` (fixed Clock), `RetentionApiTest`, `RetentionPurgeTest`
 - `common/util/{PathValidationUtil,PathValidationException}.java`: central path guard: `resolve(base, relative)` (rejects empty/absolute/`..`/NUL/backslash/percent-encoding, symlink escape via real path of nearest existing ancestor), `validateStackName` (`[a-z0-9][a-z0-9_-]{0,62}`); test `PathValidationUtilTest`
+- `git/{GitCredential,GitCredentialRepository,GitCredentialService,GitCredentialController,GitException}.java`, `git/dto/*`: ADMIN `/api/git/credentials` GET/POST, PUT/DELETE `/{id}`, POST `/{id}/test` (body `repoUrl`, https only; `{status}` OK/AUTH_FAILED/NOT_FOUND/UNREACHABLE); token via `SecretCipher` + `tokenHint`, `@Auditable` GIT_CREDENTIAL_CREATE/UPDATE/DELETE; 409 CREDENTIAL_IN_USE (native count on `stacks`) / CREDENTIAL_NAME_TAKEN / ENCRYPTION_KEY_MISSING, 400 INVALID_REPO_URL / TOKEN_REQUIRED, 404 CREDENTIAL_NOT_FOUND
+- `git/{GitRemoteChecker,GitProperties}.java`: JGit `ls-remote` + URL validation; `shipir.git.{connect-timeout=10s,allow-insecure-http=false}` (http only for test stubs)
+- `backend/src/test/java/dev/bethge/shipir/git/`: `GitTestBase`, `GitCredentialApiTest`, `GitCredentialConnectionTest` (JDK HttpServer smart-HTTP stub), `GitCredentialWithoutKeyTest`
 - `common/config/PasswordEncoderConfig.java`: Argon2id `PasswordEncoder` bean (DelegatingPasswordEncoder, bcrypt match-only)
 - `common/config/ClockConfig.java`: `Clock` bean (system UTC)
 - `backend/src/test/resources/application.properties`: test initial-admin password
@@ -104,7 +107,7 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `backend/src/test/java/dev/bethge/shipir/docker/**`: endpoint, manager (fake factory), properties defaults, no-docker-java-in-API check, service unit (missing/hanging socket), Docker integration tests, dind TLS integration test, PEM parsing (`tls/PemSslConfigTest`, `tls/TestPki` generates certs)
 - `compose/StackProperties.java`: `shipir.stacks.base-dir` (env `SHIPIR_STACKS_BASE_DIR`, default `./data/stacks`)
 - `compose/file/ComposeFileRepository.java`: `<base>/<hostId>/<stackName>/{compose.yaml,.env}` write (temp + atomic move)/read/delete, dirs 0700, files 0600, `stackDir`/`repoDir` (Git checkout `repo/`), all paths via `PathValidationUtil`, contents never logged; test `ComposeFileRepositoryTest`
-- `backend/pom.xml`: Maven build, Java 25, Spring Boot 4.1.1 parent, docker-java 3.7.1 (core + httpclient5), starters web/websocket/security/validation/data-jpa/flyway/test, spring-security-test, flyway-database-postgresql, postgresql driver, Testcontainers (test)
+- `backend/pom.xml`: Maven build, Java 25, Spring Boot 4.1.1 parent, docker-java 3.7.1 (core + httpclient5), JGit, starters web/websocket/security/validation/data-jpa/flyway/test, spring-security-test, flyway-database-postgresql, postgresql driver, Testcontainers (test)
 - `backend/mvnw`, `backend/.mvn/wrapper/`: Maven wrapper
 - `backend/Dockerfile`: multi-stage image: Temurin 25 build (tests skipped), JRE alpine runtime + docker-cli/docker-cli-compose, user uid 10001, `/data/stacks` (`SHIPIR_STACKS_BASE_DIR`), env-only config
 - `backend/.dockerignore`: excludes `target/`, `.env`, keys, IDE and git files from the image build
@@ -340,6 +343,7 @@ dev.bethge.shipir
 │   ├── dto/, web/
 ├── config_editor/     ConfigFile, repository, service (must use PathValidationUtil), DTOs, controller
 ├── streaming/         LogStreamHandler, DockerEventStreamService, ComposeOutputStreamService, ExecSessionHandler
+├── git/               Git credentials (encrypted PAT), remote checks via JGit
 ├── notification/      in-app notifications (HostStatusChangedEvent listener), per-user preferences, webhooks
 ├── retention/         retention settings, daily purge of audit log and notifications
 ├── auth/              User, Role (ADMIN/OPERATOR/VIEWER), UserService, AuthController, DTOs

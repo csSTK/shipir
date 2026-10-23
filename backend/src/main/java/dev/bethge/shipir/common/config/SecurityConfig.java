@@ -80,6 +80,7 @@ class SecurityConfig {
                         .requestMatchers("/api/compose/generate").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers("/api/audit-log", "/api/audit-log/**").hasRole("ADMIN")
                         .requestMatchers("/api/notifications/webhooks", "/api/notifications/webhooks/**").hasRole("ADMIN")
+                        .requestMatchers("/api/git/**").hasRole("ADMIN")
                         .requestMatchers("/api/settings/retention").hasRole("ADMIN")
                         .anyRequest().authenticated());
         return http.build();
