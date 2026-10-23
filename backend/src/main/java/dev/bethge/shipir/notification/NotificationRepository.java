@@ -9,7 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import java.time.Instant;
 import java.util.UUID;
 
-interface NotificationRepository extends JpaRepository<Notification, UUID> {
+public interface NotificationRepository extends JpaRepository<Notification, UUID> {
 
     Page<Notification> findByUserId(UUID userId, Pageable pageable);
 
@@ -25,4 +25,9 @@ interface NotificationRepository extends JpaRepository<Notification, UUID> {
     @Modifying
     @Query("update Notification n set n.readAt = :now where n.userId = :userId and n.readAt is null")
     int markAllRead(UUID userId, Instant now);
+
+    /** Bulk delete for the retention purge; returns the number of deleted rows. */
+    @Modifying
+    @Query("delete from Notification n where n.createdAt < :cutoff")
+    int deleteByCreatedAtBefore(Instant cutoff);
 }
