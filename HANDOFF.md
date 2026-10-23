@@ -29,7 +29,7 @@ This file holds the parts of the original planning handoff that aren't permanent
 1. ~~**Project setup:**~~ **done** (epic shipr-yy7): build tool, Spring Boot skeleton, package structure, `docker-compose.dev.yml`, Flyway V1–V4, Testcontainers baseline.
 2. **`docker/` module + simple REST endpoints** (list, start, stop containers) against the local socket. A quick win that tests the basic connection. The `docker/` abstraction (per-host clients, LOCAL socket + TCP/TLS, system info) is **done** (epic shipr-406); read-only lists of containers, Compose stacks, images, networks and volumes are **done** (epic shipr-zlq); container lifecycle actions (start/stop/restart/pause/unpause/kill) are **done** (epic shipr-wju).
 3. **`auth` + `host`:** basic protection and host management before things get complex. Login, session auth and the first-start setup are **done** (epic shipr-a1h); `host` (environments CRUD, live overview, environment setup step) is **done** (epic shipr-406); user management remains.
-4. **`streaming`:** live logs over WebSocket early. Retrofitting it is painful.
+4. **`streaming`:** live logs over WebSocket early. Retrofitting it is painful. Compose output streaming is **done** (deploy epics); live container logs are **done** (epic shipr-9gf); Docker events and the exec terminal remain.
 5. **`compose`, incrementally:** first raw YAML upload + deploy (+ validation), then the form wizard on top, then versioning and rollback.
 6. **`config_editor`** with `PathValidationUtil` and a backup before every write.
 7. **`audit` + fine-grained `permission`.** `audit` (log, `@Auditable`, ADMIN page) is **done** (epic shipr-46j), together with in-app notifications, webhooks and retention rules; `permission` remains.
