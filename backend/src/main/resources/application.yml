@@ -2,6 +2,12 @@ shipir:
   initial-admin:
     username: ${SHIPIR_INITIAL_ADMIN_USERNAME:admin}
     password: ${SHIPIR_INITIAL_ADMIN_PASSWORD:}
+server:
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
 spring:
   application:
     name: shipir

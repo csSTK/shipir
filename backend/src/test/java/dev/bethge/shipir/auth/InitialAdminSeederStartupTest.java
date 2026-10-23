@@ -18,7 +18,8 @@ class InitialAdminSeederStartupTest {
 
     private SpringApplication app() {
         SpringApplication app = new SpringApplication(ShipirApplication.class, PostgresTestConfiguration.class);
-        app.setWebApplicationType(WebApplicationType.NONE);
+        app.setWebApplicationType(WebApplicationType.SERVLET);
+        app.setDefaultProperties(java.util.Map.of("server.port", "0"));
         return app;
     }
 

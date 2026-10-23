@@ -37,8 +37,14 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `audit/AuditLogEntry.java`, `compose/Stack.java`, `compose/generator/ComposeGeneratorService.java`, `config_editor/ConfigFile.java`, `docker/DockerHostConnectionManager.java`, `host/DockerHost.java`, `permission/Permission.java`, `streaming/LogStreamHandler.java`: empty placeholders
 - `auth/{User,Role,UserRepository}.java`: user entity (`isSetupRequired()`), ADMIN/OPERATOR/VIEWER enum, repository
 - `auth/InitialAdminSeeder.java`, `auth/InitialAdminProperties.java`: seeds first admin on empty DB from `shipir.initial-admin.*` (fails startup without password)
+- `auth/AuthController.java`: `/api/auth/{login,logout,me}`; login rotates session id + CSRF token, same 401 body for any failure
+- `auth/DatabaseUserDetailsService.java`: `UserDetailsService` backed by `UserRepository` (`ROLE_<role>`)
+- `auth/dto/{LoginRequest,CurrentUserResponse}.java`: login body (validated, toString hides password), `{username, role, setupRequired}`
+- `common/config/SecurityConfig.java`: session-based filter chain: cookie CSRF (`XSRF-TOKEN` on every response), JSON 401/403, `/api/**` authenticated except login/logout, `AuthenticationManager`
+- `common/exception/{ErrorResponse,GlobalExceptionHandler}.java`: `{code, message, details}` record; handler for validation/malformed body (400)
 - `common/config/PasswordEncoderConfig.java`: Argon2id `PasswordEncoder` bean (DelegatingPasswordEncoder, bcrypt match-only)
 - `backend/src/test/resources/application.properties`: test initial-admin password
+- `backend/src/test/java/dev/bethge/shipir/auth/AuthEndpointsTest.java`: MockMvc + Testcontainers: login/me/logout, CSRF, session fixation, identical 401, JSON 401
 - `backend/src/test/java/dev/bethge/shipir/auth/InitialAdminSeeder{,Startup}Test.java`: seeding, no-op rerun, missing password, no password in logs
 - `backend/pom.xml`: Maven build, Java 25, Spring Boot 4.1.1 parent, starters web/websocket/security/validation/data-jpa/flyway/test, spring-security-test, flyway-database-postgresql, postgresql driver, Testcontainers (test)
 - `backend/mvnw`, `backend/.mvn/wrapper/`: Maven wrapper
