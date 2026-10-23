@@ -11,6 +11,7 @@ import dev.bethge.shipir.compose.dto.StackEnvResponse;
 import dev.bethge.shipir.compose.dto.StackSummaryResponse;
 import dev.bethge.shipir.compose.dto.StackUpdateRequest;
 import dev.bethge.shipir.compose.dto.StackVersionResponse;
+import dev.bethge.shipir.git.GitOperationException;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -83,6 +84,12 @@ class StackController {
         return deployments.deploy(hostId, id, authentication.getName());
     }
 
+    @PostMapping("/{id}/git/redeploy")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    DeploymentResponse gitRedeploy(@PathVariable UUID hostId, @PathVariable UUID id, Authentication authentication) {
+        return deployments.gitRedeploy(hostId, id, authentication.getName());
+    }
+
     @PostMapping("/{id}/stop")
     StackSummaryResponse stop(@PathVariable UUID hostId, @PathVariable UUID id) {
         return deployments.stop(hostId, id);
@@ -103,5 +110,10 @@ class StackController {
     @ExceptionHandler(StackException.class)
     ResponseEntity<ErrorResponse> handle(StackException ex) {
         return ResponseEntity.status(ex.status()).body(new ErrorResponse(ex.code(), ex.getMessage(), ex.details()));
+    }
+
+    @ExceptionHandler(GitOperationException.class)
+    ResponseEntity<ErrorResponse> handle(GitOperationException ex) {
+        return ResponseEntity.status(ex.status()).body(new ErrorResponse(ex.code(), ex.getMessage()));
     }
 }

@@ -17,6 +17,10 @@ import dev.bethge.shipir.compose.execution.ComposeExecutionException;
 import dev.bethge.shipir.compose.execution.ComposeExecutionService;
 import dev.bethge.shipir.compose.execution.ComposeProcessResult;
 import dev.bethge.shipir.compose.file.ComposeFileRepository;
+import dev.bethge.shipir.compose.validation.ComposeValidationService;
+import dev.bethge.shipir.compose.validation.ValidationResult;
+import dev.bethge.shipir.git.GitCheckout;
+import dev.bethge.shipir.git.GitRepositoryService;
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.streaming.ComposeOutputStreamService;
 import dev.bethge.shipir.streaming.DeploymentStatus;
@@ -62,11 +66,14 @@ public class StackDeploymentService {
     private final Clock clock;
     private final DeploymentLocks locks;
     private final TransactionTemplate tx;
+    private final GitRepositoryService git;
+    private final ComposeValidationService validation;
 
     StackDeploymentService(StackService stackService, StackRepository stacks, StackVersionRepository versions,
                            UserRepository users, ComposeFileRepository files, ComposeExecutionService execution,
                            ComposeOutputStreamService streams, AuditService audit, SecretCipher cipher, Clock clock,
-                           DeploymentLocks locks, PlatformTransactionManager txManager) {
+                           DeploymentLocks locks, PlatformTransactionManager txManager,
+                           GitRepositoryService git, ComposeValidationService validation) {
         this.stackService = stackService;
         this.stacks = stacks;
         this.versions = versions;
@@ -79,16 +86,27 @@ public class StackDeploymentService {
         this.clock = clock;
         this.locks = locks;
         this.tx = new TransactionTemplate(txManager);
+        this.git = git;
+        this.validation = validation;
     }
 
     @Auditable(action = "STACK_DEPLOY", targetType = "STACK", targetId = "#id")
     public DeploymentResponse deploy(UUID hostId, UUID id, String username) {
-        return start(hostId, id, username, null, "STACK_DEPLOY_RESULT");
+        return start(hostId, id, username, null, "STACK_DEPLOY_RESULT", false);
     }
 
     @Auditable(action = "STACK_ROLLBACK", targetType = "STACK", targetId = "#id")
     public DeploymentResponse rollback(UUID hostId, UUID id, UUID versionId, String username) {
-        return start(hostId, id, username, versionId, "STACK_ROLLBACK_RESULT");
+        return start(hostId, id, username, versionId, "STACK_ROLLBACK_RESULT", false);
+    }
+
+    /**
+     * "Pull &amp; redeploy": fetches the stack's ref again, records the checked-out commit as a new GIT version and
+     * deploys it. Also runs when the commit has not changed (manual trigger). 400 NOT_A_GIT_STACK for FILE stacks.
+     */
+    @Auditable(action = "STACK_GIT_REDEPLOY", targetType = "STACK", targetId = "#id")
+    public DeploymentResponse gitRedeploy(UUID hostId, UUID id, String username) {
+        return start(hostId, id, username, null, "STACK_GIT_REDEPLOY_RESULT", true);
     }
 
     /** Runs {@code docker compose down} and waits for it; the files and the stack record stay. */
@@ -135,7 +153,8 @@ public class StackDeploymentService {
                 .toList();
     }
 
-    private DeploymentResponse start(UUID hostId, UUID id, String username, UUID rollbackTo, String resultAction) {
+    private DeploymentResponse start(UUID hostId, UUID id, String username, UUID rollbackTo, String resultAction,
+                                    boolean pullGit) {
         var host = stackService.requireHost(hostId);
         Stack stack = stackService.requireStack(hostId, id);
         DockerEndpoint endpoint = stackService.endpointOf(host);
@@ -145,13 +164,22 @@ public class StackDeploymentService {
         try {
             StackVersion source = rollbackTo == null ? stackService.currentVersion(stack) : versionOf(stack, rollbackTo);
             String envText = decryptEnv(source);
+            GitCheckout checkout = pullGit ? pull(stack, endpoint, envText) : null;
+            String yaml = checkout == null ? source.getYamlContent() : checkout.composeYaml();
+            VersionSource versionSource = rollbackTo != null ? VersionSource.ROLLBACK
+                    : pullGit ? VersionSource.GIT : source.getSource();
+            String commitSha = checkout == null ? source.getCommitSha() : checkout.commitSha();
             StackVersion version = tx.execute(status -> {
-                StackVersion v = versions.save(new StackVersion(stack.getId(), source.getYamlContent(),
-                        source.getEnvCiphertext(), rollbackTo == null ? source.getSource() : VersionSource.ROLLBACK,
-                        userId, clock.instant()));
+                StackVersion v = new StackVersion(stack.getId(), yaml, source.getEnvCiphertext(), versionSource,
+                        userId, clock.instant());
+                v.setCommitSha(commitSha);
+                v = versions.save(v);
                 v.markDeployed(clock.instant());
                 versions.save(v);
                 stack.setCurrentVersionId(v.getId());
+                if (checkout != null) {
+                    stack.setLastCommitSha(commitSha);
+                }
                 stacks.save(stack);
                 return v;
             });
@@ -168,6 +196,40 @@ public class StackDeploymentService {
                 locks.release(stack.getId());
             }
         }
+    }
+
+    /** Fetches the ref into the checkout and validates the compose file; the previous file is restored when invalid. */
+    private GitCheckout pull(Stack stack, DockerEndpoint endpoint, String envText) {
+        if (stack.getSourceType() != StackSource.GIT) {
+            throw new StackException(HttpStatus.BAD_REQUEST, "NOT_A_GIT_STACK", "This stack is not sourced from Git");
+        }
+        UUID hostId = stack.getHostId();
+        String name = stack.getName();
+        GitCheckout checkout = git.sync(files.repoDir(hostId, name), stack.getGitRepoUrl(), stack.getGitRef(),
+                stack.getGitComposePath(), stack.getGitCredentialId());
+        String previousYaml = files.readCompose(hostId, name).orElse(null);
+        files.write(hostId, name, checkout.composeYaml(), envText);
+        ValidationResult result;
+        try {
+            result = validation.validate(hostId, name, endpoint);
+        } catch (ComposeExecutionException e) {
+            restore(hostId, name, previousYaml, envText);
+            throw new StackException(HttpStatus.BAD_GATEWAY, "COMPOSE_UNAVAILABLE", "docker compose could not run");
+        }
+        if (!result.valid()) {
+            restore(hostId, name, previousYaml, envText);
+            throw new StackException(HttpStatus.BAD_REQUEST, "INVALID_COMPOSE", "The compose file is invalid",
+                    result.errors());
+        }
+        return checkout;
+    }
+
+    private void restore(UUID hostId, String name, String yaml, String envText) {
+        if (yaml == null) {
+            files.delete(hostId, name);
+            return;
+        }
+        files.write(hostId, name, yaml, envText);
     }
 
     private void run(Stack stack, StackVersion version, DockerEndpoint endpoint, String deploymentId,

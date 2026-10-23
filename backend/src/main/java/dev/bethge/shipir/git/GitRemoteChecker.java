@@ -59,7 +59,7 @@ class GitRemoteChecker {
         }
     }
 
-    private static String classify(TransportException e) {
+    static String classify(TransportException e) {
         if (e.getCause() instanceof NoRemoteRepositoryException || hasMessage(e, "not found")) {
             return NOT_FOUND;
         }

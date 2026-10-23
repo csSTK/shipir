@@ -76,6 +76,8 @@ public class StackVersion {
     /** True once a deploy or rollback used this version; its content must not change any more. */
     public boolean isDeployed() { return deployedAt != null; }
 
+    public void setCommitSha(String commitSha) { this.commitSha = commitSha; }
+
     public void markDeployed(Instant now) { this.deployedAt = now; }
 
     public void replaceContent(String yamlContent, byte[] envCiphertext) {

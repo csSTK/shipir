@@ -7,7 +7,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/** Stack with its current YAML; env values are never included, only the variable names. */
+/** Stack with its current YAML; env values are never included, only the variable names. {@code git} is null for FILE stacks. */
 public record StackDetailResponse(UUID id, String name, StackStatus status, StackSource source,
-                                  Instant lastDeployedAt, Instant createdAt, String yaml, List<String> envKeys) {
+                                  Instant lastDeployedAt, Instant createdAt, String yaml, List<String> envKeys,
+                                  GitInfo git) {
 }

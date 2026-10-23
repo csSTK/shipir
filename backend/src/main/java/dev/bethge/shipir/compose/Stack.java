@@ -38,6 +38,21 @@ public class Stack {
     @Column(name = "source_type", nullable = false, length = 10)
     private StackSource sourceType = StackSource.FILE;
 
+    @Column(name = "git_repo_url", length = 500)
+    private String gitRepoUrl;
+
+    @Column(name = "git_ref")
+    private String gitRef;
+
+    @Column(name = "git_compose_path", length = 500)
+    private String gitComposePath;
+
+    @Column(name = "git_credential_id")
+    private UUID gitCredentialId;
+
+    @Column(name = "last_commit_sha", length = 64)
+    private String lastCommitSha;
+
     @Column(name = "created_by", nullable = false, updatable = false)
     private UUID createdBy;
 
@@ -61,17 +76,32 @@ public class Stack {
         this.createdAt = now;
     }
 
+    /** Makes this a Git-sourced stack; the credential is optional (public repositories). */
+    public void useGit(String repoUrl, String ref, String composePath, UUID credentialId) {
+        this.sourceType = StackSource.GIT;
+        this.gitRepoUrl = repoUrl;
+        this.gitRef = ref;
+        this.gitComposePath = composePath;
+        this.gitCredentialId = credentialId;
+    }
+
     public UUID getId() { return id; }
     public String getName() { return name; }
     public UUID getHostId() { return hostId; }
     public String getComposeFilePath() { return composeFilePath; }
     public StackStatus getStatus() { return status; }
     public StackSource getSourceType() { return sourceType; }
+    public String getGitRepoUrl() { return gitRepoUrl; }
+    public String getGitRef() { return gitRef; }
+    public String getGitComposePath() { return gitComposePath; }
+    public UUID getGitCredentialId() { return gitCredentialId; }
+    public String getLastCommitSha() { return lastCommitSha; }
     public UUID getCreatedBy() { return createdBy; }
     public Instant getLastDeployedAt() { return lastDeployedAt; }
     public Instant getCreatedAt() { return createdAt; }
     public UUID getCurrentVersionId() { return currentVersionId; }
 
+    public void setLastCommitSha(String lastCommitSha) { this.lastCommitSha = lastCommitSha; }
     public void setStatus(StackStatus status) { this.status = status; }
     public void setLastDeployedAt(Instant lastDeployedAt) { this.lastDeployedAt = lastDeployedAt; }
     public void setCurrentVersionId(UUID currentVersionId) { this.currentVersionId = currentVersionId; }
