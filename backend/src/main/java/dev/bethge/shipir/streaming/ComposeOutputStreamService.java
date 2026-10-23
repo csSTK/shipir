@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessageType;
+import org.springframework.messaging.simp.broker.OrderedMessageChannelDecorator;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.json.JsonMapper;
@@ -56,7 +57,10 @@ public class ComposeOutputStreamService {
 
     ComposeOutputStreamService(@Lazy @Qualifier("clientOutboundChannel") MessageChannel clientOutbound,
                                JsonMapper mapper, StreamProperties properties, Clock clock) {
-        this.clientOutbound = clientOutbound;
+        // the outbound channel is a thread pool: the decorator (enabled by setPreservePublishOrder in
+        // WebSocketConfig) serializes sends per session so frames arrive in seq order
+        this.clientOutbound = new OrderedMessageChannelDecorator(clientOutbound,
+                org.apache.commons.logging.LogFactory.getLog(ComposeOutputStreamService.class));
         this.mapper = mapper;
         this.properties = properties;
         this.clock = clock;
@@ -118,6 +122,19 @@ public class ComposeOutputStreamService {
             for (StreamMessage m : stream.buffer) {
                 send(deploymentId, sub, m);
             }
+        }
+    }
+
+    int subscriberCount(String deploymentId) {
+        Stream stream;
+        synchronized (streams) {
+            stream = streams.get(deploymentId);
+        }
+        if (stream == null) {
+            return 0;
+        }
+        synchronized (stream) {
+            return stream.subscribers.size();
         }
     }
 

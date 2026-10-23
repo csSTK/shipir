@@ -150,11 +150,29 @@ class ComposeOutputStreamTest {
         StompSession s = connect(handshakeHeaders(), csrf);
         BlockingQueue<String> q = subscribe(s, id);
         // wait for the subscription to be registered before emitting
-        Thread.sleep(300);
+        awaitSubscribed(id);
         sink.accept("Container web  Started");
         streams.complete(id, DeploymentStatus.DONE);
         assertThat(q.poll(5, TimeUnit.SECONDS)).contains("\"type\":\"LINE\"").contains("Container web  Started");
         assertThat(q.poll(5, TimeUnit.SECONDS)).contains("\"type\":\"STATUS\"").contains("\"status\":\"DONE\"");
+        s.disconnect();
+    }
+
+    @org.junit.jupiter.api.RepeatedTest(20)
+    void framesArriveInStrictSeqOrder() throws Exception {
+        login();
+        String id = UUID.randomUUID().toString();
+        var sink = streams.start(id);
+        StompSession s = connect(handshakeHeaders(), csrf);
+        BlockingQueue<String> q = subscribe(s, id);
+        awaitSubscribed(id);
+        for (int i = 1; i <= 300; i++) {
+            sink.accept("l" + i);
+        }
+        streams.complete(id, DeploymentStatus.DONE);
+        for (int i = 1; i <= 301; i++) {
+            assertThat(q.poll(5, TimeUnit.SECONDS)).contains("\"seq\":" + i + ",");
+        }
         s.disconnect();
     }
 
@@ -165,7 +183,7 @@ class ComposeOutputStreamTest {
         streams.start(id);
         StompSession s = connect(handshakeHeaders(), csrf);
         BlockingQueue<String> q = subscribe(s, id);
-        Thread.sleep(300);
+        awaitSubscribed(id);
         streams.complete(id, DeploymentStatus.FAILED);
         assertThat(q.poll(5, TimeUnit.SECONDS)).contains("\"status\":\"FAILED\"");
         s.disconnect();
@@ -248,6 +266,10 @@ class ComposeOutputStreamTest {
         StompSession s = connect(handshakeHeaders(), csrf);
         s.send("/topic/deployments/abc", "forged".getBytes());
         org.awaitility.Awaitility.await().atMost(5, TimeUnit.SECONDS).until(() -> !s.isConnected());
+    }
+
+    private void awaitSubscribed(String id) {
+        org.awaitility.Awaitility.await().atMost(5, TimeUnit.SECONDS).until(() -> streams.subscriberCount(id) > 0);
     }
 
     private StompHeaders csrfHeaders() {
