@@ -2,6 +2,8 @@ package dev.bethge.shipir.migration;
 
 import dev.bethge.shipir.PostgresTestConfiguration;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
@@ -18,7 +20,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V5 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V6 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
 @Import(PostgresTestConfiguration.class)
@@ -29,10 +32,141 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To5Successfully() {
+    void flywayAppliedVersions1To6Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6");
+    }
+
+    @Test
+    void tlsCertRefColumnIsRemovedFromDockerHosts() {
+        Integer count = jdbc.queryForObject("""
+                SELECT count(*) FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'docker_hosts' AND column_name = 'tls_cert_ref'
+                """, Integer.class);
+        assertThat(count).isZero();
+    }
+
+    @Test
+    void tlsColumnsAreNullableByteaColumns() {
+        List<Map<String, Object>> columns = jdbc.queryForList("""
+                SELECT column_name, data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'docker_hosts'
+                  AND column_name IN ('tls_ca_encrypted', 'tls_cert_encrypted', 'tls_key_encrypted')
+                """);
+        assertThat(columns).hasSize(3);
+        assertThat(columns).allSatisfy(column -> {
+            assertThat(column.get("data_type")).isEqualTo("bytea");
+            assertThat(column.get("is_nullable")).isEqualTo("YES");
+        });
+    }
+
+    @Test
+    void localHostWithoutHostPortOrTlsIsAccepted() {
+        insertHost("local", "LOCAL", null, null, insertUser("alice"));
+        assertThat(count("docker_hosts")).isEqualTo(1);
+    }
+
+    @Test
+    void tcpHostWithAllTlsColumnsIsAccepted() {
+        UUID owner = insertUser("alice");
+        jdbc.update("""
+                INSERT INTO docker_hosts (name, connection_type, host, port,
+                    tls_ca_encrypted, tls_cert_encrypted, tls_key_encrypted, owner_user_id)
+                VALUES ('tls', 'TCP', 'docker.local', 2376, ?, ?, ?, ?)
+                """, new byte[] {1}, new byte[] {2}, new byte[] {3}, owner);
+        assertThat(count("docker_hosts")).isEqualTo(1);
+    }
+
+    @Test
+    void tcpPortBoundariesOneAndMaxAreAccepted() {
+        UUID owner = insertUser("alice");
+        insertHost("low", "TCP", "docker.local", 1, owner);
+        insertHost("high", "TCP", "docker.local", 65535, owner);
+        assertThat(count("docker_hosts")).isEqualTo(2);
+    }
+
+    @Test
+    void invalidConnectionTypeIsRejected() {
+        // The shape check also rejects any type other than LOCAL/TCP, and Postgres may report either,
+        // so the test asserts the rejection itself rather than a specific constraint name.
+        UUID owner = insertUser("alice");
+        assertThatThrownBy(() -> insertHost("ssh", "SSH", "docker.local", 22, owner))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void tcpWithoutHostIsRejected() {
+        UUID owner = insertUser("alice");
+        assertThatThrownBy(() -> insertHost("tcp", "TCP", null, 2376, owner))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("docker_hosts_connection_shape_check");
+    }
+
+    @Test
+    void tcpWithoutPortIsRejected() {
+        UUID owner = insertUser("alice");
+        assertThatThrownBy(() -> insertHost("tcp", "TCP", "docker.local", null, owner))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("docker_hosts_connection_shape_check");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 65536, -1})
+    void tcpPortOutsideValidRangeIsRejected(int port) {
+        UUID owner = insertUser("alice");
+        assertThatThrownBy(() -> insertHost("tcp", "TCP", "docker.local", port, owner))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("docker_hosts_connection_shape_check");
+    }
+
+    @Test
+    void localWithHostIsRejected() {
+        UUID owner = insertUser("alice");
+        assertThatThrownBy(() -> insertHost("local", "LOCAL", "docker.local", null, owner))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("docker_hosts_connection_shape_check");
+    }
+
+    @Test
+    void localWithPortIsRejected() {
+        UUID owner = insertUser("alice");
+        assertThatThrownBy(() -> insertHost("local", "LOCAL", null, 2376, owner))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("docker_hosts_connection_shape_check");
+    }
+
+    @Test
+    void localWithTlsMaterialIsRejected() {
+        UUID owner = insertUser("alice");
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO docker_hosts (name, connection_type, tls_ca_encrypted, owner_user_id)
+                VALUES ('local', 'LOCAL', ?, ?)
+                """, new byte[] {1}, owner))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("docker_hosts_connection_shape_check");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"tls_ca_encrypted", "tls_cert_encrypted", "tls_key_encrypted"})
+    void partialTlsMaterialIsRejected(String presentColumn) {
+        // Only one of the three TLS columns is set. The column name comes from the fixed list above.
+        UUID owner = insertUser("alice");
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO docker_hosts (name, connection_type, host, port, " + presentColumn
+                        + ", owner_user_id) VALUES ('tls', 'TCP', 'docker.local', 2376, ?, ?)",
+                new byte[] {1}, owner))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("docker_hosts_tls_all_or_none_check");
+    }
+
+    @Test
+    void duplicateDockerHostNameIsRejected() {
+        UUID owner = insertUser("alice");
+        insertHost("same", "LOCAL", null, null, owner);
+        assertThatThrownBy(() -> insertHost("same", "LOCAL", null, null, owner))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("docker_hosts_name_key");
     }
 
     @Test
@@ -142,9 +276,14 @@ class SchemaMigrationTest {
     }
 
     private UUID insertHost(UUID owner) {
-        return jdbc.queryForObject(
-                "INSERT INTO docker_hosts (name, connection_type, owner_user_id) VALUES ('h', 'LOCAL', ?) RETURNING id",
-                UUID.class, owner);
+        return insertHost("host-" + UUID.randomUUID(), "LOCAL", null, null, owner);
+    }
+
+    private UUID insertHost(String name, String connectionType, String host, Integer port, UUID owner) {
+        return jdbc.queryForObject("""
+                INSERT INTO docker_hosts (name, connection_type, host, port, owner_user_id)
+                VALUES (?, ?, ?, ?, ?) RETURNING id
+                """, UUID.class, name, connectionType, host, port, owner);
     }
 
     private UUID insertStack(UUID host, UUID creator, String name) {
