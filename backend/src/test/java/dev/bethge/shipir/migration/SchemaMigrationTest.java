@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V10 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V11 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To10Successfully() {
+    void flywayAppliedVersions1To11Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11");
     }
 
     @Test
@@ -640,6 +640,81 @@ class SchemaMigrationTest {
         insertWebhook("ops-hook", creator);
         assertThatThrownBy(() -> jdbc.update("DELETE FROM users WHERE id = ?", creator))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void retentionSettingsHasExactlyOneDefaultRow() {
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT id, audit_log_days, notification_days, updated_by FROM retention_settings");
+        assertThat(rows).hasSize(1);
+        assertThat(((Number) rows.get(0).get("id")).intValue()).isEqualTo(1);
+        assertThat(rows.get(0).get("audit_log_days")).isEqualTo(365);
+        assertThat(rows.get(0).get("notification_days")).isEqualTo(30);
+        assertThat(rows.get(0).get("updated_by")).isNull();
+    }
+
+    @Test
+    void retentionSettingsHasExpectedColumnsAndTypes() {
+        List<Map<String, Object>> columns = jdbc.queryForList("""
+                SELECT column_name, data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'retention_settings'
+                """);
+        Map<String, Map<String, Object>> byName = columns.stream()
+                .collect(java.util.stream.Collectors.toMap(c -> (String) c.get("column_name"), c -> c));
+        assertThat(byName.keySet()).containsExactlyInAnyOrder(
+                "id", "audit_log_days", "notification_days", "updated_at", "updated_by");
+        assertThat(byName.get("id").get("data_type")).isEqualTo("smallint");
+        assertThat(byName.get("audit_log_days").get("data_type")).isEqualTo("integer");
+        assertThat(byName.get("audit_log_days").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("notification_days").get("data_type")).isEqualTo("integer");
+        assertThat(byName.get("notification_days").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("updated_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("updated_at").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("updated_by").get("data_type")).isEqualTo("uuid");
+        assertThat(byName.get("updated_by").get("is_nullable")).isEqualTo("YES");
+    }
+
+    @Test
+    void retentionSettingsSecondRowIsRejected() {
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO retention_settings (id, audit_log_days, notification_days) VALUES (2, 365, 30)"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 3651, -1})
+    void retentionAuditLogDaysOutsideRangeIsRejected(int days) {
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE retention_settings SET audit_log_days = ? WHERE id = 1", days))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("retention_settings_audit_log_days_check");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 3651, -1})
+    void retentionNotificationDaysOutsideRangeIsRejected(int days) {
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE retention_settings SET notification_days = ? WHERE id = 1", days))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("retention_settings_notification_days_check");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 3650})
+    void retentionDaysBoundariesAreAccepted(int days) {
+        jdbc.update("UPDATE retention_settings SET audit_log_days = ?, notification_days = ? WHERE id = 1",
+                days, days);
+        Integer audit = jdbc.queryForObject("SELECT audit_log_days FROM retention_settings", Integer.class);
+        assertThat(audit).isEqualTo(days);
+    }
+
+    @Test
+    void deletingUserWhoUpdatedRetentionSettingsSetsUpdatedByNull() {
+        UUID admin = insertUser("retention-editor");
+        jdbc.update("UPDATE retention_settings SET updated_by = ? WHERE id = 1", admin);
+        jdbc.update("DELETE FROM users WHERE id = ?", admin);
+        UUID updatedBy = jdbc.queryForObject("SELECT updated_by FROM retention_settings WHERE id = 1", UUID.class);
+        assertThat(updatedBy).isNull();
     }
 
     private void insertWebhook(String name, UUID creator) {
