@@ -100,3 +100,59 @@ export function useSaveRetentionSettings() {
     onSuccess: (saved) => queryClient.setQueryData(RETENTION_KEY, saved),
   })
 }
+
+export const AUDIT_ACTION_LABELS: Record<string, string> = {
+  LOGIN: 'Login',
+  LOGOUT: 'Logout',
+  PASSWORD_CHANGE: 'Password changed',
+  PASSWORD_RESET_CONFIRM: 'Password reset',
+  HOST_CREATE: 'Host created',
+  HOST_RENAME: 'Host renamed',
+  HOST_DELETE: 'Host deleted',
+  WEBHOOK_CREATE: 'Webhook created',
+  WEBHOOK_UPDATE: 'Webhook updated',
+  WEBHOOK_DELETE: 'Webhook deleted',
+  RETENTION_UPDATE: 'Retention updated',
+  RETENTION_PURGE: 'Retention purge',
+}
+
+export interface AuditLogEntry {
+  id: string
+  occurredAt: string
+  username: string
+  action: string
+  outcome: 'SUCCESS' | 'FAILURE'
+  targetType: string | null
+  targetId: string | null
+  details: Record<string, unknown> | null
+}
+
+export interface AuditLogPageData {
+  items: AuditLogEntry[]
+  page: number
+  size: number
+  totalElements: number
+}
+
+/** `from`/`to` are inclusive ISO-8601 instants; `page` is zero-based. */
+export interface AuditLogQuery {
+  page: number
+  size: number
+  action?: string
+  username?: string
+  from?: string
+  to?: string
+}
+
+export function useAuditLog(query: AuditLogQuery) {
+  const params = new URLSearchParams({ page: String(query.page), size: String(query.size) })
+  for (const key of ['action', 'username', 'from', 'to'] as const) {
+    if (query[key]) params.set(key, query[key])
+  }
+  const path = `/audit-log?${params}`
+  return useQuery({
+    queryKey: ['audit-log', path],
+    queryFn: () => apiFetch<AuditLogPageData>(path),
+    placeholderData: (previous) => previous,
+  })
+}

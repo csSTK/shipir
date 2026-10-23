@@ -1,11 +1,11 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { EnvironmentPage, EnvironmentsOverview } from '../features/hosts/index.ts'
 import { AccountPage } from '../features/account/index.ts'
-import { RetentionSettingsPage, WebhooksSettingsPage } from '../features/settings/index.ts'
+import { AuditLogPage, RetentionSettingsPage, WebhooksSettingsPage } from '../features/settings/index.ts'
 import { NotificationsPage } from '../features/notifications/index.ts'
 import { LoginPage, SetupPage, useCurrentUser, useLogout } from '../features/auth/index.ts'
 import { AppShell } from './layout/AppShell.tsx'
-import { NotAllowedPage, PlaceholderPage } from './layout/PlaceholderPages.tsx'
+import { NotAllowedPage } from './layout/PlaceholderPages.tsx'
 import { Providers } from './providers.tsx'
 
 function AuthGate() {
@@ -20,8 +20,6 @@ function AuthGate() {
   if (setupStep) return <SetupPage username={user.username} step={setupStep} />
 
   const isAdmin = user.role === 'ADMIN'
-  const settings = (title: string) =>
-    isAdmin ? <PlaceholderPage title={title} /> : <NotAllowedPage />
 
   return (
     <AppShell user={user} onSignOut={() => logout.mutate()} signingOut={logout.isPending}>
@@ -32,7 +30,7 @@ function AuthGate() {
         <Route path="/account" element={<AccountPage user={user} />} />
         <Route path="/settings/notifications" element={isAdmin ? <WebhooksSettingsPage /> : <NotAllowedPage />} />
         <Route path="/settings/retention" element={isAdmin ? <RetentionSettingsPage /> : <NotAllowedPage />} />
-        <Route path="/settings/audit-log" element={settings('Audit log')} />
+        <Route path="/settings/audit-log" element={isAdmin ? <AuditLogPage /> : <NotAllowedPage />} />
         <Route path="/settings/*" element={<NotAllowedPage />} />
         <Route path="*" element={<EnvironmentsOverview role={user.role} />} />
       </Routes>

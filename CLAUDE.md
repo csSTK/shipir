@@ -122,6 +122,7 @@ Frontend (`frontend/`):
 - `src/features/notifications/api.ts`: also `useNotificationPreferences`/`useSavePreferences` (GET/PUT `/notifications/preferences`)
 - `src/features/settings/{api.ts,WebhooksSettingsPage.tsx,.css,.test.tsx,index.ts}`: ADMIN webhook management at `/settings/notifications` (list with urlHint, create/edit dialog with never-prefilled URL, delete, send test)
 - `src/features/settings/{RetentionSettingsPage.tsx,.css,.test.tsx}`: ADMIN retention form at `/settings/retention` (audit log / notification days 1-3650, client check, inline errors); hooks `useRetentionSettings`/`useSaveRetentionSettings` in `api.ts`
+- `src/features/settings/AuditLogPage.{tsx,css,test.tsx}`: ADMIN audit log at `/settings/audit-log` (table, action/user/date filters + page in URL query, empty/error states); `useAuditLog`, `AUDIT_ACTION_LABELS` in `api.ts`
 - `e2e/webhooks.spec.ts`: admin creates webhook + test, operator blocked
 - `src/features/{containers,stacks}/index.ts`: empty feature entry points
 - `src/features/hosts/api.ts`: host types, `HOSTS_KEY`/`HOSTS_OVERVIEW_KEY`, `useHosts/useHostsOverview` (30 s + focus refetch, `HostOverview`), `useCreateHost/useTestConnection/useRenameHost/useDeleteHost` (create/delete also invalidate current user)
@@ -137,6 +138,7 @@ Frontend (`frontend/`):
 - `e2e/fixtures/api.ts`: Playwright `test` with auto `api` fixture: mocks `/api/**` per method+path, fails on unmocked calls (own spec: `api.spec.ts`)
 - `e2e/account.spec.ts`: user menu > Settings, password change, preference toggle
 - `e2e/retention.spec.ts`: admin changes retention and saves, server 400 inline
+- `e2e/audit-log.spec.ts`: admin filters by action and pages, operator not allowed
 - `e2e/app.spec.ts`: smoke spec, Shipir heading (signed in)
 - `e2e/auth.spec.ts`: login happy path + sign out, wrong password
 - `e2e/environments.spec.ts`: overview list/search, viewer vs admin add, admin rename/delete, taken name, operator no actions, error, placeholder navigation
