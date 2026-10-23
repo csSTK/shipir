@@ -37,6 +37,8 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `compose/Stack.java`, `compose/generator/ComposeGeneratorService.java`, `config_editor/ConfigFile.java`, `permission/Permission.java`, `streaming/LogStreamHandler.java`: empty placeholders
 - `audit/{AuditLogEntry,AuditRecord,AuditLogRepository,AuditService}.java`: `audit_log` entity (details JSONB), input record, repository, `record` in REQUIRES_NEW tx
 - `audit/{Auditable,AuditAspect}.java`: `@Auditable(action, targetType, targetId SpEL, username SpEL)`; aspect writes SUCCESS/FAILURE (error-status `ResponseEntity` = FAILURE, exceptions rethrown), user from SecurityContext, recording errors swallowed; used on `AuthController` login/logout/password/reset-confirm and `HostService` create/rename/delete
+- `audit/{AuditLogController,AuditLogQueryService,InvalidAuditQueryException}.java`, `audit/dto/{AuditLogEntryResponse,AuditLogPageResponse}.java`: ADMIN-only `GET /api/audit-log?page&size&action&username&from&to` (newest first, size 1..100 else 400 INVALID_PARAMETER, ISO instants)
+- `backend/src/test/java/dev/bethge/shipir/audit/AuditLogApiTest.java`: audit read API (paging, filters, 400s, role access)
 - `backend/src/test/java/dev/bethge/shipir/audit/`: `AuditAspectTest` (rows per action, null user_id on failed login, rollback survival, no secrets), `AuditServiceFailureTest` (audit exception does not fail request)
 - `host/{DockerHost,ConnectionType,DockerHostRepository}.java`: environment entity (TLS columns are ciphertext), LOCAL/TCP enum, repository
 - `host/{HostController,HostService,HostException,HostExceptionHandler}.java`: `/api/hosts` list/create/connection-test/rename/delete (create pings first: 422 CONNECTION_FAILED; 400/409 codes via `HostException`)
@@ -85,10 +87,14 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `backend/Dockerfile`: multi-stage image: Temurin 25 build (tests skipped), JRE alpine runtime, user uid 10001, env-only config
 - `backend/.dockerignore`: excludes `target/`, `.env`, keys, IDE and git files from the image build
 - `backend/src/main/resources/application.yml`: app name, datasource (`DB_HOST/PORT/NAME/USER` with local defaults, `${DB_PASSWORD}` no default), JPA validate/no OSIV, Flyway
-- `backend/src/main/resources/db/migration/V{1..4}__create_{users,docker_hosts,stacks,stack_versions}.sql`, `V5__add_users_password_changed_at.sql`, `V6__add_docker_hosts_tls_columns.sql`, `V7__create_password_reset_codes.sql`, `V9__create_notifications.sql`: Flyway schema (TIMESTAMPTZ, FKs to users RESTRICT, host/stack FKs CASCADE; V5 NULL = first-start setup pending; V6 docker_hosts: encrypted TLS BYTEA columns, connection shape/TLS/name constraints; V7 password_reset_codes: hashed codes, attempt counter, CASCADE with user; V8 audit_log: username snapshot, outcome check, user FK SET NULL, indexes on occurred_at and (action, occurred_at)); V9 notifications: type CHECK HOST_DOWN/HOST_UP, host_id SET NULL keeps host_name, preferences PK (user_id, type)
+- `backend/src/main/resources/db/migration/V{1..4}__create_{users,docker_hosts,stacks,stack_versions}.sql`, `V5__add_users_password_changed_at.sql`, `V6__add_docker_hosts_tls_columns.sql`, `V7__create_password_reset_codes.sql`, `V9__create_notifications.sql`, `V10__create_notification_webhooks.sql`: Flyway schema (TIMESTAMPTZ, FKs to users RESTRICT, host/stack FKs CASCADE; V5 NULL = first-start setup pending; V6 docker_hosts: encrypted TLS BYTEA columns, connection shape/TLS/name constraints; V7 password_reset_codes: hashed codes, attempt counter, CASCADE with user; V8 audit_log: username snapshot, outcome check, user FK SET NULL, indexes on occurred_at and (action, occurred_at)); V9 notifications: type CHECK HOST_DOWN/HOST_UP, host_id SET NULL keeps host_name, preferences PK (user_id, type); V10 notification_webhooks: URL as ciphertext + hint only, event_types text[], created_by RESTRICT
 - `backend/src/test/java/dev/bethge/shipir/ShipirApplicationTests.java`: context-load + Postgres 16 test
 - `backend/src/test/java/dev/bethge/shipir/DatasourcePropertiesTest.java`: resolves application.yml datasource defaults and `DB_*` overrides (no context, no DB)
-- `backend/src/test/java/dev/bethge/shipir/migration/SchemaMigrationTest.java`: V1-V9 schema test (timestamptz, unique, cascade, restrict, password_changed_at, docker_hosts checks, password_reset_codes columns/checks/cascade, audit_log columns/outcome check/user SET NULL/indexes, notifications/notification_preferences), `@Transactional` rollback
+- `notification/{Notification,NotificationPreference,NotificationType,*Repository}.java`: notification + per-user preference entities (missing preference row = enabled), HOST_DOWN/HOST_UP
+- `notification/NotificationService.java`: `@EventListener` on `HostStatusChangedEvent` (one notification per opted-in user), list/unread-count/mark-read (own rows only)/preferences
+- `notification/NotificationController.java`: `/api/notifications` list (`unreadOnly,page,size`, size max 100), `unread-count`, `{id}/read` (other user's id -> 404), `read-all`, `preferences` GET/PUT; `notification/dto/*`
+- `backend/src/test/java/dev/bethge/shipir/notification/`: `NotificationTestBase`, `NotificationApiTest` (MockMvc), `NotificationListenerTest` (event -> rows)
+- `backend/src/test/java/dev/bethge/shipir/migration/SchemaMigrationTest.java`: V1-V10 schema test (notification_webhooks columns/unique/no plaintext URL/created_by RESTRICT, timestamptz, unique, cascade, restrict, password_changed_at, docker_hosts checks, password_reset_codes columns/checks/cascade, audit_log columns/outcome check/user SET NULL/indexes, notifications/notification_preferences), `@Transactional` rollback
 - `backend/src/test/java/dev/bethge/shipir/PostgresTestConfiguration.java`: reusable `@TestConfiguration`, `@ServiceConnection` postgres:16-alpine; integration tests `@Import` it
 
 Frontend (`frontend/`):
@@ -104,6 +110,8 @@ Frontend (`frontend/`):
 - `src/app/layout/PlaceholderPages.tsx`: `PlaceholderPage`, `NotAllowedPage` (non-ADMIN on /settings/*)
 - `e2e/shell.spec.ts`: sidebar/user menu navigation, viewer not allowed on settings
 - `src/features/notifications/{api.ts,NotificationsPage.tsx,.css,index.ts}`: `useNotifications(unreadOnly)`, `useUnreadCount` (30 s + focus), `useMarkRead/useMarkAllRead`; `/notifications` page (assumed API: Page `{content,totalElements}`, `{count}`, POST `/{id}/read`, `/read-all`); Sidebar shows the unread badge
+- `src/features/account/AccountPage.{tsx,css,test.tsx}`: `/account` (props `user`): read-only username/role, password change (reuses `useChangePassword` + `passwordPolicy.ts`), notification preference switches (optimistic save)
+- `src/features/notifications/api.ts`: also `useNotificationPreferences`/`useSavePreferences` (GET/PUT `/notifications/preferences`)
 - `src/features/{containers,stacks}/index.ts`: empty feature entry points
 - `src/features/hosts/api.ts`: host types, `HOSTS_KEY`/`HOSTS_OVERVIEW_KEY`, `useHosts/useHostsOverview` (30 s + focus refetch, `HostOverview`), `useCreateHost/useTestConnection/useRenameHost/useDeleteHost` (create/delete also invalidate current user)
 - `src/features/hosts/EnvironmentForm.{tsx,css}`: Local / Remote (TCP+TLS) form, PEM file pickers (names only shown), connection test, inline server errors; props `onCreated`, `submitLabel`
@@ -116,6 +124,7 @@ Frontend (`frontend/`):
 - `playwright.config.ts`: Playwright config (Chromium, `e2e/` dir, starts Vite dev server)
 - `tsconfig.e2e.json`: type-checks `e2e/` and `playwright.config.ts` (referenced from `tsconfig.json`)
 - `e2e/fixtures/api.ts`: Playwright `test` with auto `api` fixture: mocks `/api/**` per method+path, fails on unmocked calls (own spec: `api.spec.ts`)
+- `e2e/account.spec.ts`: user menu > Settings, password change, preference toggle
 - `e2e/app.spec.ts`: smoke spec, Shipir heading (signed in)
 - `e2e/auth.spec.ts`: login happy path + sign out, wrong password
 - `e2e/environments.spec.ts`: overview list/search, viewer vs admin add, admin rename/delete, taken name, operator no actions, error, placeholder navigation
