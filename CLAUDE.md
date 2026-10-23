@@ -175,6 +175,8 @@ Frontend (`frontend/`):
 - `src/shared/realtime/stomp.ts`: `subscribeToTopic(destination, {onMessage,onState})` over `@stomp/stompjs` (`/ws`, `X-XSRF-TOKEN` on CONNECT, auto reconnect); tests mock this module
 - `e2e/deploy-output.spec.ts`: deploy run via `page.routeWebSocket` STOMP mock: success/failed badge, scroll pause, reconnect without duplicates
 - `e2e/stack-detail.spec.ts`: operator create -> deploy -> rollback -> delete, viewer read-only
+- `src/features/stacks/{GitSourceFields,GitSourcePanel}.tsx`, `GitStacks.test.tsx`: add-dialog 'Git repository' fields (credential select ADMIN-only, hint for others); detail panel (repo/ref/path/short SHA, auto-update switch + minutes interval, last poll error); `api.ts`: `useGitRedeploy`, `useSetAutoUpdate`; `AddStackDialog` has New file / Git repository source switch; `StackDetailPage` shows 'Pull & redeploy' for GIT stacks
+- `e2e/git-stacks.spec.ts`: create from Git, GIT_AUTH_FAILED inline, operator without credential list, Pull & redeploy new SHA, auto-update save
 - `src/features/stacks/wizard/{model.ts,ComposeWizard.tsx,wizard.css,index.ts}`: Compose form wizard (services: image/command/restart/ports/env literal or `.env` ref/volumes/networks/depends_on; top-level networks/volumes); `model.ts` = form state, `validateWizard`, `buildSpec` (generate payload), `referencedEnvKeys`; one-way (no YAML -> form); preview via `useGenerateCompose` (`api.ts`, `POST /compose/generate`)
 - `src/features/stacks/AddStackDialog.tsx`: also 'Form wizard' / 'YAML' mode switch; 'Continue in editor' fills the YAML editor and adds empty env rows for referenced keys
 - `e2e/compose-wizard.spec.ts`: wizard builds 2 services + network + env ref, preview, continue, create; local and server (INVALID_COMPOSE_SPEC) errors

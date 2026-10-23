@@ -101,6 +101,7 @@
   font-size: 0.875rem;
 }
 .sk-field input,
+.sk-field select,
 .sk-yaml-input,
 .sk-env__row input {
   font: inherit;
@@ -119,6 +120,7 @@
   resize: vertical;
 }
 .sk-field input:focus-visible,
+.sk-field select:focus-visible,
 .sk-yaml-input:focus-visible,
 .sk-env__row input:focus-visible {
   outline: 2px solid AccentColor;
@@ -184,4 +186,20 @@
 }
 .sk-dialog:has(.sk-form) {
   width: min(44rem, 100%);
+}
+
+.sk-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  opacity: 0.7;
+}
+.sk-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 600px) {
+  .sk-row {
+    grid-template-columns: 1fr;
+  }
 }

@@ -172,3 +172,42 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+.sd-git {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: 0.875rem;
+}
+.sd-git dt {
+  opacity: 0.7;
+}
+.sd-git dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sd-auto {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+.sd-auto__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+.sd-auto__toggle input {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: AccentColor;
+}
+.sd-auto__interval {
+  max-width: 14rem;
+}

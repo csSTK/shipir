@@ -2,7 +2,7 @@ import { DeployOutput } from './deploy-output/DeployOutput.tsx'
 import type { DeploymentResult } from './deploy-output/useDeploymentStream.ts'
 
 export interface StartedDeployment {
-  kind: 'Deploy' | 'Rollback'
+  kind: 'Deploy' | 'Rollback' | 'Pull & redeploy'
   deploymentId: string
 }
 
@@ -14,6 +14,6 @@ export function DeploymentPanel({
   deployment: StartedDeployment
   onFinished?: (result: DeploymentResult) => void
 }) {
-  const title = deployment.kind === 'Deploy' ? 'Deployment' : 'Rollback'
+  const title = deployment.kind === 'Rollback' ? 'Rollback' : 'Deployment'
   return <DeployOutput title={title} deploymentId={deployment.deploymentId} onFinished={onFinished} />
 }

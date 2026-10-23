@@ -37,8 +37,23 @@ export interface ManagedStack {
   createdAt: string
 }
 
+/** Git source of a stack (`null` for FILE stacks); never contains a token. */
+export interface GitInfo {
+  repoUrl: string
+  ref: string
+  composePath: string
+  credentialId: string | null
+  lastCommitSha: string | null
+  autoUpdateEnabled: boolean
+  autoUpdateIntervalSeconds: number | null
+  lastPolledAt: string | null
+  /** Error code of the last failed auto-update check. */
+  lastPollError: string | null
+}
+
 export interface ManagedStackDetail extends ManagedStack {
   yaml: string
+  git?: GitInfo | null
   /** Variable names only; values are never part of this response. */
   envKeys: string[]
 }
@@ -68,6 +83,16 @@ export interface Deployment {
 export interface CreateStackInput {
   name: string
   yaml: string
+  env: EnvEntry[]
+}
+
+export interface CreateGitStackInput {
+  source: 'GIT'
+  name: string
+  repoUrl: string
+  ref: string
+  composePath: string
+  credentialId?: string
   env: EnvEntry[]
 }
 
@@ -105,7 +130,7 @@ function useInvalidateStacks(hostId: string) {
 export function useCreateStack(hostId: string) {
   const invalidate = useInvalidateStacks(hostId)
   return useMutation({
-    mutationFn: (input: CreateStackInput) =>
+    mutationFn: (input: CreateStackInput | CreateGitStackInput) =>
       apiFetch<ManagedStackDetail>(managedBase(hostId), { method: 'POST', body: input }),
     onSuccess: () => void invalidate(),
   })
@@ -174,5 +199,34 @@ export function useGenerateCompose() {
   return useMutation({
     mutationFn: (spec: ComposeSpecPayload) =>
       apiFetch<{ yaml: string }>('/compose/generate', { method: 'POST', body: { spec } }),
+  })
+}
+
+/** Pulls the repository and redeploys (`POST .../git/redeploy`, 202); output streams like a normal deploy. */
+export function useGitRedeploy(hostId: string) {
+  const invalidate = useInvalidateStacks(hostId)
+  return useMutation({
+    mutationFn: (stackId: string) =>
+      apiFetch<Deployment>(`${managedBase(hostId)}/${stackId}/git/redeploy`, { method: 'POST' }),
+    onSuccess: () => void invalidate(),
+  })
+}
+
+export interface AutoUpdateInput {
+  stackId: string
+  enabled: boolean
+  /** Seconds, at least 60. */
+  intervalSeconds: number
+}
+
+export function useSetAutoUpdate(hostId: string) {
+  const invalidate = useInvalidateStacks(hostId)
+  return useMutation({
+    mutationFn: ({ stackId, enabled, intervalSeconds }: AutoUpdateInput) =>
+      apiFetch<ManagedStackDetail>(`${managedBase(hostId)}/${stackId}/git/auto-update`, {
+        method: 'PUT',
+        body: { enabled, intervalSeconds },
+      }),
+    onSuccess: () => void invalidate(),
   })
 }

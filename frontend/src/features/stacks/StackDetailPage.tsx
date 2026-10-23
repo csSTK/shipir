@@ -7,6 +7,7 @@ import { useCurrentUser } from '../auth/index.ts'
 import {
   useDeleteStack,
   useDeployStack,
+  useGitRedeploy,
   useManagedStack,
   useRollbackStack,
   useStackVersions,
@@ -16,6 +17,7 @@ import {
 } from './api.ts'
 import { ConfirmDialog } from './ConfirmDialog.tsx'
 import { DeploymentPanel, type StartedDeployment } from './DeploymentPanel.tsx'
+import { GitSourcePanel } from './GitSourcePanel.tsx'
 import { StackContentPanel } from './StackContentPanel.tsx'
 import { describeStackError } from './stackErrors.ts'
 import './StackUi.css'
@@ -46,6 +48,7 @@ export function StackDetailPage() {
   const stack = useManagedStack(hostId, stackId)
   const versions = useStackVersions(hostId, stackId)
   const deploy = useDeployStack(hostId)
+  const redeploy = useGitRedeploy(hostId)
   const stop = useStopStack(hostId)
   const rollback = useRollbackStack(hostId)
   const remove = useDeleteStack(hostId)
@@ -92,13 +95,21 @@ export function StackDetailPage() {
   }
 
   const data = stack.data
-  const busy = deploy.isPending || stop.isPending || rollback.isPending
+  const busy = deploy.isPending || redeploy.isPending || stop.isPending || rollback.isPending
 
   function startDeploy() {
     setActionError(null)
     deploy.mutate(stackId, {
       onSuccess: (d) => setStarted({ kind: 'Deploy', deploymentId: d.deploymentId }),
       onError: (err) => setActionError(describeStackError(err, 'Could not start the deployment. Try again.')),
+    })
+  }
+
+  function startRedeploy() {
+    setActionError(null)
+    redeploy.mutate(stackId, {
+      onSuccess: (d) => setStarted({ kind: 'Pull & redeploy', deploymentId: d.deploymentId }),
+      onError: (err) => setActionError(describeStackError(err, 'Could not start the redeployment. Try again.')),
     })
   }
 
@@ -153,6 +164,11 @@ export function StackDetailPage() {
             <button type="button" className="sk-btn sk-btn--primary" onClick={startDeploy} disabled={busy}>
               Deploy
             </button>
+            {data.source === 'GIT' && (
+              <button type="button" className="sk-btn" onClick={startRedeploy} disabled={busy}>
+                Pull &amp; redeploy
+              </button>
+            )}
             <button type="button" className="sk-btn" onClick={() => setDialog({ kind: 'stop' })} disabled={busy}>
               Stop
             </button>
@@ -175,6 +191,8 @@ export function StackDetailPage() {
           onFinished={() => void queryClient.invalidateQueries({ queryKey: ['hosts', hostId] })}
         />
       )}
+
+      {data.git && <GitSourcePanel key={`${data.git.autoUpdateEnabled}-${data.git.autoUpdateIntervalSeconds}`} stackId={stackId} hostId={hostId} git={data.git} canWrite={canWrite} />}
 
       <StackContentPanel stack={data} hostId={hostId} canWrite={canWrite} />
 
