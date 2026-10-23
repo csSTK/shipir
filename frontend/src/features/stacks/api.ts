@@ -110,6 +110,30 @@ export function useCreateStack(hostId: string) {
   })
 }
 
+export interface UpdateStackInput {
+  stackId: string
+  yaml: string
+  /** `null` keeps the stored variables, `[]` clears them. */
+  env: EnvEntry[] | null
+}
+
+/** Saves a draft version (PUT). Does not deploy. */
+export function useUpdateStack(hostId: string) {
+  const invalidate = useInvalidateStacks(hostId)
+  return useMutation({
+    mutationFn: ({ stackId, yaml, env }: UpdateStackInput) =>
+      apiFetch<ManagedStackDetail>(`${managedBase(hostId)}/${stackId}`, { method: 'PUT', body: { yaml, env } }),
+    onSuccess: () => void invalidate(),
+  })
+}
+
+/** Reads the stored variable values (ADMIN/OPERATOR). A mutation, so secrets never enter the query cache. */
+export function useLoadStackEnv(hostId: string) {
+  return useMutation({
+    mutationFn: (stackId: string) => apiFetch<{ entries: EnvEntry[] }>(`${managedBase(hostId)}/${stackId}/env`),
+  })
+}
+
 export function useDeleteStack(hostId: string) {
   const invalidate = useInvalidateStacks(hostId)
   return useMutation({

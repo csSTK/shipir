@@ -168,7 +168,7 @@ export function StackDetailPage() {
       )}
       {started && <DeploymentPanel deployment={started} />}
 
-      <StackContentPanel stack={data} />
+      <StackContentPanel stack={data} hostId={hostId} canWrite={canWrite} />
 
       <div className="sd-panel">
         <h3 className="sd-panel__title">Versions</h3>

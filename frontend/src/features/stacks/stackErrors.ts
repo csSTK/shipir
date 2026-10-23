@@ -16,6 +16,8 @@ export function describeStackError(error: unknown, fallback: string): string {
         return ['The Compose file is not valid.', ...(error.details ?? [])].join(' ')
       case 'INVALID_ENV':
         return 'An environment variable is invalid. Check names and values.'
+      case 'GIT_MANAGED':
+        return 'The Compose file of a Git stack comes from the repository and cannot be edited here.'
       case 'STACK_NOT_FOUND':
         return 'This stack no longer exists.'
       case 'VERSION_NOT_FOUND':

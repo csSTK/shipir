@@ -161,3 +161,14 @@
     border-color: currentColor;
   }
 }
+.sd-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sd-panel__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

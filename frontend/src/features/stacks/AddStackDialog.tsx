@@ -1,15 +1,14 @@
 import { useId, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ApiError } from '../../shared/api/client.ts'
 import { useCreateStack, type EnvEntry } from './api.ts'
+import { EnvEditor, toPayload, validateEnv, YamlEditor } from './editor/index.ts'
 import { describeStackError } from './stackErrors.ts'
 import { StackDialog } from './StackDialog.tsx'
 
 const NAME_PATTERN = /^[a-z0-9][a-z0-9_-]*$/
 
-/**
- * Create form. Plain textarea and simple env rows for now; shipr-e42.14 swaps in the
- * Monaco and env editors.
- */
+/** Create form: name, Compose file (Monaco) and environment variables. */
 export function AddStackDialog({ hostId, onClose }: { hostId: string; onClose: () => void }) {
   const titleId = useId()
   const navigate = useNavigate()
@@ -18,10 +17,7 @@ export function AddStackDialog({ hostId, onClose }: { hostId: string; onClose: (
   const [yaml, setYaml] = useState('')
   const [env, setEnv] = useState<EnvEntry[]>([])
   const [problem, setProblem] = useState<string | null>(null)
-
-  function setRow(i: number, patch: Partial<EnvEntry>) {
-    setEnv((rows) => rows.map((r, j) => (j === i ? { ...r, ...patch } : r)))
-  }
+  const [yamlError, setYamlError] = useState<{ message: string; details?: string[] } | null>(null)
 
   function submit(e: FormEvent) {
     e.preventDefault()
@@ -34,13 +30,24 @@ export function AddStackDialog({ hostId, onClose }: { hostId: string; onClose: (
       setProblem('Enter the Compose file.')
       return
     }
+    if (validateEnv(env).size > 0) {
+      setProblem('Fix the highlighted variables first.')
+      return
+    }
     setProblem(null)
-    const entries = env.filter((r) => r.key.trim() !== '').map((r) => ({ key: r.key.trim(), value: r.value }))
+    setYamlError(null)
+    const entries = toPayload(env)
     create.mutate(
       { name: trimmed, yaml, env: entries },
       {
         onSuccess: (stack) => navigate(`/environments/${hostId}/stacks/${stack.id}`),
-        onError: (err) => setProblem(describeStackError(err, 'Could not create the stack. Try again.')),
+        onError: (err) => {
+          if (err instanceof ApiError && err.code === 'INVALID_COMPOSE') {
+            setYamlError({ message: 'The Compose file is not valid.', details: err.details })
+          } else {
+            setProblem(describeStackError(err, 'Could not create the stack. Try again.'))
+          }
+        },
       },
     )
   }
@@ -52,25 +59,11 @@ export function AddStackDialog({ hostId, onClose }: { hostId: string; onClose: (
           <span>Name</span>
           <input value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" spellCheck={false} />
         </label>
-        <label className="sk-field">
+        <div className="sk-field">
           <span>Compose file</span>
-          <textarea className="sk-yaml-input" value={yaml} onChange={(e) => setYaml(e.target.value)} rows={10} spellCheck={false} />
-        </label>
-        <fieldset className="sk-env">
-          <legend>Environment variables</legend>
-          {env.map((row, i) => (
-            <div className="sk-env__row" key={i}>
-              <input aria-label={`Variable ${i + 1} name`} placeholder="NAME" value={row.key} onChange={(e) => setRow(i, { key: e.target.value })} autoComplete="off" spellCheck={false} />
-              <input aria-label={`Variable ${i + 1} value`} placeholder="value" type="password" value={row.value} onChange={(e) => setRow(i, { value: e.target.value })} autoComplete="off" />
-              <button type="button" className="sk-btn sk-btn--plain" aria-label={`Remove variable ${i + 1}`} onClick={() => setEnv((rows) => rows.filter((_, j) => j !== i))}>
-                Remove
-              </button>
-            </div>
-          ))}
-          <button type="button" className="sk-btn sk-btn--plain" onClick={() => setEnv((rows) => [...rows, { key: '', value: '' }])}>
-            Add variable
-          </button>
-        </fieldset>
+          <YamlEditor label="Compose file" value={yaml} onChange={setYaml} height="260px" error={yamlError} />
+        </div>
+        <EnvEditor value={env} onChange={setEnv} />
         {problem && (
           <p role="alert" className="sk-error">
             {problem}

@@ -182,3 +182,6 @@
     --sk-border: currentColor;
   }
 }
+.sk-dialog:has(.sk-form) {
+  width: min(44rem, 100%);
+}

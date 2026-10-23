@@ -72,7 +72,7 @@ describe('StackDetailPage', () => {
     expect(screen.getByRole('status', { name: 'Loading stack' })).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'shop' })).toBeInTheDocument()
     expect(screen.getByText('Running')).toBeInTheDocument()
-    expect(screen.getByLabelText('Compose file')).toHaveTextContent('image: nginx')
+    expect(await screen.findByLabelText('Compose file')).toHaveDisplayValue(/image: nginx/)
     expect(screen.getByText('DB_PASSWORD')).toBeInTheDocument()
     const list = await screen.findByRole('list', { name: 'Versions' })
     const items = within(list).getAllByRole('listitem')
@@ -167,5 +167,71 @@ describe('StackDetailPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  describe('editing', () => {
+    const putKey = `PUT ${BASE}`
+    const envKey = `GET ${BASE}/env`
+
+    async function startEdit() {
+      renderPage()
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+    }
+
+    it('saves a changed Compose file and keeps stored variables (env null)', async () => {
+      const put = vi.fn(() => stack)
+      serve('OPERATOR', { [putKey]: put })
+      await startEdit()
+      fireEvent.change(await screen.findByLabelText('Compose file'), { target: { value: 'services: {}' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(await screen.findByRole('status')).toHaveTextContent('Saved as a draft')
+      expect(apiFetch).toHaveBeenCalledWith(BASE, { method: 'PUT', body: { yaml: 'services: {}', env: null } })
+    })
+
+    it('loads values on request, masks them and sends the edited list', async () => {
+      const put = vi.fn(() => stack)
+      serve('ADMIN', { [putKey]: put, [envKey]: () => ({ entries: [{ key: 'DB_PASSWORD', value: 's3cret' }] }) })
+      await startEdit()
+      fireEvent.click(screen.getByRole('button', { name: 'Edit variables' }))
+      const value = await screen.findByLabelText('Variable 1 value')
+      expect(value).toHaveAttribute('type', 'password')
+      fireEvent.click(screen.getByRole('button', { name: 'Show values' }))
+      expect(value).toHaveAttribute('type', 'text')
+      fireEvent.change(value, { target: { value: 'new' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+      await waitFor(() =>
+        expect(apiFetch).toHaveBeenCalledWith(BASE, {
+          method: 'PUT',
+          body: { yaml: stack.yaml, env: [{ key: 'DB_PASSWORD', value: 'new' }] },
+        }),
+      )
+    })
+
+    it('shows INVALID_COMPOSE details inline and stays in edit mode', async () => {
+      serve('OPERATOR', { [putKey]: () => new ApiError(400, 'bad', 'INVALID_COMPOSE', undefined, ['services.web: image required']) })
+      await startEdit()
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent('The Compose file is not valid.')
+      expect(alert).toHaveTextContent('services.web: image required')
+      expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
+    })
+
+    it('blocks saving while a variable name is invalid', async () => {
+      serve('OPERATOR', { [envKey]: () => ({ entries: [{ key: '1bad', value: 'x' }] }) })
+      await startEdit()
+      fireEvent.click(screen.getByRole('button', { name: 'Edit variables' }))
+      await screen.findByLabelText('Variable 1 name')
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(await screen.findAllByRole('alert')).not.toHaveLength(0)
+      expect(apiFetch).not.toHaveBeenCalledWith(BASE, expect.objectContaining({ method: 'PUT' }))
+    })
+
+    it('does not offer Edit to viewers', async () => {
+      serve('VIEWER')
+      renderPage()
+      await screen.findByRole('heading', { name: 'shop' })
+      expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
+    })
   })
 })

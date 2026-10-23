@@ -1,0 +1,109 @@
+/* Editors: calm surfaces, instant focus/press feedback, no decorative motion. */
+.ed-yaml {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ed-yaml__frame {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 12px;
+  transition: border-color 0.15s ease;
+}
+.ed-yaml__frame:focus-within {
+  border-color: AccentColor;
+}
+.ed-yaml__frame[data-invalid='true'] {
+  border-color: #d92d20;
+}
+.ed-yaml__loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  font-size: 0.875rem;
+  opacity: 0.6;
+}
+.ed-yaml__error {
+  font-size: 0.875rem;
+  color: #d92d20;
+}
+.ed-yaml__error p {
+  margin: 0;
+}
+.ed-yaml__error ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.ed-yaml__error code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+}
+
+.ed-env {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 0.875rem;
+}
+.ed-env legend {
+  padding: 0;
+  margin-bottom: 6px;
+}
+.ed-env__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ed-env__row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr auto;
+  gap: 8px;
+}
+.ed-env__row input,
+.ed-env__paste textarea {
+  font: inherit;
+  font-size: 1rem;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  color: inherit;
+  min-width: 0;
+}
+.ed-env__row input[aria-invalid='true'] {
+  border-color: #d92d20;
+}
+.ed-env__row input:focus-visible,
+.ed-env__paste textarea:focus-visible {
+  outline: 2px solid AccentColor;
+  outline-offset: 2px;
+}
+.ed-env__issue {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #d92d20;
+}
+.ed-env__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ed-env__paste {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ed-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  opacity: 0.7;
+}
+@media (max-width: 600px) {
+  .ed-env__row {
+    grid-template-columns: 1fr;
+  }
+}
