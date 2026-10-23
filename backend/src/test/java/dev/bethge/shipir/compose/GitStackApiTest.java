@@ -405,8 +405,8 @@ class GitStackApiTest extends StackTestBase {
         commit(".env", "TRACKED=repo\n");
         Login admin = login("admin");
         String body = mvc.perform(admin.write(post(url())).contentType(APPLICATION_JSON)
-                        .content("{\"name\":\"relstack\",\"source\":\"GIT\",\"repoUrl\":\"%s\",\"ref\":\"main\","
-                                + "\"composePath\":\"deploy/compose.yaml\",\"env\":[{\"key\":\"SHIPIR_VAR\",\"value\":\"s\"}]}"
+                        .content(("{\"name\":\"relstack\",\"source\":\"GIT\",\"repoUrl\":\"%s\",\"ref\":\"main\","
+                                + "\"composePath\":\"deploy/compose.yaml\",\"env\":[{\"key\":\"SHIPIR_VAR\",\"value\":\"s\"}]}")
                                 .formatted(base + "/public.git")))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         String id = JsonPath.read(body, "$.id");

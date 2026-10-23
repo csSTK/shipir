@@ -12,6 +12,7 @@ import org.eclipse.jgit.api.errors.TransportException;
 import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Ref;
+import org.eclipse.jgit.lib.RefUpdate;
 import org.eclipse.jgit.transport.CredentialsProvider;
 import org.eclipse.jgit.transport.RefSpec;
 import org.eclipse.jgit.transport.TagOpt;
@@ -136,6 +137,12 @@ public class GitRepositoryService {
     private String fetch(Git git, String url, String ref, CredentialsProvider provider)
             throws GitAPIException, IOException {
         String source = resolveRemoteRef(url, ref, provider);
+        // a stale target from the previous sync must never be mistaken for the result of this fetch
+        RefUpdate stale = git.getRepository().updateRef(TARGET_REF);
+        stale.setForceUpdate(true);
+        if (git.getRepository().exactRef(TARGET_REF) != null) {
+            stale.delete();
+        }
         try {
             git.fetch().setRemote(url)
                     .setRefSpecs(new RefSpec("+" + source + ":" + TARGET_REF))
@@ -148,6 +155,9 @@ public class GitRepositoryService {
             throw map(e, SHA.matcher(ref).matches());
         }
         ObjectId id = git.getRepository().resolve(TARGET_REF + "^{commit}");
+        if (id == null && SHA.matcher(ref).matches()) {
+            id = git.getRepository().resolve(ref + "^{commit}");
+        }
         if (id == null) {
             throw refNotFound();
         }
