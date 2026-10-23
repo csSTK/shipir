@@ -9,14 +9,16 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.Timestamp;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V4 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V5 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  */
 @SpringBootTest
 @Import(PostgresTestConfiguration.class)
@@ -27,10 +29,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To4Successfully() {
+    void flywayAppliedVersions1To5Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5");
     }
 
     @Test
@@ -49,7 +51,25 @@ class SchemaMigrationTest {
                 WHERE table_schema = 'public' AND data_type = 'timestamp with time zone'
                   AND table_name IN ('users','docker_hosts','stacks','stack_versions')
                 """, Integer.class);
-        assertThat(count).isEqualTo(5); // 1 users + 1 hosts + 2 stacks + 1 versions
+        assertThat(count).isEqualTo(6); // 2 users + 1 hosts + 2 stacks + 1 versions
+    }
+
+    @Test
+    void usersPasswordChangedAtIsNullableTimestamptz() {
+        Map<String, Object> column = jdbc.queryForMap("""
+                SELECT data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'password_changed_at'
+                """);
+        assertThat(column.get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(column.get("is_nullable")).isEqualTo("YES");
+    }
+
+    @Test
+    void userInsertedWithoutPasswordChangedAtHasNull() {
+        UUID user = insertUser("alice");
+        Timestamp passwordChangedAt = jdbc.queryForObject(
+                "SELECT password_changed_at FROM users WHERE id = ?", Timestamp.class, user);
+        assertThat(passwordChangedAt).isNull();
     }
 
     @Test
