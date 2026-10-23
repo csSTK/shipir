@@ -9,7 +9,7 @@ shipir:
     timeout: 10m
   ai:
     connect-timeout: 5s
-    read-timeout: 60s
+    read-timeout: 180s
   git:
     poll-enabled: true
     poll-tick: 60s

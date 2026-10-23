@@ -8,5 +8,5 @@ import java.time.Duration;
 /** Bound from {@code shipir.ai.*}. {@code readTimeout} is the idle time allowed without any response bytes. */
 @ConfigurationProperties("shipir.ai")
 public record LlmProperties(@DefaultValue("5s") Duration connectTimeout,
-                            @DefaultValue("60s") Duration readTimeout) {
+                            @DefaultValue("180s") Duration readTimeout) {
 }
