@@ -1,17 +1,15 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
-import { ENV_RESOURCES, EnvironmentDashboard, EnvironmentsOverview } from '../features/hosts/index.ts'
+import { EnvironmentDashboard, EnvironmentsOverview } from '../features/hosts/index.ts'
 import { ContainersPage } from '../features/containers/index.ts'
+import { ImagesPage } from '../features/images/index.ts'
+import { NetworksPage } from '../features/networks/index.ts'
+import { VolumesPage } from '../features/volumes/index.ts'
 import { StacksPage } from '../features/stacks/index.ts'
 import { NotificationsPage } from '../features/notifications/index.ts'
 import { LoginPage, SetupPage, useCurrentUser, useLogout } from '../features/auth/index.ts'
 import { AppShell } from './layout/AppShell.tsx'
 import { NotAllowedPage, PlaceholderPage } from './layout/PlaceholderPages.tsx'
 import { Providers } from './providers.tsx'
-
-function ResourcePlaceholder({ slug }: { slug: (typeof ENV_RESOURCES)[number]['slug'] }) {
-  const label = ENV_RESOURCES.find((r) => r.slug === slug)?.label ?? slug
-  return <PlaceholderPage title={label} />
-}
 
 function AuthGate() {
   const { data: user, isPending, isError } = useCurrentUser()
@@ -36,9 +34,9 @@ function AuthGate() {
         {/* One line per resource: later tasks swap the placeholder for the real list page. */}
         <Route path="/environments/:id/stacks" element={<StacksPage />} />
         <Route path="/environments/:id/containers" element={<ContainersPage />} />
-        <Route path="/environments/:id/images" element={<ResourcePlaceholder slug="images" />} />
-        <Route path="/environments/:id/networks" element={<ResourcePlaceholder slug="networks" />} />
-        <Route path="/environments/:id/volumes" element={<ResourcePlaceholder slug="volumes" />} />
+        <Route path="/environments/:id/images" element={<ImagesPage />} />
+        <Route path="/environments/:id/networks" element={<NetworksPage />} />
+        <Route path="/environments/:id/volumes" element={<VolumesPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/account" element={<PlaceholderPage title="Account" />} />
         <Route path="/settings/notifications" element={settings('Notification settings')} />

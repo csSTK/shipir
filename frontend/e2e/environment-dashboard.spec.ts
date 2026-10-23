@@ -33,6 +33,7 @@ test('overview -> dashboard -> sidebar items', async ({ page, api }) => {
   api.mock('GET', '/api/notifications/unread-count', { body: { count: 0 } })
   api.mock('GET', '/api/hosts/overview', { body: [local, staging] })
   api.mock('GET', '/api/hosts/a/containers', { body: [] })
+  api.mock('GET', '/api/hosts/a/volumes', { body: [] })
   await page.goto('/')
   const nav = page.getByRole('navigation', { name: 'Main' })
   await expect(nav.getByRole('group', { name: 'Local' })).toHaveCount(0)

@@ -36,3 +36,11 @@ export function describeError(code: string | null): string {
 export function describeResourceError(error: unknown): string {
   return describeError(error instanceof ApiError ? (error.code ?? null) : null)
 }
+
+/** Byte size for image lists: B, KiB, MiB or GiB with one decimal at most. */
+export function formatSize(bytes: number): string {
+  if (bytes >= GIB) return `${trim(bytes / GIB)} GiB`
+  if (bytes >= MIB) return `${trim(bytes / MIB)} MiB`
+  if (bytes >= 1024) return `${trim(bytes / 1024)} KiB`
+  return `${bytes} B`
+}
