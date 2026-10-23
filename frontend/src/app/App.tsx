@@ -1,3 +1,5 @@
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { EnvironmentPage, EnvironmentsOverview } from '../features/hosts/index.ts'
 import { LoginPage, SetupPage, useCurrentUser, useLogout } from '../features/auth/index.ts'
 import { Providers } from './providers.tsx'
 
@@ -14,6 +16,11 @@ function AuthGate() {
     <main>
       <h1>Shipir</h1>
       <p>Manage Docker containers and Compose stacks.</p>
+      <Routes>
+        <Route path="/" element={<EnvironmentsOverview role={user.role} />} />
+        <Route path="/environments/:id" element={<EnvironmentPage />} />
+        <Route path="*" element={<EnvironmentsOverview role={user.role} />} />
+      </Routes>
       <button type="button" onClick={() => logout.mutate()} disabled={logout.isPending}>
         Sign out
       </button>
@@ -24,7 +31,9 @@ function AuthGate() {
 export function App() {
   return (
     <Providers>
-      <AuthGate />
+      <BrowserRouter>
+        <AuthGate />
+      </BrowserRouter>
     </Providers>
   )
 }

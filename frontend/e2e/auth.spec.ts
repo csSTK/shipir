@@ -5,6 +5,7 @@ const admin = { username: 'admin', role: 'ADMIN', setupRequired: false }
 test('signs in and out', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { status: 401 })
   api.mock('POST', '/api/auth/login', { body: admin })
+  api.mock('GET', '/api/hosts/overview', { body: [] })
   await page.goto('/')
 
   await page.getByLabel('Username').fill('admin')

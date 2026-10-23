@@ -25,6 +25,7 @@ test('login -> setup screen -> valid password -> app shown', async ({ page, api 
 
   api.mock('POST', '/api/auth/password', { status: 204 })
   api.mock('GET', '/api/auth/me', { body: ready })
+  api.mock('GET', '/api/hosts/overview', { body: [] })
   await submit.click()
   await expect(page.getByRole('heading', { name: 'Shipir' })).toBeVisible()
 })
@@ -43,6 +44,7 @@ test('shows the server error for a wrong current password', async ({ page, api }
 
 test('reload with setupRequired=false shows no setup screen', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: ready })
+  api.mock('GET', '/api/hosts/overview', { body: [] })
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Shipir' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Set your password' })).toHaveCount(0)

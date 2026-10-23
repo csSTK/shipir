@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apiFetch } from '../../shared/api/client.ts'
-import { HOSTS_KEY, HOSTS_OVERVIEW_KEY, useCreateHost, useDeleteHost, useRenameHost } from './api.ts'
+import { HOSTS_KEY, HOSTS_OVERVIEW_KEY, useCreateHost, useDeleteHost, useHostsOverview, useRenameHost } from './api.ts'
 
 vi.mock('../../shared/api/client.ts', async (importActual) => ({
   ...(await importActual<typeof import('../../shared/api/client.ts')>()),
@@ -68,5 +68,16 @@ describe('hosts mutations', () => {
 
     expect(apiFetchMock).toHaveBeenCalledWith('/hosts/abc', { method: 'PATCH', body: { name: 'New' } })
     expect(invalidatedKeys(invalidate)).toContain(JSON.stringify(HOSTS_OVERVIEW_KEY))
+  })
+})
+
+describe('useHostsOverview', () => {
+  it('fetches the overview under the shared key and refreshes on an interval and on focus', async () => {
+    apiFetchMock.mockResolvedValue([])
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useHostsOverview(), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(apiFetchMock).toHaveBeenCalledWith('/hosts/overview')
+    expect(HOSTS_OVERVIEW_KEY).toEqual(['hosts', 'overview'])
   })
 })
