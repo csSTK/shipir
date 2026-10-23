@@ -77,6 +77,7 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `retention/{RetentionSettings,RetentionSettingsRepository,RetentionService,RetentionController}.java`, `retention/dto/*`: singleton `retention_settings` (V11), ADMIN `GET/PUT /api/settings/retention` (1-3650, PUT `@Auditable` RETENTION_UPDATE)
 - `retention/{RetentionPurgeService,RetentionPurgeJob}.java`: purge (rows strictly older than now-days, audit_log + notifications via bulk deletes, writes RETENTION_PURGE audit entry as `system`); cron `shipir.retention.purge-cron` (03:00 UTC), off with `shipir.retention.purge-enabled=false`
 - `backend/src/test/java/dev/bethge/shipir/retention/`: `RetentionTestBase` (fixed Clock), `RetentionApiTest`, `RetentionPurgeTest`
+- `common/util/{PathValidationUtil,PathValidationException}.java`: central path guard: `resolve(base, relative)` (rejects empty/absolute/`..`/NUL/backslash/percent-encoding, symlink escape via real path of nearest existing ancestor), `validateStackName` (`[a-z0-9][a-z0-9_-]{0,62}`); test `PathValidationUtilTest`
 - `common/config/PasswordEncoderConfig.java`: Argon2id `PasswordEncoder` bean (DelegatingPasswordEncoder, bcrypt match-only)
 - `common/config/ClockConfig.java`: `Clock` bean (system UTC)
 - `backend/src/test/resources/application.properties`: test initial-admin password
