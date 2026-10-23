@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../shared/api/client.ts'
 import { ContainersPage } from './ContainersPage.tsx'
 
+let apiFetchRole = 'OPERATOR'
 const apiFetch = vi.fn()
 vi.mock('../../shared/api/client.ts', async (importActual) => ({
   ...(await importActual<typeof import('../../shared/api/client.ts')>()),
@@ -30,7 +31,8 @@ const containers = [
   { ...base, id: '3', name: 'cache', image: 'redis:7', state: 'running', health: 'unhealthy' },
 ]
 
-function renderAt(url: string) {
+function renderAt(url: string, role = 'OPERATOR') {
+  apiFetchRole = role
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={[url]}>
@@ -101,5 +103,75 @@ describe('ContainersPage', () => {
     apiFetch.mockResolvedValue([])
     renderAt('/environments/h1/containers')
     expect(await screen.findByText('No containers in this environment.')).toBeInTheDocument()
+  })
+
+  describe('lifecycle actions', () => {
+    function mockApi(post: () => Promise<unknown> = () => Promise.resolve(undefined)) {
+      apiFetch.mockImplementation((path: string, init?: { method?: string }) => {
+        if (path === '/auth/me') return Promise.resolve({ username: 'u', role: apiFetchRole, setupRequired: false })
+        if (init?.method === 'POST') return post()
+        if (path === '/hosts/h1/containers') return Promise.resolve(containers)
+        return Promise.resolve([])
+      })
+    }
+    const paused = { ...containers[0], id: '4', name: 'frozen', state: 'paused' }
+    const buttons = (row: string) =>
+      within(screen.getByRole('row', { name: new RegExp(row) }))
+        .getAllByRole('button')
+        .map((b) => b.textContent)
+
+    it('offers buttons matching the container state', async () => {
+      apiFetch.mockImplementation((path: string) =>
+        path === '/auth/me' ? Promise.resolve({ username: 'u', role: 'OPERATOR', setupRequired: false }) : Promise.resolve([...containers, paused]),
+      )
+      renderAt('/environments/h1/containers')
+      await screen.findByRole('button', { name: 'Start container api' })
+      expect(buttons('web')).toEqual(['Stop', 'Restart', 'Pause', 'Kill', 'Delete'])
+      expect(buttons('api')).toEqual(['Start', 'Delete'])
+      expect(buttons('frozen')).toEqual(['Unpause', 'Delete'])
+    })
+
+    it('hides actions for viewers', async () => {
+      mockApi()
+      renderAt('/environments/h1/containers', 'VIEWER')
+      await screen.findByText('nginx:1')
+      expect(screen.queryByRole('button', { name: /container web/ })).toBeNull()
+    })
+
+    it('shows the pending label at once, posts and refetches', async () => {
+      let resolve!: () => void
+      mockApi(() => new Promise<void>((r) => (resolve = r)))
+      renderAt('/environments/h1/containers')
+      fireEvent.click(await screen.findByRole('button', { name: 'Restart container web' }))
+      expect(await screen.findByRole('button', { name: 'Restart container web' })).toHaveTextContent('Restarting…')
+      expect(screen.getByRole('button', { name: 'Stop container web' })).toBeDisabled()
+      expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/containers/1/restart', { method: 'POST' })
+      const before = apiFetch.mock.calls.filter((c) => c[0] === '/hosts/h1/containers').length
+      resolve()
+      await vi.waitFor(() => expect(apiFetch.mock.calls.filter((c) => c[0] === '/hosts/h1/containers').length).toBeGreaterThan(before))
+    })
+
+    it('asks before killing', async () => {
+      mockApi()
+      renderAt('/environments/h1/containers')
+      fireEvent.click(await screen.findByRole('button', { name: 'Kill container web' }))
+      expect(apiFetch).not.toHaveBeenCalledWith(expect.stringContaining('/kill'), expect.anything())
+      const dialog = screen.getByRole('dialog')
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Kill' }))
+      await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/containers/1/kill', { method: 'POST' }))
+      await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    })
+
+    it('shows INVALID_CONTAINER_STATE and 502 errors inline', async () => {
+      mockApi(() => Promise.reject(new ApiError(409, '{}', 'INVALID_CONTAINER_STATE')))
+      renderAt('/environments/h1/containers')
+      fireEvent.click(await screen.findByRole('button', { name: 'Stop container web' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent('not in a state that allows this action')
+      cleanup()
+      mockApi(() => Promise.reject(new ApiError(502, '{}', 'UNREACHABLE')))
+      renderAt('/environments/h1/containers')
+      fireEvent.click(await screen.findByRole('button', { name: 'Stop container web' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent('Could not reach the Docker host.')
+    })
   })
 })

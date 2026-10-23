@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useSearchParams, useParams } from 'react-router-dom'
 import { useCurrentUser } from '../auth/index.ts'
 import { useDeployments } from '../deployments/api.ts'
@@ -6,7 +6,8 @@ import { deleteColumn } from '../hosts/deleteColumn.tsx'
 import { DeleteResourceDialog } from '../hosts/DeleteResourceDialog.tsx'
 import { describeResourceError } from '../hosts/format.ts'
 import { Badge, ResourceTable, type ResourceColumn } from '../../shared/ui/index.ts'
-import { useContainers, useDeleteContainer, type Container } from './api.ts'
+import { ConfirmDialog } from '../deployments/ConfirmDialog.tsx'
+import { actionsFor, describeActionError, useContainerAction, useContainers, useDeleteContainer, type Container, type ContainerAction } from './api.ts'
 import './ContainersPage.css'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -22,7 +23,7 @@ function healthTone(health: string): 'ok' | 'warn' | 'bad' {
   return health === 'healthy' ? 'ok' : health === 'unhealthy' ? 'bad' : 'warn'
 }
 
-const columns: ResourceColumn<Container>[] = [
+const baseColumns: ResourceColumn<Container>[] = [
   { id: 'name', header: 'Name', sortValue: (c) => c.name, render: (c) => <strong>{c.name}</strong> },
   {
     id: 'state',
@@ -60,6 +61,42 @@ const columns: ResourceColumn<Container>[] = [
   },
 ]
 
+const LABELS: Record<ContainerAction, [label: string, pending: string]> = {
+  start: ['Start', 'Starting…'],
+  stop: ['Stop', 'Stopping…'],
+  restart: ['Restart', 'Restarting…'],
+  pause: ['Pause', 'Pausing…'],
+  unpause: ['Unpause', 'Unpausing…'],
+  kill: ['Kill', 'Killing…'],
+}
+
+/** State-aware lifecycle buttons for one row; the pressed one shows its pending label at once and the row is locked meanwhile. */
+function actionColumn(pending: { id: string; action: ContainerAction } | null, onAction: (c: Container, a: ContainerAction) => void): ResourceColumn<Container> {
+  return {
+    id: 'lifecycle',
+    header: 'Control',
+    render: (c): ReactNode => {
+      const busy = pending?.id === c.id
+      return (
+        <span className="containers__actions">
+          {actionsFor(c.state).map((a) => (
+            <button
+              key={a}
+              type="button"
+              className={`sk-btn ${a === 'kill' ? 'sk-btn--danger-text' : 'sk-btn--plain'} containers__btn`}
+              aria-label={`${LABELS[a][0]} container ${c.name}`}
+              disabled={busy}
+              onClick={() => onAction(c, a)}
+            >
+              {busy && pending.action === a ? LABELS[a][1] : LABELS[a][0]}
+            </button>
+          ))}
+        </span>
+      )
+    },
+  }
+}
+
 /** Looks up the managed deployment only once a delete is requested, so plain browsing costs no extra request. */
 function DeleteContainerDialog({ hostId, container, onClose }: { hostId: string; container: Container; onClose: () => void }) {
   const deployments = useDeployments(hostId)
@@ -86,13 +123,35 @@ export function ContainersPage() {
   const canWrite = user?.role === 'ADMIN' || user?.role === 'OPERATOR'
   const { data, isPending, error, refetch } = useContainers(id)
   const [target, setTarget] = useState<Container | null>(null)
-  const tableColumns = canWrite ? [...columns, deleteColumn<Container>('container', (c) => c.name, setTarget)] : columns
+  const act = useContainerAction(id)
+  const [killTarget, setKillTarget] = useState<Container | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const pending = act.isPending ? act.variables : null
+
+  function run(c: Container, action: ContainerAction) {
+    setActionError(null)
+    act.mutate(
+      { id: c.id, action },
+      {
+        onError: (e) => setActionError(`${LABELS[action][0]} ${c.name}: ${describeActionError(e)}`),
+        onSettled: () => setKillTarget(null),
+      },
+    )
+  }
+  const tableColumns = canWrite
+    ? [...baseColumns, actionColumn(pending, (c, a) => (a === 'kill' ? setKillTarget(c) : run(c, a))), deleteColumn<Container>('container', (c) => c.name, setTarget)]
+    : baseColumns
 
   const rows = deployment ? data?.filter((c) => c.composeProject === deployment) : data
 
   return (
     <section className="containers">
       <h2 className="containers__title">Containers</h2>
+      {actionError && (
+        <p role="alert" className="sk-error">
+          {actionError}
+        </p>
+      )}
       <ResourceTable
         label="containers"
         columns={tableColumns}
@@ -112,6 +171,18 @@ export function ContainersPage() {
           )
         }
       />
+      {killTarget && (
+        <ConfirmDialog
+          title="Kill container"
+          confirmLabel={act.isPending ? 'Killing…' : 'Kill'}
+          danger
+          pending={act.isPending}
+          onConfirm={() => run(killTarget, 'kill')}
+          onClose={() => setKillTarget(null)}
+        >
+          Kill {killTarget.name} immediately? The container is stopped without a graceful shutdown and unsaved data may be lost.
+        </ConfirmDialog>
+      )}
       {target && <DeleteContainerDialog hostId={id} container={target} onClose={() => setTarget(null)} />}
     </section>
   )
