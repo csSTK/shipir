@@ -2,6 +2,8 @@
 # point DB_HOST/DB_PORT in .env at an existing PostgreSQL 16 server.
 # Usage: copy .env.example to .env, set DB_PASSWORD and DB_HOST, then run:
 #   docker compose -f docker-compose.yml up -d
+# The backend mounts the Docker socket (see README: it is effectively root on the host). DOCKER_GID is the
+# group owning that socket on the host; the backend user (uid 10001) joins it via group_add.
 # Images are pulled from ghcr.io (SHIPIR_TAG, default latest); without a pull they are built locally.
 services:
   backend:
@@ -14,6 +16,13 @@ services:
       DB_USER: ${DB_USER:-shipir}
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env (see .env.example)}
       SHIPIR_INITIAL_ADMIN_PASSWORD: ${SHIPIR_INITIAL_ADMIN_PASSWORD:-}
+      # Optional while only LOCAL Docker hosts exist; required for TCP+TLS hosts (startup fails without a valid key).
+      SHIPIR_ENCRYPTION_KEY: ${SHIPIR_ENCRYPTION_KEY:-}
+    # Access to the local Docker daemon. Grants root-equivalent control of the host; keep the stack private.
+    group_add:
+      - "${DOCKER_GID:?Set DOCKER_GID in .env to the owner group of /var/run/docker.sock (see .env.example)}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     # No ports: the backend is reachable only from the frontend on the compose network.
     restart: unless-stopped
 

@@ -84,8 +84,8 @@ Frontend (`frontend/`):
 
 Repo root:
 - `docker-compose.dev.yml`: local PostgreSQL 16 for development (healthcheck, `DB_*` from `.env`)
-- `docker-compose.yml`: hosting stack, backend + frontend (`ghcr.io/csstk/shipir-*` or local build), external PostgreSQL, only frontend port published, passes `SHIPIR_INITIAL_ADMIN_PASSWORD`
-- `.env.example`: documents `DB_*` (`DB_PASSWORD` required), `SHIPIR_INITIAL_ADMIN_PASSWORD` (empty DB only), `SHIPIR_TAG`, `SHIPIR_PORT`; `.env` is gitignored
+- `docker-compose.yml`: hosting stack, backend + frontend (`ghcr.io/csstk/shipir-*` or local build), external PostgreSQL, only frontend port published, passes `SHIPIR_INITIAL_ADMIN_PASSWORD` and `SHIPIR_ENCRYPTION_KEY`, mounts Docker socket (`group_add: DOCKER_GID`)
+- `.env.example`: documents `DB_*` (`DB_PASSWORD` required), `SHIPIR_INITIAL_ADMIN_PASSWORD` (empty DB only), `DOCKER_GID` (required, hosting), `SHIPIR_ENCRYPTION_KEY`, `SHIPIR_TAG`, `SHIPIR_PORT`; `.env` is gitignored
 
 CI:
 - `.github/workflows/tests.yml`: reusable tests (`workflow_call`/`workflow_dispatch`, inputs `backend`/`frontend`/`e2e`): Maven verify, pnpm lint/test/build, Playwright (report artifact on failure)
