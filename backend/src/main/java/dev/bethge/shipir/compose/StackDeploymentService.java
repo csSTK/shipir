@@ -53,6 +53,7 @@ import java.util.stream.Collectors;
 public class StackDeploymentService {
 
     private static final Logger log = LoggerFactory.getLogger(StackDeploymentService.class);
+    private static final String SYSTEM_USER = "system";
 
     private final StackService stackService;
     private final StackRepository stacks;
@@ -92,12 +93,12 @@ public class StackDeploymentService {
 
     @Auditable(action = "STACK_DEPLOY", targetType = "STACK", targetId = "#id")
     public DeploymentResponse deploy(UUID hostId, UUID id, String username) {
-        return start(hostId, id, username, null, "STACK_DEPLOY_RESULT", false);
+        return start(hostId, id, userIdOf(username), username, null, "STACK_DEPLOY_RESULT", false);
     }
 
     @Auditable(action = "STACK_ROLLBACK", targetType = "STACK", targetId = "#id")
     public DeploymentResponse rollback(UUID hostId, UUID id, UUID versionId, String username) {
-        return start(hostId, id, username, versionId, "STACK_ROLLBACK_RESULT", false);
+        return start(hostId, id, userIdOf(username), username, versionId, "STACK_ROLLBACK_RESULT", false);
     }
 
     /**
@@ -106,7 +107,7 @@ public class StackDeploymentService {
      */
     @Auditable(action = "STACK_GIT_REDEPLOY", targetType = "STACK", targetId = "#id")
     public DeploymentResponse gitRedeploy(UUID hostId, UUID id, String username) {
-        return start(hostId, id, username, null, "STACK_GIT_REDEPLOY_RESULT", true);
+        return start(hostId, id, userIdOf(username), username, null, "STACK_GIT_REDEPLOY_RESULT", true);
     }
 
     /** Runs {@code docker compose down} and waits for it; the files and the stack record stay. */
@@ -153,12 +154,43 @@ public class StackDeploymentService {
                 .toList();
     }
 
-    private DeploymentResponse start(UUID hostId, UUID id, String username, UUID rollbackTo, String resultAction,
-                                    boolean pullGit) {
+    /**
+     * Pull &amp; redeploy triggered by {@code GitPollingScheduler} (through {@code StackAutoUpdates}). Runs as the
+     * audit user {@code system} (no user id); the new version is attributed to the stack's creator because
+     * {@code stack_versions.created_by} is mandatory. Not {@code @Auditable} (no request, no authentication): it
+     * records {@code STACK_AUTO_UPDATE} itself once the deployment was accepted, {@code STACK_AUTO_UPDATE_RESULT}
+     * follows from the worker.
+     *
+     * @throws StackException 409 DEPLOYMENT_IN_PROGRESS if the stack is busy
+     */
+    DeploymentResponse autoUpdate(UUID stackId) {
+        Stack stack = stacks.findById(stackId).orElseThrow(
+                () -> new StackException(HttpStatus.NOT_FOUND, "STACK_NOT_FOUND", "Stack not found"));
+        DeploymentResponse response = start(stack.getHostId(), stackId, stack.getCreatedBy(), SYSTEM_USER, null,
+                "STACK_AUTO_UPDATE_RESULT", true);
+        recordSystemAudit("STACK_AUTO_UPDATE", AuditLogEntry.Outcome.SUCCESS, stackId,
+                Map.of("deploymentId", response.deploymentId(), "versionId", response.versionId().toString()));
+        return response;
+    }
+
+    /** Audit entry of a system-triggered action without user; failures to write it never fail the caller. */
+    void recordSystemAudit(String action, AuditLogEntry.Outcome outcome, UUID stackId, Map<String, Object> details) {
+        try {
+            audit.record(new AuditRecord(null, SYSTEM_USER, action, outcome, "STACK", stackId.toString(), details));
+        } catch (RuntimeException e) {
+            log.warn("Could not write audit entry {}: {}", action, e.toString());
+        }
+    }
+
+    private UUID userIdOf(String username) {
+        return users.findByUsername(username).orElseThrow().getId();
+    }
+
+    private DeploymentResponse start(UUID hostId, UUID id, UUID userId, String username, UUID rollbackTo,
+                                    String resultAction, boolean pullGit) {
         var host = stackService.requireHost(hostId);
         Stack stack = stackService.requireStack(hostId, id);
         DockerEndpoint endpoint = stackService.endpointOf(host);
-        UUID userId = users.findByUsername(username).orElseThrow().getId();
         locks.acquire(stack.getId());
         boolean started = false;
         try {
@@ -188,7 +220,8 @@ public class StackDeploymentService {
             String deploymentId = UUID.randomUUID().toString();
             Consumer<String> sink = streams.start(deploymentId);
             Thread.ofVirtual().name("deploy-" + deploymentId).start(
-                    () -> run(stack, version, endpoint, deploymentId, sink, userId, username, resultAction));
+                    () -> run(stack, version, endpoint, deploymentId, sink, SYSTEM_USER.equals(username) ? null : userId,
+                            username, resultAction));
             started = true;
             return new DeploymentResponse(deploymentId, version.getId());
         } finally {

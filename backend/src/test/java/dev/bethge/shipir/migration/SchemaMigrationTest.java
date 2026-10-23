@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V13 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V15 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To14Successfully() {
+    void flywayAppliedVersions1To15Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15");
     }
 
     @Test
@@ -185,7 +185,7 @@ class SchemaMigrationTest {
                 WHERE table_schema = 'public' AND data_type = 'timestamp with time zone'
                   AND table_name IN ('users','docker_hosts','stacks','stack_versions')
                 """, Integer.class);
-        assertThat(count).isEqualTo(7); // 2 users + 1 hosts + 2 stacks + 2 versions
+        assertThat(count).isEqualTo(8); // 2 users + 1 hosts + 3 stacks + 2 versions
     }
 
     @Test
@@ -769,6 +769,17 @@ class SchemaMigrationTest {
         UUID stack = insertGitStack(insertHost(user), user, "git-web", cred, 60);
         assertThat(jdbc.queryForObject("SELECT source_type FROM stacks WHERE id = ?", String.class, stack))
                 .isEqualTo("GIT");
+    }
+
+    @Test
+    void gitStackStoresPollState() {
+        UUID user = insertUser("alice");
+        UUID stack = insertGitStack(insertHost(user), user, "git-poll", null, null);
+        jdbc.update("UPDATE stacks SET last_polled_at = now(), last_poll_error = 'GIT_UNREACHABLE' WHERE id = ?", stack);
+        assertThat(jdbc.queryForObject("SELECT last_poll_error FROM stacks WHERE id = ?", String.class, stack))
+                .isEqualTo("GIT_UNREACHABLE");
+        assertThat(jdbc.queryForObject("SELECT last_polled_at IS NOT NULL FROM stacks WHERE id = ?", Boolean.class, stack))
+                .isTrue();
     }
 
     @Test

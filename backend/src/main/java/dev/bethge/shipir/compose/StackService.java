@@ -8,6 +8,7 @@ import dev.bethge.shipir.common.security.SecretDecryptionException;
 import dev.bethge.shipir.common.util.PathValidationException;
 import dev.bethge.shipir.common.util.PathValidationUtil;
 import dev.bethge.shipir.compose.dto.EnvEntry;
+import dev.bethge.shipir.compose.dto.AutoUpdateRequest;
 import dev.bethge.shipir.compose.dto.GitInfo;
 import dev.bethge.shipir.compose.dto.StackCreateRequest;
 import dev.bethge.shipir.compose.dto.StackDetailResponse;
@@ -214,6 +215,22 @@ public class StackService {
         }
     }
 
+    /** Turns Git polling on or off for a Git stack. 400 NOT_A_GIT_STACK / VALIDATION_ERROR (no interval). */
+    @Auditable(action = "STACK_AUTO_UPDATE_CONFIG", targetType = "STACK", targetId = "#id")
+    public StackDetailResponse configureAutoUpdate(UUID hostId, UUID id, AutoUpdateRequest request) {
+        requireHost(hostId);
+        Stack stack = requireStack(hostId, id);
+        if (stack.getSourceType() != StackSource.GIT) {
+            throw new StackException(HttpStatus.BAD_REQUEST, "NOT_A_GIT_STACK", "This stack is not sourced from Git");
+        }
+        if (request.enabled() && request.intervalSeconds() == null && stack.getAutoUpdateIntervalSeconds() == null) {
+            throw missing("intervalSeconds");
+        }
+        stack.configureAutoUpdate(request.enabled(), request.intervalSeconds());
+        stacks.save(stack);
+        return get(hostId, id);
+    }
+
     @Auditable(action = "STACK_UPDATE", targetType = "STACK", targetId = "#id")
     public StackDetailResponse update(UUID hostId, UUID id, StackUpdateRequest request, String username) {
         DockerHost host = requireHost(hostId);
@@ -389,7 +406,8 @@ public class StackService {
     private static StackDetailResponse toDetail(Stack s, String yaml, List<String> envKeys) {
         GitInfo gitInfo = s.getSourceType() == StackSource.GIT
                 ? new GitInfo(s.getGitRepoUrl(), s.getGitRef(), s.getGitComposePath(), s.getGitCredentialId(),
-                        s.getLastCommitSha())
+                        s.getLastCommitSha(), s.isAutoUpdateEnabled(), s.getAutoUpdateIntervalSeconds(),
+                        s.getLastPolledAt(), s.getLastPollError())
                 : null;
         return new StackDetailResponse(s.getId(), s.getName(), s.getStatus(), s.getSourceType(),
                 s.getLastDeployedAt(), s.getCreatedAt(), yaml, envKeys, gitInfo);

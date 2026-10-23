@@ -53,6 +53,18 @@ public class Stack {
     @Column(name = "last_commit_sha", length = 64)
     private String lastCommitSha;
 
+    @Column(name = "auto_update_enabled", nullable = false)
+    private boolean autoUpdateEnabled;
+
+    @Column(name = "auto_update_interval_seconds")
+    private Integer autoUpdateIntervalSeconds;
+
+    @Column(name = "last_polled_at")
+    private Instant lastPolledAt;
+
+    @Column(name = "last_poll_error", length = 50)
+    private String lastPollError;
+
     @Column(name = "created_by", nullable = false, updatable = false)
     private UUID createdBy;
 
@@ -96,10 +108,29 @@ public class Stack {
     public String getGitComposePath() { return gitComposePath; }
     public UUID getGitCredentialId() { return gitCredentialId; }
     public String getLastCommitSha() { return lastCommitSha; }
+    public boolean isAutoUpdateEnabled() { return autoUpdateEnabled; }
+    public Integer getAutoUpdateIntervalSeconds() { return autoUpdateIntervalSeconds; }
+    public Instant getLastPolledAt() { return lastPolledAt; }
+    public String getLastPollError() { return lastPollError; }
     public UUID getCreatedBy() { return createdBy; }
     public Instant getLastDeployedAt() { return lastDeployedAt; }
     public Instant getCreatedAt() { return createdAt; }
     public UUID getCurrentVersionId() { return currentVersionId; }
+
+    public void configureAutoUpdate(boolean enabled, Integer intervalSeconds) {
+        this.autoUpdateEnabled = enabled;
+        if (intervalSeconds != null) {
+            this.autoUpdateIntervalSeconds = intervalSeconds;
+        }
+        if (!enabled) {
+            this.lastPollError = null;
+        }
+    }
+
+    public void recordPoll(Instant at, String error) {
+        this.lastPolledAt = at;
+        this.lastPollError = error;
+    }
 
     public void setLastCommitSha(String lastCommitSha) { this.lastCommitSha = lastCommitSha; }
     public void setStatus(StackStatus status) { this.status = status; }

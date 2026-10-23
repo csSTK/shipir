@@ -7,6 +7,9 @@ shipir:
     overview-timeout: 5s
   compose:
     timeout: 10m
+  git:
+    poll-enabled: true
+    poll-tick: 60s
   stacks:
     base-dir: ${SHIPIR_STACKS_BASE_DIR:./data/stacks}
   initial-admin:

@@ -10,5 +10,7 @@ public interface StackRepository extends JpaRepository<Stack, UUID> {
 
     List<Stack> findByHostIdOrderByNameAsc(UUID hostId);
 
+    List<Stack> findByAutoUpdateEnabledTrue();
+
     Optional<Stack> findByIdAndHostId(UUID id, UUID hostId);
 }

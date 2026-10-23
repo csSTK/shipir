@@ -95,6 +95,22 @@ public class GitRepositoryService {
         return new GitCheckout(commit, read(file));
     }
 
+    /**
+     * The commit {@code ref} points to on the remote right now, via {@code ls-remote} only (nothing is downloaded).
+     * Annotated tags are peeled to their commit, so the value equals what {@link #sync} would check out. A full commit
+     * SHA is returned as is.
+     */
+    public String remoteCommit(String repoUrl, String ref, UUID credentialId) {
+        validateUrl(repoUrl);
+        CredentialsProvider provider = provider(credentialId);
+        if (SHA.matcher(ref.trim()).matches()) {
+            return ref.trim().toLowerCase();
+        }
+        Ref found = lookupRemoteRef(repoUrl.trim(), ref.trim(), provider);
+        ObjectId peeled = found.getPeeledObjectId();
+        return (peeled != null ? peeled : found.getObjectId()).name();
+    }
+
     private String fetch(Git git, String url, String ref, CredentialsProvider provider)
             throws GitAPIException, IOException {
         String source = resolveRemoteRef(url, ref, provider);
@@ -121,6 +137,10 @@ public class GitRepositoryService {
         if (SHA.matcher(ref).matches()) {
             return ref.toLowerCase();
         }
+        return lookupRemoteRef(url, ref, provider).getName();
+    }
+
+    private Ref lookupRemoteRef(String url, String ref, CredentialsProvider provider) {
         Collection<Ref> remote;
         try {
             remote = Git.lsRemoteRepository().setRemote(url).setHeads(true).setTags(true)
@@ -132,8 +152,12 @@ public class GitRepositoryService {
             throw new GitOperationException(HttpStatus.BAD_GATEWAY, "GIT_UNREACHABLE", "The repository could not be read");
         }
         for (String candidate : new String[]{ref, Constants.R_HEADS + ref, Constants.R_TAGS + ref}) {
-            if (candidate.startsWith("refs/") && remote.stream().anyMatch(r -> r.getName().equals(candidate))) {
-                return candidate;
+            if (candidate.startsWith("refs/")) {
+                for (Ref r : remote) {
+                    if (r.getName().equals(candidate)) {
+                        return r;
+                    }
+                }
             }
         }
         throw refNotFound();

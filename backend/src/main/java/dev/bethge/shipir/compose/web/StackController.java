@@ -4,6 +4,7 @@ import dev.bethge.shipir.common.exception.ErrorResponse;
 import dev.bethge.shipir.compose.StackDeploymentService;
 import dev.bethge.shipir.compose.StackException;
 import dev.bethge.shipir.compose.StackService;
+import dev.bethge.shipir.compose.dto.AutoUpdateRequest;
 import dev.bethge.shipir.compose.dto.DeploymentResponse;
 import dev.bethge.shipir.compose.dto.StackCreateRequest;
 import dev.bethge.shipir.compose.dto.StackDetailResponse;
@@ -88,6 +89,12 @@ class StackController {
     @ResponseStatus(HttpStatus.ACCEPTED)
     DeploymentResponse gitRedeploy(@PathVariable UUID hostId, @PathVariable UUID id, Authentication authentication) {
         return deployments.gitRedeploy(hostId, id, authentication.getName());
+    }
+
+    @PutMapping("/{id}/git/auto-update")
+    StackDetailResponse autoUpdate(@PathVariable UUID hostId, @PathVariable UUID id,
+                                   @Valid @RequestBody AutoUpdateRequest request) {
+        return service.configureAutoUpdate(hostId, id, request);
     }
 
     @PostMapping("/{id}/stop")
