@@ -32,6 +32,7 @@ import java.util.stream.Collectors;
 @Service
 public class ChatSessionService {
 
+    static final String HIDDEN = "<hidden>";
     static final String DEFAULT_TITLE = "New chat";
     private static final int MAX_PAGE_SIZE = 100;
 
@@ -118,6 +119,30 @@ public class ChatSessionService {
         return messages.findBySessionIdOrderBySeqAsc(sessionId);
     }
 
+    /** The message if it belongs to the session, else 404. */
+    @Transactional(readOnly = true)
+    public ChatMessage findMessage(UUID sessionId, UUID messageId) {
+        return messages.findById(messageId).filter(m -> m.getSessionId().equals(sessionId))
+                .orElseThrow(() -> new ChatSessionException(HttpStatus.NOT_FOUND, "CHAT_ACTION_NOT_FOUND",
+                        "Action not found"));
+    }
+
+    /** Settles a pending action message with its new status and outcome text. */
+    @Transactional
+    public void resolvePending(UUID messageId, ChatMessageStatus status, String outcome) {
+        messages.findById(messageId).orElseThrow(ChatSessionException::notFound).resolve(status, outcome);
+    }
+
+    /** Names a still-untitled session after its first message. */
+    @Transactional
+    public void titleFromFirstMessage(UUID sessionId, String text) {
+        ChatSession session = sessions.findById(sessionId).orElseThrow(ChatSessionException::notFound);
+        String oneLine = text.strip().replaceAll("\\s+", " ");
+        if (DEFAULT_TITLE.equals(session.getTitle()) && !oneLine.isEmpty()) {
+            session.rename(oneLine.length() > 60 ? oneLine.substring(0, 57) + "..." : oneLine, clock.instant());
+        }
+    }
+
     @Transactional(readOnly = true)
     public ChatSessionPageResponse listShared(int page, int size) {
         return toPage(sessions.findBySharedWithAdminTrue(pageRequest(page, size)), true);
@@ -164,8 +189,26 @@ public class ChatSessionService {
                 s.getUpdatedAt(), owner);
     }
 
+    /** Secrets never leave the service: drops the stored env ciphertext and hides any env value. */
+    private JsonNode redact(JsonNode toolCalls) {
+        for (JsonNode call : toolCalls) {
+            if (call instanceof tools.jackson.databind.node.ObjectNode o) {
+                o.remove("envCiphertext");
+                String args = o.path("arguments").asString(null);
+                if (args != null && args.contains("\"env\"")) {
+                    JsonNode parsed = mapper.readTree(args);
+                    if (parsed instanceof tools.jackson.databind.node.ObjectNode a && a.has("env")) {
+                        a.put("env", HIDDEN);
+                        o.put("arguments", a.toString());
+                    }
+                }
+            }
+        }
+        return toolCalls;
+    }
+
     private ChatMessageResponse toResponse(ChatMessage m) {
-        JsonNode toolCalls = m.getToolCalls() == null ? null : mapper.readTree(m.getToolCalls());
+        JsonNode toolCalls = m.getToolCalls() == null ? null : redact(mapper.readTree(m.getToolCalls()));
         return new ChatMessageResponse(m.getId(), m.getSeq(), m.getRole().name(), m.getContent(), toolCalls,
                 m.getToolCallId(), m.getStatus() == null ? null : m.getStatus().name(), m.getCreatedAt());
     }

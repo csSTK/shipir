@@ -18,7 +18,8 @@ import java.util.regex.Pattern;
 /**
  * Inbound STOMP frame policy: CONNECT needs an authenticated handshake principal and the CSRF token (header
  * {@code X-XSRF-TOKEN} equal to the {@code XSRF-TOKEN} cookie of the handshake, see {@link CsrfHandshakeInterceptor}),
- * SUBSCRIBE only to {@code /topic/deployments/{id}} (and registers the subscription for replay), clients may not SEND.
+ * SUBSCRIBE only to {@code /topic/deployments/{id}} (registers the subscription for replay) and
+ * {@code /topic/chat/{sessionId}} (owner only, via {@link ChatTopicAccess}), clients may not SEND.
  */
 @Component
 public class StompSecurityInterceptor implements ChannelInterceptor {
@@ -27,10 +28,15 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
     private static final Pattern DEPLOYMENT_TOPIC =
             Pattern.compile("^" + Pattern.quote(ComposeOutputStreamService.TOPIC_PREFIX) + "([A-Za-z0-9-]{1,64})$");
 
-    private final ComposeOutputStreamService streams;
+    private static final Pattern CHAT_TOPIC =
+            Pattern.compile("^" + Pattern.quote(ChatTopicAccess.TOPIC_PREFIX) + "([A-Za-z0-9-]{1,64})$");
 
-    StompSecurityInterceptor(ComposeOutputStreamService streams) {
+    private final ComposeOutputStreamService streams;
+    private final ChatTopicAccess chatAccess;
+
+    StompSecurityInterceptor(ComposeOutputStreamService streams, ChatTopicAccess chatAccess) {
         this.streams = streams;
+        this.chatAccess = chatAccess;
     }
 
     @Override
@@ -44,7 +50,16 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
             case CONNECT, STOMP -> checkConnect(accessor);
             case SUBSCRIBE -> {
                 requireUser(accessor);
-                var m = DEPLOYMENT_TOPIC.matcher(String.valueOf(accessor.getDestination()));
+                String destination = String.valueOf(accessor.getDestination());
+                var chat = CHAT_TOPIC.matcher(destination);
+                if (chat.matches()) {
+                    // live chat events go through the broker; only the session owner may follow them
+                    if (!chatAccess.maySubscribe(accessor.getUser().getName(), chat.group(1))) {
+                        throw new MessageDeliveryException("Subscription destination not allowed");
+                    }
+                    break;
+                }
+                var m = DEPLOYMENT_TOPIC.matcher(destination);
                 if (!m.matches()) {
                     throw new MessageDeliveryException("Subscription destination not allowed");
                 }

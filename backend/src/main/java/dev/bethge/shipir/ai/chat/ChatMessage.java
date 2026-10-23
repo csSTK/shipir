@@ -78,4 +78,10 @@ public class ChatMessage {
     public void setStatus(ChatMessageStatus status) {
         this.status = status;
     }
+
+    /** Settles a pending action: new status and the outcome that replaces the display text. */
+    void resolve(ChatMessageStatus status, String outcome) {
+        this.status = status;
+        this.content = outcome;
+    }
 }
