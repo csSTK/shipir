@@ -2,6 +2,8 @@ package dev.bethge.shipir.auth;
 
 import dev.bethge.shipir.auth.dto.CurrentUserResponse;
 import dev.bethge.shipir.auth.dto.LoginRequest;
+import dev.bethge.shipir.auth.dto.PasswordChangeRequest;
+import dev.bethge.shipir.auth.dto.PasswordPolicyErrorResponse;
 import dev.bethge.shipir.common.exception.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -18,6 +20,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -37,17 +40,20 @@ class AuthController {
     private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
     private final CsrfTokenRepository csrfTokenRepository;
     private final UserRepository users;
+    private final UserService userService;
 
     AuthController(AuthenticationManager authenticationManager,
                    SecurityContextRepository securityContextRepository,
                    SessionAuthenticationStrategy sessionAuthenticationStrategy,
                    CsrfTokenRepository csrfTokenRepository,
-                   UserRepository users) {
+                   UserRepository users,
+                   UserService userService) {
         this.authenticationManager = authenticationManager;
         this.securityContextRepository = securityContextRepository;
         this.sessionAuthenticationStrategy = sessionAuthenticationStrategy;
         this.csrfTokenRepository = csrfTokenRepository;
         this.users = users;
+        this.userService = userService;
     }
 
     @PostMapping("/login")
@@ -77,6 +83,27 @@ class AuthController {
                 .<ResponseEntity<?>>map(u -> ResponseEntity.ok(CurrentUserResponse.from(u)))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(new ErrorResponse("UNAUTHENTICATED", "Authentication required")));
+    }
+
+    @PostMapping("/password")
+    ResponseEntity<Void> changePassword(@Valid @RequestBody PasswordChangeRequest body, Authentication authentication,
+                                        HttpServletRequest request, HttpServletResponse response) {
+        userService.changePassword(authentication.getName(), body.currentPassword(), body.newPassword());
+        // Privilege change: rotate the session id and CSRF token; the security context stays in the session.
+        sessionAuthenticationStrategy.onAuthentication(authentication, request, response);
+        return ResponseEntity.noContent().build();
+    }
+
+    @ExceptionHandler(UserService.InvalidCurrentPasswordException.class)
+    ResponseEntity<ErrorResponse> invalidCurrentPassword() {
+        return ResponseEntity.badRequest()
+                .body(new ErrorResponse("INVALID_CURRENT_PASSWORD", "The current password is incorrect"));
+    }
+
+    @ExceptionHandler(UserService.PasswordPolicyException.class)
+    ResponseEntity<PasswordPolicyErrorResponse> passwordPolicy(UserService.PasswordPolicyException ex) {
+        return ResponseEntity.badRequest().body(PasswordPolicyErrorResponse.of(
+                ex.violations().stream().map(Enum::name).toList()));
     }
 
     @PostMapping("/logout")

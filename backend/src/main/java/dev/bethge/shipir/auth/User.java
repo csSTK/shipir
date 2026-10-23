@@ -51,6 +51,12 @@ public class User {
         return passwordChangedAt == null;
     }
 
+    /** Stores the new hash and stamps {@code passwordChangedAt}, which ends the first-start setup. */
+    public void changePasswordHash(String newPasswordHash, Instant changedAt) {
+        this.passwordHash = newPasswordHash;
+        this.passwordChangedAt = changedAt;
+    }
+
     public UUID getId() {
         return id;
     }

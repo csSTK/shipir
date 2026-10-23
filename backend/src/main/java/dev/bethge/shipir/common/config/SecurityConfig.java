@@ -1,6 +1,8 @@
 package dev.bethge.shipir.common.config;
 
 import dev.bethge.shipir.common.exception.ErrorResponse;
+import dev.bethge.shipir.common.security.SetupGateFilter;
+import dev.bethge.shipir.common.security.SetupStatus;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,6 +23,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy;
 import org.springframework.security.web.authentication.session.CompositeSessionAuthenticationStrategy;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
@@ -50,7 +53,9 @@ class SecurityConfig {
                                             SecurityContextRepository securityContextRepository,
                                             CsrfTokenRepository csrfTokenRepository,
                                             AuthenticationEntryPoint entryPoint,
-                                            AccessDeniedHandler accessDeniedHandler) throws Exception {
+                                            AccessDeniedHandler accessDeniedHandler,
+                                            SetupStatus setupStatus,
+                                            JsonMapper mapper) throws Exception {
         http
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
@@ -62,6 +67,7 @@ class SecurityConfig {
                         // plain (non-BREACH) handler: the SPA echoes the cookie value back as header
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
                 .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
+                .addFilterBefore(new SetupGateFilter(setupStatus, mapper), AuthorizationFilter.class)
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint(entryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
