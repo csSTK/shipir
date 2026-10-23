@@ -32,7 +32,7 @@ import java.util.concurrent.TimeoutException;
  */
 @Service
 @EnableConfigurationProperties(HostOverviewProperties.class)
-class HostOverviewService {
+public class HostOverviewService {
 
     private static final Logger log = LoggerFactory.getLogger(HostOverviewService.class);
 
@@ -57,7 +57,7 @@ class HostOverviewService {
         executor.shutdownNow();
     }
 
-    List<HostOverviewResponse> overview() {
+    public List<HostOverviewResponse> overview() {
         List<DockerHost> all = hosts.findAll().stream()
                 .sorted(Comparator.comparing(DockerHost::getName, String.CASE_INSENSITIVE_ORDER))
                 .toList();

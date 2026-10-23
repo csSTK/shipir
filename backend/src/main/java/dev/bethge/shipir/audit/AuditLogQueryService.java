@@ -14,7 +14,7 @@ import java.time.format.DateTimeParseException;
 
 /** Read side of the audit log: filtered, paged, newest first. Builds DTOs here (no open-session-in-view). */
 @Service
-class AuditLogQueryService {
+public class AuditLogQueryService {
 
     static final int DEFAULT_SIZE = 20;
     static final int MAX_SIZE = 100;
@@ -26,7 +26,7 @@ class AuditLogQueryService {
     }
 
     @Transactional(readOnly = true)
-    AuditLogPageResponse find(int page, int size, String action, String username, String from, String to) {
+    public AuditLogPageResponse find(int page, int size, String action, String username, String from, String to) {
         if (page < 0) {
             throw new InvalidAuditQueryException("page must be >= 0");
         }

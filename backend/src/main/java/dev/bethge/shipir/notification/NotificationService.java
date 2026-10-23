@@ -24,7 +24,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
-class NotificationService {
+public class NotificationService {
 
     static final int MAX_PAGE_SIZE = 100;
 
@@ -61,7 +61,7 @@ class NotificationService {
     }
 
     @Transactional(readOnly = true)
-    NotificationPageResponse list(UUID userId, boolean unreadOnly, int page, int size) {
+    public NotificationPageResponse list(UUID userId, boolean unreadOnly, int page, int size) {
         PageRequest pr = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE),
                 Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Notification> p = unreadOnly

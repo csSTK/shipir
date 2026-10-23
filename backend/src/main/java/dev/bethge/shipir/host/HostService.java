@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-class HostService {
+public class HostService {
 
     private final DockerHostRepository hosts;
     private final UserRepository users;
@@ -43,7 +43,7 @@ class HostService {
     }
 
     @Transactional(readOnly = true)
-    List<HostResponse> list() {
+    public List<HostResponse> list() {
         return hosts.findAll().stream()
                 .sorted(Comparator.comparing(DockerHost::getName, String.CASE_INSENSITIVE_ORDER))
                 .map(HostService::toResponse)

@@ -27,7 +27,7 @@ import java.util.function.BiFunction;
  * never carry connection details.
  */
 @Service
-class HostResourcesService {
+public class HostResourcesService {
 
     private final DockerHostRepository hosts;
     private final HostEndpointResolver endpoints;
@@ -49,25 +49,25 @@ class HostResourcesService {
         this.managedStacks = managedStacks;
     }
 
-    List<HostStackResponse> stacks(UUID hostId) {
+    public List<HostStackResponse> stacks(UUID hostId) {
         List<StackSummaryDto> found = call(hostId, containers::listStacks);
         Map<String, UUID> managed = managedStacks.managedStackIds(hostId);
         return found.stream().map(s -> HostStackResponse.of(s, managed.get(s.name()))).toList();
     }
 
-    List<ContainerDto> containers(UUID hostId) {
+    public List<ContainerDto> containers(UUID hostId) {
         return call(hostId, containers::listContainers);
     }
 
-    List<ImageDto> images(UUID hostId) {
+    public List<ImageDto> images(UUID hostId) {
         return call(hostId, images::list);
     }
 
-    List<NetworkDto> networks(UUID hostId) {
+    public List<NetworkDto> networks(UUID hostId) {
         return call(hostId, networks::list);
     }
 
-    List<VolumeDto> volumes(UUID hostId) {
+    public List<VolumeDto> volumes(UUID hostId) {
         return call(hostId, volumes::list);
     }
 

@@ -5,7 +5,7 @@ import org.springframework.http.HttpStatus;
 import java.util.List;
 
 /** A host request that cannot be fulfilled; carries the HTTP status and stable error code. */
-class HostException extends RuntimeException {
+public class HostException extends RuntimeException {
 
     private final HttpStatus status;
     private final String code;
@@ -26,7 +26,7 @@ class HostException extends RuntimeException {
         return status;
     }
 
-    String code() {
+    public String code() {
         return code;
     }
 
