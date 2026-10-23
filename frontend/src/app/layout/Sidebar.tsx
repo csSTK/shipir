@@ -47,6 +47,9 @@ export function Sidebar({ role, open, onNavigate }: Props) {
       <NavLink to="/" end className={link} onClick={onNavigate}>
         Environments
       </NavLink>
+      <NavLink to="/assistant" className={link} onClick={onNavigate}>
+        Assistant
+      </NavLink>
       <NavLink to="/notifications" className={link} onClick={onNavigate}>
         Notifications
         {unread > 0 && (

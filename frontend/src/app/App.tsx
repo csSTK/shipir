@@ -2,7 +2,8 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { EnvironmentDashboard, EnvironmentsOverview } from '../features/hosts/index.ts'
 import { AccountPage } from '../features/account/index.ts'
 import { AiSettingsPage, AuditLogPage, GitCredentialsSettingsPage, RetentionSettingsPage, WebhooksSettingsPage } from '../features/settings/index.ts'
-import { ContainersPage } from '../features/containers/index.ts'
+import { ChatPage } from '../features/ai-chat/index.ts'
+import { ContainersPage }from '../features/containers/index.ts'
 import { ImagesPage } from '../features/images/index.ts'
 import { NetworksPage } from '../features/networks/index.ts'
 import { VolumesPage } from '../features/volumes/index.ts'
@@ -38,6 +39,8 @@ function AuthGate() {
         <Route path="/environments/:id/images" element={<ImagesPage />} />
         <Route path="/environments/:id/networks" element={<NetworksPage />} />
         <Route path="/environments/:id/volumes" element={<VolumesPage />} />
+        <Route path="/assistant" element={<ChatPage role={user.role} />} />
+        <Route path="/assistant/:sessionId" element={<ChatPage role={user.role} />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/account" element={<AccountPage user={user} />} />
         <Route path="/settings/notifications" element={isAdmin ? <WebhooksSettingsPage /> : <NotAllowedPage />} />
