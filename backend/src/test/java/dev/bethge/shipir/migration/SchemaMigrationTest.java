@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V15 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V16 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To15Successfully() {
+    void flywayAppliedVersions1To16Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16");
     }
 
     @Test
@@ -662,7 +662,9 @@ class SchemaMigrationTest {
         Map<String, Map<String, Object>> byName = columns.stream()
                 .collect(java.util.stream.Collectors.toMap(c -> (String) c.get("column_name"), c -> c));
         assertThat(byName.keySet()).containsExactlyInAnyOrder(
-                "id", "audit_log_days", "notification_days", "updated_at", "updated_by");
+                "id", "audit_log_days", "notification_days", "chat_session_days", "updated_at", "updated_by");
+        assertThat(byName.get("chat_session_days").get("data_type")).isEqualTo("integer");
+        assertThat(byName.get("chat_session_days").get("is_nullable")).isEqualTo("NO");
         assertThat(byName.get("id").get("data_type")).isEqualTo("smallint");
         assertThat(byName.get("audit_log_days").get("data_type")).isEqualTo("integer");
         assertThat(byName.get("audit_log_days").get("is_nullable")).isEqualTo("NO");
@@ -715,6 +717,249 @@ class SchemaMigrationTest {
         jdbc.update("DELETE FROM users WHERE id = ?", admin);
         UUID updatedBy = jdbc.queryForObject("SELECT updated_by FROM retention_settings WHERE id = 1", UUID.class);
         assertThat(updatedBy).isNull();
+    }
+
+    @Test
+    void retentionChatSessionDaysDefaultsToNinety() {
+        Integer days = jdbc.queryForObject("SELECT chat_session_days FROM retention_settings WHERE id = 1", Integer.class);
+        assertThat(days).isEqualTo(90);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 3651, -1})
+    void retentionChatSessionDaysOutsideRangeIsRejected(int days) {
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE retention_settings SET chat_session_days = ? WHERE id = 1", days))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("retention_settings_chat_session_days_check");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 3650})
+    void retentionChatSessionDaysBoundariesAreAccepted(int days) {
+        jdbc.update("UPDATE retention_settings SET chat_session_days = ? WHERE id = 1", days);
+        Integer stored = jdbc.queryForObject("SELECT chat_session_days FROM retention_settings", Integer.class);
+        assertThat(stored).isEqualTo(days);
+    }
+
+    @Test
+    void aiSettingsHasExpectedColumnsAndTypes() {
+        List<Map<String, Object>> columns = jdbc.queryForList("""
+                SELECT column_name, data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'ai_settings'
+                """);
+        Map<String, Map<String, Object>> byName = columns.stream()
+                .collect(java.util.stream.Collectors.toMap(c -> (String) c.get("column_name"), c -> c));
+        assertThat(byName.keySet()).containsExactlyInAnyOrder(
+                "id", "base_url", "model", "api_key_ciphertext", "api_key_hint", "enabled", "updated_at", "updated_by");
+        assertThat(byName.get("id").get("data_type")).isEqualTo("smallint");
+        assertThat(byName.get("base_url").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("model").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("api_key_ciphertext").get("data_type")).isEqualTo("bytea");
+        assertThat(byName.get("api_key_ciphertext").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("api_key_hint").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("enabled").get("data_type")).isEqualTo("boolean");
+        assertThat(byName.get("enabled").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("updated_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("updated_by").get("is_nullable")).isEqualTo("YES");
+    }
+
+    @Test
+    void aiSettingsHasExactlyOneSeededRowDisabledWithNvidiaDefaults() {
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT id, base_url, model, enabled, api_key_ciphertext, api_key_hint, updated_by FROM ai_settings");
+        assertThat(rows).hasSize(1);
+        Map<String, Object> row = rows.get(0);
+        assertThat(((Number) row.get("id")).intValue()).isEqualTo(1);
+        assertThat(row.get("base_url")).isEqualTo("https://integrate.api.nvidia.com/v1");
+        assertThat(row.get("model")).isEqualTo("z-ai/glm-5.3-flash");
+        assertThat(row.get("enabled")).isEqualTo(false);
+        assertThat(row.get("api_key_ciphertext")).isNull();
+        assertThat(row.get("api_key_hint")).isNull();
+        assertThat(row.get("updated_by")).isNull();
+    }
+
+    @Test
+    void aiSettingsSecondRowIsRejected() {
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO ai_settings (id, base_url, model) VALUES (2, 'https://example.com/v1', 'm')"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ai_settings_id_check");
+    }
+
+    @Test
+    void aiSettingsStoresApiKeyOnlyAsCiphertextAndHint() {
+        // No plaintext column exists; the ciphertext is a BYTEA and the hint is the only readable form.
+        List<String> columns = jdbc.queryForList("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'ai_settings' AND column_name LIKE 'api_key%'
+                """, String.class);
+        assertThat(columns).containsExactlyInAnyOrder("api_key_ciphertext", "api_key_hint");
+    }
+
+    @Test
+    void deletingUserWhoUpdatedAiSettingsSetsUpdatedByNull() {
+        UUID admin = insertUser("ai-editor");
+        jdbc.update("UPDATE ai_settings SET updated_by = ? WHERE id = 1", admin);
+        jdbc.update("DELETE FROM users WHERE id = ?", admin);
+        UUID updatedBy = jdbc.queryForObject("SELECT updated_by FROM ai_settings WHERE id = 1", UUID.class);
+        assertThat(updatedBy).isNull();
+    }
+
+    @Test
+    void chatSessionsHasExpectedColumnsAndTypes() {
+        List<Map<String, Object>> columns = jdbc.queryForList("""
+                SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'chat_sessions'
+                """);
+        Map<String, Map<String, Object>> byName = columns.stream()
+                .collect(java.util.stream.Collectors.toMap(c -> (String) c.get("column_name"), c -> c));
+        assertThat(byName.keySet()).containsExactlyInAnyOrder(
+                "id", "user_id", "title", "shared_with_admin", "created_at", "updated_at");
+        assertThat(byName.get("id").get("data_type")).isEqualTo("uuid");
+        assertThat(byName.get("user_id").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("title").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("shared_with_admin").get("data_type")).isEqualTo("boolean");
+        assertThat(byName.get("shared_with_admin").get("is_nullable")).isEqualTo("NO");
+        assertThat(String.valueOf(byName.get("shared_with_admin").get("column_default"))).startsWith("false");
+        assertThat(byName.get("created_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("updated_at").get("data_type")).isEqualTo("timestamp with time zone");
+    }
+
+    @Test
+    void chatSessionIdDefaultsToGeneratedUuidAndSharingDefaultsToFalse() {
+        UUID user = insertUser("alice");
+        UUID session = jdbc.queryForObject(
+                "INSERT INTO chat_sessions (user_id, title) VALUES (?, 'hello') RETURNING id", UUID.class, user);
+        Boolean shared = jdbc.queryForObject(
+                "SELECT shared_with_admin FROM chat_sessions WHERE id = ?", Boolean.class, session);
+        assertThat(session).isNotNull();
+        assertThat(shared).isFalse();
+    }
+
+    @Test
+    void chatSessionsHasIndexOnUserIdAndUpdatedAt() {
+        List<String> indexes = jdbc.queryForList("""
+                SELECT indexdef FROM pg_indexes
+                WHERE schemaname = 'public' AND tablename = 'chat_sessions'
+                """, String.class);
+        assertThat(indexes).anyMatch(def -> def.contains("(user_id, updated_at)"));
+    }
+
+    @Test
+    void deletingUserCascadesToChatSessionsAndMessages() {
+        UUID user = insertUser("alice");
+        UUID session = insertChatSession(user);
+        insertChatMessage(session, 1, "USER", null);
+        jdbc.update("DELETE FROM users WHERE id = ?", user);
+        assertThat(count("chat_sessions")).isZero();
+        assertThat(count("chat_messages")).isZero();
+    }
+
+    @Test
+    void deletingChatSessionCascadesToMessages() {
+        UUID user = insertUser("alice");
+        UUID session = insertChatSession(user);
+        insertChatMessage(session, 1, "USER", null);
+        insertChatMessage(session, 2, "ASSISTANT", null);
+        jdbc.update("DELETE FROM chat_sessions WHERE id = ?", session);
+        assertThat(count("chat_messages")).isZero();
+    }
+
+    @Test
+    void chatMessagesHasExpectedColumnsAndTypes() {
+        List<Map<String, Object>> columns = jdbc.queryForList("""
+                SELECT column_name, data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'chat_messages'
+                """);
+        Map<String, Map<String, Object>> byName = columns.stream()
+                .collect(java.util.stream.Collectors.toMap(c -> (String) c.get("column_name"), c -> c));
+        assertThat(byName.keySet()).containsExactlyInAnyOrder(
+                "id", "session_id", "seq", "role", "content", "tool_calls", "tool_call_id", "status", "created_at");
+        assertThat(byName.get("seq").get("data_type")).isEqualTo("integer");
+        assertThat(byName.get("seq").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("content").get("data_type")).isEqualTo("text");
+        assertThat(byName.get("content").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("tool_calls").get("data_type")).isEqualTo("jsonb");
+        assertThat(byName.get("tool_calls").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("tool_call_id").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("status").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("created_at").get("data_type")).isEqualTo("timestamp with time zone");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"USER", "ASSISTANT", "TOOL"})
+    void chatMessageAcceptsKnownRoles(String role) {
+        UUID session = insertChatSession(insertUser("alice"));
+        insertChatMessage(session, 1, role, null);
+        assertThat(count("chat_messages")).isEqualTo(1);
+    }
+
+    @Test
+    void chatMessageRejectsUnknownRole() {
+        UUID session = insertChatSession(insertUser("alice"));
+        assertThatThrownBy(() -> insertChatMessage(session, 1, "SYSTEM", null))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("chat_messages_role_check");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"PENDING", "CONFIRMED", "REJECTED"})
+    void chatMessageAcceptsKnownPendingActionStatuses(String status) {
+        UUID session = insertChatSession(insertUser("alice"));
+        insertChatMessage(session, 1, "ASSISTANT", status);
+        assertThat(count("chat_messages")).isEqualTo(1);
+    }
+
+    @Test
+    void chatMessageStatusNullIsAccepted() {
+        UUID session = insertChatSession(insertUser("alice"));
+        insertChatMessage(session, 1, "USER", null);
+        Object status = jdbc.queryForObject("SELECT status FROM chat_messages", Object.class);
+        assertThat(status).isNull();
+    }
+
+    @Test
+    void chatMessageRejectsUnknownStatus() {
+        UUID session = insertChatSession(insertUser("alice"));
+        assertThatThrownBy(() -> insertChatMessage(session, 1, "ASSISTANT", "DONE"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("chat_messages_status_check");
+    }
+
+    @Test
+    void chatMessageToolCallsStoresJson() {
+        UUID session = insertChatSession(insertUser("alice"));
+        jdbc.update("""
+                INSERT INTO chat_messages (session_id, seq, role, tool_calls)
+                VALUES (?, 1, 'ASSISTANT', '[{"id":"c1","name":"list_hosts"}]'::jsonb)
+                """, session);
+        String name = jdbc.queryForObject(
+                "SELECT tool_calls->0->>'name' FROM chat_messages", String.class);
+        assertThat(name).isEqualTo("list_hosts");
+    }
+
+    @Test
+    void duplicateSeqWithinSessionIsRejected() {
+        UUID session = insertChatSession(insertUser("alice"));
+        insertChatMessage(session, 1, "USER", null);
+        assertThatThrownBy(() -> insertChatMessage(session, 1, "ASSISTANT", null))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("chat_messages_session_seq_key");
+    }
+
+    @Test
+    void sameSeqInDifferentSessionsIsAccepted() {
+        UUID user = insertUser("alice");
+        insertChatMessage(insertChatSession(user), 1, "USER", null);
+        insertChatMessage(insertChatSession(user), 1, "USER", null);
+        assertThat(count("chat_messages")).isEqualTo(2);
+    }
+
+    @Test
+    void chatMessageWithUnknownSessionIsRejected() {
+        assertThatThrownBy(() -> insertChatMessage(UUID.randomUUID(), 1, "USER", null))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -903,6 +1148,16 @@ class SchemaMigrationTest {
                 """, stack, user))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("stack_versions_source_check");
+    }
+
+    private UUID insertChatSession(UUID user) {
+        return jdbc.queryForObject(
+                "INSERT INTO chat_sessions (user_id, title) VALUES (?, 'chat') RETURNING id", UUID.class, user);
+    }
+
+    private void insertChatMessage(UUID session, int seq, String role, String status) {
+        jdbc.update("INSERT INTO chat_messages (session_id, seq, role, content, status) VALUES (?, ?, ?, 'text', ?)",
+                session, seq, role, status);
     }
 
     private UUID insertCredential(String name, UUID creator) {
