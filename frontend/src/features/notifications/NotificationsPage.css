@@ -1,0 +1,119 @@
+.notifs {
+  --n-border: color-mix(in srgb, currentColor 12%, transparent);
+  --n-up: #1f9d55;
+  --n-down: #d92d20;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.notifs__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.notifs__title {
+  margin: 0 auto 0 0;
+  font-size: 1.75rem;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+.notifs__filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9375rem;
+}
+.notifs__all,
+.notif__read {
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 6px 12px;
+  border: 1px solid var(--n-border);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 120ms ease-out, background-color 120ms ease-out;
+}
+.notifs__all:hover,
+.notif__read:hover {
+  background: color-mix(in srgb, currentColor 7%, transparent);
+}
+.notifs__all:active,
+.notif__read:active {
+  transform: scale(0.97);
+}
+.notifs__all:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.notifs__message {
+  margin: 0;
+  opacity: 0.7;
+}
+.notifs__skeleton {
+  height: 72px;
+  border-radius: 14px;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+.notifs__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.notif {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--n-border);
+  border-radius: 14px;
+  opacity: 0.75;
+}
+.notif--unread {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+.notif--unread .notif__message {
+  font-weight: 600;
+}
+.notif__type {
+  min-width: 4.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.notif__type--down {
+  color: var(--n-down);
+}
+.notif__type--up {
+  color: var(--n-up);
+}
+.notif__body {
+  flex: 1;
+  min-width: 0;
+}
+.notif__message,
+.notif__meta {
+  margin: 0;
+}
+.notif__meta {
+  font-size: 0.8125rem;
+  opacity: 0.7;
+}
+.notif__meta a {
+  color: inherit;
+}
+@media (prefers-reduced-motion: reduce) {
+  .notifs__all,
+  .notif__read {
+    transition: none;
+  }
+}

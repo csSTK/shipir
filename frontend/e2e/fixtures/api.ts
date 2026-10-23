@@ -21,7 +21,10 @@ const key = (method: string, path: string) => `${method.toUpperCase()} ${path}`
 export const test = base.extend<{ api: ApiMock }>({
   api: [
     async ({ page }, use) => {
-      const mocks = new Map<string, MockResponse>()
+      // The shell polls the unread badge on every page; default to none, specs override.
+      const mocks = new Map<string, MockResponse>([
+        [key('GET', '/api/notifications/unread-count'), { body: { count: 0 } }],
+      ])
       const unmocked: string[] = []
 
       // Predicate, not a glob: '**/api/**' would also match source files such as /src/shared/api/client.ts.

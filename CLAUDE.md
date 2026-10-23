@@ -100,6 +100,7 @@ Frontend (`frontend/`):
 - `src/app/layout/{AppShell,Sidebar,UserMenu}.tsx` (+ `.css`, `AppShell.test.tsx`): app shell: top bar (brand, user menu with Settings -> /account and Sign out), sidebar (Environments, Notifications, ADMIN-only Settings group), narrow-screen toggle
 - `src/app/layout/PlaceholderPages.tsx`: `PlaceholderPage`, `NotAllowedPage` (non-ADMIN on /settings/*)
 - `e2e/shell.spec.ts`: sidebar/user menu navigation, viewer not allowed on settings
+- `src/features/notifications/{api.ts,NotificationsPage.tsx,.css,index.ts}`: `useNotifications(unreadOnly)`, `useUnreadCount` (30 s + focus), `useMarkRead/useMarkAllRead`; `/notifications` page (assumed API: Page `{content,totalElements}`, `{count}`, POST `/{id}/read`, `/read-all`); Sidebar shows the unread badge
 - `src/features/{containers,stacks}/index.ts`: empty feature entry points
 - `src/features/hosts/api.ts`: host types, `HOSTS_KEY`/`HOSTS_OVERVIEW_KEY`, `useHosts/useHostsOverview` (30 s + focus refetch, `HostOverview`), `useCreateHost/useTestConnection/useRenameHost/useDeleteHost` (create/delete also invalidate current user)
 - `src/features/hosts/EnvironmentForm.{tsx,css}`: Local / Remote (TCP+TLS) form, PEM file pickers (names only shown), connection test, inline server errors; props `onCreated`, `submitLabel`

@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import type { CurrentUser } from '../../features/auth/index.ts'
+import { useUnreadCount } from '../../features/notifications/index.ts'
 import './Sidebar.css'
 
 interface Props {
@@ -13,6 +14,7 @@ const link = ({ isActive }: { isActive: boolean }) =>
 
 /** Primary navigation. The Settings group is ADMIN-only; collapses on narrow screens. */
 export function Sidebar({ role, open, onNavigate }: Props) {
+  const unread = useUnreadCount().data?.count ?? 0
   return (
     <nav
       id="app-sidebar"
@@ -24,6 +26,11 @@ export function Sidebar({ role, open, onNavigate }: Props) {
       </NavLink>
       <NavLink to="/notifications" className={link} onClick={onNavigate}>
         Notifications
+        {unread > 0 && (
+          <span className="sidebar__badge" aria-label={`${unread} unread`}>
+            {unread > 99 ? '99+' : unread}
+          </span>
+        )}
       </NavLink>
       {role === 'ADMIN' && (
         <div role="group" aria-labelledby="sidebar-settings" className="sidebar__group">

@@ -2,7 +2,14 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CurrentUser } from '../../features/auth/index.ts'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from '../queryClient.ts'
 import { AppShell } from './AppShell.tsx'
+
+vi.mock('../../shared/api/client.ts', async (importActual) => ({
+  ...(await importActual<typeof import('../../shared/api/client.ts')>()),
+  apiFetch: vi.fn(async () => ({ count: 3 })),
+}))
 
 afterEach(cleanup)
 
@@ -18,18 +25,25 @@ function Where() {
 
 function renderShell(role: CurrentUser['role'], onSignOut = vi.fn()) {
   render(
+    <QueryClientProvider client={queryClient}>
     <MemoryRouter initialEntries={['/']}>
       <AppShell user={user(role)} onSignOut={onSignOut}>
         <Routes>
           <Route path="*" element={<Where />} />
         </Routes>
       </AppShell>
-    </MemoryRouter>,
+    </MemoryRouter>
+    </QueryClientProvider>,
   )
   return onSignOut
 }
 
 describe('AppShell', () => {
+  it('shows the unread count on the Notifications item', async () => {
+    renderShell('VIEWER')
+    expect(await screen.findByLabelText('3 unread')).toBeInTheDocument()
+  })
+
   it('shows the Settings group to ADMIN only', () => {
     renderShell('ADMIN')
     const group = screen.getByRole('group', { name: 'Settings' })
@@ -47,9 +61,9 @@ describe('AppShell', () => {
   it('highlights the active item', () => {
     renderShell('VIEWER')
     expect(screen.getByRole('link', { name: 'Environments' })).toHaveAttribute('aria-current', 'page')
-    fireEvent.click(screen.getByRole('link', { name: 'Notifications' }))
+    fireEvent.click(screen.getByRole('link', { name: /^Notifications/ }))
     expect(screen.getByTestId('where')).toHaveTextContent('/notifications')
-    expect(screen.getByRole('link', { name: 'Notifications' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: /^Notifications/ })).toHaveAttribute('aria-current', 'page')
   })
 
   it('opens and closes the user menu with mouse and keyboard', () => {

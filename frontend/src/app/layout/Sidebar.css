@@ -60,3 +60,14 @@
     transition: none;
   }
 }
+
+.sidebar__badge {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #d92d20;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
