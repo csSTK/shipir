@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V8 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V9 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To8Successfully() {
+    void flywayAppliedVersions1To9Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9");
     }
 
     @Test
@@ -444,6 +444,123 @@ class SchemaMigrationTest {
         assertThat(definitions).anyMatch(d -> d.contains("(action, occurred_at)"));
     }
 
+    @Test
+    void notificationsHasExpectedColumnsAndTypes() {
+        List<Map<String, Object>> columns = jdbc.queryForList("""
+                SELECT column_name, data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'notifications'
+                """);
+        Map<String, Map<String, Object>> byName = columns.stream()
+                .collect(java.util.stream.Collectors.toMap(c -> (String) c.get("column_name"), c -> c));
+        assertThat(byName.keySet()).containsExactlyInAnyOrder(
+                "id", "user_id", "type", "host_id", "host_name", "message", "created_at", "read_at");
+
+        assertThat(byName.get("id").get("data_type")).isEqualTo("uuid");
+        assertThat(byName.get("user_id").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("type").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("host_id").get("data_type")).isEqualTo("uuid");
+        assertThat(byName.get("host_id").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("host_name").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("message").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("created_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("created_at").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("read_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("read_at").get("is_nullable")).isEqualTo("YES");
+    }
+
+    @Test
+    void notificationIdAndCreatedAtHaveDefaults() {
+        UUID user = insertUser("alice");
+        jdbc.update("""
+                INSERT INTO notifications (user_id, type, host_name, message)
+                VALUES (?, 'HOST_DOWN', 'prod', 'Host prod is down')
+                """, user);
+        Map<String, Object> row = jdbc.queryForMap("SELECT id, created_at, read_at FROM notifications");
+        assertThat(row.get("id")).isNotNull();
+        assertThat(row.get("created_at")).isNotNull();
+        assertThat(row.get("read_at")).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"HOST_DOWN", "HOST_UP"})
+    void notificationAcceptsKnownTypes(String type) {
+        UUID user = insertUser("alice");
+        insertNotification(user, type);
+        assertThat(count("notifications")).isEqualTo(1);
+    }
+
+    @Test
+    void notificationRejectsUnknownType() {
+        UUID user = insertUser("alice");
+        assertThatThrownBy(() -> insertNotification(user, "HOST_EXPLODED"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("notifications_type_check");
+    }
+
+    @Test
+    void notificationPreferenceRejectsUnknownType() {
+        UUID user = insertUser("alice");
+        assertThatThrownBy(() -> insertPreference(user, "HOST_EXPLODED", true))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("notification_preferences_type_check");
+    }
+
+    @Test
+    void notificationPreferenceRequiresInAppEnabled() {
+        UUID user = insertUser("alice");
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO notification_preferences (user_id, type, in_app_enabled) VALUES (?, 'HOST_DOWN', NULL)",
+                user))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void deletingUserCascadesToNotificationsAndPreferences() {
+        UUID user = insertUser("alice");
+        insertNotification(user, "HOST_DOWN");
+        insertPreference(user, "HOST_DOWN", true);
+
+        jdbc.update("DELETE FROM users WHERE id = ?", user);
+
+        assertThat(count("notifications")).isZero();
+        assertThat(count("notification_preferences")).isZero();
+    }
+
+    @Test
+    void deletingHostSetsNotificationHostIdNullAndKeepsHostName() {
+        UUID owner = insertUser("alice");
+        UUID host = insertHost("prod", "LOCAL", null, null, owner);
+        UUID user = insertUser("bob");
+        jdbc.update("""
+                INSERT INTO notifications (user_id, type, host_id, host_name, message)
+                VALUES (?, 'HOST_DOWN', ?, 'prod', 'Host prod is down')
+                """, user, host);
+
+        jdbc.update("DELETE FROM docker_hosts WHERE id = ?", host);
+
+        Map<String, Object> row = jdbc.queryForMap("SELECT host_id, host_name FROM notifications");
+        assertThat(row.get("host_id")).isNull();
+        assertThat(row.get("host_name")).isEqualTo("prod");
+    }
+
+    @Test
+    void notificationPreferencePrimaryKeyRejectsDuplicateUserAndType() {
+        UUID user = insertUser("alice");
+        insertPreference(user, "HOST_DOWN", true);
+        assertThatThrownBy(() -> insertPreference(user, "HOST_DOWN", false))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("notification_preferences_pkey");
+    }
+
+    @Test
+    void notificationsHasIndexOnUserReadAtCreatedAt() {
+        List<String> definitions = jdbc.queryForList("""
+                SELECT indexdef FROM pg_indexes
+                WHERE schemaname = 'public' AND tablename = 'notifications'
+                """, String.class);
+        assertThat(definitions).anyMatch(d -> d.contains("(user_id, read_at, created_at DESC)"));
+    }
+
     private int count(String table) {
         return jdbc.queryForObject("SELECT count(*) FROM " + table, Integer.class);
     }
@@ -470,6 +587,16 @@ class SchemaMigrationTest {
                 INSERT INTO stacks (name, host_id, compose_file_path, created_by)
                 VALUES (?, ?, '/stacks/x/compose.yml', ?) RETURNING id
                 """, UUID.class, name, host, creator);
+    }
+
+    private void insertNotification(UUID user, String type) {
+        jdbc.update("INSERT INTO notifications (user_id, type, host_name, message) VALUES (?, ?, 'prod', 'msg')",
+                user, type);
+    }
+
+    private void insertPreference(UUID user, String type, boolean inAppEnabled) {
+        jdbc.update("INSERT INTO notification_preferences (user_id, type, in_app_enabled) VALUES (?, ?, ?)",
+                user, type, inAppEnabled);
     }
 
     private void insertVersion(UUID stack, UUID creator) {
