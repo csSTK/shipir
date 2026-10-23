@@ -34,7 +34,13 @@ Current state: project skeleton in place. Backend in `backend/` with Maven and S
 Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `ShipirApplication.java`: Spring Boot entry point
 - `**/package-info.java`: one-line Javadoc per package of the architecture tree
-- `audit/AuditLogEntry.java`, `compose/Stack.java`, `compose/generator/ComposeGeneratorService.java`, `config_editor/ConfigFile.java`, `host/DockerHost.java`, `permission/Permission.java`, `streaming/LogStreamHandler.java`: empty placeholders
+- `audit/AuditLogEntry.java`, `compose/Stack.java`, `compose/generator/ComposeGeneratorService.java`, `config_editor/ConfigFile.java`, `permission/Permission.java`, `streaming/LogStreamHandler.java`: empty placeholders
+- `host/{DockerHost,ConnectionType,DockerHostRepository}.java`: environment entity (TLS columns are ciphertext), LOCAL/TCP enum, repository
+- `host/{HostController,HostService,HostException,HostExceptionHandler}.java`: `/api/hosts` list/create/connection-test/rename/delete (create pings first: 422 CONNECTION_FAILED; 400/409 codes via `HostException`)
+- `host/HostEndpointResolver.java`: public, builds `DockerEndpoint` from a `DockerHost` (decrypts TLS)
+- `host/HostEncryptionStartupCheck.java`: fails startup if TCP hosts exist without `shipir.encryption-key`
+- `host/dto/*.java`: create/test/update requests (toString hides PEMs), `HostResponse` (`tls` boolean only)
+- `backend/src/test/java/dev/bethge/shipir/host/`: `HostApiTestBase` (login helpers, local socket), `HostApiTest`, `HostApiWithoutEncryptionKeyTest`, `HostEncryptionStartupCheckTest`
 - `auth/{User,Role,UserRepository}.java`: user entity (`isSetupRequired()`), ADMIN/OPERATOR/VIEWER enum, repository
 - `auth/InitialAdminSeeder.java`, `auth/InitialAdminProperties.java`: seeds first admin on empty DB from `shipir.initial-admin.*` (fails startup without password)
 - `auth/AuthController.java`: `/api/auth/{login,logout,me,password}` (password: 204, rotates session id + CSRF, local handlers for 400 INVALID_CURRENT_PASSWORD / PASSWORD_POLICY); login rotates session id + CSRF token, same 401 body for any failure
@@ -43,7 +49,7 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `auth/UserSetupStatus.java`: implements `common/security/SetupStatus` for the gate
 - `auth/DatabaseUserDetailsService.java`: `UserDetailsService` backed by `UserRepository` (`ROLE_<role>`)
 - `auth/dto/{LoginRequest,PasswordChangeRequest,CurrentUserResponse,PasswordPolicyErrorResponse}.java`: request bodies (toString hides passwords), `{username, role, setupRequired}`, `{code, message, violations}`
-- `common/config/SecurityConfig.java`: session-based filter chain: cookie CSRF (`XSRF-TOKEN` on every response), JSON 401/403, `/api/**` authenticated except login/logout, `AuthenticationManager`, wires `SetupGateFilter`
+- `common/config/SecurityConfig.java`: session-based filter chain: cookie CSRF (`XSRF-TOKEN` on every response), JSON 401/403, `/api/**` authenticated except login/logout, `/api/hosts` writes ADMIN-only, `AuthenticationManager`, wires `SetupGateFilter`
 - `common/security/{SetupGateFilter,SetupStatus}.java`: gate: setup-required users get 403 SETUP_REQUIRED on `/api/**` except GET me, POST logout/password; port implemented by auth
 - `common/exception/{ErrorResponse,GlobalExceptionHandler}.java`: `{code, message, details}` record; handler for validation/malformed body (400)
 - `common/security/{SecretCipher,EncryptionProperties}.java`: AES-256-GCM for secrets at rest (`version+IV+ciphertext`); key `shipir.encryption-key` (env `SHIPIR_ENCRYPTION_KEY`, base64 32 bytes, `openssl rand -base64 32`), optional (empty/blank = `isConfigured()` false); invalid key fails startup
