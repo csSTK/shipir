@@ -87,6 +87,7 @@ class SecurityConfig {
                         .requestMatchers("/api/notifications/webhooks", "/api/notifications/webhooks/**").hasRole("ADMIN")
                         .requestMatchers("/api/git/**").hasRole("ADMIN")
                         .requestMatchers("/api/settings/retention").hasRole("ADMIN")
+                        .requestMatchers("/api/settings/ai", "/api/settings/ai/**").hasRole("ADMIN")
                         .anyRequest().authenticated());
         return http.build();
     }
