@@ -88,6 +88,7 @@ Repo root:
 - `.env.example`: documents `DB_*` (`DB_PASSWORD` required), `SHIPIR_INITIAL_ADMIN_PASSWORD` (empty DB only), `SHIPIR_TAG`, `SHIPIR_PORT`; `.env` is gitignored
 
 CI:
+- `.github/workflows/tests.yml`: reusable tests (`workflow_call`/`workflow_dispatch`, inputs `backend`/`frontend`/`e2e`): Maven verify, pnpm lint/test/build, Playwright (report artifact on failure)
 - `.github/workflows/images.yml`: builds backend/frontend images (matrix); PRs build only; `dev` → `:dev`, `prd` → `:latest`, `v*` tags → semver, pushed to ghcr.io/csstk/shipir-{backend,frontend}
 
 Repo tooling:
