@@ -2,7 +2,9 @@ package dev.bethge.shipir.common.config;
 
 import dev.bethge.shipir.streaming.CsrfHandshakeInterceptor;
 import dev.bethge.shipir.streaming.StompSecurityInterceptor;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.web.session.HttpSessionEventPublisher;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
@@ -22,6 +24,12 @@ class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     WebSocketConfig(StompSecurityInterceptor stompSecurityInterceptor) {
         this.stompSecurityInterceptor = stompSecurityInterceptor;
+    }
+
+    /** Publishes session destroy/id-change events so consoles end with the HTTP session they were started from. */
+    @Bean
+    static HttpSessionEventPublisher httpSessionEventPublisher() {
+        return new HttpSessionEventPublisher();
     }
 
     @Override

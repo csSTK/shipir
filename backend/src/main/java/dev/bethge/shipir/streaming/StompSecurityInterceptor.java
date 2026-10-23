@@ -8,6 +8,7 @@ import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
@@ -20,7 +21,8 @@ import java.util.regex.Pattern;
  * {@code X-XSRF-TOKEN} equal to the {@code XSRF-TOKEN} cookie of the handshake, see {@link CsrfHandshakeInterceptor}),
  * SUBSCRIBE only to {@code /topic/deployments/{id}} (registers the subscription for replay) and
  * {@code /topic/chat/{sessionId}} (owner only, via {@link ChatTopicAccess}) and container logs
- * {@code /topic/hosts/{hostId}/containers/{id}/logs} (any authenticated user, see {@link LogStreamHandler}), clients may not SEND.
+ * {@code /topic/hosts/{hostId}/containers/{id}/logs} (any authenticated user, see {@link LogStreamHandler}), interactive console {@code /topic/exec/{id}} (ADMIN owner, see {@link ExecSessionHandler}); clients may only SEND
+ * input/resize frames of their own console to {@code /app/exec/{id}/{input|resize}}.
  */
 @Component
 public class StompSecurityInterceptor implements ChannelInterceptor {
@@ -32,12 +34,19 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
     private static final Pattern CHAT_TOPIC =
             Pattern.compile("^" + Pattern.quote(ChatTopicAccess.TOPIC_PREFIX) + "([A-Za-z0-9-]{1,64})$");
 
+    private static final Pattern EXEC_TOPIC =
+            Pattern.compile("^" + Pattern.quote(ExecSessionHandler.OUTPUT_PREFIX) + "([A-Za-z0-9-]{1,64})$");
+    private static final Pattern EXEC_SEND =
+            Pattern.compile("^" + Pattern.quote(ExecSessionHandler.APP_PREFIX) + "([A-Za-z0-9-]{1,64})/(input|resize)$");
+
     private final ComposeOutputStreamService streams;
     private final ChatTopicAccess chatAccess;
     private final LogStreamHandler logStreams;
+    private final ExecSessionHandler execSessions;
 
     StompSecurityInterceptor(ComposeOutputStreamService streams, ChatTopicAccess chatAccess,
-                             LogStreamHandler logStreams) {
+                             LogStreamHandler logStreams, ExecSessionHandler execSessions) {
+        this.execSessions = execSessions;
         this.streams = streams;
         this.chatAccess = chatAccess;
         this.logStreams = logStreams;
@@ -59,6 +68,15 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                 if (chat.matches()) {
                     // live chat events go through the broker; only the session owner may follow them
                     if (!chatAccess.maySubscribe(accessor.getUser().getName(), chat.group(1))) {
+                        throw new MessageDeliveryException("Subscription destination not allowed");
+                    }
+                    break;
+                }
+                var execTopic = EXEC_TOPIC.matcher(destination);
+                if (execTopic.matches()) {
+                    // console output: ADMIN who owns the session, one subscription
+                    if (!isAdmin(accessor) || !execSessions.attach(accessor.getUser().getName(), execTopic.group(1),
+                            accessor.getSessionId(), accessor.getSubscriptionId())) {
                         throw new MessageDeliveryException("Subscription destination not allowed");
                     }
                     break;
@@ -87,8 +105,24 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
             case UNSUBSCRIBE -> {
                 streams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
                 logStreams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
+                execSessions.detach(accessor.getSessionId(), accessor.getSubscriptionId());
             }
-            case SEND -> throw new MessageDeliveryException("Sending is not allowed");
+            case SEND -> {
+                requireUser(accessor);
+                var send = EXEC_SEND.matcher(String.valueOf(accessor.getDestination()));
+                if (!send.matches() || !isAdmin(accessor)) {
+                    throw new MessageDeliveryException("Sending is not allowed");
+                }
+                String user = accessor.getUser().getName();
+                byte[] payload = message.getPayload() instanceof byte[] b ? b : null;
+                boolean ok = "input".equals(send.group(2))
+                        ? execSessions.input(user, send.group(1), payload)
+                        : execSessions.resize(user, send.group(1), payload);
+                if (!ok) {
+                    throw new MessageDeliveryException("Sending is not allowed");
+                }
+                return null; // handled here, nothing else consumes /app/exec
+            }
             default -> {
                 // DISCONNECT, heartbeats and the like need no checks
             }
@@ -117,5 +151,11 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
     void onDisconnect(SessionDisconnectEvent event) {
         streams.unsubscribe(event.getSessionId(), null);
         logStreams.unsubscribe(event.getSessionId(), null);
+        execSessions.detach(event.getSessionId(), null);
+    }
+
+    private static boolean isAdmin(StompHeaderAccessor accessor) {
+        return accessor.getUser() instanceof Authentication auth && auth.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
     }
 }
