@@ -178,6 +178,7 @@ Frontend (`frontend/`):
 - `e2e/ai-chat.spec.ts`: new chat + streamed answer, pending deploy confirm, reopen old chat and continue, delete, not-configured (STOMP broker mock)
 - `src/features/settings/AiSettingsPage.{tsx,css,test.tsx}`: ADMIN AI provider at `/settings/ai` (base URL, model, enable switch, API key never prefilled: empty keeps, 'Remove stored key' sends `""`; Test connection on saved settings); hooks `useAiSettings/useSaveAiSettings/useTestAiConnection` in `api.ts`; Retention page also edits `chatSessionDays`; `e2e/ai-settings.spec.ts`
 - `src/features/settings/AuditLogPage.{tsx,css,test.tsx}`: ADMIN audit log at `/settings/audit-log` (table, action/user/date filters + page in URL query, empty/error states); `useAuditLog`, `AUDIT_ACTION_LABELS` in `api.ts`
+- `src/features/settings/SharedChatSessionsPage.{tsx,css,test.tsx}`: ADMIN read-only shared chats at `/settings/ai/shared` (list with owner, `?session=` opens transcript via `ai-chat` `MessageList readOnly`, paged); `useSharedChatSessions`/`useSharedChatSession` in `api.ts`
 - `e2e/webhooks.spec.ts`: admin creates webhook + test, operator blocked
 - `frontend/src/features/settings/GitCredentialsSettingsPage.{tsx,css,test.tsx}`: ADMIN git credentials at `/settings/git` (list with tokenHint, create/edit dialog with never-prefilled token, test-connection dialog, delete; CREDENTIAL_IN_USE/NAME_TAKEN inline); hooks `useGitCredentials` etc. in settings `api.ts`; Sidebar Settings link
 - `frontend/e2e/git-credentials.spec.ts`: add + test connection, in-use delete conflict, operator blocked
@@ -215,6 +216,7 @@ Frontend (`frontend/`):
 - `e2e/account.spec.ts`: user menu > Settings, password change, preference toggle
 - `e2e/retention.spec.ts`: admin changes retention and saves, server 400 inline
 - `e2e/audit-log.spec.ts`: admin filters by action and pages, operator not allowed
+- `e2e/shared-chat-sessions.spec.ts`: admin opens a shared chat read-only, error state, operator not allowed
 - `e2e/app.spec.ts`: smoke spec, Shipir heading (signed in)
 - `e2e/auth.spec.ts`: login happy path + sign out, wrong password
 - `e2e/environments.spec.ts`: overview list/search, viewer vs admin add, admin rename/delete, taken name, operator no actions, error, dashboard navigation

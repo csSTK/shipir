@@ -1,7 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { EnvironmentDashboard, EnvironmentsOverview } from '../features/hosts/index.ts'
 import { AccountPage } from '../features/account/index.ts'
-import { AiSettingsPage, AuditLogPage, GitCredentialsSettingsPage, RetentionSettingsPage, WebhooksSettingsPage } from '../features/settings/index.ts'
+import { AiSettingsPage, AuditLogPage, GitCredentialsSettingsPage, RetentionSettingsPage, SharedChatSessionsPage, WebhooksSettingsPage } from '../features/settings/index.ts'
 import { ChatPage } from '../features/ai-chat/index.ts'
 import { ContainersPage }from '../features/containers/index.ts'
 import { ImagesPage } from '../features/images/index.ts'
@@ -47,6 +47,7 @@ function AuthGate() {
         <Route path="/settings/retention" element={isAdmin ? <RetentionSettingsPage /> : <NotAllowedPage />} />
         <Route path="/settings/git" element={isAdmin ? <GitCredentialsSettingsPage /> : <NotAllowedPage />} />
         <Route path="/settings/ai" element={isAdmin ? <AiSettingsPage /> : <NotAllowedPage />} />
+        <Route path="/settings/ai/shared" element={isAdmin ? <SharedChatSessionsPage /> : <NotAllowedPage />} />
         <Route path="/settings/audit-log" element={isAdmin ? <AuditLogPage /> : <NotAllowedPage />} />
         <Route path="/settings/*" element={<NotAllowedPage />} />
         <Route path="*" element={<EnvironmentsOverview role={user.role} />} />

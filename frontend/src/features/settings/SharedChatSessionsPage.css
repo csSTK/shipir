@@ -1,0 +1,137 @@
+.sc {
+  --sc-down: #d92d20;
+  --sc-border: color-mix(in srgb, currentColor 12%, transparent);
+  --sc-surface: color-mix(in srgb, currentColor 5%, transparent);
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sc-title {
+  margin: 0;
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+.sc-muted {
+  margin: 0;
+  font-size: 0.875rem;
+  opacity: 0.7;
+}
+
+.sc-error {
+  margin: 0;
+  color: var(--sc-down);
+  font-size: 0.875rem;
+}
+
+.sc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Instant press feedback on pointer-down; reduced-motion drops the transition below. */
+.sc-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--sc-border);
+  border-radius: 12px;
+  background: var(--sc-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 100ms ease-out, background-color 100ms ease-out;
+}
+
+.sc-item:hover {
+  background: color-mix(in srgb, currentColor 9%, transparent);
+}
+
+.sc-item:active {
+  transform: scale(0.98);
+}
+
+.sc-item[aria-current='true'] {
+  border-color: #0a84ff;
+}
+
+.sc-item:focus-visible,
+.sc-btn:focus-visible {
+  outline: 2px solid #0a84ff;
+  outline-offset: 2px;
+}
+
+.sc-item__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.sc-item__meta {
+  font-size: 0.8125rem;
+  opacity: 0.7;
+}
+
+.sc-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sc-btn {
+  font: inherit;
+  font-size: 0.9375rem;
+  padding: 8px 18px;
+  border: 1px solid var(--sc-border);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 100ms ease-out, opacity 100ms ease-out;
+}
+
+.sc-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.sc-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sc-transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--sc-border);
+}
+
+.sc-transcript__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sc-transcript__title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-item,
+  .sc-btn {
+    transition: none;
+  }
+}

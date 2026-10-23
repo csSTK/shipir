@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../shared/api/client.ts'
+import type { ChatSession, ChatSessionDetail } from '../ai-chat/api.ts'
 
 export type WebhookEventType = 'HOST_DOWN' | 'HOST_UP'
 
@@ -270,5 +271,32 @@ export function useTestGitCredential() {
   return useMutation({
     mutationFn: ({ id, repoUrl }: { id: string; repoUrl: string }) =>
       apiFetch<{ status: GitConnectionStatus }>(`${GIT_BASE}/${id}/test`, { method: 'POST', body: { repoUrl } }),
+  })
+}
+
+/** Sessions users shared with admins (read-only debugging view). Owner is always filled here. */
+export interface SharedChatSessionPage {
+  items: ChatSession[]
+  page: number
+  size: number
+  totalElements: number
+}
+
+export const SHARED_CHAT_SESSIONS_KEY = ['ai', 'shared-sessions'] as const
+
+export function useSharedChatSessions(page: number, size: number) {
+  return useQuery({
+    queryKey: [...SHARED_CHAT_SESSIONS_KEY, page, size],
+    queryFn: () => apiFetch<SharedChatSessionPage>(`/ai/shared-sessions?page=${page}&size=${size}`),
+    placeholderData: (previous) => previous,
+  })
+}
+
+/** Disabled while no session is selected. */
+export function useSharedChatSession(id: string | null) {
+  return useQuery({
+    queryKey: [...SHARED_CHAT_SESSIONS_KEY, 'detail', id],
+    queryFn: () => apiFetch<ChatSessionDetail>(`/ai/shared-sessions/${id}`),
+    enabled: id !== null,
   })
 }
