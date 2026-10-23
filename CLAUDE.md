@@ -10,7 +10,7 @@ Current state: project skeleton in place. Backend in `backend/` with Maven and S
 
 - **Do not silently deviate from the decisions in this file or in `HANDOFF.md`.** If you want to change something, give your reasoning and ask first.
 - **Do not guess open decisions** (listed in `HANDOFF.md`). Ask the user.
-- **Out of scope for now:** SaaS control plane with customer-side agent, hosting for third parties (Proxmox provisioning), AI assistant (LLM chat). Don't build them, and don't design in a way that blocks them. Concretely: all Docker access goes through the `docker/` abstraction so another connection type (agent over a tunnel) can be added later. Nothing more than that (YAGNI).
+- **Out of scope for now:** SaaS control plane with customer-side agent, hosting for third parties (Proxmox provisioning). Don't build them, and don't design in a way that blocks them. Concretely: all Docker access goes through the `docker/` abstraction so another connection type (agent over a tunnel) can be added later. Nothing more than that (YAGNI).
 
 ## Database Access
 
@@ -379,13 +379,18 @@ dev.bethge.shipir
 ├── streaming/         LogStreamHandler, DockerEventStreamService, ComposeOutputStreamService, ExecSessionHandler
 ├── git/               Git credentials (encrypted PAT), remote checks via JGit
 ├── notification/      in-app notifications (HostStatusChangedEvent listener), per-user preferences, webhooks
-├── retention/         retention settings, daily purge of audit log and notifications
+├── ai/                AI chat assistant (see "AI assistant" below)
+│   ├── settings/      ADMIN AI settings: API key (SecretCipher, hint only), base URL, model
+│   ├── llm/           OpenAI-compatible chat client with tool calling and streaming
+│   ├── tools/         tool registry: role-scoped tools over existing feature services
+│   └── chat/          chat sessions/messages, orchestration loop, confirmations, sharing
+├── retention/         retention settings, daily purge of audit log, notifications and chat sessions
 ├── auth/              User, Role (ADMIN/OPERATOR/VIEWER), UserService, AuthController, DTOs
 ├── permission/        Permission (per host/stack), PermissionService, PermissionEvaluator (@PreAuthorize)
 └── audit/             AuditLogEntry, service, AuditAspect (AOP, @Auditable)
 ```
 
-**Dependency direction:** `docker/` knows no other feature module. `compose/` and `streaming/` may use `docker/`, never the other way around. To be enforced with ArchUnit later.
+**Dependency direction:** `docker/` knows no other feature module. `compose/` and `streaming/` may use `docker/`, never the other way around. `ai/` may call other feature services (its tools are thin adapters over them); no feature imports `ai/`. The AI-origin marker for audit entries lives in `common/`, so `audit/` never depends on `ai/`. To be enforced with ArchUnit later.
 
 **Principles:**
 - **Never pass docker-java types outward.** Expose our own interfaces and DTOs.
@@ -395,6 +400,17 @@ dev.bethge.shipir
 - **`spring.jpa.open-in-view: false`.** Build DTOs in the service layer.
 - **Auditing via AOP** (`@Auditable` + `AuditAspect`), not by hand in every service.
 - **Config editor writes make a backup first.**
+
+## AI assistant
+
+Decided in epic shipr-9sm. An in-app chat that can do what the signed-in user can do in Shipir.
+- **Provider:** NVIDIA build API, model GLM 5.3 Flash, via OpenAI-compatible chat completions with tool calling. No other providers for now.
+- **Tools run as the signed-in user** with their role (VIEWER is read-only). Tools are thin adapters over existing feature services, never raw Docker, shell or SQL access.
+- **Writes need explicit Confirm** in the chat. Model output alone never changes anything.
+- **Audit:** actions are audited as the user, with details marking AI origin.
+- **API key:** set by ADMIN at `/settings/ai`, encrypted via `SecretCipher`, only a hint is returned, never logged.
+- **Sessions are owner-only.** The owner may share a session read-only with ADMINs (for debugging) and revoke it. Old sessions are purged by the retention job.
+- **Out of scope:** config_editor and permission tools (features not built yet), exec terminal, RAG/embeddings.
 
 ## Security (non-negotiable)
 
