@@ -84,8 +84,8 @@ Frontend (`frontend/`):
 
 Repo root:
 - `docker-compose.dev.yml`: local PostgreSQL 16 for development (healthcheck, `DB_*` from `.env`)
-- `docker-compose.yml`: hosting stack, backend + frontend (`ghcr.io/csstk/shipir-*` or local build), external PostgreSQL, only frontend port published
-- `.env.example`: documents `DB_*` (`DB_PASSWORD` required), `SHIPIR_TAG`, `SHIPIR_PORT`; `.env` is gitignored
+- `docker-compose.yml`: hosting stack, backend + frontend (`ghcr.io/csstk/shipir-*` or local build), external PostgreSQL, only frontend port published, passes `SHIPIR_INITIAL_ADMIN_PASSWORD`
+- `.env.example`: documents `DB_*` (`DB_PASSWORD` required), `SHIPIR_INITIAL_ADMIN_PASSWORD` (empty DB only), `SHIPIR_TAG`, `SHIPIR_PORT`; `.env` is gitignored
 
 CI:
 - `.github/workflows/images.yml`: builds backend/frontend images (matrix); PRs build only; `dev` → `:dev`, `prd` → `:latest`, `v*` tags → semver, pushed to ghcr.io/csstk/shipir-{backend,frontend}
@@ -272,7 +272,7 @@ dev.bethge.shipir
 - **Path traversal:** all file access (config editor, compose paths) goes through `PathValidationUtil`: canonical paths, checked against allowed base directories, symlinks considered. Test it with malicious paths (`../`, absolute paths, symlinks, URL-encoded variants).
 - **Subprocesses:** never through a shell with concatenated strings. Use `ProcessBuilder` with an argument list. Never interpolate user input into commands.
 - Never store secrets (TLS certificates, passwords) in plain text, and never log them.
-- Passwords are only stored hashed (BCrypt or Argon2).
+- Passwords are only stored hashed: Argon2id via `DelegatingPasswordEncoder` (BCrypt rejects input over 72 bytes, the policy allows 128 characters).
 
 ## Database & Flyway
 

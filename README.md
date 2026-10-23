@@ -112,7 +112,9 @@ The images on ghcr.io are private, so `docker login ghcr.io` is required before 
 
 Without a pull (or when the images don't exist on ghcr.io yet), `docker compose -f docker-compose.yml build` builds both images locally, and `up` uses them.
 
-Required in `.env`: `DB_PASSWORD` and `DB_HOST`. Compose stops with a message if either is missing. Optional: `DB_PORT`, `DB_NAME`, `DB_USER`, `SHIPIR_TAG` (image tag) and `SHIPIR_PORT` (host port, default `8080`).
+Required in `.env`: `DB_PASSWORD` and `DB_HOST`. Compose stops with a message if either is missing. On the first start (empty database) also `SHIPIR_INITIAL_ADMIN_PASSWORD`; without it the backend refuses to start. Optional: `DB_PORT`, `DB_NAME`, `DB_USER`, `SHIPIR_TAG` (image tag) and `SHIPIR_PORT` (host port, default `8080`).
+
+**First login:** sign in as `admin` with `SHIPIR_INITIAL_ADMIN_PASSWORD`. Shipir then asks for a new password (15–128 characters with upper- and lowercase letters, a digit and a symbol) before anything else is usable. Later logins skip this step.
 
 Only the frontend port is published. The backend is reachable only from the frontend on the compose network. The frontend starts even if the backend is not up yet; it reconnects on the next request.
 
