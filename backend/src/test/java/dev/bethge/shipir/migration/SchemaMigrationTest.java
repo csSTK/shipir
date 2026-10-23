@@ -100,7 +100,7 @@ class SchemaMigrationTest {
 
         assertThat(count("stacks")).isZero();
         assertThat(count("stack_versions")).isZero();
-        assertThat(count("users")).isEqualTo(1);
+        assertThat(count("users")).isEqualTo(2); // alice + the seeded initial admin
     }
 
     @Test

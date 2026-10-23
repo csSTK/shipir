@@ -89,6 +89,7 @@ The connection is configured with five variables, all listed in `.env.example`:
 | `DB_PORT` | `5432` | Port on the host, also the published port of the container |
 | `DB_NAME` | `shipir` | Database name |
 | `DB_USER` | `shipir` | Database user |
+| `SHIPIR_INITIAL_ADMIN_PASSWORD` | none (required on first start) | Password of the initial `admin` account, created only while the users table is empty; the admin must change it on first login. Ignored afterwards |
 
 The compose file reads `DB_NAME`, `DB_USER` and `DB_PORT` from `.env` as well, so the container and the backend always agree.
 

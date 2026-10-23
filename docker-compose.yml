@@ -13,6 +13,7 @@ services:
       DB_NAME: ${DB_NAME:-shipir}
       DB_USER: ${DB_USER:-shipir}
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env (see .env.example)}
+      SHIPIR_INITIAL_ADMIN_PASSWORD: ${SHIPIR_INITIAL_ADMIN_PASSWORD:-}
     # No ports: the backend is reachable only from the frontend on the compose network.
     restart: unless-stopped
 

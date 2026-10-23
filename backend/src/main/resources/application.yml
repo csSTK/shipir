@@ -1,3 +1,7 @@
+shipir:
+  initial-admin:
+    username: ${SHIPIR_INITIAL_ADMIN_USERNAME:admin}
+    password: ${SHIPIR_INITIAL_ADMIN_PASSWORD:}
 spring:
   application:
     name: shipir

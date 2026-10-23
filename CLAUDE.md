@@ -34,8 +34,13 @@ Current state: project skeleton in place. Backend in `backend/` with Maven and S
 Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `ShipirApplication.java`: Spring Boot entry point
 - `**/package-info.java`: one-line Javadoc per package of the architecture tree
-- `audit/AuditLogEntry.java`, `auth/User.java`, `compose/Stack.java`, `compose/generator/ComposeGeneratorService.java`, `config_editor/ConfigFile.java`, `docker/DockerHostConnectionManager.java`, `host/DockerHost.java`, `permission/Permission.java`, `streaming/LogStreamHandler.java`: empty placeholders
-- `backend/pom.xml`: Maven build, Java 25, Spring Boot 4.1.1 parent, starters web/websocket/validation/data-jpa/flyway/test, flyway-database-postgresql, postgresql driver, Testcontainers (test)
+- `audit/AuditLogEntry.java`, `compose/Stack.java`, `compose/generator/ComposeGeneratorService.java`, `config_editor/ConfigFile.java`, `docker/DockerHostConnectionManager.java`, `host/DockerHost.java`, `permission/Permission.java`, `streaming/LogStreamHandler.java`: empty placeholders
+- `auth/{User,Role,UserRepository}.java`: user entity (`isSetupRequired()`), ADMIN/OPERATOR/VIEWER enum, repository
+- `auth/InitialAdminSeeder.java`, `auth/InitialAdminProperties.java`: seeds first admin on empty DB from `shipir.initial-admin.*` (fails startup without password)
+- `common/config/PasswordEncoderConfig.java`: Argon2id `PasswordEncoder` bean (DelegatingPasswordEncoder, bcrypt match-only)
+- `backend/src/test/resources/application.properties`: test initial-admin password
+- `backend/src/test/java/dev/bethge/shipir/auth/InitialAdminSeeder{,Startup}Test.java`: seeding, no-op rerun, missing password, no password in logs
+- `backend/pom.xml`: Maven build, Java 25, Spring Boot 4.1.1 parent, starters web/websocket/security/validation/data-jpa/flyway/test, spring-security-test, flyway-database-postgresql, postgresql driver, Testcontainers (test)
 - `backend/mvnw`, `backend/.mvn/wrapper/`: Maven wrapper
 - `backend/Dockerfile`: multi-stage image: Temurin 25 build (tests skipped), JRE alpine runtime, user uid 10001, env-only config
 - `backend/.dockerignore`: excludes `target/`, `.env`, keys, IDE and git files from the image build
