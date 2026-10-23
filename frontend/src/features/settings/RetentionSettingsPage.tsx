@@ -22,6 +22,7 @@ function errorMessage(error: unknown): string {
 function RetentionForm({ initial }: { initial: RetentionSettings }) {
   const [audit, setAudit] = useState(String(initial.auditLogDays))
   const [notification, setNotification] = useState(String(initial.notificationDays))
+  const [chat, setChat] = useState(String(initial.chatSessionDays))
   const [problem, setProblem] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const save = useSaveRetentionSettings()
@@ -30,14 +31,15 @@ function RetentionForm({ initial }: { initial: RetentionSettings }) {
     e.preventDefault()
     const auditLogDays = parseDays(audit)
     const notificationDays = parseDays(notification)
-    if (auditLogDays === null || notificationDays === null) {
+    const chatSessionDays = parseDays(chat)
+    if (auditLogDays === null || notificationDays === null || chatSessionDays === null) {
       setSaved(false)
       return setProblem(RANGE_MESSAGE)
     }
     setProblem(null)
     setSaved(false)
     save.mutate(
-      { auditLogDays, notificationDays },
+      { auditLogDays, notificationDays, chatSessionDays },
       {
         onSuccess: () => setSaved(true),
         onError: (err) => setProblem(errorMessage(err)),
@@ -77,6 +79,21 @@ function RetentionForm({ initial }: { initial: RetentionSettings }) {
           }}
         />
       </label>
+      <label className="rt-field">
+        <span>Chat session retention (days)</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={MIN_DAYS}
+          max={MAX_DAYS}
+          step={1}
+          value={chat}
+          onChange={(e) => {
+            setChat(e.target.value)
+            setSaved(false)
+          }}
+        />
+      </label>
       <p className="rt-muted">Older entries are removed once a day. Values from 1 to 3650 days.</p>
       {problem && (
         <p role="alert" className="rt-error">
@@ -97,7 +114,7 @@ function RetentionForm({ initial }: { initial: RetentionSettings }) {
   )
 }
 
-/** Settings > Retention: ADMIN sets how long audit log and notification entries are kept. */
+/** Settings > Retention: ADMIN sets how long audit log, notification and chat session entries are kept. */
 export function RetentionSettingsPage() {
   const { data, isPending, isError } = useRetentionSettings()
 

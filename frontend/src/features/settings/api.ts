@@ -83,6 +83,7 @@ export function useTestWebhook() {
 export interface RetentionSettings {
   auditLogDays: number
   notificationDays: number
+  chatSessionDays: number
 }
 
 export const RETENTION_KEY = ['settings-retention'] as const
@@ -98,6 +99,47 @@ export function useSaveRetentionSettings() {
     mutationFn: (input: RetentionSettings) =>
       apiFetch<RetentionSettings>(RETENTION_PATH, { method: 'PUT', body: input }),
     onSuccess: (saved) => queryClient.setQueryData(RETENTION_KEY, saved),
+  })
+}
+
+/** The API key is never returned, only whether one is stored and a hint. */
+export interface AiSettings {
+  baseUrl: string
+  model: string
+  enabled: boolean
+  keyConfigured: boolean
+  apiKeyHint: string | null
+}
+
+/** `apiKey` omitted keeps the stored key, an empty string clears it. */
+export interface AiSettingsInput {
+  baseUrl: string
+  model: string
+  enabled: boolean
+  apiKey?: string
+}
+
+export type AiConnectionStatus = 'OK' | 'AUTH_FAILED' | 'UNREACHABLE'
+
+export const AI_SETTINGS_KEY = ['settings-ai'] as const
+const AI_PATH = '/settings/ai'
+
+export function useAiSettings() {
+  return useQuery({ queryKey: AI_SETTINGS_KEY, queryFn: () => apiFetch<AiSettings>(AI_PATH) })
+}
+
+export function useSaveAiSettings() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: AiSettingsInput) => apiFetch<AiSettings>(AI_PATH, { method: 'PUT', body: input }),
+    onSuccess: (saved) => queryClient.setQueryData(AI_SETTINGS_KEY, saved),
+  })
+}
+
+/** Tests the stored settings, not unsaved form values. */
+export function useTestAiConnection() {
+  return useMutation({
+    mutationFn: () => apiFetch<{ status: AiConnectionStatus }>(`${AI_PATH}/test`, { method: 'POST' }),
   })
 }
 

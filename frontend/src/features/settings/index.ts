@@ -1,4 +1,5 @@
 export { WebhooksSettingsPage } from './WebhooksSettingsPage.tsx'
 export { RetentionSettingsPage } from './RetentionSettingsPage.tsx'
+export { AiSettingsPage } from './AiSettingsPage.tsx'
 export { AuditLogPage } from './AuditLogPage.tsx'
 export { GitCredentialsSettingsPage } from './GitCredentialsSettingsPage.tsx'

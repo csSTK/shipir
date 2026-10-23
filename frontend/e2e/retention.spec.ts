@@ -4,8 +4,8 @@ const admin = { username: 'admin', role: 'ADMIN', setupRequired: false, setupSte
 
 test('admin changes the retention periods and saves', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: admin })
-  api.mock('GET', '/api/settings/retention', { body: { auditLogDays: 90, notificationDays: 30 } })
-  api.mock('PUT', '/api/settings/retention', { body: { auditLogDays: 365, notificationDays: 14 } })
+  api.mock('GET', '/api/settings/retention', { body: { auditLogDays: 90, notificationDays: 30, chatSessionDays: 60 } })
+  api.mock('PUT', '/api/settings/retention', { body: { auditLogDays: 365, notificationDays: 14, chatSessionDays: 60 } })
   await page.goto('/settings/retention')
 
   const audit = page.getByLabel('Audit log retention (days)')
@@ -20,7 +20,7 @@ test('admin changes the retention periods and saves', async ({ page, api }) => {
 
 test('server rejection is shown inline and nothing is reported as saved', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: admin })
-  api.mock('GET', '/api/settings/retention', { body: { auditLogDays: 90, notificationDays: 30 } })
+  api.mock('GET', '/api/settings/retention', { body: { auditLogDays: 90, notificationDays: 30, chatSessionDays: 60 } })
   api.mock('PUT', '/api/settings/retention', {
     status: 400,
     body: { code: 'VALIDATION_FAILED', message: 'Invalid', details: ['notificationDays must be at least 1'] },

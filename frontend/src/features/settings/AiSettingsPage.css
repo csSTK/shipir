@@ -1,0 +1,176 @@
+.ai {
+  --ai-down: #d92d20;
+  --ai-ok: #1f9d55;
+  --ai-surface: color-mix(in srgb, currentColor 5%, transparent);
+  --ai-border: color-mix(in srgb, currentColor 12%, transparent);
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ai-title {
+  margin: 0;
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+.ai-muted {
+  margin: 0;
+  font-size: 0.875rem;
+  opacity: 0.7;
+}
+
+.ai-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ai-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9375rem;
+}
+
+.ai-field input {
+  font: inherit;
+  padding: 9px 12px;
+  border: 1px solid var(--ai-border);
+  border-radius: 10px;
+  background: var(--ai-surface);
+  color: inherit;
+}
+
+.ai-field input:disabled {
+  opacity: 0.5;
+}
+
+.ai-field input:focus-visible,
+.ai-btn:focus-visible,
+.ai-toggle input:focus-visible {
+  outline: 2px solid AccentColor;
+  outline-offset: 2px;
+}
+
+.ai-keyline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: -6px;
+}
+
+.ai-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9375rem;
+}
+
+.ai-toggle input {
+  appearance: none;
+  width: 46px;
+  height: 28px;
+  border-radius: 14px;
+  background: color-mix(in srgb, currentColor 25%, transparent);
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.ai-toggle input::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.25s cubic-bezier(0.3, 1.4, 0.5, 1), width 0.15s ease-out;
+}
+
+.ai-toggle input:checked {
+  background: #34c759;
+}
+
+.ai-toggle input:checked::after {
+  transform: translateX(18px);
+}
+
+.ai-toggle input:active::after {
+  width: 28px;
+}
+
+.ai-toggle input:checked:active::after {
+  transform: translateX(14px);
+}
+
+.ai-error {
+  margin: 0;
+  color: var(--ai-down);
+  font-size: 0.875rem;
+}
+
+.ai-ok {
+  margin: 0;
+  color: var(--ai-ok);
+  font-size: 0.875rem;
+}
+
+.ai-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ai-btn {
+  font: inherit;
+  font-size: 0.9375rem;
+  padding: 8px 18px;
+  border: 1px solid var(--ai-border);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 100ms ease-out, background-color 100ms ease-out, opacity 100ms ease-out;
+}
+
+.ai-btn:active:not(:disabled) {
+  transform: scale(0.97);
+  background: var(--ai-surface);
+}
+
+.ai-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ai-btn--primary {
+  background: AccentColor;
+  border-color: transparent;
+  color: AccentColorText;
+}
+
+.ai-btn--text {
+  border: 0;
+  padding: 4px 8px;
+  font-size: 0.875rem;
+  color: var(--ai-down);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-btn,
+  .ai-toggle input,
+  .ai-toggle input::after {
+    transition: none;
+  }
+  .ai-btn:active:not(:disabled) {
+    transform: none;
+  }
+}

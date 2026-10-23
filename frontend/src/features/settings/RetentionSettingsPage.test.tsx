@@ -15,7 +15,7 @@ afterEach(() => {
   vi.resetAllMocks()
 })
 
-const current = { auditLogDays: 90, notificationDays: 30 }
+const current = { auditLogDays: 90, notificationDays: 30, chatSessionDays: 60 }
 
 function renderPage(put?: () => Promise<unknown>) {
   apiFetchMock.mockImplementation((path: string, options?: { method?: string }) => {
@@ -39,6 +39,15 @@ describe('RetentionSettingsPage', () => {
     renderPage()
     expect(await screen.findByLabelText('Audit log retention (days)')).toHaveValue(90)
     expect(screen.getByLabelText('Notification retention (days)')).toHaveValue(30)
+    expect(screen.getByLabelText('Chat session retention (days)')).toHaveValue(60)
+  })
+
+  it('rejects an out-of-range chat session value client-side', async () => {
+    renderPage()
+    fireEvent.change(await screen.findByLabelText('Chat session retention (days)'), { target: { value: '5000' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('Enter a value from 1 to 3650 days.')).toBeInTheDocument()
+    expect(calls('PUT')).toHaveLength(0)
   })
 
   it('explains that the purge runs daily', async () => {
@@ -65,7 +74,7 @@ describe('RetentionSettingsPage', () => {
   })
 
   it('saves the values and shows a success notice', async () => {
-    renderPage(() => Promise.resolve({ auditLogDays: 365, notificationDays: 30 }))
+    renderPage(() => Promise.resolve({ auditLogDays: 365, notificationDays: 30, chatSessionDays: 60 }))
     const audit = await screen.findByLabelText('Audit log retention (days)')
     fireEvent.change(audit, { target: { value: '365' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -73,7 +82,7 @@ describe('RetentionSettingsPage', () => {
     await waitFor(() => expect(calls('PUT')).toHaveLength(1))
     expect(calls('PUT')[0]).toEqual([
       '/settings/retention',
-      { method: 'PUT', body: { auditLogDays: 365, notificationDays: 30 } },
+      { method: 'PUT', body: { auditLogDays: 365, notificationDays: 30, chatSessionDays: 60 } },
     ])
   })
 
