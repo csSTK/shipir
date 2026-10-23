@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V6 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V7 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To6Successfully() {
+    void flywayAppliedVersions1To7Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7");
     }
 
     @Test
@@ -263,6 +263,106 @@ class SchemaMigrationTest {
         insertVersion(stack, author);
         assertThatThrownBy(() -> jdbc.update("DELETE FROM users WHERE id = ?", author))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void passwordResetCodesHasExpectedColumnsAndTypes() {
+        List<Map<String, Object>> columns = jdbc.queryForList("""
+                SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'password_reset_codes'
+                """);
+        Map<String, Map<String, Object>> byName = columns.stream()
+                .collect(java.util.stream.Collectors.toMap(c -> (String) c.get("column_name"), c -> c));
+        assertThat(byName.keySet()).containsExactlyInAnyOrder(
+                "id", "user_id", "code_hash", "expires_at", "failed_attempts", "used_at", "created_at");
+
+        assertThat(byName.get("id").get("data_type")).isEqualTo("uuid");
+        assertThat(byName.get("user_id").get("data_type")).isEqualTo("uuid");
+        assertThat(byName.get("user_id").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("code_hash").get("data_type")).isEqualTo("character varying");
+        assertThat(byName.get("code_hash").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("expires_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("expires_at").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("failed_attempts").get("data_type")).isEqualTo("integer");
+        assertThat(byName.get("failed_attempts").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("used_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("used_at").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("created_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("created_at").get("is_nullable")).isEqualTo("NO");
+    }
+
+    @Test
+    void passwordResetCodeHashIsVarchar64() {
+        Integer maxLength = jdbc.queryForObject("""
+                SELECT character_maximum_length FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'password_reset_codes' AND column_name = 'code_hash'
+                """, Integer.class);
+        assertThat(maxLength).isEqualTo(64);
+    }
+
+    @Test
+    void passwordResetCodeFailedAttemptsDefaultsToZero() {
+        UUID user = insertUser("alice");
+        jdbc.update("INSERT INTO password_reset_codes (user_id, code_hash, expires_at) VALUES (?, 'hash', now())", user);
+        Integer failedAttempts = jdbc.queryForObject(
+                "SELECT failed_attempts FROM password_reset_codes WHERE user_id = ?", Integer.class, user);
+        assertThat(failedAttempts).isZero();
+    }
+
+    @Test
+    void passwordResetCodeIdAndCreatedAtHaveDefaults() {
+        UUID user = insertUser("alice");
+        jdbc.update("INSERT INTO password_reset_codes (user_id, code_hash, expires_at) VALUES (?, 'hash', now())", user);
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT id, created_at FROM password_reset_codes WHERE user_id = ?", user);
+        assertThat(row.get("id")).isNotNull();
+        assertThat(row.get("created_at")).isNotNull();
+    }
+
+    @Test
+    void negativeFailedAttemptsIsRejected() {
+        UUID user = insertUser("alice");
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO password_reset_codes (user_id, code_hash, expires_at, failed_attempts) "
+                        + "VALUES (?, 'hash', now(), -1)", user))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("password_reset_codes_failed_attempts_check");
+    }
+
+    @Test
+    void passwordResetCodeWithoutCodeHashIsRejected() {
+        UUID user = insertUser("alice");
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO password_reset_codes (user_id, code_hash, expires_at) VALUES (?, NULL, now())", user))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void passwordResetCodeWithoutExpiresAtIsRejected() {
+        UUID user = insertUser("alice");
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO password_reset_codes (user_id, code_hash, expires_at) VALUES (?, 'hash', NULL)", user))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void deletingUserCascadesToPasswordResetCodes() {
+        UUID user = insertUser("alice");
+        jdbc.update("INSERT INTO password_reset_codes (user_id, code_hash, expires_at) VALUES (?, 'hash', now())", user);
+
+        jdbc.update("DELETE FROM users WHERE id = ?", user);
+
+        assertThat(count("password_reset_codes")).isZero();
+    }
+
+    @Test
+    void passwordResetCodesHasIndexOnUserId() {
+        Integer count = jdbc.queryForObject("""
+                SELECT count(*) FROM pg_indexes
+                WHERE schemaname = 'public' AND tablename = 'password_reset_codes'
+                  AND indexdef LIKE '%(user_id)%'
+                """, Integer.class);
+        assertThat(count).isGreaterThanOrEqualTo(1);
     }
 
     private int count(String table) {
