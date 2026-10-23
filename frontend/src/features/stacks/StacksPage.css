@@ -37,3 +37,17 @@
     transform: none;
   }
 }
+.stacks__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.stacks__actions {
+  display: inline-flex;
+  gap: 4px;
+}
+.stacks__notice {
+  margin: 0;
+  font-size: 0.875rem;
+}

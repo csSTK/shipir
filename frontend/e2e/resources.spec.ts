@@ -29,6 +29,7 @@ const stacks = [
 test.beforeEach(({ api }) => {
   api.mock('GET', '/api/auth/me', me)
   api.mock('GET', '/api/hosts/overview', { body: [local] })
+  api.mock('GET', '/api/hosts/a/managed-stacks', { body: [] })
 })
 
 test('stacks: search, sort, click opens filtered containers', async ({ page, api }) => {

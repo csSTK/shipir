@@ -22,6 +22,18 @@ const stacks = [
   { name: 'old', containerCount: 1, runningCount: 0, status: 'STOPPED', workingDir: '/srv/old' },
 ]
 
+const me = (role: string) => ({ username: 'u', role, setupRequired: false })
+
+/** Routes mocked API calls by path; unknown paths reject like a 404. */
+function serve(live: unknown, opts: { role?: string; managed?: unknown[] } = {}) {
+  apiFetch.mockImplementation((path: string) => {
+    if (path === '/auth/me') return Promise.resolve(me(opts.role ?? 'VIEWER'))
+    if (path === '/hosts/h1/stacks') return live instanceof Error ? Promise.reject(live) : Promise.resolve(live)
+    if (path === '/hosts/h1/managed-stacks') return Promise.resolve(opts.managed ?? [])
+    return Promise.reject(new ApiError(404, 'x', 'NOT_FOUND'))
+  })
+}
+
 function Where() {
   const l = useLocation()
   return <p data-testid="where">{l.pathname + l.search}</p>
@@ -34,6 +46,7 @@ function renderPage() {
         <Routes>
           <Route path="/environments/:id/stacks" element={<StacksPage />} />
           <Route path="/environments/:id/containers" element={<Where />} />
+          <Route path="/environments/:id/stacks/:stackId" element={<Where />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -49,7 +62,7 @@ function names() {
 
 describe('StacksPage', () => {
   it('lists stacks with status, running/total and working directory', async () => {
-    apiFetch.mockResolvedValue(stacks)
+    serve(stacks)
     renderPage()
     expect(screen.getByRole('status', { name: 'Loading stacks' })).toBeInTheDocument()
     await screen.findByText('/srv/shop')
@@ -61,7 +74,7 @@ describe('StacksPage', () => {
   })
 
   it('searches and sorts by name', async () => {
-    apiFetch.mockResolvedValue(stacks)
+    serve(stacks)
     renderPage()
     await screen.findByText('/srv/shop')
     fireEvent.click(screen.getByRole('button', { name: 'Name' }))
@@ -71,7 +84,7 @@ describe('StacksPage', () => {
   })
 
   it('opens the containers page filtered by the clicked stack', async () => {
-    apiFetch.mockResolvedValue(stacks)
+    serve(stacks)
     renderPage()
     await screen.findByText('/srv/shop')
     fireEvent.click(screen.getByRole('link', { name: 'shop' }))
@@ -79,14 +92,95 @@ describe('StacksPage', () => {
   })
 
   it('shows a message for UNREACHABLE', async () => {
-    apiFetch.mockRejectedValue(new ApiError(502, 'x', 'UNREACHABLE'))
+    serve(new ApiError(502, 'x', 'UNREACHABLE'))
     renderPage()
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not reach the Docker host.')
   })
 
   it('shows the empty state', async () => {
-    apiFetch.mockResolvedValue([])
+    serve([])
     renderPage()
     expect(await screen.findByText('No stacks in this environment.')).toBeInTheDocument()
+  })
+
+  it('shows managed stacks, including ones never deployed, and links them to the detail page', async () => {
+    serve(stacks, {
+      managed: [
+        { id: 'm1', name: 'shop', status: 'RUNNING', source: 'FILE', lastDeployedAt: null, createdAt: '2026-10-01T10:00:00Z' },
+        { id: 'm2', name: 'draft', status: 'STOPPED', source: 'FILE', lastDeployedAt: null, createdAt: '2026-10-01T10:00:00Z' },
+      ],
+    })
+    renderPage()
+    await screen.findByText('/srv/shop')
+    expect(names()).toEqual(['blog', 'draft', 'old', 'shop'])
+    expect(within(screen.getByRole('row', { name: /draft/ })).getByText('Not deployed')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('link', { name: 'draft' }))
+    expect(screen.getByTestId('where')).toHaveTextContent('/environments/h1/stacks/m2')
+  })
+
+  it('hides Add stack and row actions from viewers', async () => {
+    serve(stacks, { managed: [{ id: 'm1', name: 'shop', status: 'RUNNING', source: 'FILE', lastDeployedAt: null, createdAt: 'x' }] })
+    renderPage()
+    await screen.findByText('/srv/shop')
+    expect(screen.queryByRole('button', { name: 'Add stack' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Deploy shop' })).not.toBeInTheDocument()
+  })
+
+  it('lets operators add a stack and deploy a managed one', async () => {
+    serve(stacks, { role: 'OPERATOR', managed: [{ id: 'm1', name: 'shop', status: 'RUNNING', source: 'FILE', lastDeployedAt: null, createdAt: 'x' }] })
+    renderPage()
+    await screen.findByText('/srv/shop')
+    expect(screen.getByRole('button', { name: 'Add stack' })).toBeInTheDocument()
+    apiFetch.mockImplementation((path: string, init?: { method?: string }) =>
+      path === '/hosts/h1/managed-stacks/m1/deploy' && init?.method === 'POST'
+        ? Promise.resolve({ deploymentId: 'd-1', versionId: 'v1' })
+        : Promise.resolve([]),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Deploy shop' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('d-1')
+  })
+
+  it('creates a stack and opens its detail page', async () => {
+    serve(stacks, { role: 'ADMIN' })
+    renderPage()
+    await screen.findByText('/srv/shop')
+    fireEvent.click(screen.getByRole('button', { name: 'Add stack' }))
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'web' } })
+    fireEvent.change(screen.getByLabelText('Compose file'), { target: { value: 'services: {}' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add variable' }))
+    fireEvent.change(screen.getByLabelText('Variable 1 name'), { target: { value: 'A' } })
+    fireEvent.change(screen.getByLabelText('Variable 1 value'), { target: { value: 'b' } })
+    apiFetch.mockImplementation((_path: string, init?: { method?: string }) =>
+      init?.method === 'POST' ? Promise.resolve({ id: 'new1' }) : Promise.resolve([]),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Create stack' }))
+    await vi.waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/environments/h1/stacks/new1'))
+    expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/managed-stacks', {
+      method: 'POST',
+      body: { name: 'web', yaml: 'services: {}', env: [{ key: 'A', value: 'b' }] },
+    })
+  })
+
+  it('shows server errors in the add dialog', async () => {
+    serve(stacks, { role: 'ADMIN' })
+    renderPage()
+    await screen.findByText('/srv/shop')
+    fireEvent.click(screen.getByRole('button', { name: 'Add stack' }))
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'web' } })
+    fireEvent.change(screen.getByLabelText('Compose file'), { target: { value: 'x' } })
+    apiFetch.mockRejectedValue(new ApiError(409, 'taken', 'STACK_NAME_TAKEN'))
+    fireEvent.click(screen.getByRole('button', { name: 'Create stack' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('already exists')
+  })
+
+  it('rejects an invalid name before calling the server', async () => {
+    serve(stacks, { role: 'ADMIN' })
+    renderPage()
+    await screen.findByText('/srv/shop')
+    fireEvent.click(screen.getByRole('button', { name: 'Add stack' }))
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Bad Name' } })
+    fireEvent.change(screen.getByLabelText('Compose file'), { target: { value: 'x' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create stack' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('lowercase')
   })
 })

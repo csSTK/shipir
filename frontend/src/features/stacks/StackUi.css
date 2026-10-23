@@ -1,0 +1,184 @@
+/* Shared stack UI: buttons, dialogs. Press feedback is instant; motion is transform/opacity only. */
+.sk-btn {
+  --sk-border: color-mix(in srgb, currentColor 12%, transparent);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  padding: 8px 14px;
+  border: 1px solid var(--sk-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  transition: transform 0.12s ease-out, background-color 0.15s ease;
+}
+.sk-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.sk-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.sk-btn:focus-visible {
+  outline: 2px solid AccentColor;
+  outline-offset: 2px;
+}
+.sk-btn--primary {
+  background: AccentColor;
+  border-color: transparent;
+  color: AccentColorText;
+}
+.sk-btn--plain {
+  border-color: transparent;
+  background: transparent;
+}
+.sk-btn--danger {
+  background: #d92d20;
+  border-color: transparent;
+  color: #fff;
+}
+.sk-btn--danger-text {
+  color: #d92d20;
+}
+
+.sk-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: color-mix(in srgb, #000 40%, transparent);
+  animation: sk-fade 0.2s ease-out;
+}
+.sk-dialog {
+  width: min(34rem, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 20px;
+  border-radius: 20px;
+  background: Canvas;
+  color: CanvasText;
+  box-shadow: 0 24px 60px color-mix(in srgb, #000 35%, transparent);
+  animation: sk-pop 0.3s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.sk-dialog:focus {
+  outline: none;
+}
+.sk-dialog__title {
+  margin: 0 0 12px;
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
+}
+.sk-dialog__text {
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+.sk-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.sk-error {
+  margin: 0 0 12px;
+  font-size: 0.875rem;
+  color: #d92d20;
+}
+.sk-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sk-form .sk-error {
+  margin: 0;
+}
+.sk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.875rem;
+}
+.sk-field input,
+.sk-yaml-input,
+.sk-env__row input {
+  font: inherit;
+  font-size: 1rem;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  color: inherit;
+  min-width: 0;
+}
+.sk-yaml-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+.sk-field input:focus-visible,
+.sk-yaml-input:focus-visible,
+.sk-env__row input:focus-visible {
+  outline: 2px solid AccentColor;
+  outline-offset: 2px;
+}
+.sk-env {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  font-size: 0.875rem;
+}
+.sk-env legend {
+  padding: 0;
+  margin-bottom: 6px;
+}
+.sk-env__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  width: 100%;
+}
+
+@keyframes sk-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes sk-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@media (max-width: 600px) {
+  .sk-env__row {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-dialog {
+    animation: sk-fade 0.2s ease-out;
+  }
+  .sk-btn {
+    transition: background-color 0.15s ease;
+  }
+  .sk-btn:active:not(:disabled) {
+    transform: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .sk-scrim {
+    background: color-mix(in srgb, #000 60%, transparent);
+  }
+}
+@media (prefers-contrast: more) {
+  .sk-btn {
+    --sk-border: currentColor;
+  }
+}

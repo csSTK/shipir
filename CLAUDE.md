@@ -158,7 +158,10 @@ Frontend (`frontend/`):
 - `src/features/containers/{api.ts,ContainersPage.tsx,.css,index.ts}`: `useContainers(hostId)`; `/environments/:id/containers` table, `?stack=<project>` filter chip
 - `src/features/{images,networks,volumes}/{api.ts,*Page.tsx,.css,index.ts}`: `useImages/useNetworks/useVolumes(hostId)`; `/environments/:id/{images,networks,volumes}` tables on `ResourceTable` (usage/internal badges, missing values as `–`); `formatSize` in `hosts/format.ts`
 - `e2e/images-networks-volumes.spec.ts`: images/networks/volumes pages (search, sort, badges, error + retry)
-- `src/features/stacks/{api.ts,StacksPage.tsx,.css,index.ts}`: `useStacks(hostId)`; `/environments/:id/stacks` table, stack name links to containers filtered by stack
+- `src/features/stacks/{api.ts,StacksPage.tsx,.css,index.ts}`: `useStacks(hostId)` + managed-stack hooks (`useManagedStacks/useManagedStack/useStackVersions/useCreateStack/useDeleteStack/useDeployStack/useStopStack/useRollbackStack`); `/environments/:id/stacks` table joins live + managed stacks (unmanaged name links to containers filtered by stack, managed to detail), Add stack (ADMIN/OPERATOR), row Deploy/Stop
+- `src/features/stacks/{StackDetailPage,AddStackDialog,ConfirmDialog,StackDialog}.tsx`, `StackUi.css`, `StackDetailPage.css`, `stackErrors.ts`: `/environments/:id/stacks/:stackId` (status, Deploy/Stop/Delete, versions + Rollback confirm, writes hidden for VIEWER); add form (textarea + env rows), confirm/modal shell, API error mapping
+- `src/features/stacks/{StackContentPanel,DeploymentPanel}.tsx`: seams: read-only YAML/env keys (replaced by editors in shipr-e42.14), deployment started notice (replaced by live STOMP output in shipr-e42.16)
+- `e2e/stack-detail.spec.ts`: operator create -> deploy -> rollback -> delete, viewer read-only
 - `e2e/resources.spec.ts`: stacks/containers pages: search, sort, stack filter, UNREACHABLE/TIMEOUT, empty
 - `src/features/hosts/api.ts`: host types, `HOSTS_KEY`/`HOSTS_OVERVIEW_KEY`, `useHosts/useHostsOverview` (30 s + focus refetch, `HostOverview`), `useCreateHost/useTestConnection/useRenameHost/useDeleteHost` (create/delete also invalidate current user)
 - `src/features/hosts/EnvironmentForm.{tsx,css}`: Local / Remote (TCP+TLS) form, PEM file pickers (names only shown), connection test, inline server errors; props `onCreated`, `submitLabel`
