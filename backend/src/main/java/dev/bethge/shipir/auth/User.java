@@ -65,6 +65,24 @@ public class User {
         this.passwordChangedAt = changedAt;
     }
 
+    public void changeRole(Role newRole) {
+        this.role = newRole;
+    }
+
+    public void disable(Instant at) {
+        this.disabledAt = at;
+    }
+
+    public void enable() {
+        this.disabledAt = null;
+    }
+
+    /** Stores a hash of an admin-issued one-time password; the user must choose their own on next login. */
+    public void resetPasswordHash(String newPasswordHash) {
+        this.passwordHash = newPasswordHash;
+        this.passwordChangedAt = null;
+    }
+
     public UUID getId() {
         return id;
     }

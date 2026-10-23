@@ -18,7 +18,11 @@ import org.springframework.security.authentication.dao.DaoAuthenticationProvider
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.core.session.SessionRegistry;
+import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.web.session.HttpSessionEventPublisher;
+import org.springframework.security.web.authentication.session.RegisterSessionAuthenticationStrategy;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
@@ -55,6 +59,7 @@ class SecurityConfig {
                                             AuthenticationEntryPoint entryPoint,
                                             AccessDeniedHandler accessDeniedHandler,
                                             SetupStatus setupStatus,
+                                            SessionRegistry sessionRegistry,
                                             JsonMapper mapper) throws Exception {
         http
                 .formLogin(AbstractHttpConfigurer::disable)
@@ -68,6 +73,9 @@ class SecurityConfig {
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
                 .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
                 .addFilterBefore(new SetupGateFilter(setupStatus, mapper), AuthorizationFilter.class)
+                .sessionManagement(sm -> sm.maximumSessions(-1).sessionRegistry(sessionRegistry)
+                        .expiredSessionStrategy(event -> writeJson(mapper, event.getResponse(), HttpStatus.UNAUTHORIZED,
+                                new ErrorResponse("UNAUTHENTICATED", "Authentication required"))))
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint(entryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
@@ -92,6 +100,7 @@ class SecurityConfig {
                         .requestMatchers("/api/compose/generate").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers("/api/audit-log", "/api/audit-log/**").hasRole("ADMIN")
                         .requestMatchers("/api/notifications/webhooks", "/api/notifications/webhooks/**").hasRole("ADMIN")
+                        .requestMatchers("/api/users", "/api/users/**").hasRole("ADMIN")
                         .requestMatchers("/api/git/**").hasRole("ADMIN")
                         .requestMatchers("/api/settings/retention").hasRole("ADMIN")
                         .requestMatchers("/api/settings/ai", "/api/settings/ai/**").hasRole("ADMIN")
@@ -112,6 +121,18 @@ class SecurityConfig {
         return new HttpSessionSecurityContextRepository();
     }
 
+    /** Tracks sessions per user so an ADMIN action (disable, reset, delete) can end them. */
+    @Bean
+    SessionRegistry sessionRegistry() {
+        return new SessionRegistryImpl();
+    }
+
+    /** Lets the registry forget sessions that the container destroys (timeout, logout). */
+    @Bean
+    HttpSessionEventPublisher httpSessionEventPublisher() {
+        return new HttpSessionEventPublisher();
+    }
+
     @Bean
     CsrfTokenRepository csrfTokenRepository() {
         return CookieCsrfTokenRepository.withHttpOnlyFalse();
@@ -119,9 +140,11 @@ class SecurityConfig {
 
     /** Applied by the login endpoint: new session id and new CSRF token once the user is authenticated. */
     @Bean
-    SessionAuthenticationStrategy sessionAuthenticationStrategy(CsrfTokenRepository csrfTokenRepository) {
+    SessionAuthenticationStrategy sessionAuthenticationStrategy(CsrfTokenRepository csrfTokenRepository,
+                                                                SessionRegistry sessionRegistry) {
         return new CompositeSessionAuthenticationStrategy(List.of(
                 new ChangeSessionIdAuthenticationStrategy(),
+                new RegisterSessionAuthenticationStrategy(sessionRegistry),
                 new CsrfAuthenticationStrategy(csrfTokenRepository)));
     }
 
