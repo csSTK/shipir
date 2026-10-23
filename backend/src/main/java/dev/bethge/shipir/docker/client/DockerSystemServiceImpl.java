@@ -122,6 +122,9 @@ public class DockerSystemServiceImpl implements DockerSystemService {
     }
 
     private DockerConnectionException translate(Exception e) {
+        if (e instanceof DockerConnectionException known) {
+            return known; // e.g. INVALID_TLS_MATERIAL from the client factory
+        }
         DockerErrorCode code = classify(e);
         log.debug("Docker call failed ({}): {}", code, e.toString());
         String message = switch (code) {
@@ -129,6 +132,7 @@ public class DockerSystemServiceImpl implements DockerSystemService {
             case TLS_ERROR -> "The TLS handshake with the Docker daemon failed.";
             case PERMISSION_DENIED -> "Permission denied accessing the Docker daemon.";
             case UNREACHABLE -> "The Docker daemon is not reachable.";
+            case INVALID_TLS_MATERIAL -> "The TLS certificate or key is not valid PEM.";
         };
         return new DockerConnectionException(code, message, e);
     }
