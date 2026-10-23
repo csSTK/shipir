@@ -1,10 +1,112 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError, apiFetch } from '../shared/api/client.ts'
 import { App } from './App.tsx'
+import { queryClient } from './queryClient.ts'
 
-describe('App', () => {
-  it('renders the Shipir heading', () => {
+vi.mock('../shared/api/client.ts', async (importActual) => ({
+  ...(await importActual<typeof import('../shared/api/client.ts')>()),
+  apiFetch: vi.fn(),
+}))
+
+const apiFetchMock = vi.mocked(apiFetch)
+
+function route(handlers: Record<string, () => unknown>) {
+  apiFetchMock.mockImplementation(async (path, options) => {
+    const handler = handlers[`${options?.method ?? 'GET'} ${path}`]
+    if (!handler) throw new Error(`unexpected call ${options?.method ?? 'GET'} ${path}`)
+    return handler() as never
+  })
+}
+
+const unauthorized = () => {
+  throw new ApiError(401, 'unauthorized')
+}
+
+beforeEach(() => queryClient.clear())
+afterEach(() => {
+  cleanup()
+  vi.resetAllMocks()
+})
+
+describe('App auth gate', () => {
+  it('renders the login page when /me answers 401', async () => {
+    route({ 'GET /auth/me': unauthorized })
     render(<App />)
-    expect(screen.getByRole('heading', { name: 'Shipir' })).toBeInTheDocument()
+
+    expect(await screen.findByLabelText('Username')).toBeInTheDocument()
+    expect(screen.getByLabelText('Password')).toBeInTheDocument()
+  })
+
+  it('shows the app after a successful login', async () => {
+    route({
+      'GET /auth/me': unauthorized,
+      'POST /auth/login': () => ({ username: 'admin', role: 'ADMIN', setupRequired: false }),
+    })
+    render(<App />)
+
+    fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'admin' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    expect(await screen.findByRole('heading', { name: 'Shipir' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+    expect(apiFetchMock).toHaveBeenCalledWith('/auth/login', {
+      method: 'POST',
+      body: { username: 'admin', password: 'secret' },
+    })
+  })
+
+  it('shows a generic error and keeps the username on a 401 login', async () => {
+    route({
+      'GET /auth/me': unauthorized,
+      'POST /auth/login': unauthorized,
+    })
+    render(<App />)
+
+    fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'admin' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'wrong' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Invalid username or password')
+    expect(screen.getByLabelText('Username')).toHaveValue('admin')
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled()
+  })
+
+  it('disables the form while the login is pending', async () => {
+    route({ 'GET /auth/me': unauthorized, 'POST /auth/login': () => new Promise(() => {}) })
+    render(<App />)
+
+    fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'admin' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'x' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Signing in…' })).toBeDisabled())
+    expect(screen.getByLabelText('Username')).toBeDisabled()
+  })
+
+  it('renders the setup slot, not the app, while setupRequired', async () => {
+    route({ 'GET /auth/me': () => ({ username: 'admin', role: 'ADMIN', setupRequired: true }) })
+    render(<App />)
+
+    expect(await screen.findByTestId('setup-slot')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Sign out' })).not.toBeInTheDocument()
+  })
+
+  it('returns to the login page after sign out', async () => {
+    let signedIn = true
+    route({
+      'GET /auth/me': () => {
+        if (!signedIn) return unauthorized()
+        return { username: 'admin', role: 'ADMIN', setupRequired: false }
+      },
+      'POST /auth/logout': () => {
+        signedIn = false
+      },
+    })
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }))
+    expect(await screen.findByLabelText('Username')).toBeInTheDocument()
   })
 })
