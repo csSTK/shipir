@@ -3,6 +3,7 @@ package dev.bethge.shipir.docker.client;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.exception.ConflictException;
 import com.github.dockerjava.api.exception.NotFoundException;
+import com.github.dockerjava.api.exception.NotModifiedException;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.DockerErrorCode;
@@ -13,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import javax.net.ssl.SSLException;
 import java.net.SocketTimeoutException;
 import java.nio.file.AccessDeniedException;
+import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
@@ -41,9 +43,14 @@ class DockerCallSupport {
 
     /** Runs {@code call} on the cached client of {@code hostId}; evicts the client when the deadline expires. */
     <T> T call(UUID hostId, DockerEndpoint endpoint, Function<DockerClient, T> call) {
+        return call(hostId, endpoint, Duration.ZERO, call);
+    }
+
+    /** Like {@link #call(UUID, DockerEndpoint, Function)} but the deadline is the read timeout plus {@code extra} (e.g. a stop grace period). */
+    <T> T call(UUID hostId, DockerEndpoint endpoint, Duration extra, Function<DockerClient, T> call) {
         try {
             DockerClient client = manager.client(hostId, endpoint);
-            return callWithDeadline(() -> call.apply(client), () -> manager.evict(hostId));
+            return callWithDeadline(extra, () -> call.apply(client), () -> manager.evict(hostId));
         } catch (Exception e) {
             throw translate(e);
         }
@@ -54,6 +61,10 @@ class DockerCallSupport {
      * ignores socket timeouts, so on expiry {@code abort} closes the connection to free the hung call.
      */
     <T> T callWithDeadline(Callable<T> call, Runnable abort) throws Exception {
+        return callWithDeadline(Duration.ZERO, call, abort);
+    }
+
+    <T> T callWithDeadline(Duration extra, Callable<T> call, Runnable abort) throws Exception {
         CompletableFuture<T> result = new CompletableFuture<>();
         Thread.ofVirtual().start(() -> {
             try {
@@ -63,7 +74,7 @@ class DockerCallSupport {
             }
         });
         try {
-            return result.get(manager.readTimeout().toMillis(), TimeUnit.MILLISECONDS);
+            return result.get(manager.readTimeout().plus(extra).toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             abort.run();
             throw e;
@@ -87,6 +98,7 @@ class DockerCallSupport {
             case NOT_FOUND -> "The resource does not exist.";
             case IN_USE -> "The resource is in use.";
             case BUILTIN_NETWORK -> "Built-in networks cannot be removed.";
+            case INVALID_STATE -> "The container is not in a state that allows this action.";
         };
         return new DockerConnectionException(code, message, e);
     }
@@ -96,6 +108,9 @@ class DockerCallSupport {
         for (Throwable t = error; t != null; t = t.getCause()) {
             if (t instanceof NotFoundException) {
                 return DockerErrorCode.NOT_FOUND;
+            }
+            if (t instanceof NotModifiedException) {
+                return DockerErrorCode.INVALID_STATE;
             }
             if (t instanceof ConflictException) {
                 return DockerErrorCode.IN_USE;

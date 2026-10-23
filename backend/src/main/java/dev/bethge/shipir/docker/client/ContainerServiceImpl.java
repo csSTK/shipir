@@ -1,13 +1,18 @@
 package dev.bethge.shipir.docker.client;
 
+import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.exception.InternalServerErrorException;
 import com.github.dockerjava.api.model.Container;
 import com.github.dockerjava.api.model.ContainerPort;
+import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
 import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.DeploymentSummaryDto;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -16,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 @Service
 public class ContainerServiceImpl implements ContainerService {
@@ -107,5 +113,54 @@ public class ContainerServiceImpl implements ContainerService {
             client.removeContainerCmd(id).withForce(force).withRemoveVolumes(false).exec();
             return null;
         });
+    }
+
+    @Override
+    public void startContainer(UUID hostId, DockerEndpoint endpoint, String id) {
+        lifecycle(hostId, endpoint, Duration.ZERO, c -> c.startContainerCmd(id).exec());
+    }
+
+    @Override
+    public void stopContainer(UUID hostId, DockerEndpoint endpoint, String id, int timeoutSeconds) {
+        lifecycle(hostId, endpoint, Duration.ofSeconds(timeoutSeconds), c -> c.stopContainerCmd(id).withTimeout(timeoutSeconds).exec());
+    }
+
+    @Override
+    public void restartContainer(UUID hostId, DockerEndpoint endpoint, String id, int timeoutSeconds) {
+        lifecycle(hostId, endpoint, Duration.ofSeconds(timeoutSeconds), c -> c.restartContainerCmd(id).withtTimeout(timeoutSeconds).exec());
+    }
+
+    @Override
+    public void pauseContainer(UUID hostId, DockerEndpoint endpoint, String id) {
+        lifecycle(hostId, endpoint, Duration.ZERO, c -> c.pauseContainerCmd(id).exec());
+    }
+
+    @Override
+    public void unpauseContainer(UUID hostId, DockerEndpoint endpoint, String id) {
+        lifecycle(hostId, endpoint, Duration.ZERO, c -> c.unpauseContainerCmd(id).exec());
+    }
+
+    @Override
+    public void killContainer(UUID hostId, DockerEndpoint endpoint, String id) {
+        lifecycle(hostId, endpoint, Duration.ZERO, c -> c.killContainerCmd(id).exec());
+    }
+
+    /** A 409 on a lifecycle action means "wrong state", not "in use". */
+    private void lifecycle(UUID hostId, DockerEndpoint endpoint, Duration extra, Consumer<DockerClient> action) {
+        try {
+            calls.call(hostId, endpoint, extra, client -> {
+                action.accept(client);
+                return null;
+            });
+        } catch (DockerConnectionException e) {
+            // The daemon answers unpause on a running container with 500 "Container ... is not paused".
+            boolean notPaused = e.getCause() instanceof InternalServerErrorException ise
+                    && ise.getMessage() != null && ise.getMessage().contains("is not paused");
+            if (e.getCode() == DockerErrorCode.IN_USE || notPaused) {
+                throw new DockerConnectionException(DockerErrorCode.INVALID_STATE,
+                        "The container is not in a state that allows this action.", e);
+            }
+            throw e;
+        }
     }
 }

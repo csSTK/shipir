@@ -13,5 +13,7 @@ public enum DockerErrorCode {
     /** The daemon answered 409: the resource is running or still used by a container. */
     IN_USE,
     /** Refused before calling Docker: bridge, host and none cannot be removed. */
-    BUILTIN_NETWORK
+    BUILTIN_NETWORK,
+    /** Container lifecycle action does not fit the current state (daemon 304 or 409): already started/stopped, not running, (not) paused. */
+    INVALID_STATE
 }

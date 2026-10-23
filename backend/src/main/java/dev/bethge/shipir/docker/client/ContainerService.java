@@ -20,4 +20,24 @@ public interface ContainerService {
      * Throws {@code DockerConnectionException} with NOT_FOUND or IN_USE (running, no force).
      */
     void removeContainer(UUID hostId, DockerEndpoint endpoint, String id, boolean force);
+
+    /**
+     * Lifecycle actions. All throw {@code DockerConnectionException}: NOT_FOUND for an unknown container,
+     * INVALID_STATE when the state does not fit (start on running, stop on stopped, pause on stopped/paused,
+     * unpause on not paused, kill on not running).
+     */
+    void startContainer(UUID hostId, DockerEndpoint endpoint, String id);
+
+    /** Stops with SIGTERM, SIGKILL after {@code timeoutSeconds}; the call may take that long. */
+    void stopContainer(UUID hostId, DockerEndpoint endpoint, String id, int timeoutSeconds);
+
+    /** Restarts; like stop it may take up to {@code timeoutSeconds} extra. */
+    void restartContainer(UUID hostId, DockerEndpoint endpoint, String id, int timeoutSeconds);
+
+    void pauseContainer(UUID hostId, DockerEndpoint endpoint, String id);
+
+    void unpauseContainer(UUID hostId, DockerEndpoint endpoint, String id);
+
+    /** Sends SIGKILL to a running container. */
+    void killContainer(UUID hostId, DockerEndpoint endpoint, String id);
 }
