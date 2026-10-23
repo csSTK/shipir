@@ -65,3 +65,28 @@ export function useMarkAllRead() {
     onSuccess: () => void invalidate(),
   })
 }
+
+export interface NotificationPreference {
+  type: NotificationType
+  inAppEnabled: boolean
+}
+
+export const PREFERENCES_KEY = ['notification-preferences'] as const
+
+export function useNotificationPreferences() {
+  return useQuery({
+    queryKey: PREFERENCES_KEY,
+    queryFn: () => apiFetch<NotificationPreference[]>('/notifications/preferences'),
+  })
+}
+
+/** Replaces all preferences; updates the cache at once and re-reads the server state only on failure. */
+export function useSavePreferences() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (preferences: NotificationPreference[]) =>
+      apiFetch<void>('/notifications/preferences', { method: 'PUT', body: preferences }),
+    onMutate: (preferences) => queryClient.setQueryData(PREFERENCES_KEY, preferences),
+    onError: () => void queryClient.invalidateQueries({ queryKey: PREFERENCES_KEY }),
+  })
+}

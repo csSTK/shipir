@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { EnvironmentPage, EnvironmentsOverview } from '../features/hosts/index.ts'
+import { AccountPage } from '../features/account/index.ts'
 import { NotificationsPage } from '../features/notifications/index.ts'
 import { LoginPage, SetupPage, useCurrentUser, useLogout } from '../features/auth/index.ts'
 import { AppShell } from './layout/AppShell.tsx'
@@ -27,7 +28,7 @@ function AuthGate() {
         <Route path="/" element={<EnvironmentsOverview role={user.role} />} />
         <Route path="/environments/:id" element={<EnvironmentPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
-        <Route path="/account" element={<PlaceholderPage title="Account" />} />
+        <Route path="/account" element={<AccountPage user={user} />} />
         <Route path="/settings/notifications" element={settings('Notification settings')} />
         <Route path="/settings/retention" element={settings('Retention')} />
         <Route path="/settings/audit-log" element={settings('Audit log')} />
