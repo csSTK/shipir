@@ -35,6 +35,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 
@@ -149,7 +150,7 @@ public class StackService {
                     "A stack with this name already exists on this environment");
         }
         try {
-            writeAndValidate(hostId, name, request.yaml(), envText, endpoint);
+            writeAndValidate(hostId, name, request.yaml(), envText, endpoint, null);
         } catch (RuntimeException e) {
             stacks.deleteById(stack.getId());
             files.delete(hostId, name);
@@ -197,7 +198,8 @@ public class StackService {
         try {
             GitCheckout checkout = git.sync(files.repoDir(hostId, name), repoUrl, ref, r.composePath().trim(),
                     r.credentialId());
-            writeAndValidate(hostId, name, checkout.composeYaml(), envText, endpoint);
+            writeAndValidate(hostId, name, checkout.composeYaml(), envText, endpoint,
+                    files.repoComposeFile(hostId, name, r.composePath().trim()));
             tx.executeWithoutResult(status -> {
                 StackVersion v = versions.findById(stack.getCurrentVersionId()).orElseThrow();
                 v.replaceContent(checkout.composeYaml(), v.getEnvCiphertext());
@@ -267,7 +269,7 @@ public class StackService {
         DockerEndpoint endpoint = endpointOf(host);
 
         try {
-            writeAndValidate(hostId, name, newYaml, envText, endpoint);
+            writeAndValidate(hostId, name, newYaml, envText, endpoint, composeFileOf(stack));
             UUID userId = users.findByUsername(username).orElseThrow().getId();
             tx.executeWithoutResult(status -> {
                 if (version.isDeployed()) {
@@ -307,7 +309,8 @@ public class StackService {
     private void deleteLocked(UUID hostId, Stack stack, DockerEndpoint endpoint) {
         ComposeProcessResult result;
         try {
-            result = execution.execute(hostId, stack.getName(), ComposeCommand.DOWN, endpoint, line -> { });
+            result = execution.execute(hostId, stack.getName(), ComposeCommand.DOWN, endpoint, line -> { },
+                    composeFileOf(stack));
         } catch (ComposeExecutionException e) {
             throw new StackException(HttpStatus.BAD_GATEWAY, "COMPOSE_DOWN_FAILED", "docker compose down could not run");
         }
@@ -322,11 +325,28 @@ public class StackService {
         files.delete(hostId, stack.getName());
     }
 
-    private void writeAndValidate(UUID hostId, String name, String yaml, String envText, DockerEndpoint endpoint) {
+    /**
+     * Compose file Shipir runs for the stack: {@code null} for FILE stacks (the stored {@code compose.yaml}); for Git
+     * stacks the file inside the checkout, so its relative paths resolve against the repository.
+     */
+    Path composeFileOf(Stack stack) {
+        if (stack.getSourceType() != StackSource.GIT) {
+            return null;
+        }
+        try {
+            return files.repoComposeFile(stack.getHostId(), stack.getName(), stack.getGitComposePath());
+        } catch (PathValidationException e) {
+            throw new StackException(HttpStatus.BAD_REQUEST, "INVALID_COMPOSE_PATH",
+                    "The compose file path must be a relative path inside the repository");
+        }
+    }
+
+    private void writeAndValidate(UUID hostId, String name, String yaml, String envText, DockerEndpoint endpoint,
+                                  Path composeFile) {
         files.write(hostId, name, yaml, envText);
         ValidationResult result;
         try {
-            result = validation.validate(hostId, name, endpoint);
+            result = validation.validate(hostId, name, endpoint, composeFile);
         } catch (ComposeExecutionException e) {
             throw new StackException(HttpStatus.BAD_GATEWAY, "COMPOSE_UNAVAILABLE", "docker compose could not run");
         }

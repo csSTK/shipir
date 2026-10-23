@@ -120,7 +120,8 @@ public class StackDeploymentService {
         try {
             ComposeProcessResult result;
             try {
-                result = execution.execute(hostId, stack.getName(), ComposeCommand.DOWN, endpoint, line -> { });
+                result = execution.execute(hostId, stack.getName(), ComposeCommand.DOWN, endpoint, line -> { },
+                        stackService.composeFileOf(stack));
             } catch (ComposeExecutionException e) {
                 throw new StackException(HttpStatus.BAD_GATEWAY, "COMPOSE_DOWN_FAILED",
                         "docker compose down could not run");
@@ -197,6 +198,9 @@ public class StackDeploymentService {
             StackVersion source = rollbackTo == null ? stackService.currentVersion(stack) : versionOf(stack, rollbackTo);
             String envText = decryptEnv(source);
             GitCheckout checkout = pullGit ? pull(stack, endpoint, envText) : null;
+            if (!pullGit) {
+                alignCheckout(stack, source);
+            }
             String yaml = checkout == null ? source.getYamlContent() : checkout.composeYaml();
             VersionSource versionSource = rollbackTo != null ? VersionSource.ROLLBACK
                     : pullGit ? VersionSource.GIT : source.getSource();
@@ -231,6 +235,18 @@ public class StackDeploymentService {
         }
     }
 
+    /**
+     * Deploy and rollback of a Git stack run the files of the checkout, so the checkout must be at the commit of the
+     * version being deployed (a rollback target, or after a failed pull that left a newer commit behind). The stored
+     * YAML snapshot alone would not do: build contexts, bind mounts and env_file come from the repository at that commit.
+     */
+    private void alignCheckout(Stack stack, StackVersion version) {
+        if (stack.getSourceType() == StackSource.GIT && version.getCommitSha() != null) {
+            git.ensureCommit(files.repoDir(stack.getHostId(), stack.getName()), stack.getGitRepoUrl(),
+                    version.getCommitSha(), stack.getGitComposePath(), stack.getGitCredentialId());
+        }
+    }
+
     /** Fetches the ref into the checkout and validates the compose file; the previous file is restored when invalid. */
     private GitCheckout pull(Stack stack, DockerEndpoint endpoint, String envText) {
         if (stack.getSourceType() != StackSource.GIT) {
@@ -244,7 +260,7 @@ public class StackDeploymentService {
         files.write(hostId, name, checkout.composeYaml(), envText);
         ValidationResult result;
         try {
-            result = validation.validate(hostId, name, endpoint);
+            result = validation.validate(hostId, name, endpoint, stackService.composeFileOf(stack));
         } catch (ComposeExecutionException e) {
             restore(hostId, name, previousYaml, envText);
             throw new StackException(HttpStatus.BAD_GATEWAY, "COMPOSE_UNAVAILABLE", "docker compose could not run");
@@ -273,7 +289,7 @@ public class StackDeploymentService {
         details.put("versionId", version.getId().toString());
         try {
             ComposeProcessResult result = execution.execute(stack.getHostId(), stack.getName(), ComposeCommand.UP,
-                    endpoint, sink);
+                    endpoint, sink, stackService.composeFileOf(stack));
             success = result.success();
             details.put("exitCode", result.exitCode());
             details.put("timedOut", result.timedOut());

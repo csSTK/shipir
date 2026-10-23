@@ -20,7 +20,13 @@ public class ComposeValidationService {
     }
 
     public ValidationResult validate(UUID hostId, String stackName, DockerEndpoint endpoint) {
-        ComposeProcessResult result = execution.execute(hostId, stackName, ComposeCommand.CONFIG, endpoint, line -> { });
+        return validate(hostId, stackName, endpoint, null);
+    }
+
+    /** Validates the compose file at {@code composeFile} inside the stack directory (Git checkout); null = default. */
+    public ValidationResult validate(UUID hostId, String stackName, DockerEndpoint endpoint, java.nio.file.Path composeFile) {
+        ComposeProcessResult result = execution.execute(hostId, stackName, ComposeCommand.CONFIG, endpoint, line -> { },
+                composeFile);
         if (result.success()) {
             return new ValidationResult(true, List.of());
         }

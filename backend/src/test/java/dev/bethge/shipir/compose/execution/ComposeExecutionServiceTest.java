@@ -178,4 +178,48 @@ class ComposeExecutionServiceTest {
         long childPid = Long.parseLong(Files.readString(pidFile).trim());
         assertThat(ProcessHandle.of(childPid).map(ProcessHandle::isAlive).orElse(false)).isFalse();
     }
+
+    @Test
+    void composeFileInCheckoutUsesItsDirectoryAsProjectDirectoryAndShipirEnvFile() throws IOException {
+        files.write(hostId, "web", "services: {}\n", "A=1\n");
+        Path stackDir = files.stackDir(hostId, "web");
+        Files.createDirectories(files.repoDir(hostId, "web"));
+        Path file = files.repoComposeFile(hostId, "web", "app/compose.yaml");
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, "services: {}\n");
+        List<String> lines = new ArrayList<>();
+
+        service(Duration.ofSeconds(20)).execute(hostId, "web", ComposeCommand.UP, local(), lines::add, file);
+
+        assertThat(line(lines, "ARGS:")).isEqualTo("ARGS:-p web --env-file " + stackDir.resolve(".env")
+                + " --project-directory " + file.getParent() + " -f " + file + " up -d --remove-orphans");
+        assertThat(line(lines, "PWD:")).isEqualTo("PWD:" + file.getParent().toRealPath());
+    }
+
+    @Test
+    void checkoutWithoutShipirEnvPassesNoEnvFileSoRepoDotEnvStaysInEffect() throws IOException {
+        Files.createDirectories(files.repoDir(hostId, "web"));
+        Path file = files.repoComposeFile(hostId, "web", "compose.yaml");
+        Files.writeString(file, "services: {}\n");
+        List<String> lines = new ArrayList<>();
+
+        service(Duration.ofSeconds(20)).execute(hostId, "web", ComposeCommand.CONFIG, local(), lines::add, file);
+
+        assertThat(line(lines, "ARGS:")).doesNotContain("--env-file");
+    }
+
+    @Test
+    void composeFilesOutsideTheStackDirectoryAreRejected() throws IOException {
+        Path stackDir = files.stackDir(hostId, "web");
+        Path outside = Files.writeString(tmp.resolve("outside.yaml"), "services: {}\n");
+        Path repo = files.repoDir(hostId, "web");
+        Files.createDirectories(repo);
+        Path link = Files.createSymbolicLink(repo.resolve("link.yaml"), outside);
+        var service = service(Duration.ofSeconds(5));
+
+        for (Path bad : List.of(outside, stackDir.resolve("../other/compose.yaml"), link)) {
+            assertThatThrownBy(() -> service.execute(hostId, "web", ComposeCommand.UP, local(), l -> { }, bad))
+                    .isInstanceOf(ComposeExecutionException.class);
+        }
+    }
 }

@@ -96,6 +96,28 @@ public class GitRepositoryService {
     }
 
     /**
+     * Makes the checkout match {@code commitSha} (deploy and rollback run the files of a recorded version). If HEAD is
+     * already that commit the working tree is only reset locally, without network access; otherwise the commit is
+     * fetched like a SHA ref by {@link #sync}.
+     */
+    public GitCheckout ensureCommit(Path repoDir, String repoUrl, String commitSha, String composePath,
+                                    UUID credentialId) {
+        if (commitSha != null && SHA.matcher(commitSha).matches() && Files.exists(repoDir.resolve(".git"))) {
+            composeFile(repoDir, composePath, false);
+            try (Git git = Git.open(repoDir.toFile())) {
+                ObjectId head = git.getRepository().resolve("HEAD^{commit}");
+                if (head != null && head.name().equalsIgnoreCase(commitSha)) {
+                    git.reset().setMode(ResetCommand.ResetType.HARD).setRef(head.name()).call();
+                    return new GitCheckout(head.name(), read(composeFile(repoDir, composePath, true)));
+                }
+            } catch (GitAPIException | IOException e) {
+                log.warn("Local git check failed: {}", e.getClass().getSimpleName());
+            }
+        }
+        return sync(repoDir, repoUrl, commitSha, composePath, credentialId);
+    }
+
+    /**
      * The commit {@code ref} points to on the remote right now, via {@code ls-remote} only (nothing is downloaded).
      * Annotated tags are peeled to their commit, so the value equals what {@link #sync} would check out. A full commit
      * SHA is returned as is.

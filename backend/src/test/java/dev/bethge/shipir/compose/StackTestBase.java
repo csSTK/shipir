@@ -83,6 +83,8 @@ abstract class StackTestBase {
 
     protected UUID hostId;
     protected final List<ComposeCommand> commands = new CopyOnWriteArrayList<>();
+    /** Compose file passed to each execution (null = default {@code compose.yaml}); parallel to {@link #commands}. */
+    protected final List<Path> composeFiles = new CopyOnWriteArrayList<>();
     protected boolean downFails;
     protected volatile boolean upFails;
     /** Blocks every {@code up} until counted down; replaced per test. */
@@ -106,11 +108,13 @@ abstract class StackTestBase {
         downFails = false;
         upFails = false;
         upGate = new java.util.concurrent.CountDownLatch(0);
-        when(execution.execute(any(), any(), any(), any(), any())).thenAnswer(inv -> {
+        composeFiles.clear();
+        org.mockito.stubbing.Answer<ComposeProcessResult> fake = inv -> {
             UUID h = inv.getArgument(0);
             String name = inv.getArgument(1);
             ComposeCommand command = inv.getArgument(2);
             commands.add(command);
+            composeFiles.add(inv.getArguments().length > 5 ? inv.getArgument(5) : null);
             if (command == ComposeCommand.DOWN) {
                 return downFails ? new ComposeProcessResult(1, false, List.of("cannot reach daemon"))
                         : new ComposeProcessResult(0, false, List.of());
@@ -127,7 +131,9 @@ abstract class StackTestBase {
             return yaml.contains("INVALID")
                     ? new ComposeProcessResult(1, false, List.of("yaml: line 2: INVALID mapping"))
                     : new ComposeProcessResult(0, false, List.of());
-        });
+        };
+        org.mockito.Mockito.doAnswer(fake).when(execution).execute(any(), any(), any(), any(), any());
+        org.mockito.Mockito.doAnswer(fake).when(execution).execute(any(), any(), any(), any(), any(), any());
     }
 
     record Login(MockHttpSession session, Cookie csrf) {

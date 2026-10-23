@@ -87,6 +87,16 @@ public class ComposeFileRepository {
         return PathValidationUtil.resolve(existingBaseDir(), segment(hostId, stackName) + "/" + REPO_DIR);
     }
 
+    /**
+     * Validated location of a Git stack's compose file {@code <stackDir>/repo/<composePath>} (symlinks leaving the
+     * checkout are rejected); working directory source for relative paths in the compose file.
+     *
+     * @throws dev.bethge.shipir.common.util.PathValidationException for traversal, absolute or escaping paths
+     */
+    public Path repoComposeFile(UUID hostId, String stackName, String composePath) {
+        return PathValidationUtil.resolve(repoDir(hostId, stackName), composePath);
+    }
+
     private static String segment(UUID hostId, String stackName) {
         if (hostId == null) {
             throw new IllegalArgumentException("hostId is required");

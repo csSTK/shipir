@@ -58,7 +58,8 @@ public class ComposeExecutionService {
     }
 
     /**
-     * Runs {@code command} for the stack and blocks until it ends or times out.
+     * Runs {@code command} for the stack (compose file {@code <stackDir>/compose.yaml}) and blocks until it ends or
+     * times out.
      *
      * @param onLine receives every output line as it arrives (called on the calling thread)
      * @throws dev.bethge.shipir.common.util.PathValidationException for an invalid stack name
@@ -66,10 +67,36 @@ public class ComposeExecutionService {
      */
     public ComposeProcessResult execute(UUID hostId, String stackName, ComposeCommand command,
                                         DockerEndpoint endpoint, Consumer<String> onLine) {
-        Path dir = files.stackDir(hostId, stackName);
+        return execute(hostId, stackName, command, endpoint, onLine, null);
+    }
+
+    /**
+     * Like {@link #execute(UUID, String, ComposeCommand, DockerEndpoint, Consumer)}, but for a compose file that lives
+     * inside the stack directory (Git checkout in {@code repo/}): {@code --project-directory} is that file's directory
+     * and {@code -f} the file itself, so relative build contexts, bind mounts and {@code env_file} resolve against the
+     * checkout. The Shipir-managed {@code <stackDir>/.env} is passed with {@code --env-file} when it exists; this
+     * replaces compose's default lookup of {@code .env} in the project directory, so a {@code .env} tracked in the
+     * repository is never read nor overwritten (Shipir's variables win and nothing in the checkout is modified).
+     *
+     * @param composeFile {@code null} for the default {@code <stackDir>/compose.yaml}; otherwise must lie inside the
+     *                    stack directory (symlinks resolved), else {@code ComposeExecutionException}
+     */
+    public ComposeProcessResult execute(UUID hostId, String stackName, ComposeCommand command,
+                                        DockerEndpoint endpoint, Consumer<String> onLine, Path composeFile) {
+        Path stackDir = files.stackDir(hostId, stackName);
+        Path dir = stackDir;
+        Path file = stackDir.resolve(ComposeFileRepository.COMPOSE_FILE);
         List<String> cmd = new ArrayList<>(executable);
-        cmd.addAll(List.of("-p", stackName, "--project-directory", dir.toString(),
-                "-f", dir.resolve(ComposeFileRepository.COMPOSE_FILE).toString()));
+        cmd.addAll(List.of("-p", stackName));
+        if (composeFile != null) {
+            file = requireInside(stackDir, composeFile);
+            dir = file.getParent();
+            Path envFile = stackDir.resolve(ComposeFileRepository.ENV_FILE);
+            if (Files.isRegularFile(envFile, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                cmd.addAll(List.of("--env-file", envFile.toString()));
+            }
+        }
+        cmd.addAll(List.of("--project-directory", dir.toString(), "-f", file.toString()));
         cmd.addAll(command.args());
 
         Path certDir = null;
@@ -85,6 +112,24 @@ public class ComposeExecutionService {
         } finally {
             deleteRecursively(certDir);
         }
+    }
+
+    /** The compose file must be inside the stack directory, also after resolving symlinks. */
+    private static Path requireInside(Path stackDir, Path composeFile) {
+        Path normalized = composeFile.toAbsolutePath().normalize();
+        try {
+            Path realStack = stackDir.toRealPath();
+            Path existing = normalized;
+            while (existing != null && !Files.exists(existing)) {
+                existing = existing.getParent();
+            }
+            if (!normalized.startsWith(stackDir) || existing == null || !existing.toRealPath().startsWith(realStack)) {
+                throw new ComposeExecutionException("Compose file is outside the stack directory", null);
+            }
+        } catch (IOException e) {
+            throw new ComposeExecutionException("Compose file is outside the stack directory", e);
+        }
+        return normalized;
     }
 
     private ComposeProcessResult run(ProcessBuilder builder, Consumer<String> onLine) {

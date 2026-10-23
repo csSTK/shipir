@@ -381,4 +381,91 @@ class GitStackApiTest extends StackTestBase {
         mvc.perform(admin.write(post(url() + "/" + id + "/git/redeploy")))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("NOT_A_GIT_STACK"));
     }
+
+    private static final String APP_YAML = """
+            services:
+              web:
+                image: nginx
+                env_file: ./app.env
+                volumes:
+                  - ./data:/data
+                build:
+                  context: .
+            """;
+
+    private Path repoCheckout(String name) {
+        return files.repoDir(hostId, name);
+    }
+
+    @Test
+    void composeRunsAgainstTheCheckoutSoRelativePathsResolveInTheRepo() throws Exception {
+        commit("deploy/app.env", "FROM_REPO=1\n");
+        commit("deploy/data/keep.txt", "x");
+        commit("deploy/compose.yaml", APP_YAML);
+        commit(".env", "TRACKED=repo\n");
+        Login admin = login("admin");
+        String body = mvc.perform(admin.write(post(url())).contentType(APPLICATION_JSON)
+                        .content("{\"name\":\"relstack\",\"source\":\"GIT\",\"repoUrl\":\"%s\",\"ref\":\"main\","
+                                + "\"composePath\":\"deploy/compose.yaml\",\"env\":[{\"key\":\"SHIPIR_VAR\",\"value\":\"s\"}]}"
+                                .formatted(base + "/public.git")))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String id = JsonPath.read(body, "$.id");
+        Path expected = repoCheckout("relstack").resolve("deploy/compose.yaml");
+
+        mvc.perform(admin.write(post(url() + "/" + id + "/deploy"))).andExpect(status().isAccepted());
+        awaitResults(1);
+
+        // validation (config) and up both ran on the file inside the checkout, whose directory holds app.env and data/
+        assertThat(commands).contains(ComposeCommand.CONFIG, ComposeCommand.UP);
+        assertThat(composeFiles).isNotEmpty().allMatch(expected::equals);
+        assertThat(expected.getParent().resolve("app.env")).exists();
+        assertThat(expected.getParent().resolve("data/keep.txt")).exists();
+        // Shipir's env lives beside the checkout; the tracked .env of the repository is left untouched
+        assertThat(files.readEnv(hostId, "relstack")).hasValueSatisfying(e -> assertThat(e).contains("SHIPIR_VAR=s"));
+        assertThat(Files.readString(repoCheckout("relstack").resolve(".env"))).isEqualTo("TRACKED=repo\n");
+    }
+
+    @Test
+    void fileStacksStillUseTheStoredComposeFile() throws Exception {
+        Login admin = login("admin");
+        mvc.perform(admin.write(post(url())).contentType(APPLICATION_JSON)
+                        .content("{\"name\":\"plain\",\"yaml\":\"services:\\n  web:\\n    image: nginx\\n\"}"))
+                .andExpect(status().isCreated());
+        assertThat(composeFiles).isNotEmpty().containsOnlyNulls();
+    }
+
+    @Test
+    void rollbackChecksOutTheCommitOfThatVersionBeforeRunning() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitstack", credential(TOKEN));
+        String first = head();
+        commit("compose.yaml", YAML_B);
+        mvc.perform(admin.write(post(url() + "/" + id + "/git/redeploy"))).andExpect(status().isAccepted());
+        awaitResults(1);
+        assertThat(Files.readString(repoCheckout("gitstack").resolve("compose.yaml"))).isEqualTo(YAML_B);
+        UUID firstVersion = jdbc.queryForObject(
+                "SELECT id FROM stack_versions WHERE commit_sha = ?", UUID.class, first);
+
+        mvc.perform(admin.write(post(url() + "/" + id + "/versions/" + firstVersion + "/rollback")))
+                .andExpect(status().isAccepted());
+        awaitResults(2);
+
+        assertThat(Files.readString(repoCheckout("gitstack").resolve("compose.yaml"))).isEqualTo(YAML_A);
+        assertThat(composeFiles.getLast()).isEqualTo(repoCheckout("gitstack").resolve("compose.yaml"));
+    }
+
+    @Test
+    void plainDeployRealignsACheckoutLeftOnANewerCommitByAFailedPull() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitstack", credential(TOKEN));
+        commit("compose.yaml", "services:\n  web:\n    image: INVALID\n");
+        mvc.perform(admin.write(post(url() + "/" + id + "/git/redeploy"))).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_COMPOSE"));
+        assertThat(Files.readString(repoCheckout("gitstack").resolve("compose.yaml"))).contains("INVALID");
+
+        mvc.perform(admin.write(post(url() + "/" + id + "/deploy"))).andExpect(status().isAccepted());
+        awaitResults(1);
+
+        assertThat(Files.readString(repoCheckout("gitstack").resolve("compose.yaml"))).isEqualTo(YAML_A);
+    }
 }
