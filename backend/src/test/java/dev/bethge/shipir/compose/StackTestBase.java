@@ -84,6 +84,9 @@ abstract class StackTestBase {
     protected UUID hostId;
     protected final List<ComposeCommand> commands = new CopyOnWriteArrayList<>();
     protected boolean downFails;
+    protected volatile boolean upFails;
+    /** Blocks every {@code up} until counted down; replaced per test. */
+    protected volatile java.util.concurrent.CountDownLatch upGate = new java.util.concurrent.CountDownLatch(0);
 
     @BeforeEach
     void resetStacks() {
@@ -101,6 +104,8 @@ abstract class StackTestBase {
         hostId = jdbc.queryForObject("SELECT id FROM docker_hosts", UUID.class);
         commands.clear();
         downFails = false;
+        upFails = false;
+        upGate = new java.util.concurrent.CountDownLatch(0);
         when(execution.execute(any(), any(), any(), any(), any())).thenAnswer(inv -> {
             UUID h = inv.getArgument(0);
             String name = inv.getArgument(1);
@@ -109,6 +114,14 @@ abstract class StackTestBase {
             if (command == ComposeCommand.DOWN) {
                 return downFails ? new ComposeProcessResult(1, false, List.of("cannot reach daemon"))
                         : new ComposeProcessResult(0, false, List.of());
+            }
+            if (command == ComposeCommand.UP) {
+                java.util.function.Consumer<String> onLine = inv.getArgument(4);
+                onLine.accept("Container web  Starting");
+                upGate.await();
+                onLine.accept(upFails ? "Error: boom" : "Container web  Started");
+                return upFails ? new ComposeProcessResult(1, false, List.of("Error: boom"))
+                        : new ComposeProcessResult(0, false, List.of("Container web  Started"));
             }
             String yaml = files.readCompose(h, name).orElse("");
             return yaml.contains("INVALID")

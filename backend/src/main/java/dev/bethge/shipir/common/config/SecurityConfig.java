@@ -76,7 +76,8 @@ class SecurityConfig {
                                 "/api/auth/password-reset/request", "/api/auth/password-reset/confirm").permitAll()
                         // managed stacks: every role reads (env values only ADMIN/OPERATOR), ADMIN/OPERATOR write
                         .requestMatchers(HttpMethod.GET, "/api/hosts/*/managed-stacks/*/env").hasAnyRole("ADMIN", "OPERATOR")
-                        .requestMatchers(HttpMethod.GET, "/api/hosts/*/managed-stacks", "/api/hosts/*/managed-stacks/*").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/hosts/*/managed-stacks", "/api/hosts/*/managed-stacks/*",
+                                "/api/hosts/*/managed-stacks/*/versions").authenticated()
                         .requestMatchers("/api/hosts/*/managed-stacks", "/api/hosts/*/managed-stacks/**").hasAnyRole("ADMIN", "OPERATOR")
                         // environments: every role reads, only ADMIN writes (create, test, rename, delete)
                         .requestMatchers(HttpMethod.GET, "/api/hosts", "/api/hosts/**").authenticated()

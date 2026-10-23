@@ -1,13 +1,16 @@
 package dev.bethge.shipir.compose.web;
 
 import dev.bethge.shipir.common.exception.ErrorResponse;
+import dev.bethge.shipir.compose.StackDeploymentService;
 import dev.bethge.shipir.compose.StackException;
 import dev.bethge.shipir.compose.StackService;
+import dev.bethge.shipir.compose.dto.DeploymentResponse;
 import dev.bethge.shipir.compose.dto.StackCreateRequest;
 import dev.bethge.shipir.compose.dto.StackDetailResponse;
 import dev.bethge.shipir.compose.dto.StackEnvResponse;
 import dev.bethge.shipir.compose.dto.StackSummaryResponse;
 import dev.bethge.shipir.compose.dto.StackUpdateRequest;
+import dev.bethge.shipir.compose.dto.StackVersionResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,9 +35,11 @@ import java.util.UUID;
 class StackController {
 
     private final StackService service;
+    private final StackDeploymentService deployments;
 
-    StackController(StackService service) {
+    StackController(StackService service, StackDeploymentService deployments) {
         this.service = service;
+        this.deployments = deployments;
     }
 
     @GetMapping
@@ -61,14 +66,38 @@ class StackController {
 
     @PutMapping("/{id}")
     StackDetailResponse update(@PathVariable UUID hostId, @PathVariable UUID id,
-                               @Valid @RequestBody StackUpdateRequest request) {
-        return service.update(hostId, id, request);
+                               @Valid @RequestBody StackUpdateRequest request,
+                               Authentication authentication) {
+        return service.update(hostId, id, request, authentication.getName());
     }
 
     @DeleteMapping("/{id}")
     ResponseEntity<Void> delete(@PathVariable UUID hostId, @PathVariable UUID id) {
         service.delete(hostId, id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/deploy")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    DeploymentResponse deploy(@PathVariable UUID hostId, @PathVariable UUID id, Authentication authentication) {
+        return deployments.deploy(hostId, id, authentication.getName());
+    }
+
+    @PostMapping("/{id}/stop")
+    StackSummaryResponse stop(@PathVariable UUID hostId, @PathVariable UUID id) {
+        return deployments.stop(hostId, id);
+    }
+
+    @GetMapping("/{id}/versions")
+    List<StackVersionResponse> versions(@PathVariable UUID hostId, @PathVariable UUID id) {
+        return deployments.versions(hostId, id);
+    }
+
+    @PostMapping("/{id}/versions/{versionId}/rollback")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    DeploymentResponse rollback(@PathVariable UUID hostId, @PathVariable UUID id, @PathVariable UUID versionId,
+                                Authentication authentication) {
+        return deployments.rollback(hostId, id, versionId, authentication.getName());
     }
 
     @ExceptionHandler(StackException.class)

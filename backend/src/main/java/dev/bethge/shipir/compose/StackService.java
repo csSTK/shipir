@@ -56,11 +56,12 @@ public class StackService {
     private final SecretCipher cipher;
     private final Clock clock;
     private final TransactionTemplate tx;
+    private final DeploymentLocks locks;
 
     StackService(StackRepository stacks, StackVersionRepository versions, DockerHostRepository hosts,
                  UserRepository users, HostEndpointResolver endpoints, ComposeFileRepository files,
                  ComposeValidationService validation, ComposeExecutionService execution, SecretCipher cipher,
-                 Clock clock, PlatformTransactionManager txManager) {
+                 Clock clock, PlatformTransactionManager txManager, DeploymentLocks locks) {
         this.stacks = stacks;
         this.versions = versions;
         this.hosts = hosts;
@@ -72,6 +73,7 @@ public class StackService {
         this.cipher = cipher;
         this.clock = clock;
         this.tx = new TransactionTemplate(txManager);
+        this.locks = locks;
     }
 
     public List<StackSummaryResponse> list(UUID hostId) {
@@ -144,7 +146,7 @@ public class StackService {
     }
 
     @Auditable(action = "STACK_UPDATE", targetType = "STACK", targetId = "#id")
-    public StackDetailResponse update(UUID hostId, UUID id, StackUpdateRequest request) {
+    public StackDetailResponse update(UUID hostId, UUID id, StackUpdateRequest request, String username) {
         DockerHost host = requireHost(hostId);
         Stack stack = requireStack(hostId, id);
         String name = stack.getName();
@@ -157,9 +159,18 @@ public class StackService {
 
         try {
             writeAndValidate(hostId, name, request.yaml(), envText, endpoint);
+            UUID userId = users.findByUsername(username).orElseThrow().getId();
             tx.executeWithoutResult(status -> {
-                version.replaceContent(request.yaml(), envCiphertext);
-                versions.save(version);
+                if (version.isDeployed()) {
+                    // deployed versions are immutable (rollback must restore what really ran): start a new draft
+                    StackVersion draft = versions.save(new StackVersion(stack.getId(), request.yaml(), envCiphertext,
+                            userId, clock.instant()));
+                    stack.setCurrentVersionId(draft.getId());
+                    stacks.save(stack);
+                } else {
+                    version.replaceContent(request.yaml(), envCiphertext);
+                    versions.save(version);
+                }
             });
         } catch (RuntimeException e) {
             restore(hostId, name, previousYaml, previousEnv);
@@ -174,6 +185,15 @@ public class StackService {
         DockerHost host = requireHost(hostId);
         Stack stack = requireStack(hostId, id);
         DockerEndpoint endpoint = endpointOf(host);
+        locks.acquire(stack.getId());
+        try {
+            deleteLocked(hostId, stack, endpoint);
+        } finally {
+            locks.release(stack.getId());
+        }
+    }
+
+    private void deleteLocked(UUID hostId, Stack stack, DockerEndpoint endpoint) {
         ComposeProcessResult result;
         try {
             result = execution.execute(hostId, stack.getName(), ComposeCommand.DOWN, endpoint, line -> { });
@@ -241,7 +261,7 @@ public class StackService {
         }
     }
 
-    private DockerEndpoint endpointOf(DockerHost host) {
+    DockerEndpoint endpointOf(DockerHost host) {
         try {
             return endpoints.endpointOf(host);
         } catch (EncryptionKeyMissingException e) {
@@ -252,22 +272,22 @@ public class StackService {
         }
     }
 
-    private DockerHost requireHost(UUID hostId) {
+    DockerHost requireHost(UUID hostId) {
         return hosts.findById(hostId).orElseThrow(
                 () -> new StackException(HttpStatus.NOT_FOUND, "HOST_NOT_FOUND", "Environment not found"));
     }
 
-    private Stack requireStack(UUID hostId, UUID id) {
+    Stack requireStack(UUID hostId, UUID id) {
         return stacks.findByIdAndHostId(id, hostId).orElseThrow(
                 () -> new StackException(HttpStatus.NOT_FOUND, "STACK_NOT_FOUND", "Stack not found"));
     }
 
-    private StackVersion currentVersion(Stack stack) {
+    StackVersion currentVersion(Stack stack) {
         return versions.findById(stack.getCurrentVersionId()).orElseThrow(
                 () -> new StackException(HttpStatus.NOT_FOUND, "STACK_NOT_FOUND", "Stack not found"));
     }
 
-    private static StackException keyMissing() {
+    static StackException keyMissing() {
         return new StackException(HttpStatus.CONFLICT, "ENCRYPTION_KEY_MISSING",
                 "Environment variables need shipir.encryption-key (SHIPIR_ENCRYPTION_KEY) to be stored");
     }

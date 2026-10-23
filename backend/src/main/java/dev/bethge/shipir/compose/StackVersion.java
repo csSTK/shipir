@@ -37,6 +37,9 @@ public class StackVersion {
     @Column(nullable = false, length = 10)
     private VersionSource source = VersionSource.MANUAL;
 
+    @Column(name = "deployed_at")
+    private Instant deployedAt;
+
     @Column(name = "created_by", nullable = false, updatable = false)
     private UUID createdBy;
 
@@ -54,6 +57,12 @@ public class StackVersion {
         this.createdAt = now;
     }
 
+    public StackVersion(UUID stackId, String yamlContent, byte[] envCiphertext, VersionSource source, UUID createdBy,
+                        Instant now) {
+        this(stackId, yamlContent, envCiphertext, createdBy, now);
+        this.source = source;
+    }
+
     public UUID getId() { return id; }
     public UUID getStackId() { return stackId; }
     public String getYamlContent() { return yamlContent; }
@@ -62,6 +71,12 @@ public class StackVersion {
     public VersionSource getSource() { return source; }
     public UUID getCreatedBy() { return createdBy; }
     public Instant getCreatedAt() { return createdAt; }
+    public Instant getDeployedAt() { return deployedAt; }
+
+    /** True once a deploy or rollback used this version; its content must not change any more. */
+    public boolean isDeployed() { return deployedAt != null; }
+
+    public void markDeployed(Instant now) { this.deployedAt = now; }
 
     public void replaceContent(String yamlContent, byte[] envCiphertext) {
         this.yamlContent = yamlContent;

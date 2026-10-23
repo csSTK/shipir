@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To13Successfully() {
+    void flywayAppliedVersions1To14Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14");
     }
 
     @Test
@@ -185,7 +185,7 @@ class SchemaMigrationTest {
                 WHERE table_schema = 'public' AND data_type = 'timestamp with time zone'
                   AND table_name IN ('users','docker_hosts','stacks','stack_versions')
                 """, Integer.class);
-        assertThat(count).isEqualTo(6); // 2 users + 1 hosts + 2 stacks + 1 versions
+        assertThat(count).isEqualTo(7); // 2 users + 1 hosts + 2 stacks + 2 versions
     }
 
     @Test
