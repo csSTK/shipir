@@ -12,15 +12,15 @@ This is a learning and portfolio project focused on Java backend development. Th
 
 - **Containers:** list, start, stop, inspect and view stats, across one or more Docker hosts.
 - **Hosts:** manage multiple Docker hosts (local Unix socket or remote TCP with TLS), with health checks.
-- **Compose stacks:**
-  - Create stacks with a form wizard that generates the YAML, or write it yourself in an advanced editor with schema validation.
+- **Deployments (Compose projects):**
+  - Create deployments with a form wizard that generates the YAML, or write it yourself in an advanced editor with schema validation.
   - Deploy, stop and pull, with live output.
   - Every deploy is versioned, so you can see history and roll back.
-  - Environment variables per stack, stored encrypted.
-  - Stacks from a (private) Git repository with an access token: Pull & redeploy, and optional polling that redeploys on new commits.
-- **Config editor:** edit a stack's config files in the browser, with protection against path traversal and an automatic backup before every write.
+  - Environment variables per deployment, stored encrypted.
+  - Deployments from a (private) Git repository with an access token: Pull & redeploy, and optional polling that redeploys on new commits.
+- **Config editor:** edit a deployment's config files in the browser, with protection against path traversal and an automatic backup before every write.
 - **Live streaming:** container logs, Docker events, Compose output and an exec terminal over WebSocket.
-- **Access control:** users with roles (Admin, Operator, Viewer) plus fine-grained permissions per host and stack.
+- **Access control:** users with roles (Admin, Operator, Viewer) plus fine-grained permissions per host and deployment.
 - **Audit log:** a record of who did what, and when.
 
 ## Tech stack
@@ -116,7 +116,7 @@ Without a pull (or when the images don't exist on ghcr.io yet), `docker compose 
 
 Required in `.env`: `DB_PASSWORD`, `DB_HOST` and `DOCKER_GID`. Compose stops with a message if one is missing. On the first start (empty database) also `SHIPIR_INITIAL_ADMIN_PASSWORD`; without it the backend refuses to start. Optional: `DB_PORT`, `DB_NAME`, `DB_USER`, `SHIPIR_TAG` (image tag), `SHIPIR_PORT` (host port, default `8080`) and `SHIPIR_ENCRYPTION_KEY` (see below).
 
-**First login:** sign in as `admin` with `SHIPIR_INITIAL_ADMIN_PASSWORD`. Shipir then asks for a new password (15–128 characters with upper- and lowercase letters, a digit and a symbol) before anything else is usable. Next, the admin adds the first Docker environment: the local Docker socket, or a remote Docker engine over TCP with TLS client certificates (needs `SHIPIR_ENCRYPTION_KEY`). Shipir tests the connection before saving it. Later logins skip both steps. After setup, every user lands on the environments overview (status and live stats per environment); only admins can add, rename or delete environments. Clicking an environment opens its dashboard; the sidebar then lists its stacks (Compose projects), containers, images, networks and volumes as read-only tables for every role.
+**First login:** sign in as `admin` with `SHIPIR_INITIAL_ADMIN_PASSWORD`. Shipir then asks for a new password (15–128 characters with upper- and lowercase letters, a digit and a symbol) before anything else is usable. Next, the admin adds the first Docker environment: the local Docker socket, or a remote Docker engine over TCP with TLS client certificates (needs `SHIPIR_ENCRYPTION_KEY`). Shipir tests the connection before saving it. Later logins skip both steps. After setup, every user lands on the environments overview (status and live stats per environment); only admins can add, rename or delete environments. Clicking an environment opens its dashboard; the sidebar then lists its deployments (Compose projects), containers, images, networks and volumes for every role. Admins and operators can delete containers (running ones only with Force), unused images, volumes and networks, and remove unmanaged deployments (`compose down`, volumes kept unless chosen); viewers only read.
 
 **Forgotten password:** the login page has a "Forgot password?" flow: enter the username, then a 6-digit one-time code (valid 5 minutes, single use, 5 attempts) and a new password. Shipir can't deliver the code yet (no mail service), so this isn't usable in a real installation until delivery is added.
 
@@ -134,7 +134,7 @@ Images are published to GitHub Container Registry (`ghcr.io/csstk/shipir-backend
 
 Branches: `dev` is the default branch where all work lands. `prd` holds released versions and only ever fast-forwards to a `dev` commit. Release: `git push origin dev:prd`, wait until `release.yml` is green, then push the `v*` tag on that commit. If `tag.yml` failed because the image did not exist yet, re-run it with `gh run rerun <id>`.
 
-Compose stack files live in the named volume `shipir-stacks`, mounted at `/data/stacks` in the backend (`SHIPIR_STACKS_BASE_DIR`, set in the image). The backend image includes the `docker compose` CLI, which runs as the app user (uid `10001`) and uses the same mounted Docker socket.
+Deployment files live in the named volume `shipir-stacks`, mounted at `/data/stacks` in the backend (`SHIPIR_STACKS_BASE_DIR`, set in the image). The backend image includes the `docker compose` CLI, which runs as the app user (uid `10001`) and uses the same mounted Docker socket.
 
 Stop the stack with `docker compose -f docker-compose.yml down`. This does not touch the external database or the `shipir-stacks` volume. Only `down -v` deletes the stack files.
 

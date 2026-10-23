@@ -1,6 +1,6 @@
 # Shipir
 
-Web platform for managing Docker containers and Compose stacks, similar to a simplified Portainer, with a UI non-experts can use (forms instead of mandatory YAML). Includes editing config files and creating/editing Compose files.
+Web platform for managing Docker containers and Compose deployments, similar to a simplified Portainer, with a UI non-experts can use (forms instead of mandatory YAML). Includes editing config files and creating/editing Compose files.
 
 **Purpose: learning and portfolio project for Java backend job applications (Germany/Europe).** Code quality, clean architecture, meaningful tests and traceable decisions matter more than the number of features. No shortcuts that couldn't be explained in an interview. Write clear, focused commits.
 
@@ -376,7 +376,7 @@ dev.bethge.shipir
 │   └── web/           ContainerController
 ├── host/              DockerHost (entity), repository, service, HostHealthCheckScheduler, DTOs, HostController
 ├── compose/           Core of the product
-│   ├── Stack, StackVersion (entities), repositories, StackService
+│   ├── Deployment, DeploymentVersion (entities), repositories, DeploymentService, DeploymentRunService
 │   ├── file/          ComposeFileRepository          (reads/writes YAML on disk)
 │   ├── generator/     ComposeGeneratorService + model/  (wizard input -> YAML)
 │   ├── execution/     ComposeExecutionService, ComposeProcessResult   (ProcessBuilder)
