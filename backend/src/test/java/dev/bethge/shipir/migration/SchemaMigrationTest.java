@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V11 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V13 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To11Successfully() {
+    void flywayAppliedVersions1To13Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13");
     }
 
     @Test
@@ -715,6 +715,200 @@ class SchemaMigrationTest {
         jdbc.update("DELETE FROM users WHERE id = ?", admin);
         UUID updatedBy = jdbc.queryForObject("SELECT updated_by FROM retention_settings WHERE id = 1", UUID.class);
         assertThat(updatedBy).isNull();
+    }
+
+    @Test
+    void gitCredentialsHasNoPlaintextTokenColumn() {
+        List<Map<String, Object>> cols = jdbc.queryForList("""
+                SELECT column_name, data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'git_credentials'
+                """);
+        assertThat(cols).extracting(c -> c.get("column_name")).containsExactlyInAnyOrder(
+                "id", "name", "username", "token_ciphertext", "token_hint", "created_by", "created_at", "updated_at");
+        assertThat(cols).filteredOn(c -> "token_ciphertext".equals(c.get("column_name")))
+                .singleElement().satisfies(c -> {
+                    assertThat(c.get("data_type")).isEqualTo("bytea");
+                    assertThat(c.get("is_nullable")).isEqualTo("NO");
+                });
+    }
+
+    @Test
+    void duplicateGitCredentialNameIsRejected() {
+        UUID user = insertUser("alice");
+        insertCredential("gh", user);
+        assertThatThrownBy(() -> insertCredential("gh", user))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("git_credentials_name_key");
+    }
+
+    @Test
+    void deletingUserWhoCreatedGitCredentialFails() {
+        UUID user = insertUser("alice");
+        insertCredential("gh", user);
+        assertThatThrownBy(() -> jdbc.update("DELETE FROM users WHERE id = ?", user))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void existingStackDefaultsToFileSourceWithoutAutoUpdate() {
+        UUID user = insertUser("alice");
+        UUID stack = insertStack(insertHost(user), user, "web");
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT source_type, auto_update_enabled, git_repo_url, current_version_id FROM stacks WHERE id = ?",
+                stack);
+        assertThat(row.get("source_type")).isEqualTo("FILE");
+        assertThat(row.get("auto_update_enabled")).isEqualTo(false);
+        assertThat(row.get("git_repo_url")).isNull();
+        assertThat(row.get("current_version_id")).isNull();
+    }
+
+    @Test
+    void gitStackWithAllGitColumnsIsAccepted() {
+        UUID user = insertUser("alice");
+        UUID cred = insertCredential("gh", user);
+        UUID stack = insertGitStack(insertHost(user), user, "git-web", cred, 60);
+        assertThat(jdbc.queryForObject("SELECT source_type FROM stacks WHERE id = ?", String.class, stack))
+                .isEqualTo("GIT");
+    }
+
+    @Test
+    void gitStackWithoutCredentialIsAccepted() {
+        UUID user = insertUser("alice");
+        UUID stack = insertGitStack(insertHost(user), user, "git-pub", null, null);
+        assertThat(stack).isNotNull();
+    }
+
+    @Test
+    void invalidSourceTypeIsRejected() {
+        UUID user = insertUser("alice");
+        UUID host = insertHost(user);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO stacks (name, host_id, compose_file_path, created_by, source_type)
+                VALUES ('x', ?, '/x', ?, 'SVN')
+                """, host, user))
+                .isInstanceOf(DataIntegrityViolationException.class); // also trips the git-columns check
+    }
+
+    @Test
+    void gitStackWithoutRepoUrlIsRejected() {
+        UUID user = insertUser("alice");
+        UUID host = insertHost(user);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO stacks (name, host_id, compose_file_path, created_by, source_type, git_ref, git_compose_path)
+                VALUES ('x', ?, '/x', ?, 'GIT', 'main', 'compose.yml')
+                """, host, user))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("stacks_git_columns_check");
+    }
+
+    @Test
+    void fileStackWithGitColumnsIsRejected() {
+        UUID user = insertUser("alice");
+        UUID host = insertHost(user);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO stacks (name, host_id, compose_file_path, created_by, git_repo_url)
+                VALUES ('x', ?, '/x', ?, 'https://example.com/r.git')
+                """, host, user))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("stacks_git_columns_check");
+    }
+
+    @Test
+    void fileStackWithAutoUpdateEnabledIsRejected() {
+        UUID user = insertUser("alice");
+        UUID host = insertHost(user);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO stacks (name, host_id, compose_file_path, created_by, auto_update_enabled)
+                VALUES ('x', ?, '/x', ?, TRUE)
+                """, host, user))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("stacks_git_columns_check");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {-1, 0, 59})
+    void autoUpdateIntervalBelow60IsRejected(int seconds) {
+        UUID user = insertUser("alice");
+        UUID host = insertHost(user);
+        assertThatThrownBy(() -> insertGitStack(host, user, "g", null, seconds))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("stacks_auto_update_interval_check");
+    }
+
+    @Test
+    void deletingReferencedGitCredentialIsRestricted() {
+        UUID user = insertUser("alice");
+        UUID cred = insertCredential("gh", user);
+        insertGitStack(insertHost(user), user, "g", cred, 60);
+        assertThatThrownBy(() -> jdbc.update("DELETE FROM git_credentials WHERE id = ?", cred))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void deletingCurrentVersionSetsStackCurrentVersionNull() {
+        UUID user = insertUser("alice");
+        UUID stack = insertStack(insertHost(user), user, "web");
+        UUID version = jdbc.queryForObject("""
+                INSERT INTO stack_versions (stack_id, yaml_content, created_by)
+                VALUES (?, 'services: {}', ?) RETURNING id
+                """, UUID.class, stack, user);
+        jdbc.update("UPDATE stacks SET current_version_id = ? WHERE id = ?", version, stack);
+        jdbc.update("DELETE FROM stack_versions WHERE id = ?", version);
+        assertThat(jdbc.queryForObject("SELECT current_version_id FROM stacks WHERE id = ?", UUID.class, stack))
+                .isNull();
+    }
+
+    @Test
+    void stackVersionDefaultsToManualSourceWithNullEnvAndCommit() {
+        UUID user = insertUser("alice");
+        UUID stack = insertStack(insertHost(user), user, "web");
+        insertVersion(stack, user);
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT source, env_ciphertext, commit_sha FROM stack_versions WHERE stack_id = ?", stack);
+        assertThat(row.get("source")).isEqualTo("MANUAL");
+        assertThat(row.get("env_ciphertext")).isNull();
+        assertThat(row.get("commit_sha")).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"MANUAL", "GIT", "ROLLBACK"})
+    void stackVersionAcceptsKnownSourcesWithEncryptedEnv(String source) {
+        UUID user = insertUser("alice");
+        UUID stack = insertStack(insertHost(user), user, "web");
+        jdbc.update("""
+                INSERT INTO stack_versions (stack_id, yaml_content, created_by, env_ciphertext, commit_sha, source)
+                VALUES (?, 'services: {}', ?, ?, 'abc123', ?)
+                """, stack, user, new byte[] {1, 2}, source);
+        assertThat(count("stack_versions")).isEqualTo(1);
+    }
+
+    @Test
+    void stackVersionWithUnknownSourceIsRejected() {
+        UUID user = insertUser("alice");
+        UUID stack = insertStack(insertHost(user), user, "web");
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO stack_versions (stack_id, yaml_content, created_by, source)
+                VALUES (?, 'services: {}', ?, 'IMPORT')
+                """, stack, user))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("stack_versions_source_check");
+    }
+
+    private UUID insertCredential(String name, UUID creator) {
+        return jdbc.queryForObject("""
+                INSERT INTO git_credentials (name, username, token_ciphertext, token_hint, created_by)
+                VALUES (?, 'octocat', ?, '...abcd', ?) RETURNING id
+                """, UUID.class, name, new byte[] {1, 2, 3}, creator);
+    }
+
+    private UUID insertGitStack(UUID host, UUID creator, String name, UUID credential, Integer intervalSeconds) {
+        return jdbc.queryForObject("""
+                INSERT INTO stacks (name, host_id, compose_file_path, created_by, source_type, git_repo_url, git_ref,
+                                    git_compose_path, git_credential_id, auto_update_enabled,
+                                    auto_update_interval_seconds)
+                VALUES (?, ?, '/stacks/x/compose.yml', ?, 'GIT', 'https://example.com/r.git', 'main', 'compose.yml',
+                        ?, ?, ?) RETURNING id
+                """, UUID.class, name, host, creator, credential, intervalSeconds != null, intervalSeconds);
     }
 
     private void insertWebhook(String name, UUID creator) {
