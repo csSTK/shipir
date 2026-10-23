@@ -47,18 +47,16 @@ interface LogState {
 export function useContainerLogs(hostId: string, containerId: string, tail: TailOption, timestamps: boolean) {
   const key = `${hostId}/${containerId}/${tail}/${timestamps}`
   const [state, setState] = useState<LogState>({ key, lines: [], end: null })
-  const [connection, setConnection] = useState<ConnectionState>('connecting')
+  const [conn, setConnection] = useState<{ key: string; state: ConnectionState }>({ key, state: 'connecting' })
 
   useEffect(() => {
     let lastSeq = -1
     let done = false
-    setState({ key, lines: [], end: null })
-    setConnection('connecting')
     const unsubscribe = subscribeToTopic(
       `/topic/hosts/${hostId}/containers/${containerId}/logs`,
       {
         onState: (s) => {
-          if (!done) setConnection(s)
+          if (!done) setConnection({ key, state: s })
         },
         onMessage: (body) => {
           const frame = parseFrame(body)
@@ -71,11 +69,16 @@ export function useContainerLogs(hostId: string, containerId: string, tail: Tail
               text: frame.line ?? '',
               timestamp: frame.timestamp,
             }
-            setState((prev) => ({ ...prev, lines: [...prev.lines, line].slice(-MAX_LOG_LINES) }))
+            // A frame from a previous subscription's state is replaced, so the first frame starts fresh.
+            setState((prev) =>
+              prev.key === key
+                ? { ...prev, lines: [...prev.lines, line].slice(-MAX_LOG_LINES) }
+                : { key, lines: [line], end: null },
+            )
           } else if (frame.status === 'ENDED' || frame.status === 'ERROR') {
             done = true
             const end: LogEnd = frame.status === 'ENDED' ? { status: 'ENDED' } : { status: 'ERROR', code: frame.line ?? 'UNKNOWN' }
-            setState((prev) => ({ ...prev, end }))
+            setState((prev) => (prev.key === key ? { ...prev, end } : { key, lines: [], end }))
             unsubscribe() // stream is complete: stop reconnecting
           }
         },
@@ -90,5 +93,6 @@ export function useContainerLogs(hostId: string, containerId: string, tail: Tail
 
   // Until the effect has reset the state for new options, show nothing from the old subscription.
   const current = state.key === key
+  const connection: ConnectionState = conn.key === key ? conn.state : 'connecting'
   return { lines: current ? state.lines : [], end: current ? state.end : null, connection }
 }
