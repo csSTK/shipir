@@ -83,10 +83,13 @@ Frontend (`frontend/`):
 - `src/main.tsx`: entry, mounts `App`
 - `src/app/App.tsx`: root component, `Providers` + auth gate (loading, `LoginPage` on 401, `SetupPage` while `setupRequired`, app + sign out)
 - `src/app/providers.tsx`, `src/app/queryClient.ts`: React Query setup
-- `src/shared/api/client.ts`: `apiFetch<T>` + `ApiError` (status, code, violations), JSON fetch against `/api`, same-origin credentials, `X-XSRF-TOKEN` from cookie on non-GET
+- `src/shared/api/client.ts`: `apiFetch<T>` + `ApiError` (status, code, violations, details), JSON fetch against `/api`, same-origin credentials, `X-XSRF-TOKEN` from cookie on non-GET
 - `src/features/auth/{api.ts,LoginPage.tsx,LoginPage.css,index.ts}`: `useCurrentUser/useLogin/useLogout/useChangePassword` hooks, login form
 - `src/features/auth/{SetupPage.tsx,SetupPage.css,passwordPolicy.ts}`: first-start forced password change; client mirror of backend password rules + violation messages
-- `src/features/{containers,hosts,stacks}/index.ts`: empty feature entry points
+- `src/features/{containers,stacks}/index.ts`: empty feature entry points
+- `src/features/hosts/api.ts`: host types, `HOSTS_KEY`/`HOSTS_OVERVIEW_KEY`, `useHosts/useCreateHost/useTestConnection/useRenameHost/useDeleteHost` (create/delete also invalidate current user)
+- `src/features/hosts/EnvironmentForm.{tsx,css}`: Local / Remote (TCP+TLS) form, PEM file pickers (names only shown), connection test, inline server errors; props `onCreated`, `submitLabel`
+- `src/features/hosts/index.ts`: exports form, hooks, types
 - `src/test/setup.ts`: jest-dom matchers for Vitest
 - `playwright.config.ts`: Playwright config (Chromium, `e2e/` dir, starts Vite dev server)
 - `tsconfig.e2e.json`: type-checks `e2e/` and `playwright.config.ts` (referenced from `tsconfig.json`)

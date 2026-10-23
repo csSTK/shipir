@@ -8,13 +8,22 @@ export class ApiError extends Error {
   readonly code?: string
   /** Rule violation codes from the response body (e.g. `PASSWORD_POLICY`), if any. */
   readonly violations?: string[]
+  /** Human-readable detail lines from the response body (e.g. `port: must be ...`), if any. */
+  readonly details?: string[]
 
-  constructor(status: number, message: string, code?: string, violations?: string[]) {
+  constructor(
+    status: number,
+    message: string,
+    code?: string,
+    violations?: string[],
+    details?: string[],
+  ) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
     this.violations = violations
+    this.details = details
   }
 }
 
@@ -30,18 +39,24 @@ function readCookie(name: string): string | undefined {
   return entry ? decodeURIComponent(entry.slice(prefix.length)) : undefined
 }
 
-function parseErrorBody(text: string): { code?: string; violations?: string[] } {
+function stringArray(value: unknown): string[] | undefined {
+  return Array.isArray(value) && value.every((v): v is string => typeof v === 'string')
+    ? value
+    : undefined
+}
+
+function parseErrorBody(text: string): {
+  code?: string
+  violations?: string[]
+  details?: string[]
+} {
   try {
     const parsed: unknown = JSON.parse(text)
     if (!parsed || typeof parsed !== 'object') return {}
     const code = 'code' in parsed && typeof parsed.code === 'string' ? parsed.code : undefined
-    const violations =
-      'violations' in parsed &&
-      Array.isArray(parsed.violations) &&
-      parsed.violations.every((v): v is string => typeof v === 'string')
-        ? parsed.violations
-        : undefined
-    return { code, violations }
+    const violations = 'violations' in parsed ? stringArray(parsed.violations) : undefined
+    const details = 'details' in parsed ? stringArray(parsed.details) : undefined
+    return { code, violations, details }
   } catch {
     return {} // body is not JSON
   }
@@ -65,8 +80,8 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   if (!response.ok) {
     const text = await response.text()
-    const { code, violations } = parseErrorBody(text)
-    throw new ApiError(response.status, text || response.statusText, code, violations)
+    const { code, violations, details } = parseErrorBody(text)
+    throw new ApiError(response.status, text || response.statusText, code, violations, details)
   }
   if (response.status === 204) {
     return undefined as T

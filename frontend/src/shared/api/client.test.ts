@@ -79,3 +79,15 @@ describe('apiFetch', () => {
     await expect(apiFetch('/x')).rejects.toMatchObject({ code: 'X', violations: undefined })
   })
 })
+
+describe('apiFetch error details', () => {
+  it('exposes the details array of an error body', async () => {
+    const body = { code: 'VALIDATION_ERROR', message: 'bad', details: ['port: must be positive'] }
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify(body), { status: 400 }))))
+
+    await expect(apiFetch('/hosts')).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: ['port: must be positive'],
+    })
+  })
+})

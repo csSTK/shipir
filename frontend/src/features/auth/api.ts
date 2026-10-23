@@ -12,7 +12,7 @@ export interface LoginRequest {
   password: string
 }
 
-const CURRENT_USER_KEY = ['auth', 'me'] as const
+export const CURRENT_USER_KEY = ['auth', 'me'] as const
 
 /** Resolves to the session user, or `null` when not signed in (401). */
 export function useCurrentUser() {
