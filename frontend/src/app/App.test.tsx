@@ -50,7 +50,7 @@ describe('App auth gate', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
     expect(await screen.findByRole('heading', { name: 'Shipir' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /admin/ })).toBeInTheDocument()
     expect(apiFetchMock).toHaveBeenCalledWith('/auth/login', {
       method: 'POST',
       body: { username: 'admin', password: 'secret' },
@@ -106,7 +106,27 @@ describe('App auth gate', () => {
     })
     render(<App />)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }))
+    fireEvent.click(await screen.findByRole('button', { name: /admin/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }))
     expect(await screen.findByLabelText('Username')).toBeInTheDocument()
+  })
+
+  it('shows a not-allowed message for non-admins on /settings/*', async () => {
+    window.history.pushState({}, '', '/settings/retention')
+    route({ 'GET /auth/me': () => ({ username: 'v', role: 'VIEWER', setupRequired: false }) })
+    render(<App />)
+
+    expect(await screen.findByText(/not allowed to view/i)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Retention' })).not.toBeInTheDocument()
+    window.history.pushState({}, '', '/')
+  })
+
+  it('shows the settings placeholder to admins', async () => {
+    window.history.pushState({}, '', '/settings/retention')
+    route({ 'GET /auth/me': () => ({ username: 'a', role: 'ADMIN', setupRequired: false }) })
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: 'Retention' })).toBeInTheDocument()
+    window.history.pushState({}, '', '/')
   })
 })

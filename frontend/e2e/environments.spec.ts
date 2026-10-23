@@ -85,7 +85,7 @@ test('opens the placeholder page and navigates back', async ({ page, api }) => {
   await expect(page).toHaveURL(/\/environments\/a$/)
   await expect(page.getByText('Coming soon')).toBeVisible()
 
-  await page.getByRole('link', { name: /Environments/ }).click()
+  await page.getByRole('link', { name: '‹ Environments' }).click()
   await expect(page).toHaveURL(/\/$/)
   await expect(page.getByRole('link', { name: /Local/ })).toBeVisible()
 })
