@@ -42,6 +42,8 @@ export function describeDeploymentError(error: unknown, fallback: string): strin
         return 'This version no longer exists.'
       case 'COMPOSE_DOWN_FAILED':
         return 'Docker could not stop the deployment, so it was not deleted. Try again.'
+      case 'MANAGED_DEPLOYMENT':
+        return 'This deployment is managed by Shipir; delete it from its detail page.'
       case 'HOST_NOT_FOUND':
         return 'This environment no longer exists.'
       default:
