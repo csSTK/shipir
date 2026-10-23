@@ -39,7 +39,7 @@ test('deleting a credential in use shows the conflict', async ({ page, api }) =>
   await page.goto('/settings/git')
   await page.getByRole('button', { name: 'Delete GitHub work' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click()
-  await expect(page.getByText(/still used by one or more stacks/)).toBeVisible()
+  await expect(page.getByText(/still used by one or more deployments/)).toBeVisible()
 })
 
 test('operator cannot reach the page', async ({ page, api }) => {

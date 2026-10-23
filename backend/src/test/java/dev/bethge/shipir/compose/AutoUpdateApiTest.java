@@ -13,24 +13,24 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** {@code PUT .../git/auto-update}: validation, FILE stacks, roles, audit. */
-class AutoUpdateApiTest extends StackTestBase {
+/** {@code PUT .../git/auto-update}: validation, FILE deployments, roles, audit. */
+class AutoUpdateApiTest extends DeploymentTestBase {
 
-    private UUID gitStack;
-    private UUID fileStack;
+    private UUID gitDeployment;
+    private UUID fileDeployment;
 
     @BeforeEach
-    void stacks() {
-        jdbc.update("INSERT INTO stacks (name, host_id, compose_file_path, created_by, source_type, git_repo_url, "
+    void deployments() {
+        jdbc.update("INSERT INTO deployments (name, host_id, compose_file_path, created_by, source_type, git_repo_url, "
                 + "git_ref, git_compose_path) SELECT 'g', ?, 'x', u.id, 'GIT', 'https://example.com/r.git', 'main', "
                 + "'compose.yaml' FROM users u WHERE u.username = 'admin'", hostId);
-        jdbc.update("INSERT INTO stacks (name, host_id, compose_file_path, created_by) "
+        jdbc.update("INSERT INTO deployments (name, host_id, compose_file_path, created_by) "
                 + "SELECT 'f', ?, 'x', u.id FROM users u WHERE u.username = 'admin'", hostId);
-        jdbc.update("INSERT INTO stack_versions (stack_id, yaml_content, created_by) "
-                + "SELECT s.id, ?, s.created_by FROM stacks s", YAML);
-        jdbc.update("UPDATE stacks SET current_version_id = (SELECT id FROM stack_versions v WHERE v.stack_id = stacks.id)");
-        gitStack = jdbc.queryForObject("SELECT id FROM stacks WHERE name = 'g'", UUID.class);
-        fileStack = jdbc.queryForObject("SELECT id FROM stacks WHERE name = 'f'", UUID.class);
+        jdbc.update("INSERT INTO deployment_versions (deployment_id, yaml_content, created_by) "
+                + "SELECT s.id, ?, s.created_by FROM deployments s", YAML);
+        jdbc.update("UPDATE deployments SET current_version_id = (SELECT id FROM deployment_versions v WHERE v.deployment_id = deployments.id)");
+        gitDeployment = jdbc.queryForObject("SELECT id FROM deployments WHERE name = 'g'", UUID.class);
+        fileDeployment = jdbc.queryForObject("SELECT id FROM deployments WHERE name = 'f'", UUID.class);
     }
 
     private String path(UUID id) {
@@ -40,23 +40,23 @@ class AutoUpdateApiTest extends StackTestBase {
     @Test
     void enablesWithIntervalAndExposesItInDetail() throws Exception {
         Login admin = login("admin");
-        mvc.perform(admin.write(put(path(gitStack))).contentType(APPLICATION_JSON)
+        mvc.perform(admin.write(put(path(gitDeployment))).contentType(APPLICATION_JSON)
                         .content("{\"enabled\":true,\"intervalSeconds\":120}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.git.autoUpdateEnabled").value(true))
                 .andExpect(jsonPath("$.git.autoUpdateIntervalSeconds").value(120));
-        assertThat(jdbc.queryForObject("SELECT auto_update_enabled FROM stacks WHERE id = ?", Boolean.class, gitStack))
+        assertThat(jdbc.queryForObject("SELECT auto_update_enabled FROM deployments WHERE id = ?", Boolean.class, gitDeployment))
                 .isTrue();
-        assertThat(jdbc.queryForList("SELECT outcome FROM audit_log WHERE action = 'STACK_AUTO_UPDATE_CONFIG'",
+        assertThat(jdbc.queryForList("SELECT outcome FROM audit_log WHERE action = 'DEPLOYMENT_AUTO_UPDATE_CONFIG'",
                 String.class)).containsExactly("SUCCESS");
     }
 
     @Test
     void operatorMayConfigureAndKeepsIntervalWhenDisabling() throws Exception {
         Login op = login("operator");
-        mvc.perform(op.write(put(path(gitStack))).contentType(APPLICATION_JSON)
+        mvc.perform(op.write(put(path(gitDeployment))).contentType(APPLICATION_JSON)
                 .content("{\"enabled\":true,\"intervalSeconds\":90}")).andExpect(status().isOk());
-        mvc.perform(op.write(put(path(gitStack))).contentType(APPLICATION_JSON).content("{\"enabled\":false}"))
+        mvc.perform(op.write(put(path(gitDeployment))).contentType(APPLICATION_JSON).content("{\"enabled\":false}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.git.autoUpdateEnabled").value(false))
                 .andExpect(jsonPath("$.git.autoUpdateIntervalSeconds").value(90));
@@ -66,31 +66,31 @@ class AutoUpdateApiTest extends StackTestBase {
     @ValueSource(strings = {"{\"enabled\":true,\"intervalSeconds\":59}", "{\"enabled\":true,\"intervalSeconds\":0}",
             "{\"enabled\":true}", "{\"intervalSeconds\":120}", "{\"enabled\":\"yes\"}"})
     void rejectsInvalidSettings(String body) throws Exception {
-        mvc.perform(login("admin").write(put(path(gitStack))).contentType(APPLICATION_JSON).content(body))
+        mvc.perform(login("admin").write(put(path(gitDeployment))).contentType(APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest());
-        assertThat(jdbc.queryForObject("SELECT auto_update_enabled FROM stacks WHERE id = ?", Boolean.class, gitStack))
+        assertThat(jdbc.queryForObject("SELECT auto_update_enabled FROM deployments WHERE id = ?", Boolean.class, gitDeployment))
                 .isFalse();
     }
 
     @Test
-    void fileStackIsRejected() throws Exception {
-        mvc.perform(login("admin").write(put(path(fileStack))).contentType(APPLICATION_JSON)
+    void fileDeploymentIsRejected() throws Exception {
+        mvc.perform(login("admin").write(put(path(fileDeployment))).contentType(APPLICATION_JSON)
                         .content("{\"enabled\":true,\"intervalSeconds\":120}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("NOT_A_GIT_STACK"));
+                .andExpect(jsonPath("$.code").value("NOT_A_GIT_DEPLOYMENT"));
     }
 
     @Test
-    void unknownStackIs404() throws Exception {
+    void unknownDeploymentIs404() throws Exception {
         mvc.perform(login("admin").write(put(path(UUID.randomUUID()))).contentType(APPLICATION_JSON)
                 .content("{\"enabled\":false}")).andExpect(status().isNotFound());
     }
 
     @Test
     void viewerIsForbiddenAndAnonymousUnauthorized() throws Exception {
-        mvc.perform(login("viewer").write(put(path(gitStack))).contentType(APPLICATION_JSON)
+        mvc.perform(login("viewer").write(put(path(gitDeployment))).contentType(APPLICATION_JSON)
                 .content("{\"enabled\":false}")).andExpect(status().isForbidden());
-        mvc.perform(put(path(gitStack)).contentType(APPLICATION_JSON).content("{\"enabled\":false}"))
+        mvc.perform(put(path(gitDeployment)).contentType(APPLICATION_JSON).content("{\"enabled\":false}"))
                 .andExpect(status().is4xxClientError());
     }
 }

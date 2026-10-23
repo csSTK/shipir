@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V16 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V17 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To16Successfully() {
+    void flywayAppliedVersions1To17Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17");
     }
 
     @Test
@@ -174,7 +174,7 @@ class SchemaMigrationTest {
         List<String> wrong = jdbc.queryForList("""
                 SELECT table_name || '.' || column_name FROM information_schema.columns
                 WHERE table_schema = 'public'
-                  AND table_name IN ('users','docker_hosts','stacks','stack_versions')
+                  AND table_name IN ('users','docker_hosts','deployments','deployment_versions')
                   AND (column_name LIKE '%\\_at' ESCAPE '\\')
                   AND data_type <> 'timestamp with time zone'
                 """, String.class);
@@ -183,9 +183,9 @@ class SchemaMigrationTest {
         Integer count = jdbc.queryForObject("""
                 SELECT count(*) FROM information_schema.columns
                 WHERE table_schema = 'public' AND data_type = 'timestamp with time zone'
-                  AND table_name IN ('users','docker_hosts','stacks','stack_versions')
+                  AND table_name IN ('users','docker_hosts','deployments','deployment_versions')
                 """, Integer.class);
-        assertThat(count).isEqualTo(8); // 2 users + 1 hosts + 3 stacks + 2 versions
+        assertThat(count).isEqualTo(8); // 2 users + 1 hosts + 3 deployments + 2 versions
     }
 
     @Test
@@ -213,27 +213,27 @@ class SchemaMigrationTest {
     }
 
     @Test
-    void stackNameIsUniquePerHostButNotAcrossHosts() {
+    void deploymentNameIsUniquePerHostButNotAcrossHosts() {
         UUID user = insertUser("alice");
         UUID host1 = insertHost(user);
         UUID host2 = insertHost(user);
-        insertStack(host1, user, "web");
-        insertStack(host2, user, "web");
-        assertThatThrownBy(() -> insertStack(host1, user, "web"))
+        insertDeployment(host1, user, "web");
+        insertDeployment(host2, user, "web");
+        assertThatThrownBy(() -> insertDeployment(host1, user, "web"))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
-    void deletingHostCascadesToStacksAndVersions() {
+    void deletingHostCascadesToDeploymentsAndVersions() {
         UUID user = insertUser("alice");
         UUID host = insertHost(user);
-        UUID stack = insertStack(host, user, "web");
-        insertVersion(stack, user);
+        UUID deployment = insertDeployment(host, user, "web");
+        insertVersion(deployment, user);
 
         jdbc.update("DELETE FROM docker_hosts WHERE id = ?", host);
 
-        assertThat(count("stacks")).isZero();
-        assertThat(count("stack_versions")).isZero();
+        assertThat(count("deployments")).isZero();
+        assertThat(count("deployment_versions")).isZero();
         assertThat(count("users")).isEqualTo(2); // alice + the seeded initial admin
     }
 
@@ -246,11 +246,11 @@ class SchemaMigrationTest {
     }
 
     @Test
-    void deletingUserWhoCreatedStackFails() {
+    void deletingUserWhoCreatedDeploymentFails() {
         UUID owner = insertUser("owner");
         UUID creator = insertUser("creator");
         UUID host = insertHost(owner);
-        insertStack(host, creator, "web");
+        insertDeployment(host, creator, "web");
         assertThatThrownBy(() -> jdbc.update("DELETE FROM users WHERE id = ?", creator))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
@@ -259,8 +259,8 @@ class SchemaMigrationTest {
     void deletingUserWhoCreatedVersionFails() {
         UUID owner = insertUser("owner");
         UUID author = insertUser("author");
-        UUID stack = insertStack(insertHost(owner), owner, "web");
-        insertVersion(stack, author);
+        UUID deployment = insertDeployment(insertHost(owner), owner, "web");
+        insertVersion(deployment, author);
         assertThatThrownBy(() -> jdbc.update("DELETE FROM users WHERE id = ?", author))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
@@ -995,12 +995,12 @@ class SchemaMigrationTest {
     }
 
     @Test
-    void existingStackDefaultsToFileSourceWithoutAutoUpdate() {
+    void existingDeploymentDefaultsToFileSourceWithoutAutoUpdate() {
         UUID user = insertUser("alice");
-        UUID stack = insertStack(insertHost(user), user, "web");
+        UUID deployment = insertDeployment(insertHost(user), user, "web");
         Map<String, Object> row = jdbc.queryForMap(
-                "SELECT source_type, auto_update_enabled, git_repo_url, current_version_id FROM stacks WHERE id = ?",
-                stack);
+                "SELECT source_type, auto_update_enabled, git_repo_url, current_version_id FROM deployments WHERE id = ?",
+                deployment);
         assertThat(row.get("source_type")).isEqualTo("FILE");
         assertThat(row.get("auto_update_enabled")).isEqualTo(false);
         assertThat(row.get("git_repo_url")).isNull();
@@ -1008,30 +1008,30 @@ class SchemaMigrationTest {
     }
 
     @Test
-    void gitStackWithAllGitColumnsIsAccepted() {
+    void gitDeploymentWithAllGitColumnsIsAccepted() {
         UUID user = insertUser("alice");
         UUID cred = insertCredential("gh", user);
-        UUID stack = insertGitStack(insertHost(user), user, "git-web", cred, 60);
-        assertThat(jdbc.queryForObject("SELECT source_type FROM stacks WHERE id = ?", String.class, stack))
+        UUID deployment = insertGitDeployment(insertHost(user), user, "git-web", cred, 60);
+        assertThat(jdbc.queryForObject("SELECT source_type FROM deployments WHERE id = ?", String.class, deployment))
                 .isEqualTo("GIT");
     }
 
     @Test
-    void gitStackStoresPollState() {
+    void gitDeploymentStoresPollState() {
         UUID user = insertUser("alice");
-        UUID stack = insertGitStack(insertHost(user), user, "git-poll", null, null);
-        jdbc.update("UPDATE stacks SET last_polled_at = now(), last_poll_error = 'GIT_UNREACHABLE' WHERE id = ?", stack);
-        assertThat(jdbc.queryForObject("SELECT last_poll_error FROM stacks WHERE id = ?", String.class, stack))
+        UUID deployment = insertGitDeployment(insertHost(user), user, "git-poll", null, null);
+        jdbc.update("UPDATE deployments SET last_polled_at = now(), last_poll_error = 'GIT_UNREACHABLE' WHERE id = ?", deployment);
+        assertThat(jdbc.queryForObject("SELECT last_poll_error FROM deployments WHERE id = ?", String.class, deployment))
                 .isEqualTo("GIT_UNREACHABLE");
-        assertThat(jdbc.queryForObject("SELECT last_polled_at IS NOT NULL FROM stacks WHERE id = ?", Boolean.class, stack))
+        assertThat(jdbc.queryForObject("SELECT last_polled_at IS NOT NULL FROM deployments WHERE id = ?", Boolean.class, deployment))
                 .isTrue();
     }
 
     @Test
-    void gitStackWithoutCredentialIsAccepted() {
+    void gitDeploymentWithoutCredentialIsAccepted() {
         UUID user = insertUser("alice");
-        UUID stack = insertGitStack(insertHost(user), user, "git-pub", null, null);
-        assertThat(stack).isNotNull();
+        UUID deployment = insertGitDeployment(insertHost(user), user, "git-pub", null, null);
+        assertThat(deployment).isNotNull();
     }
 
     @Test
@@ -1039,46 +1039,46 @@ class SchemaMigrationTest {
         UUID user = insertUser("alice");
         UUID host = insertHost(user);
         assertThatThrownBy(() -> jdbc.update("""
-                INSERT INTO stacks (name, host_id, compose_file_path, created_by, source_type)
+                INSERT INTO deployments (name, host_id, compose_file_path, created_by, source_type)
                 VALUES ('x', ?, '/x', ?, 'SVN')
                 """, host, user))
                 .isInstanceOf(DataIntegrityViolationException.class); // also trips the git-columns check
     }
 
     @Test
-    void gitStackWithoutRepoUrlIsRejected() {
+    void gitDeploymentWithoutRepoUrlIsRejected() {
         UUID user = insertUser("alice");
         UUID host = insertHost(user);
         assertThatThrownBy(() -> jdbc.update("""
-                INSERT INTO stacks (name, host_id, compose_file_path, created_by, source_type, git_ref, git_compose_path)
+                INSERT INTO deployments (name, host_id, compose_file_path, created_by, source_type, git_ref, git_compose_path)
                 VALUES ('x', ?, '/x', ?, 'GIT', 'main', 'compose.yml')
                 """, host, user))
                 .isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessageContaining("stacks_git_columns_check");
+                .hasMessageContaining("deployments_git_columns_check");
     }
 
     @Test
-    void fileStackWithGitColumnsIsRejected() {
+    void fileDeploymentWithGitColumnsIsRejected() {
         UUID user = insertUser("alice");
         UUID host = insertHost(user);
         assertThatThrownBy(() -> jdbc.update("""
-                INSERT INTO stacks (name, host_id, compose_file_path, created_by, git_repo_url)
+                INSERT INTO deployments (name, host_id, compose_file_path, created_by, git_repo_url)
                 VALUES ('x', ?, '/x', ?, 'https://example.com/r.git')
                 """, host, user))
                 .isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessageContaining("stacks_git_columns_check");
+                .hasMessageContaining("deployments_git_columns_check");
     }
 
     @Test
-    void fileStackWithAutoUpdateEnabledIsRejected() {
+    void fileDeploymentWithAutoUpdateEnabledIsRejected() {
         UUID user = insertUser("alice");
         UUID host = insertHost(user);
         assertThatThrownBy(() -> jdbc.update("""
-                INSERT INTO stacks (name, host_id, compose_file_path, created_by, auto_update_enabled)
+                INSERT INTO deployments (name, host_id, compose_file_path, created_by, auto_update_enabled)
                 VALUES ('x', ?, '/x', ?, TRUE)
                 """, host, user))
                 .isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessageContaining("stacks_git_columns_check");
+                .hasMessageContaining("deployments_git_columns_check");
     }
 
     @ParameterizedTest
@@ -1086,41 +1086,41 @@ class SchemaMigrationTest {
     void autoUpdateIntervalBelow60IsRejected(int seconds) {
         UUID user = insertUser("alice");
         UUID host = insertHost(user);
-        assertThatThrownBy(() -> insertGitStack(host, user, "g", null, seconds))
+        assertThatThrownBy(() -> insertGitDeployment(host, user, "g", null, seconds))
                 .isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessageContaining("stacks_auto_update_interval_check");
+                .hasMessageContaining("deployments_auto_update_interval_check");
     }
 
     @Test
     void deletingReferencedGitCredentialIsRestricted() {
         UUID user = insertUser("alice");
         UUID cred = insertCredential("gh", user);
-        insertGitStack(insertHost(user), user, "g", cred, 60);
+        insertGitDeployment(insertHost(user), user, "g", cred, 60);
         assertThatThrownBy(() -> jdbc.update("DELETE FROM git_credentials WHERE id = ?", cred))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
-    void deletingCurrentVersionSetsStackCurrentVersionNull() {
+    void deletingCurrentVersionSetsDeploymentCurrentVersionNull() {
         UUID user = insertUser("alice");
-        UUID stack = insertStack(insertHost(user), user, "web");
+        UUID deployment = insertDeployment(insertHost(user), user, "web");
         UUID version = jdbc.queryForObject("""
-                INSERT INTO stack_versions (stack_id, yaml_content, created_by)
+                INSERT INTO deployment_versions (deployment_id, yaml_content, created_by)
                 VALUES (?, 'services: {}', ?) RETURNING id
-                """, UUID.class, stack, user);
-        jdbc.update("UPDATE stacks SET current_version_id = ? WHERE id = ?", version, stack);
-        jdbc.update("DELETE FROM stack_versions WHERE id = ?", version);
-        assertThat(jdbc.queryForObject("SELECT current_version_id FROM stacks WHERE id = ?", UUID.class, stack))
+                """, UUID.class, deployment, user);
+        jdbc.update("UPDATE deployments SET current_version_id = ? WHERE id = ?", version, deployment);
+        jdbc.update("DELETE FROM deployment_versions WHERE id = ?", version);
+        assertThat(jdbc.queryForObject("SELECT current_version_id FROM deployments WHERE id = ?", UUID.class, deployment))
                 .isNull();
     }
 
     @Test
-    void stackVersionDefaultsToManualSourceWithNullEnvAndCommit() {
+    void deploymentVersionDefaultsToManualSourceWithNullEnvAndCommit() {
         UUID user = insertUser("alice");
-        UUID stack = insertStack(insertHost(user), user, "web");
-        insertVersion(stack, user);
+        UUID deployment = insertDeployment(insertHost(user), user, "web");
+        insertVersion(deployment, user);
         Map<String, Object> row = jdbc.queryForMap(
-                "SELECT source, env_ciphertext, commit_sha FROM stack_versions WHERE stack_id = ?", stack);
+                "SELECT source, env_ciphertext, commit_sha FROM deployment_versions WHERE deployment_id = ?", deployment);
         assertThat(row.get("source")).isEqualTo("MANUAL");
         assertThat(row.get("env_ciphertext")).isNull();
         assertThat(row.get("commit_sha")).isNull();
@@ -1128,26 +1128,26 @@ class SchemaMigrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"MANUAL", "GIT", "ROLLBACK"})
-    void stackVersionAcceptsKnownSourcesWithEncryptedEnv(String source) {
+    void deploymentVersionAcceptsKnownSourcesWithEncryptedEnv(String source) {
         UUID user = insertUser("alice");
-        UUID stack = insertStack(insertHost(user), user, "web");
+        UUID deployment = insertDeployment(insertHost(user), user, "web");
         jdbc.update("""
-                INSERT INTO stack_versions (stack_id, yaml_content, created_by, env_ciphertext, commit_sha, source)
+                INSERT INTO deployment_versions (deployment_id, yaml_content, created_by, env_ciphertext, commit_sha, source)
                 VALUES (?, 'services: {}', ?, ?, 'abc123', ?)
-                """, stack, user, new byte[] {1, 2}, source);
-        assertThat(count("stack_versions")).isEqualTo(1);
+                """, deployment, user, new byte[] {1, 2}, source);
+        assertThat(count("deployment_versions")).isEqualTo(1);
     }
 
     @Test
-    void stackVersionWithUnknownSourceIsRejected() {
+    void deploymentVersionWithUnknownSourceIsRejected() {
         UUID user = insertUser("alice");
-        UUID stack = insertStack(insertHost(user), user, "web");
+        UUID deployment = insertDeployment(insertHost(user), user, "web");
         assertThatThrownBy(() -> jdbc.update("""
-                INSERT INTO stack_versions (stack_id, yaml_content, created_by, source)
+                INSERT INTO deployment_versions (deployment_id, yaml_content, created_by, source)
                 VALUES (?, 'services: {}', ?, 'IMPORT')
-                """, stack, user))
+                """, deployment, user))
                 .isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessageContaining("stack_versions_source_check");
+                .hasMessageContaining("deployment_versions_source_check");
     }
 
     private UUID insertChatSession(UUID user) {
@@ -1167,12 +1167,12 @@ class SchemaMigrationTest {
                 """, UUID.class, name, new byte[] {1, 2, 3}, creator);
     }
 
-    private UUID insertGitStack(UUID host, UUID creator, String name, UUID credential, Integer intervalSeconds) {
+    private UUID insertGitDeployment(UUID host, UUID creator, String name, UUID credential, Integer intervalSeconds) {
         return jdbc.queryForObject("""
-                INSERT INTO stacks (name, host_id, compose_file_path, created_by, source_type, git_repo_url, git_ref,
+                INSERT INTO deployments (name, host_id, compose_file_path, created_by, source_type, git_repo_url, git_ref,
                                     git_compose_path, git_credential_id, auto_update_enabled,
                                     auto_update_interval_seconds)
-                VALUES (?, ?, '/stacks/x/compose.yml', ?, 'GIT', 'https://example.com/r.git', 'main', 'compose.yml',
+                VALUES (?, ?, '/deployments/x/compose.yml', ?, 'GIT', 'https://example.com/r.git', 'main', 'compose.yml',
                         ?, ?, ?) RETURNING id
                 """, UUID.class, name, host, creator, credential, intervalSeconds != null, intervalSeconds);
     }
@@ -1205,10 +1205,10 @@ class SchemaMigrationTest {
                 """, UUID.class, name, connectionType, host, port, owner);
     }
 
-    private UUID insertStack(UUID host, UUID creator, String name) {
+    private UUID insertDeployment(UUID host, UUID creator, String name) {
         return jdbc.queryForObject("""
-                INSERT INTO stacks (name, host_id, compose_file_path, created_by)
-                VALUES (?, ?, '/stacks/x/compose.yml', ?) RETURNING id
+                INSERT INTO deployments (name, host_id, compose_file_path, created_by)
+                VALUES (?, ?, '/deployments/x/compose.yml', ?) RETURNING id
                 """, UUID.class, name, host, creator);
     }
 
@@ -1222,8 +1222,8 @@ class SchemaMigrationTest {
                 user, type, inAppEnabled);
     }
 
-    private void insertVersion(UUID stack, UUID creator) {
-        jdbc.update("INSERT INTO stack_versions (stack_id, yaml_content, created_by) VALUES (?, 'services: {}', ?)",
-                stack, creator);
+    private void insertVersion(UUID deployment, UUID creator) {
+        jdbc.update("INSERT INTO deployment_versions (deployment_id, yaml_content, created_by) VALUES (?, 'services: {}', ?)",
+                deployment, creator);
     }
 }

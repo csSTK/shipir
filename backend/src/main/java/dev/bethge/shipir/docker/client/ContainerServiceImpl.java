@@ -5,7 +5,7 @@ import com.github.dockerjava.api.model.ContainerPort;
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
 import dev.bethge.shipir.docker.dto.ContainerDto;
-import dev.bethge.shipir.docker.dto.StackSummaryDto;
+import dev.bethge.shipir.docker.dto.DeploymentSummaryDto;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -38,11 +38,11 @@ public class ContainerServiceImpl implements ContainerService {
     }
 
     @Override
-    public List<StackSummaryDto> listStacks(UUID hostId, DockerEndpoint endpoint) {
-        return calls.call(hostId, endpoint, client -> groupStacks(client.listContainersCmd().withShowAll(true).exec()));
+    public List<DeploymentSummaryDto> listDeployments(UUID hostId, DockerEndpoint endpoint) {
+        return calls.call(hostId, endpoint, client -> groupDeployments(client.listContainersCmd().withShowAll(true).exec()));
     }
 
-    static List<StackSummaryDto> groupStacks(List<Container> containers) {
+    static List<DeploymentSummaryDto> groupDeployments(List<Container> containers) {
         Map<String, List<Container>> byProject = new LinkedHashMap<>();
         for (Container c : containers) {
             String project = label(c, PROJECT_LABEL);
@@ -52,17 +52,17 @@ public class ContainerServiceImpl implements ContainerService {
         }
         return byProject.entrySet().stream()
                 .map(e -> summarize(e.getKey(), e.getValue()))
-                .sorted(Comparator.comparing(StackSummaryDto::name))
+                .sorted(Comparator.comparing(DeploymentSummaryDto::name))
                 .toList();
     }
 
-    private static StackSummaryDto summarize(String name, List<Container> members) {
+    private static DeploymentSummaryDto summarize(String name, List<Container> members) {
         int running = (int) members.stream().filter(c -> "running".equals(c.getState())).count();
-        StackSummaryDto.Status status = running == 0 ? StackSummaryDto.Status.STOPPED
-                : running == members.size() ? StackSummaryDto.Status.RUNNING : StackSummaryDto.Status.PARTIAL;
+        DeploymentSummaryDto.Status status = running == 0 ? DeploymentSummaryDto.Status.STOPPED
+                : running == members.size() ? DeploymentSummaryDto.Status.RUNNING : DeploymentSummaryDto.Status.PARTIAL;
         String workingDir = members.stream().map(c -> label(c, WORKING_DIR_LABEL))
                 .filter(w -> w != null).findFirst().orElse(null);
-        return new StackSummaryDto(name, members.size(), running, status, workingDir);
+        return new DeploymentSummaryDto(name, members.size(), running, status, workingDir);
     }
 
     static ContainerDto toDto(Container c) {
@@ -99,5 +99,13 @@ public class ContainerServiceImpl implements ContainerService {
 
     private static String stripSlash(String name) {
         return name != null && name.startsWith("/") ? name.substring(1) : name;
+    }
+
+    @Override
+    public void removeContainer(UUID hostId, DockerEndpoint endpoint, String id, boolean force) {
+        calls.call(hostId, endpoint, client -> {
+            client.removeContainerCmd(id).withForce(force).withRemoveVolumes(false).exec();
+            return null;
+        });
     }
 }

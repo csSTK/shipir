@@ -1,7 +1,12 @@
+import { useState } from 'react'
 import { useSearchParams, useParams } from 'react-router-dom'
+import { useCurrentUser } from '../auth/index.ts'
+import { useDeployments } from '../deployments/api.ts'
+import { deleteColumn } from '../hosts/deleteColumn.tsx'
+import { DeleteResourceDialog } from '../hosts/DeleteResourceDialog.tsx'
 import { describeResourceError } from '../hosts/format.ts'
 import { Badge, ResourceTable, type ResourceColumn } from '../../shared/ui/index.ts'
-import { useContainers, type Container } from './api.ts'
+import { useContainers, useDeleteContainer, type Container } from './api.ts'
 import './ContainersPage.css'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -32,7 +37,7 @@ const columns: ResourceColumn<Container>[] = [
     render: (c) => (c.health ? <Badge tone={healthTone(c.health)}>{c.health}</Badge> : '–'),
   },
   { id: 'image', header: 'Image', sortValue: (c) => c.image, render: (c) => c.image },
-  { id: 'stack', header: 'Stack', sortValue: (c) => c.composeProject, render: (c) => c.composeProject ?? '–' },
+  { id: 'deployment', header: 'Deployment', sortValue: (c) => c.composeProject, render: (c) => c.composeProject ?? '–' },
   {
     id: 'ports',
     header: 'Ports',
@@ -55,37 +60,59 @@ const columns: ResourceColumn<Container>[] = [
   },
 ]
 
-/** `/environments/:id/containers`: all containers of one environment, optionally `?stack=<project>`. */
+/** Looks up the managed deployment only once a delete is requested, so plain browsing costs no extra request. */
+function DeleteContainerDialog({ hostId, container, onClose }: { hostId: string; container: Container; onClose: () => void }) {
+  const deployments = useDeployments(hostId)
+  const del = useDeleteContainer(hostId)
+  const managed = deployments.data?.some((d) => d.name === container.composeProject && d.managedDeploymentId)
+  return (
+    <DeleteResourceDialog
+      kind="container"
+      name={container.name}
+      forceOption={container.state === 'running'}
+      warning={managed ? `Belongs to deployment ${container.composeProject} and may come back on the next deploy.` : null}
+      onDelete={(force) => del.mutateAsync({ id: container.id, force })}
+      onClose={onClose}
+    />
+  )
+}
+
+/** `/environments/:id/containers`: all containers of one environment, optionally `?deployment=<project>`. */
 export function ContainersPage() {
   const { id = '' } = useParams()
   const [params, setParams] = useSearchParams()
-  const stack = params.get('stack')
+  const deployment = params.get('deployment')
+  const { data: user } = useCurrentUser()
+  const canWrite = user?.role === 'ADMIN' || user?.role === 'OPERATOR'
   const { data, isPending, error, refetch } = useContainers(id)
+  const [target, setTarget] = useState<Container | null>(null)
+  const tableColumns = canWrite ? [...columns, deleteColumn<Container>('container', (c) => c.name, setTarget)] : columns
 
-  const rows = stack ? data?.filter((c) => c.composeProject === stack) : data
+  const rows = deployment ? data?.filter((c) => c.composeProject === deployment) : data
 
   return (
     <section className="containers">
       <h2 className="containers__title">Containers</h2>
       <ResourceTable
         label="containers"
-        columns={columns}
+        columns={tableColumns}
         rows={rows}
         rowKey={(c) => c.id}
         searchText={(c) => `${c.name} ${c.image} ${c.composeProject ?? ''}`}
         defaultSort="name"
-        emptyMessage={stack ? `No containers in stack ${stack}.` : 'No containers in this environment.'}
+        emptyMessage={deployment ? `No containers in deployment ${deployment}.` : 'No containers in this environment.'}
         isPending={isPending}
         error={error ? describeResourceError(error) : null}
         onRetry={() => void refetch()}
         toolbar={
-          stack && (
+          deployment && (
             <button type="button" className="containers__chip" onClick={() => setParams({})}>
-              Stack: {stack} <span aria-hidden="true">×</span>
+              Deployment: {deployment} <span aria-hidden="true">×</span>
             </button>
           )
         }
       />
+      {target && <DeleteContainerDialog hostId={id} container={target} onClose={() => setTarget(null)} />}
     </section>
   )
 }

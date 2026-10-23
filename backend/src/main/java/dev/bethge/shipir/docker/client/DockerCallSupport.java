@@ -1,6 +1,8 @@
 package dev.bethge.shipir.docker.client;
 
 import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.exception.ConflictException;
+import com.github.dockerjava.api.exception.NotFoundException;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.DockerErrorCode;
@@ -82,6 +84,9 @@ class DockerCallSupport {
             case PERMISSION_DENIED -> "Permission denied accessing the Docker daemon.";
             case UNREACHABLE -> "The Docker daemon is not reachable.";
             case INVALID_TLS_MATERIAL -> "The TLS certificate or key is not valid PEM.";
+            case NOT_FOUND -> "The resource does not exist.";
+            case IN_USE -> "The resource is in use.";
+            case BUILTIN_NETWORK -> "Built-in networks cannot be removed.";
         };
         return new DockerConnectionException(code, message, e);
     }
@@ -89,6 +94,12 @@ class DockerCallSupport {
     private static DockerErrorCode classify(Throwable error) {
         DockerErrorCode result = DockerErrorCode.UNREACHABLE;
         for (Throwable t = error; t != null; t = t.getCause()) {
+            if (t instanceof NotFoundException) {
+                return DockerErrorCode.NOT_FOUND;
+            }
+            if (t instanceof ConflictException) {
+                return DockerErrorCode.IN_USE;
+            }
             if (t instanceof SocketTimeoutException || t instanceof TimeoutException
                     || t.getClass().getSimpleName().contains("Timeout")) {
                 return DockerErrorCode.TIMEOUT;

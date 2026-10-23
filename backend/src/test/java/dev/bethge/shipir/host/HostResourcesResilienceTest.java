@@ -8,7 +8,7 @@ import dev.bethge.shipir.docker.client.ImageService;
 import dev.bethge.shipir.docker.client.NetworkService;
 import dev.bethge.shipir.docker.client.VolumeService;
 import dev.bethge.shipir.docker.dto.ContainerDto;
-import dev.bethge.shipir.docker.dto.StackSummaryDto;
+import dev.bethge.shipir.docker.dto.DeploymentSummaryDto;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -60,13 +60,13 @@ class HostResourcesResilienceTest extends HostApiTestBase {
         String id = insertTcp("h");
         var boom = new DockerConnectionException(code, "connect to secret-host.example:2376 failed", null);
         when(containers.listContainers(any(), any())).thenThrow(boom);
-        when(containers.listStacks(any(), any())).thenThrow(boom);
+        when(containers.listDeployments(any(), any())).thenThrow(boom);
         when(images.list(any(), any())).thenThrow(boom);
         when(networks.list(any(), any())).thenThrow(boom);
         when(volumes.list(any(), any())).thenThrow(boom);
         Login viewer = login("viewer");
 
-        for (String r : new String[]{"stacks", "containers", "images", "networks", "volumes"}) {
+        for (String r : new String[]{"deployments", "containers", "images", "networks", "volumes"}) {
             mvc.perform(get("/api/hosts/{id}/{r}", id, r).session(viewer.session()))
                     .andExpect(status().isBadGateway())
                     .andExpect(jsonPath("$.code").value(code.name()))
@@ -86,12 +86,12 @@ class HostResourcesResilienceTest extends HostApiTestBase {
     @Test
     void stubbedListsAreSerialisedAsOwnDtos() throws Exception {
         String id = insertTcp("ok");
-        when(containers.listStacks(any(), any())).thenReturn(
-                List.of(new StackSummaryDto("web", 2, 1, StackSummaryDto.Status.PARTIAL, "/srv/web")));
+        when(containers.listDeployments(any(), any())).thenReturn(
+                List.of(new DeploymentSummaryDto("web", 2, 1, DeploymentSummaryDto.Status.PARTIAL, "/srv/web")));
         when(containers.listContainers(any(), any())).thenReturn(List.<ContainerDto>of());
         Login viewer = login("operator");
 
-        mvc.perform(get("/api/hosts/{id}/stacks", id).session(viewer.session()))
+        mvc.perform(get("/api/hosts/{id}/deployments", id).session(viewer.session()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].name").value("web"))
                 .andExpect(jsonPath("$[0].status").value("PARTIAL"));

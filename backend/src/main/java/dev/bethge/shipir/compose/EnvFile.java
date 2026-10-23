@@ -78,7 +78,7 @@ public final class EnvFile {
         return raw;
     }
 
-    private static StackException invalid(String message) {
-        return new StackException(HttpStatus.BAD_REQUEST, "INVALID_ENV", message);
+    private static DeploymentException invalid(String message) {
+        return new DeploymentException(HttpStatus.BAD_REQUEST, "INVALID_ENV", message);
     }
 }

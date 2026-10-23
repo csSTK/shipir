@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '../../shared/api/client.ts'
+import { useDeleteResourceMutation } from '../hosts/deleteResource.ts'
 
 /** One container of `GET /api/hosts/{id}/containers`; compose fields are null outside Compose. */
 export interface Container {
@@ -21,4 +22,9 @@ export function useContainers(hostId: string) {
     queryKey: ['hosts', hostId, 'containers'],
     queryFn: () => apiFetch<Container[]>(`/hosts/${hostId}/containers`),
   })
+}
+
+/** `force` stops a running container before removing it. */
+export function useDeleteContainer(hostId: string) {
+  return useDeleteResourceMutation(hostId, 'containers', ({ id, force }: { id: string; force: boolean }) => ({ ref: id, force }))
 }

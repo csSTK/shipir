@@ -1,7 +1,7 @@
 package dev.bethge.shipir.ai.tools;
 
 import dev.bethge.shipir.auth.Role;
-import dev.bethge.shipir.compose.StackException;
+import dev.bethge.shipir.compose.DeploymentException;
 import dev.bethge.shipir.host.HostException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -157,7 +157,7 @@ class AiToolRegistryTest {
                     throw e;
                 }),
                 tool("stack", Role.VIEWER, false, (a, c) -> {
-                    throw new StackException(HttpStatus.NOT_FOUND, "STACK_NOT_FOUND", "Stack not found");
+                    throw new DeploymentException(HttpStatus.NOT_FOUND, "DEPLOYMENT_NOT_FOUND", "Stack not found");
                 }),
                 tool("arg", Role.VIEWER, false, (a, c) -> {
                     throw new ToolArgumentException("'from' is malformed");
@@ -167,7 +167,7 @@ class AiToolRegistryTest {
                 }));
 
         assertThat(registry.execute("host", args, ctx(Role.VIEWER)).content()).contains("HOST_NOT_FOUND");
-        assertThat(registry.execute("stack", args, ctx(Role.VIEWER)).content()).contains("STACK_NOT_FOUND");
+        assertThat(registry.execute("stack", args, ctx(Role.VIEWER)).content()).contains("DEPLOYMENT_NOT_FOUND");
         assertThat(registry.execute("arg", args, ctx(Role.VIEWER)).content()).contains("INVALID_ARGUMENTS", "malformed");
         ToolResult boom = registry.execute("boom", args, ctx(Role.VIEWER));
         assertThat(boom.error()).isTrue();

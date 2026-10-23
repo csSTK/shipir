@@ -1,7 +1,7 @@
 package dev.bethge.shipir.compose.execution;
 
 import dev.bethge.shipir.common.util.PathValidationException;
-import dev.bethge.shipir.compose.StackProperties;
+import dev.bethge.shipir.compose.DeploymentProperties;
 import dev.bethge.shipir.compose.file.ComposeFileRepository;
 import dev.bethge.shipir.docker.DockerEndpoint;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,7 +32,7 @@ class ComposeExecutionServiceTest {
 
     @BeforeEach
     void setUp() throws IOException {
-        files = new ComposeFileRepository(new StackProperties(tmp.resolve("stacks")));
+        files = new ComposeFileRepository(new DeploymentProperties(tmp.resolve("deployments")));
         files.write(hostId, "web", "services: {}\n", null);
         script = tmp.resolve("fake-compose.sh");
         writeScript("""
@@ -77,7 +77,7 @@ class ComposeExecutionServiceTest {
     void buildsArgumentListForUp() throws IOException {
         List<String> lines = new ArrayList<>();
         ComposeProcessResult result = run(ComposeCommand.UP, local(), lines);
-        Path dir = files.stackDir(hostId, "web");
+        Path dir = files.deploymentDir(hostId, "web");
         assertThat(result.exitCode()).isZero();
         assertThat(result.success()).isTrue();
         assertThat(line(lines, "ARGS:")).isEqualTo("ARGS:-p web --project-directory " + dir + " -f "
@@ -99,7 +99,7 @@ class ComposeExecutionServiceTest {
     }
 
     @Test
-    void shellMetacharactersInStackNameAreRejectedBeforeProcessStart() {
+    void shellMetacharactersInDeploymentNameAreRejectedBeforeProcessStart() {
         var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(5)),
                 List.of(tmp.resolve("does-not-exist").toString()));
         for (String bad : List.of("web; rm -rf /", "../x", "a b", "$(id)", "Web", "", "a/b")) {
@@ -182,7 +182,7 @@ class ComposeExecutionServiceTest {
     @Test
     void composeFileInCheckoutUsesItsDirectoryAsProjectDirectoryAndShipirEnvFile() throws IOException {
         files.write(hostId, "web", "services: {}\n", "A=1\n");
-        Path stackDir = files.stackDir(hostId, "web");
+        Path deploymentDir = files.deploymentDir(hostId, "web");
         Files.createDirectories(files.repoDir(hostId, "web"));
         Path file = files.repoComposeFile(hostId, "web", "app/compose.yaml");
         Files.createDirectories(file.getParent());
@@ -191,7 +191,7 @@ class ComposeExecutionServiceTest {
 
         service(Duration.ofSeconds(20)).execute(hostId, "web", ComposeCommand.UP, local(), lines::add, file);
 
-        assertThat(line(lines, "ARGS:")).isEqualTo("ARGS:-p web --env-file " + stackDir.resolve(".env")
+        assertThat(line(lines, "ARGS:")).isEqualTo("ARGS:-p web --env-file " + deploymentDir.resolve(".env")
                 + " --project-directory " + file.getParent() + " -f " + file + " up -d --remove-orphans");
         assertThat(line(lines, "PWD:")).isEqualTo("PWD:" + file.getParent().toRealPath());
     }
@@ -209,17 +209,36 @@ class ComposeExecutionServiceTest {
     }
 
     @Test
-    void composeFilesOutsideTheStackDirectoryAreRejected() throws IOException {
-        Path stackDir = files.stackDir(hostId, "web");
+    void composeFilesOutsideTheDeploymentDirectoryAreRejected() throws IOException {
+        Path deploymentDir = files.deploymentDir(hostId, "web");
         Path outside = Files.writeString(tmp.resolve("outside.yaml"), "services: {}\n");
         Path repo = files.repoDir(hostId, "web");
         Files.createDirectories(repo);
         Path link = Files.createSymbolicLink(repo.resolve("link.yaml"), outside);
         var service = service(Duration.ofSeconds(5));
 
-        for (Path bad : List.of(outside, stackDir.resolve("../other/compose.yaml"), link)) {
+        for (Path bad : List.of(outside, deploymentDir.resolve("../other/compose.yaml"), link)) {
             assertThatThrownBy(() -> service.execute(hostId, "web", ComposeCommand.UP, local(), l -> { }, bad))
                     .isInstanceOf(ComposeExecutionException.class);
+        }
+    }
+
+    @Test
+    void executeProjectRunsOnlyProjectNameAndCommandWithoutComposeFile() {
+        ComposeProcessResult result = service(Duration.ofSeconds(10))
+                .executeProject("legacy", ComposeCommand.DOWN, local(), line -> { });
+
+        assertThat(result.output()).contains("ARGS:-p legacy down");
+        assertThat(service(Duration.ofSeconds(10)).executeProject("legacy", ComposeCommand.DOWN_VOLUMES, local(), line -> { })
+                .output()).contains("ARGS:-p legacy down -v");
+    }
+
+    @Test
+    void executeProjectRejectsInvalidNamesBeforeStartingAnything() {
+        for (String name : List.of("../x", "A", "a b", "-x", "x;y", "")) {
+            assertThatThrownBy(() -> service(Duration.ofSeconds(10))
+                    .executeProject(name, ComposeCommand.DOWN, local(), line -> { }))
+                    .isInstanceOf(PathValidationException.class);
         }
     }
 }

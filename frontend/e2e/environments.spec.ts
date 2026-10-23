@@ -107,7 +107,7 @@ test('admin renames and deletes an environment', async ({ page, api }) => {
   await page.getByRole('button', { name: 'Delete Production' }).click()
   const confirm = page.getByRole('dialog', { name: 'Delete environment' })
   await expect(confirm).toContainText('Production')
-  await expect(confirm).toContainText('stacks')
+  await expect(confirm).toContainText('deployments')
   api.mock('DELETE', '/api/hosts/a', { status: 204 })
   api.mock('GET', '/api/hosts/overview', { body: [] })
   await confirm.getByRole('button', { name: 'Delete' }).click()

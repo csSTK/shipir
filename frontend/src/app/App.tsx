@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
 import { EnvironmentDashboard, EnvironmentsOverview } from '../features/hosts/index.ts'
 import { AccountPage } from '../features/account/index.ts'
 import { AiSettingsPage, AuditLogPage, GitCredentialsSettingsPage, RetentionSettingsPage, SharedChatSessionsPage, WebhooksSettingsPage } from '../features/settings/index.ts'
@@ -7,12 +7,18 @@ import { ContainersPage }from '../features/containers/index.ts'
 import { ImagesPage } from '../features/images/index.ts'
 import { NetworksPage } from '../features/networks/index.ts'
 import { VolumesPage } from '../features/volumes/index.ts'
-import { StackDetailPage, StacksPage } from '../features/stacks/index.ts'
+import { DeploymentDetailPage, DeploymentsPage } from '../features/deployments/index.ts'
 import { NotificationsPage } from '../features/notifications/index.ts'
 import { LoginPage, SetupPage, useCurrentUser, useLogout } from '../features/auth/index.ts'
 import { AppShell } from './layout/AppShell.tsx'
 import { NotAllowedPage } from './layout/PlaceholderPages.tsx'
 import { Providers } from './providers.tsx'
+
+/** Old `/environments/:id/stacks[/:deploymentId]` URLs forward to `/deployments`. */
+function LegacyStacksRedirect() {
+  const { id, deploymentId } = useParams()
+  return <Navigate to={`/environments/${id}/deployments${deploymentId ? `/${deploymentId}` : ''}`} replace />
+}
 
 function AuthGate() {
   const { data: user, isPending, isError } = useCurrentUser()
@@ -33,8 +39,11 @@ function AuthGate() {
         <Route path="/" element={<EnvironmentsOverview role={user.role} />} />
         <Route path="/environments/:id" element={<EnvironmentDashboard />} />
         {/* One line per resource: later tasks swap the placeholder for the real list page. */}
-        <Route path="/environments/:id/stacks" element={<StacksPage />} />
-        <Route path="/environments/:id/stacks/:stackId" element={<StackDetailPage />} />
+        <Route path="/environments/:id/deployments" element={<DeploymentsPage />} />
+        <Route path="/environments/:id/deployments/:deploymentId" element={<DeploymentDetailPage />} />
+        {/* Bookmarks from before the stack -> deployment rename. */}
+        <Route path="/environments/:id/stacks" element={<LegacyStacksRedirect />} />
+        <Route path="/environments/:id/stacks/:deploymentId" element={<LegacyStacksRedirect />} />
         <Route path="/environments/:id/containers" element={<ContainersPage />} />
         <Route path="/environments/:id/images" element={<ImagesPage />} />
         <Route path="/environments/:id/networks" element={<NetworksPage />} />

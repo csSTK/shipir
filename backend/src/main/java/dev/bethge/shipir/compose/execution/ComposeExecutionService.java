@@ -25,8 +25,8 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 /**
- * Runs {@code docker compose} for a stack as a subprocess: argument list only (no shell), the stack name is
- * validated by {@link ComposeFileRepository#stackDir} before anything starts. The target daemon is selected through
+ * Runs {@code docker compose} for a deployment as a subprocess: argument list only (no shell), the deployment name is
+ * validated by {@link ComposeFileRepository#deploymentDir} before anything starts. The target daemon is selected through
  * {@code DOCKER_HOST} (and, for TLS, {@code DOCKER_CERT_PATH} pointing to a 0700 temp dir that is always deleted).
  * Output (stdout and stderr merged) is delivered line by line; on timeout the whole process tree is killed.
  */
@@ -58,40 +58,40 @@ public class ComposeExecutionService {
     }
 
     /**
-     * Runs {@code command} for the stack (compose file {@code <stackDir>/compose.yaml}) and blocks until it ends or
+     * Runs {@code command} for the deployment (compose file {@code <deploymentDir>/compose.yaml}) and blocks until it ends or
      * times out.
      *
      * @param onLine receives every output line as it arrives (called on the calling thread)
-     * @throws dev.bethge.shipir.common.util.PathValidationException for an invalid stack name
+     * @throws dev.bethge.shipir.common.util.PathValidationException for an invalid deployment name
      * @throws ComposeExecutionException if the process cannot be started
      */
-    public ComposeProcessResult execute(UUID hostId, String stackName, ComposeCommand command,
+    public ComposeProcessResult execute(UUID hostId, String deploymentName, ComposeCommand command,
                                         DockerEndpoint endpoint, Consumer<String> onLine) {
-        return execute(hostId, stackName, command, endpoint, onLine, null);
+        return execute(hostId, deploymentName, command, endpoint, onLine, null);
     }
 
     /**
      * Like {@link #execute(UUID, String, ComposeCommand, DockerEndpoint, Consumer)}, but for a compose file that lives
-     * inside the stack directory (Git checkout in {@code repo/}): {@code --project-directory} is that file's directory
+     * inside the deployment directory (Git checkout in {@code repo/}): {@code --project-directory} is that file's directory
      * and {@code -f} the file itself, so relative build contexts, bind mounts and {@code env_file} resolve against the
-     * checkout. The Shipir-managed {@code <stackDir>/.env} is passed with {@code --env-file} when it exists; this
+     * checkout. The Shipir-managed {@code <deploymentDir>/.env} is passed with {@code --env-file} when it exists; this
      * replaces compose's default lookup of {@code .env} in the project directory, so a {@code .env} tracked in the
      * repository is never read nor overwritten (Shipir's variables win and nothing in the checkout is modified).
      *
-     * @param composeFile {@code null} for the default {@code <stackDir>/compose.yaml}; otherwise must lie inside the
-     *                    stack directory (symlinks resolved), else {@code ComposeExecutionException}
+     * @param composeFile {@code null} for the default {@code <deploymentDir>/compose.yaml}; otherwise must lie inside the
+     *                    deployment directory (symlinks resolved), else {@code ComposeExecutionException}
      */
-    public ComposeProcessResult execute(UUID hostId, String stackName, ComposeCommand command,
+    public ComposeProcessResult execute(UUID hostId, String deploymentName, ComposeCommand command,
                                         DockerEndpoint endpoint, Consumer<String> onLine, Path composeFile) {
-        Path stackDir = files.stackDir(hostId, stackName);
-        Path dir = stackDir;
-        Path file = stackDir.resolve(ComposeFileRepository.COMPOSE_FILE);
+        Path deploymentDir = files.deploymentDir(hostId, deploymentName);
+        Path dir = deploymentDir;
+        Path file = deploymentDir.resolve(ComposeFileRepository.COMPOSE_FILE);
         List<String> cmd = new ArrayList<>(executable);
-        cmd.addAll(List.of("-p", stackName));
+        cmd.addAll(List.of("-p", deploymentName));
         if (composeFile != null) {
-            file = requireInside(stackDir, composeFile);
+            file = requireInside(deploymentDir, composeFile);
             dir = file.getParent();
-            Path envFile = stackDir.resolve(ComposeFileRepository.ENV_FILE);
+            Path envFile = deploymentDir.resolve(ComposeFileRepository.ENV_FILE);
             if (Files.isRegularFile(envFile, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
                 cmd.addAll(List.of("--env-file", envFile.toString()));
             }
@@ -114,20 +114,45 @@ public class ComposeExecutionService {
         }
     }
 
-    /** The compose file must be inside the stack directory, also after resolving symlinks. */
-    private static Path requireInside(Path stackDir, Path composeFile) {
+    /**
+     * Runs {@code docker compose -p <project> <command>} without any compose file, for a live project Shipir does not
+     * manage (Compose finds the containers by their project label). The name is validated like a deployment name.
+     *
+     * @throws dev.bethge.shipir.common.util.PathValidationException for an invalid project name
+     * @throws ComposeExecutionException if the process cannot be started
+     */
+    public ComposeProcessResult executeProject(String projectName, ComposeCommand command, DockerEndpoint endpoint,
+                                               Consumer<String> onLine) {
+        dev.bethge.shipir.common.util.PathValidationUtil.validateDeploymentName(projectName);
+        List<String> cmd = new ArrayList<>(executable);
+        cmd.addAll(List.of("-p", projectName));
+        cmd.addAll(command.args());
+        Path certDir = null;
+        try {
+            ProcessBuilder builder = new ProcessBuilder(cmd).redirectErrorStream(true);
+            Map<String, String> env = builder.environment();
+            DOCKER_ENV.forEach(env::remove);
+            certDir = applyEndpoint(env, endpoint);
+            return run(builder, onLine);
+        } finally {
+            deleteRecursively(certDir);
+        }
+    }
+
+    /** The compose file must be inside the deployment directory, also after resolving symlinks. */
+    private static Path requireInside(Path deploymentDir, Path composeFile) {
         Path normalized = composeFile.toAbsolutePath().normalize();
         try {
-            Path realStack = stackDir.toRealPath();
+            Path realDeployment = deploymentDir.toRealPath();
             Path existing = normalized;
             while (existing != null && !Files.exists(existing)) {
                 existing = existing.getParent();
             }
-            if (!normalized.startsWith(stackDir) || existing == null || !existing.toRealPath().startsWith(realStack)) {
-                throw new ComposeExecutionException("Compose file is outside the stack directory", null);
+            if (!normalized.startsWith(deploymentDir) || existing == null || !existing.toRealPath().startsWith(realDeployment)) {
+                throw new ComposeExecutionException("Compose file is outside the deployment directory", null);
             }
         } catch (IOException e) {
-            throw new ComposeExecutionException("Compose file is outside the stack directory", e);
+            throw new ComposeExecutionException("Compose file is outside the deployment directory", e);
         }
         return normalized;
     }

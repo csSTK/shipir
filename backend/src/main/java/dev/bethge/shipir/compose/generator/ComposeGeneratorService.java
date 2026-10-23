@@ -36,7 +36,7 @@ public class ComposeGeneratorService {
     private static final Pattern IMAGE = Pattern.compile("[^\\s'\"\\\\]+");
     private static final Set<String> RESTART = Set.of("no", "always", "on-failure", "unless-stopped");
     private static final Set<String> PROTOCOLS = Set.of("tcp", "udp");
-    /** Only used for the syntax checks of PathValidationUtil; the real stack directory is not known here. */
+    /** Only used for the syntax checks of PathValidationUtil; the real deployment directory is not known here. */
     private static final Path SYNTAX_BASE = Path.of("").toAbsolutePath();
 
     private final YAMLMapper yaml = YAMLMapper.builder()

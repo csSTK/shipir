@@ -32,7 +32,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
- * Shallow clone/fetch of one ref through JGit (no git binary, no shell) into a stack's checkout directory, and reading
+ * Shallow clone/fetch of one ref through JGit (no git binary, no shell) into a deployment's checkout directory, and reading
  * of the compose file from it. The token is decrypted only for the call and handed to a {@link CredentialsProvider};
  * it never ends up in a URL, log line, exception message or the on-disk git config. JGit messages are not forwarded.
  */

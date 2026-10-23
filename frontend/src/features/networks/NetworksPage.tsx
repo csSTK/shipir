@@ -1,7 +1,11 @@
+import { useState } from 'react'
+import { useCurrentUser } from '../auth/index.ts'
+import { deleteColumn } from '../hosts/deleteColumn.tsx'
+import { DeleteResourceDialog } from '../hosts/DeleteResourceDialog.tsx'
 import { useParams } from 'react-router-dom'
 import { describeResourceError } from '../hosts/format.ts'
 import { Badge, ResourceTable, type ResourceColumn } from '../../shared/ui/index.ts'
-import { useNetworks, type Network } from './api.ts'
+import { useDeleteNetwork, useNetworks, type Network } from './api.ts'
 import './NetworksPage.css'
 
 const columns: ResourceColumn<Network>[] = [
@@ -30,14 +34,19 @@ const columns: ResourceColumn<Network>[] = [
 /** `/environments/:id/networks`: all networks of one environment. */
 export function NetworksPage() {
   const { id = '' } = useParams()
+  const { data: user } = useCurrentUser()
+  const canWrite = user?.role === 'ADMIN' || user?.role === 'OPERATOR'
   const { data, isPending, error, refetch } = useNetworks(id)
+  const del = useDeleteNetwork(id)
+  const [target, setTarget] = useState<Network | null>(null)
+  const tableColumns = canWrite ? [...columns, deleteColumn<Network>('network', (n) => n.name, setTarget)] : columns
 
   return (
     <section className="networks">
       <h2 className="networks__title">Networks</h2>
       <ResourceTable
         label="networks"
-        columns={columns}
+        columns={tableColumns}
         rows={data}
         rowKey={(n) => n.id}
         searchText={(n) => `${n.name} ${n.driver} ${n.scope} ${n.subnet ?? ''}`}
@@ -47,6 +56,9 @@ export function NetworksPage() {
         error={error ? describeResourceError(error) : null}
         onRetry={() => void refetch()}
       />
+      {target && (
+        <DeleteResourceDialog kind="network" name={target.name} onDelete={() => del.mutateAsync(target.id)} onClose={() => setTarget(null)} />
+      )}
     </section>
   )
 }

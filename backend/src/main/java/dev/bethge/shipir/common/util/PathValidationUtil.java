@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
  */
 public final class PathValidationUtil {
 
-    private static final Pattern STACK_NAME = Pattern.compile("[a-z0-9][a-z0-9_-]{0,62}");
+    private static final Pattern DEPLOYMENT_NAME = Pattern.compile("[a-z0-9][a-z0-9_-]{0,62}");
     private static final Pattern PERCENT_ENCODING = Pattern.compile("%[0-9a-fA-F]{2}");
     private static final Pattern DRIVE_PREFIX = Pattern.compile("^[a-zA-Z]:.*");
 
@@ -68,11 +68,11 @@ public final class PathValidationUtil {
     }
 
     /**
-     * Validates a stack name (also used as Compose project name and directory segment): {@code [a-z0-9][a-z0-9_-]{0,62}}.
+     * Validates a deployment name (also used as Compose project name and directory segment): {@code [a-z0-9][a-z0-9_-]{0,62}}.
      */
-    public static String validateStackName(String name) {
-        if (name == null || !STACK_NAME.matcher(name).matches()) {
-            throw new PathValidationException("Invalid stack name");
+    public static String validateDeploymentName(String name) {
+        if (name == null || !DEPLOYMENT_NAME.matcher(name).matches()) {
+            throw new PathValidationException("Invalid deployment name");
         }
         return name;
     }

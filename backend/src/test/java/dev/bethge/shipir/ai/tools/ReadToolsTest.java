@@ -4,10 +4,10 @@ import dev.bethge.shipir.PostgresTestConfiguration;
 import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
-import dev.bethge.shipir.compose.StackService;
+import dev.bethge.shipir.compose.DeploymentService;
 import dev.bethge.shipir.compose.dto.EnvEntry;
-import dev.bethge.shipir.compose.dto.StackCreateRequest;
-import dev.bethge.shipir.compose.dto.StackDetailResponse;
+import dev.bethge.shipir.compose.dto.DeploymentCreateRequest;
+import dev.bethge.shipir.compose.dto.DeploymentDetailResponse;
 import dev.bethge.shipir.compose.execution.ComposeExecutionService;
 import dev.bethge.shipir.compose.execution.ComposeProcessResult;
 import dev.bethge.shipir.docker.dto.ContainerDto;
@@ -17,7 +17,7 @@ import dev.bethge.shipir.docker.dto.VolumeDto;
 import dev.bethge.shipir.host.HostOverviewService;
 import dev.bethge.shipir.host.HostResourcesService;
 import dev.bethge.shipir.host.dto.HostOverviewResponse;
-import dev.bethge.shipir.host.dto.HostStackResponse;
+import dev.bethge.shipir.host.dto.HostDeploymentResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -85,7 +85,7 @@ class ReadToolsTest {
     @Autowired
     PasswordEncoder encoder;
     @Autowired
-    StackService stacks;
+    DeploymentService deployments;
     @Autowired
     ObjectMapper mapper;
     @MockitoBean
@@ -97,14 +97,14 @@ class ReadToolsTest {
 
     UUID hostId;
     UUID tcpHostId;
-    UUID stackId;
+    UUID deploymentId;
 
     @BeforeEach
     void setUp() {
         jdbc.update("DELETE FROM audit_log");
         jdbc.update("DELETE FROM notifications");
         jdbc.update("DELETE FROM notification_webhooks");
-        jdbc.update("DELETE FROM stacks");
+        jdbc.update("DELETE FROM deployments");
         jdbc.update("DELETE FROM docker_hosts");
         for (Role role : Role.values()) {
             String name = role.name().toLowerCase();
@@ -127,9 +127,9 @@ class ReadToolsTest {
         ComposeProcessResult ok = new ComposeProcessResult(0, false, List.of());
         when(execution.execute(any(), any(), any(), any(), any())).thenReturn(ok);
         when(execution.execute(any(), any(), any(), any(), any(), any())).thenReturn(ok);
-        StackDetailResponse created = stacks.create(hostId, new StackCreateRequest("web",
+        DeploymentDetailResponse created = deployments.create(hostId, new DeploymentCreateRequest("web",
                 "services:\n  web:\n    image: nginx\n", List.of(new EnvEntry("API_TOKEN", ENV_SECRET))), "admin");
-        stackId = created.id();
+        deploymentId = created.id();
     }
 
     private ToolContext ctx(Role role) {
@@ -146,7 +146,7 @@ class ReadToolsTest {
     }
 
     private static String stack(UUID host, UUID stack) {
-        return "{\"hostId\":\"" + host + "\",\"stackId\":\"" + stack + "\"}";
+        return "{\"hostId\":\"" + host + "\",\"deploymentId\":\"" + stack + "\"}";
     }
 
     @Test
@@ -173,19 +173,19 @@ class ReadToolsTest {
 
     @Test
     void resourceToolsDelegateWithTheHostId() {
-        when(resources.stacks(hostId)).thenReturn(List.of());
+        when(resources.deployments(hostId)).thenReturn(List.of());
         when(resources.containers(hostId)).thenReturn(List.of(
                 new ContainerDto("c1", "web-1", "nginx", "running", "Up", null, null, List.of(), "web", "web")));
         when(resources.images(hostId)).thenReturn(List.of(new ImageDto("i1", List.of("nginx:latest"), 1L, null, true)));
         when(resources.networks(hostId)).thenReturn(List.of(new NetworkDto("n1", "bridge", "bridge", "local", null, false, 1)));
         when(resources.volumes(hostId)).thenReturn(List.of(new VolumeDto("v1", "local", "/var/lib/v1", null, true)));
 
-        assertThat(run("list_stacks", host(hostId), Role.VIEWER).content()).isEqualTo("[]");
+        assertThat(run("list_deployments", host(hostId), Role.VIEWER).content()).isEqualTo("[]");
         assertThat(run("list_containers", host(hostId), Role.VIEWER).content()).contains("web-1");
         assertThat(run("list_images", host(hostId), Role.VIEWER).content()).contains("nginx:latest");
         assertThat(run("list_networks", host(hostId), Role.VIEWER).content()).contains("bridge");
         assertThat(run("list_volumes", host(hostId), Role.VIEWER).content()).contains("/var/lib/v1");
-        verify(resources).stacks(eq(hostId));
+        verify(resources).deployments(eq(hostId));
         verify(resources).containers(eq(hostId));
         verify(resources).images(eq(hostId));
         verify(resources).networks(eq(hostId));
@@ -194,7 +194,7 @@ class ReadToolsTest {
 
     @Test
     void getManagedStackReturnsYamlAndEnvKeysButNoValues() {
-        ToolResult result = run("get_managed_stack", stack(hostId, stackId), Role.VIEWER);
+        ToolResult result = run("get_managed_deployment", stack(hostId, deploymentId), Role.VIEWER);
 
         assertThat(result.error()).isFalse();
         JsonNode json = mapper.readTree(result.content());
@@ -206,15 +206,15 @@ class ReadToolsTest {
 
     @Test
     void unknownStackIsAnErrorResultWithTheServiceCode() {
-        ToolResult result = run("get_managed_stack", stack(hostId, UUID.randomUUID()), Role.VIEWER);
+        ToolResult result = run("get_managed_deployment", stack(hostId, UUID.randomUUID()), Role.VIEWER);
 
         assertThat(result.error()).isTrue();
-        assertThat(result.content()).contains("STACK_NOT_FOUND");
+        assertThat(result.content()).contains("DEPLOYMENT_NOT_FOUND");
     }
 
     @Test
     void listStackVersionsReturnsHistory() {
-        ToolResult result = run("list_stack_versions", stack(hostId, stackId), Role.OPERATOR);
+        ToolResult result = run("list_deployment_versions", stack(hostId, deploymentId), Role.OPERATOR);
 
         assertThat(result.error()).isFalse();
         assertThat(mapper.readTree(result.content())).hasSize(1);
@@ -274,7 +274,7 @@ class ReadToolsTest {
     @Test
     void roleFilteringOfTheRealToolSet() {
         assertThat(readTools(Role.ADMIN)).extracting(AiTool::name).containsExactlyInAnyOrder(
-                "list_hosts", "host_overview", "list_stacks", "get_managed_stack", "list_stack_versions",
+                "list_hosts", "host_overview", "list_deployments", "get_managed_deployment", "list_deployment_versions",
                 "list_containers", "list_images", "list_networks", "list_volumes", "list_notifications",
                 "list_audit_log");
         for (Role role : List.of(Role.OPERATOR, Role.VIEWER)) {
@@ -289,9 +289,9 @@ class ReadToolsTest {
 
     @Test
     void secretsNeverAppearInAnyToolResult() {
-        when(resources.stacks(any())).thenReturn(List.of(HostStackResponse.of(
-                new dev.bethge.shipir.docker.dto.StackSummaryDto("web", 1, 1,
-                        dev.bethge.shipir.docker.dto.StackSummaryDto.Status.RUNNING, null), stackId)));
+        when(resources.deployments(any())).thenReturn(List.of(HostDeploymentResponse.of(
+                new dev.bethge.shipir.docker.dto.DeploymentSummaryDto("web", 1, 1,
+                        dev.bethge.shipir.docker.dto.DeploymentSummaryDto.Status.RUNNING, null), deploymentId)));
         when(resources.containers(any())).thenReturn(List.of());
         when(resources.images(any())).thenReturn(List.of());
         when(resources.networks(any())).thenReturn(List.of());
@@ -300,8 +300,8 @@ class ReadToolsTest {
         jdbc.update("INSERT INTO audit_log (username, action, outcome, details) VALUES ('admin', 'WEBHOOK_CREATE', 'SUCCESS', '{\"name\":\"hook\"}'::jsonb)");
 
         Map<String, String> argsByTool = Map.of(
-                "get_managed_stack", stack(hostId, stackId),
-                "list_stack_versions", stack(hostId, stackId));
+                "get_managed_deployment", stack(hostId, deploymentId),
+                "list_deployment_versions", stack(hostId, deploymentId));
         StringBuilder all = new StringBuilder();
         for (AiTool tool : readTools(Role.ADMIN)) {
             String args = argsByTool.getOrDefault(tool.name(),

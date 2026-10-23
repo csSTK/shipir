@@ -3,7 +3,7 @@ package dev.bethge.shipir.ai.tools;
 import dev.bethge.shipir.ai.llm.LlmToolDefinition;
 import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.common.security.AiInvocationContext;
-import dev.bethge.shipir.compose.StackException;
+import dev.bethge.shipir.compose.DeploymentException;
 import dev.bethge.shipir.git.GitException;
 import dev.bethge.shipir.git.GitOperationException;
 import dev.bethge.shipir.host.HostException;
@@ -220,7 +220,7 @@ public class AiToolRegistry {
             return ToolResult.error("INVALID_ARGUMENTS", e.getMessage());
         } catch (HostException e) {
             return ToolResult.error(e.code(), e.getMessage());
-        } catch (StackException e) {
+        } catch (DeploymentException e) {
             return ToolResult.error(e.code(), e.getMessage());
         } catch (WebhookException e) {
             return ToolResult.error(e.code(), e.getMessage());

@@ -204,7 +204,7 @@ export function ChatPane({ sessionId, isAdmin }: { sessionId: string; isAdmin: b
           rows={2}
           value={draft}
           disabled={blocked}
-          placeholder={hasPending ? 'Confirm or reject the action above to continue' : 'Ask about your environments or stacks'}
+          placeholder={hasPending ? 'Confirm or reject the action above to continue' : 'Ask about your environments or deployments'}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {

@@ -15,8 +15,8 @@ const host = {
   images: 0,
   volumes: 0,
 }
-const BASE = '/api/hosts/a/managed-stacks'
-const stack = {
+const BASE = '/api/hosts/a/managed-deployments'
+const deployment = {
   id: 's1',
   name: 'shop',
   status: 'STOPPED',
@@ -67,12 +67,12 @@ async function mockBroker(
 async function openAndDeploy(page: Page, api: import('./fixtures/api.ts').ApiMock) {
   api.mock('GET', '/api/auth/me', { body: { username: 'u', role: 'OPERATOR', setupRequired: false } })
   api.mock('GET', '/api/hosts/overview', { body: [host] })
-  api.mock('GET', '/api/hosts/a/stacks', { body: [] })
+  api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   api.mock('GET', BASE, { body: [] })
-  api.mock('GET', `${BASE}/s1`, { body: stack })
+  api.mock('GET', `${BASE}/s1`, { body: deployment })
   api.mock('GET', `${BASE}/s1/versions`, { body: [] })
-  api.mock('POST', `${BASE}/s1/deploy`, { status: 202, body: { deploymentId: 'dep-1', versionId: 'v1' } })
-  await page.goto('/environments/a/stacks/s1')
+  api.mock('POST', `${BASE}/s1/deploy`, { status: 202, body: { runId: 'dep-1', versionId: 'v1' } })
+  await page.goto('/environments/a/deployments/s1')
   await page.getByRole('button', { name: 'Deploy', exact: true }).click()
 }
 

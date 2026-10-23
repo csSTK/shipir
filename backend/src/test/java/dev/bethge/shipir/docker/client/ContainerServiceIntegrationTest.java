@@ -4,7 +4,7 @@ import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
 import dev.bethge.shipir.docker.DockerProperties;
 import dev.bethge.shipir.docker.dto.ContainerDto;
-import dev.bethge.shipir.docker.dto.StackSummaryDto;
+import dev.bethge.shipir.docker.dto.DeploymentSummaryDto;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +41,7 @@ class ContainerServiceIntegrationTest {
     }
 
     @Test
-    void labeledContainerAppearsInContainersAndItsStack() {
+    void labeledContainerAppearsInContainersAndItsDeployment() {
         String project = "shipir-it-" + UUID.randomUUID().toString().substring(0, 8);
         try (GenericContainer<?> container = new GenericContainer<>("alpine:3")
                 .withCommand("sleep", "120")
@@ -58,8 +58,8 @@ class ContainerServiceIntegrationTest {
             assertThat(dto.composeService()).isEqualTo("sleeper");
             assertThat(dto.image()).isEqualTo("alpine:3");
 
-            assertThat(service.listStacks(hostId, endpoint)).contains(
-                    new StackSummaryDto(project, 1, 1, StackSummaryDto.Status.RUNNING, "/srv/" + project));
+            assertThat(service.listDeployments(hostId, endpoint)).contains(
+                    new DeploymentSummaryDto(project, 1, 1, DeploymentSummaryDto.Status.RUNNING, "/srv/" + project));
         }
     }
 }

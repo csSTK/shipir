@@ -1,8 +1,11 @@
 package dev.bethge.shipir.docker.client;
 
+import com.github.dockerjava.api.exception.DockerException;
 import com.github.dockerjava.api.model.Container;
 import com.github.dockerjava.api.model.Network;
+import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
 import dev.bethge.shipir.docker.dto.NetworkDto;
 import org.springframework.stereotype.Service;
@@ -10,10 +13,13 @@ import org.springframework.stereotype.Service;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 public class NetworkServiceImpl implements NetworkService {
+
+    private static final Set<String> BUILTIN = Set.of("bridge", "host", "none");
 
     private final DockerCallSupport calls;
 
@@ -46,5 +52,26 @@ public class NetworkServiceImpl implements NetworkService {
                 .map(Network.Ipam.Config::getSubnet)
                 .filter(s -> s != null && !s.isBlank())
                 .findFirst().orElse(null);
+    }
+
+    @Override
+    public void removeNetwork(UUID hostId, DockerEndpoint endpoint, String id) {
+        calls.call(hostId, endpoint, client -> {
+            String name = client.inspectNetworkCmd().withNetworkId(id).exec().getName();
+            if (name != null && BUILTIN.contains(name)) {
+                throw new DockerConnectionException(DockerErrorCode.BUILTIN_NETWORK,
+                        "Built-in networks cannot be removed.", null);
+            }
+            try {
+                client.removeNetworkCmd(id).exec();
+            } catch (DockerException e) {
+                // Docker answers 403 (not 409) when containers are still attached to the network.
+                if (e.getHttpStatus() == 403) {
+                    throw new DockerConnectionException(DockerErrorCode.IN_USE, "The network is in use.", e);
+                }
+                throw e;
+            }
+            return null;
+        });
     }
 }

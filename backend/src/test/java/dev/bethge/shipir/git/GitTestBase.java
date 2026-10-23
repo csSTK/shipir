@@ -49,7 +49,7 @@ abstract class GitTestBase {
 
     @BeforeEach
     void resetState() {
-        jdbc.update("DELETE FROM stacks");
+        jdbc.update("DELETE FROM deployments");
         jdbc.update("DELETE FROM git_credentials");
         jdbc.update("DELETE FROM audit_log");
         for (Role role : Role.values()) {
@@ -93,11 +93,11 @@ abstract class GitTestBase {
         return com.jayway.jsonpath.JsonPath.read(r.getResponse().getContentAsString(), "$.id");
     }
 
-    /** Minimal stack row referencing a credential (columns from V3/V13). */
-    void insertStackUsing(String credentialId) {
-        jdbc.update("INSERT INTO stacks (name, host_id, compose_file_path, created_by, source_type, git_repo_url, "
+    /** Minimal deployment row referencing a credential (columns from V3/V13). */
+    void insertDeploymentUsing(String credentialId) {
+        jdbc.update("INSERT INTO deployments (name, host_id, compose_file_path, created_by, source_type, git_repo_url, "
                         + "git_ref, git_compose_path, git_credential_id) "
-                        + "SELECT 'git-stack', h.id, 'x/compose.yaml', u.id, 'GIT', 'https://example.com/r.git', "
+                        + "SELECT 'git-deployment', h.id, 'x/compose.yaml', u.id, 'GIT', 'https://example.com/r.git', "
                         + "'main', 'compose.yaml', ?::uuid FROM docker_hosts h, users u WHERE u.username = 'admin' LIMIT 1",
                 credentialId);
     }

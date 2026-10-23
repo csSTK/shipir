@@ -50,7 +50,7 @@ function names() {
 }
 
 describe('ContainersPage', () => {
-  it('loads the containers of the environment and lists name, state, health, image, stack, ports', async () => {
+  it('loads the containers of the environment and lists name, state, health, image, deployment, ports', async () => {
     apiFetch.mockResolvedValue(containers)
     renderAt('/environments/h1/containers')
     expect(screen.getByRole('status', { name: 'Loading containers' })).toBeInTheDocument()
@@ -64,7 +64,7 @@ describe('ContainersPage', () => {
     expect(within(row).getByText('8080:80/tcp')).toBeInTheDocument()
   })
 
-  it('searches by name, image and stack', async () => {
+  it('searches by name, image and deployment', async () => {
     apiFetch.mockResolvedValue(containers)
     renderAt('/environments/h1/containers')
     await screen.findByText('nginx:1')
@@ -82,12 +82,12 @@ describe('ContainersPage', () => {
     expect(names()).toEqual(['web', 'cache', 'api'])
   })
 
-  it('filters by the stack query parameter and clears it', async () => {
+  it('filters by the deployment query parameter and clears it', async () => {
     apiFetch.mockResolvedValue(containers)
-    renderAt('/environments/h1/containers?stack=shop')
+    renderAt('/environments/h1/containers?deployment=shop')
     await screen.findByText('nginx:1')
     expect(names()).toEqual(['api', 'web'])
-    fireEvent.click(screen.getByRole('button', { name: /Stack: shop/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Deployment: shop/ }))
     expect(names()).toEqual(['api', 'cache', 'web'])
   })
 

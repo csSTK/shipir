@@ -21,7 +21,7 @@ const containers = [
   { ...c, id: '2', name: 'api', image: 'app:2', state: 'exited', composeProject: 'shop' },
   { ...c, id: '3', name: 'cache', image: 'redis:7', state: 'running' },
 ]
-const stacks = [
+const deployments = [
   { name: 'shop', containerCount: 2, runningCount: 1, status: 'PARTIAL', workingDir: '/srv/shop' },
   { name: 'blog', containerCount: 1, runningCount: 1, status: 'RUNNING', workingDir: null },
 ]
@@ -29,27 +29,27 @@ const stacks = [
 test.beforeEach(({ api }) => {
   api.mock('GET', '/api/auth/me', me)
   api.mock('GET', '/api/hosts/overview', { body: [local] })
-  api.mock('GET', '/api/hosts/a/managed-stacks', { body: [] })
+  api.mock('GET', '/api/hosts/a/managed-deployments', { body: [] })
 })
 
-test('stacks: search, sort, click opens filtered containers', async ({ page, api }) => {
-  api.mock('GET', '/api/hosts/a/stacks', { body: stacks })
+test('deployments: search, sort, click opens filtered containers', async ({ page, api }) => {
+  api.mock('GET', '/api/hosts/a/deployments', { body: deployments })
   api.mock('GET', '/api/hosts/a/containers', { body: containers })
-  await page.goto('/environments/a/stacks')
-  const rows = page.getByRole('table', { name: 'stacks' }).getByRole('row')
+  await page.goto('/environments/a/deployments')
+  const rows = page.getByRole('table', { name: 'deployments' }).getByRole('row')
   await expect(rows.nth(1)).toContainText('blog')
   await page.getByRole('button', { name: 'Name' }).click()
   await expect(rows.nth(1)).toContainText('shop')
-  await page.getByRole('searchbox', { name: 'Search stacks' }).fill('blo')
+  await page.getByRole('searchbox', { name: 'Search deployments' }).fill('blo')
   await expect(rows).toHaveCount(2)
 
-  await page.getByRole('searchbox', { name: 'Search stacks' }).fill('')
+  await page.getByRole('searchbox', { name: 'Search deployments' }).fill('')
   await page.getByRole('link', { name: 'shop' }).click()
-  await expect(page).toHaveURL(/\/environments\/a\/containers\?stack=shop$/)
+  await expect(page).toHaveURL(/\/environments\/a\/containers\?deployment=shop$/)
   const body = page.getByRole('table', { name: 'containers' })
   await expect(body.getByRole('row')).toHaveCount(3)
   await expect(body).not.toContainText('cache')
-  await page.getByRole('button', { name: /Stack: shop/ }).click()
+  await page.getByRole('button', { name: /Deployment: shop/ }).click()
   await expect(body.getByRole('row')).toHaveCount(4)
 })
 
@@ -71,12 +71,12 @@ test('containers: unreachable host shows the error', async ({ page, api }) => {
   await expect(page.getByRole('alert')).toHaveText('Could not reach the Docker host.')
 })
 
-test('stacks: timeout shows the error, empty list shows empty state', async ({ page, api }) => {
-  api.mock('GET', '/api/hosts/a/stacks', { status: 502, body: { code: 'TIMEOUT', message: 'x' } })
-  await page.goto('/environments/a/stacks')
+test('deployments: timeout shows the error, empty list shows empty state', async ({ page, api }) => {
+  api.mock('GET', '/api/hosts/a/deployments', { status: 502, body: { code: 'TIMEOUT', message: 'x' } })
+  await page.goto('/environments/a/deployments')
   await expect(page.getByRole('alert')).toHaveText('The connection timed out.')
 
-  api.mock('GET', '/api/hosts/a/stacks', { body: [] })
+  api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   await page.getByRole('button', { name: 'Retry' }).click()
-  await expect(page.getByText('No stacks in this environment.')).toBeVisible()
+  await expect(page.getByText('No deployments in this environment.')).toBeVisible()
 })

@@ -147,7 +147,7 @@ class ChatOrchestratorTest {
                 .thenReturn(ok);
         Mockito.when(execution.execute(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(),
                 Mockito.any())).thenReturn(ok);
-        jdbc.update("DELETE FROM stacks");
+        jdbc.update("DELETE FROM deployments");
         jdbc.update("DELETE FROM docker_hosts");
         jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
                 + "SELECT 'Chat host', 'LOCAL', id FROM users WHERE username = 'admin'");
@@ -488,7 +488,7 @@ class ChatOrchestratorTest {
                 "yaml", "services:\n  web:\n    image: nginx\n", "env", "DB_PASSWORD=" + secret));
         Login owner = login("operator");
         String id = newSession(owner);
-        llm.call("call-1", "create_stack", args);
+        llm.call("call-1", "create_deployment", args);
         llm.answer("Created.");
         say(owner, id, "Create a stack");
         String pending = pendingId(messages(owner, id));
@@ -499,7 +499,7 @@ class ChatOrchestratorTest {
         JsonNode result = action(owner, id, pending, "confirm", 200);
 
         assertThat(result.get("error").asBoolean()).as(result.toString()).isFalse();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM stack_versions WHERE env_ciphertext IS NOT NULL",
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM deployment_versions WHERE env_ciphertext IS NOT NULL",
                 Integer.class)).isEqualTo(1);
         assertNoSecret(owner, id, secret);
         for (LlmMessage m : llm.conversations.getLast()) {

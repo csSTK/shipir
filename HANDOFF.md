@@ -19,6 +19,7 @@ This file holds the parts of the original planning handoff that aren't permanent
 - [x] **DECIDED:** Classic Spring MVC + WebSocket/STOMP (no WebFlux).
 - [x] **DECIDED:** Project name is "Shipir". Base package is `dev.bethge.shipir`. Repo layout: `backend/` (Java/Maven) and `frontend/` (React/TypeScript).
 - [x] **DECIDED:** Database and user are named `shipir`. The connection is configured via `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER` (defaults `localhost`/`5432`/`shipir`/`shipir`) and `DB_PASSWORD` (no default), shared by `application.yml` and `docker-compose.dev.yml`. Reason: a native Postgres on 5432 must be able to coexist with the Docker dev DB (`DB_PORT=5433`).
+- [x] **DECIDED (shipr-r3w):** 'Stack' is renamed to 'deployment' everywhere (UI, API, code, DB via V16); a single deploy execution is a 'run' (`runId`). The `shipir.stacks.base-dir` / `SHIPIR_STACKS_BASE_DIR` setting, on-disk layout and compose project names are kept. Historic `STACK_*` audit rows are not rewritten.
 - [x] **DECIDED (shipr-e42):** Stack directories live under `shipir.stacks.base-dir` (env `SHIPIR_STACKS_BASE_DIR`, `/data/stacks` on the `shipir-stacks` volume in hosting), one dir per `<host-id>/<stack-name>`; the DB (`stack_versions`) is the source of truth and files are rewritten on deploy.
 - [x] **DECIDED (shipr-9sm):** AI chat assistant is in scope (was out of scope). Decisions are recorded in CLAUDE.md under "AI assistant".
 - [ ] How is the config editor's base directory configured?
@@ -32,7 +33,7 @@ This file holds the parts of the original planning handoff that aren't permanent
 5. **`compose`, incrementally:** first raw YAML upload + deploy (+ validation), then the form wizard on top, then versioning and rollback.
 6. **`config_editor`** with `PathValidationUtil` and a backup before every write.
 7. **`audit` + fine-grained `permission`.** `audit` (log, `@Auditable`, ADMIN page) is **done** (epic shipr-46j), together with in-app notifications, webhooks and retention rules; `permission` remains.
-8. **Frontend** in parallel, feature by feature (`features/containers`, `features/stacks`, `features/hosts`, ...).
+8. **Frontend** in parallel, feature by feature (`features/containers`, `features/deployments`, `features/hosts`, ...).
 
 ## Task for the first pass
 
@@ -43,9 +44,9 @@ This file holds the parts of the original planning handoff that aren't permanent
 
 ## Planned migrations
 
-Implemented in `backend/src/main/resources/db/migration/`: `V1__create_users`, `V2__create_docker_hosts`, `V3__create_stacks`, `V4__create_stack_versions`, `V5__add_users_password_changed_at`, `V6__add_docker_hosts_tls_columns`, `V7__create_password_reset_codes`, `V8__create_audit_log`, `V9__create_notifications`, `V10__create_notification_webhooks`, `V11__create_retention_settings`, `V12__create_git_credentials`, `V13__extend_stacks_for_deploy`, `V14__add_stack_versions_deployed_at`, `V15__add_stacks_git_poll_state`, `V16__create_ai_chat` (drafts removed; see the decided review notes below).
+Implemented in `backend/src/main/resources/db/migration/`: `V1__create_users`, `V2__create_docker_hosts`, `V3__create_stacks`, `V4__create_stack_versions`, `V5__add_users_password_changed_at`, `V6__add_docker_hosts_tls_columns`, `V7__create_password_reset_codes`, `V8__create_audit_log`, `V9__create_notifications`, `V10__create_notification_webhooks`, `V11__create_retention_settings`, `V12__create_git_credentials`, `V13__extend_stacks_for_deploy`, `V14__add_stack_versions_deployed_at`, `V15__add_stacks_git_poll_state`, `V16__rename_stacks_to_deployments` `V17__create_ai_chat` (drafts removed; see the decided review notes below).
 
-Still planned, numbered from V17 on: `create_config_files`, `create_permissions`.
+Still planned, numbered from V18 on: `create_config_files`, `create_permissions`.
 
 ### Rough model for the remaining tables
 

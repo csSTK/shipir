@@ -1,0 +1,27 @@
+.delres__warning {
+  display: block;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  background: color-mix(in srgb, #b54708 12%, transparent);
+}
+.delres__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  user-select: none;
+}
+.delres__check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: AccentColor;
+}
+.delres__btn {
+  padding: 4px 10px;
+  font-size: 0.875rem;
+}

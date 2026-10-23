@@ -10,7 +10,7 @@ const message = (id: string, seq: number, role: string, content: string | null, 
 const pendingDeploy = message('m2', 2, 'TOOL', 'Waiting for confirmation', {
   status: 'PENDING',
   toolCallId: 'c1',
-  toolCalls: [{ id: 'c1', name: 'deploy_stack', arguments: { stackId: 'st1', env: '<hidden>' }, token: 't', description: 'Deploy stack "shop" on Local' }],
+  toolCalls: [{ id: 'c1', name: 'run_deployment', arguments: { deploymentId: 'st1', env: '<hidden>' }, token: 't', description: 'Deploy "shop" on Local' }],
 })
 
 const stompFrame = (command: string, headers: Record<string, string>, body = '') =>
@@ -59,24 +59,24 @@ test('new chat: ask a question and read the streamed answer', async ({ page, api
   await page.getByRole('button', { name: 'New chat' }).click()
   await expect(page).toHaveURL(/\/assistant\/n1$/)
 
-  await page.getByLabel('Message').fill('How many stacks run?')
+  await page.getByLabel('Message').fill('How many deployments run?')
   await page.getByRole('button', { name: 'Send' }).click()
-  await expect(page.getByText('How many stacks run?')).toBeVisible()
+  await expect(page.getByText('How many deployments run?')).toBeVisible()
 
-  await broker.emit({ runId: RUN, type: 'TOOL_CALL', toolName: 'list_stacks' })
-  await expect(page.getByText('Using list stacks')).toBeVisible()
-  await broker.emit({ runId: RUN, type: 'TOKEN', text: 'Two stacks ' })
+  await broker.emit({ runId: RUN, type: 'TOOL_CALL', toolName: 'list_deployments' })
+  await expect(page.getByText('Using list deployments')).toBeVisible()
+  await broker.emit({ runId: RUN, type: 'TOKEN', text: 'Two deployments ' })
   await broker.emit({ runId: RUN, type: 'TOKEN', text: 'are running.' })
-  await expect(page.getByText('Two stacks are running.')).toBeVisible()
+  await expect(page.getByText('Two deployments are running.')).toBeVisible()
 
   api.mock('GET', '/api/ai/sessions/n1', {
     body: {
-      session: session('n1', 'How many stacks run?'),
-      messages: [message('m1', 1, 'USER', 'How many stacks run?'), message('m2', 2, 'ASSISTANT', 'Two stacks are running (stored).')],
+      session: session('n1', 'How many deployments run?'),
+      messages: [message('m1', 1, 'USER', 'How many deployments run?'), message('m2', 2, 'ASSISTANT', 'Two deployments are running (stored).')],
     },
   })
   await broker.emit({ runId: RUN, type: 'DONE', outcome: 'COMPLETE' })
-  await expect(page.getByText('Two stacks are running (stored).')).toBeVisible()
+  await expect(page.getByText('Two deployments are running (stored).')).toBeVisible()
 })
 
 test('a pending deploy is shown and can be confirmed', async ({ page, api }) => {
@@ -88,7 +88,7 @@ test('a pending deploy is shown and can be confirmed', async ({ page, api }) => 
   api.mock('POST', '/api/ai/sessions/s1/actions/m2/confirm', { body: { messageId: 'm2', status: 'CONFIRMED', error: false, result: 'started' } })
 
   await page.goto('/assistant/s1')
-  await expect(page.getByText('Deploy stack "shop" on Local')).toBeVisible()
+  await expect(page.getByText('Deploy "shop" on Local')).toBeVisible()
   await expect(page.getByText('<hidden>')).toBeVisible()
   await expect(page.getByLabel('Message')).toBeDisabled()
 

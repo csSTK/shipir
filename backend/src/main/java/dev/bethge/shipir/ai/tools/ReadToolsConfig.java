@@ -2,8 +2,8 @@ package dev.bethge.shipir.ai.tools;
 
 import dev.bethge.shipir.audit.AuditLogQueryService;
 import dev.bethge.shipir.auth.Role;
-import dev.bethge.shipir.compose.StackDeploymentService;
-import dev.bethge.shipir.compose.StackService;
+import dev.bethge.shipir.compose.DeploymentRunService;
+import dev.bethge.shipir.compose.DeploymentService;
 import dev.bethge.shipir.host.HostOverviewService;
 import dev.bethge.shipir.host.HostResourcesService;
 import dev.bethge.shipir.host.HostService;
@@ -48,21 +48,21 @@ class ReadToolsConfig {
     }
 
     @Bean
-    AiTool listStacksTool(HostResourcesService resources) {
-        return read("list_stacks", "List the Compose stacks running on one environment, and whether Shipir manages them.",
-                hostSchema(), Role.VIEWER, (a, c) -> resources.stacks(uuid(a, "hostId")));
+    AiTool listDeploymentsTool(HostResourcesService resources) {
+        return read("list_deployments", "List the Compose deployments running on one environment, and whether Shipir manages them.",
+                hostSchema(), Role.VIEWER, (a, c) -> resources.deployments(uuid(a, "hostId")));
     }
 
     @Bean
-    AiTool getManagedStackTool(StackService stacks) {
-        return read("get_managed_stack", "Details of one Shipir-managed stack: status, Compose YAML and the names (never the values) of its environment variables.",
-                stackSchema(), Role.VIEWER, (a, c) -> stacks.get(uuid(a, "hostId"), uuid(a, "stackId")));
+    AiTool getManagedDeploymentTool(DeploymentService deployments) {
+        return read("get_managed_deployment", "Details of one Shipir-managed deployment: status, Compose YAML and the names (never the values) of its environment variables.",
+                deploymentSchema(), Role.VIEWER, (a, c) -> deployments.get(uuid(a, "hostId"), uuid(a, "deploymentId")));
     }
 
     @Bean
-    AiTool listStackVersionsTool(StackDeploymentService deployments) {
-        return read("list_stack_versions", "Version history of a managed stack (source, commit, who created it, current, deployed).",
-                stackSchema(), Role.VIEWER, (a, c) -> deployments.versions(uuid(a, "hostId"), uuid(a, "stackId")));
+    AiTool listDeploymentVersionsTool(DeploymentRunService deployments) {
+        return read("list_deployment_versions", "Version history of a managed deployment (source, commit, who created it, current, deployed).",
+                deploymentSchema(), Role.VIEWER, (a, c) -> deployments.versions(uuid(a, "hostId"), uuid(a, "deploymentId")));
     }
 
     @Bean
@@ -142,8 +142,8 @@ class ReadToolsConfig {
         return schema(Map.of("hostId", UUID_PROP), "hostId");
     }
 
-    private static Map<String, Object> stackSchema() {
-        return schema(Map.of("hostId", UUID_PROP, "stackId", UUID_PROP), "hostId", "stackId");
+    private static Map<String, Object> deploymentSchema() {
+        return schema(Map.of("hostId", UUID_PROP, "deploymentId", UUID_PROP), "hostId", "deploymentId");
     }
 
     private static UUID uuid(Map<String, Object> args, String name) {

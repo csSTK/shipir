@@ -110,10 +110,10 @@ class GitCredentialApiTest extends GitTestBase {
     }
 
     @Test
-    void deleteIsRefusedWhileStackReferencesCredential() throws Exception {
+    void deleteIsRefusedWhileDeploymentReferencesCredential() throws Exception {
         Login l = login("admin");
         String id = create(l, "GitHub");
-        insertStackUsing(id);
+        insertDeploymentUsing(id);
         mvc.perform(l.write(delete("/api/git/credentials/" + id)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("CREDENTIAL_IN_USE"));

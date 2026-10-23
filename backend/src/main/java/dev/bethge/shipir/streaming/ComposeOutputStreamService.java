@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * Fan-out of Compose output to STOMP subscribers of {@code /topic/deployments/{deploymentId}}.
+ * Fan-out of Compose output to STOMP subscribers of {@code /topic/deployments/{runId}}.
  *
  * <p>Usage by the deploy code: {@link #start} returns the line sink for
  * {@code ComposeExecutionService.execute(..., onLine)}, {@link #complete} publishes the final status.
@@ -45,7 +45,7 @@ public class ComposeOutputStreamService {
         final Deque<StreamMessage> buffer = new ArrayDeque<>();
         final List<Subscription> subscribers = new ArrayList<>();
         long nextSeq = 1;
-        DeploymentStatus status;
+        RunStatus status;
         Instant finishedAt;
     }
 
@@ -67,26 +67,26 @@ public class ComposeOutputStreamService {
     }
 
     /** Opens (or resets) the stream and returns the sink for Compose output lines. */
-    public Consumer<String> start(String deploymentId) {
+    public Consumer<String> start(String runId) {
         synchronized (streams) {
             evictExpired();
-            Stream old = streams.put(deploymentId, new Stream());
+            Stream old = streams.put(runId, new Stream());
             if (old != null) {
-                streams.get(deploymentId).subscribers.addAll(old.subscribers);
+                streams.get(runId).subscribers.addAll(old.subscribers);
             }
         }
-        return line -> publish(deploymentId, StreamMessage.Type.LINE, line, null);
+        return line -> publish(runId, StreamMessage.Type.LINE, line, null);
     }
 
     /** Publishes the final status; later lines are ignored. */
-    public void complete(String deploymentId, DeploymentStatus status) {
-        publish(deploymentId, StreamMessage.Type.STATUS, null, status);
+    public void complete(String runId, RunStatus status) {
+        publish(runId, StreamMessage.Type.STATUS, null, status);
     }
 
-    private void publish(String deploymentId, StreamMessage.Type type, String line, DeploymentStatus status) {
+    private void publish(String runId, StreamMessage.Type type, String line, RunStatus status) {
         Stream stream;
         synchronized (streams) {
-            stream = streams.get(deploymentId);
+            stream = streams.get(runId);
         }
         if (stream == null) {
             return;
@@ -105,30 +105,30 @@ public class ComposeOutputStreamService {
                 stream.finishedAt = clock.instant();
             }
             for (Subscription s : stream.subscribers) {
-                send(deploymentId, s, message);
+                send(runId, s, message);
             }
         }
     }
 
     /** Registers a subscription and replays the buffer to it (called on STOMP SUBSCRIBE, before the broker sees it). */
-    void subscribe(String deploymentId, String sessionId, String subscriptionId) {
+    void subscribe(String runId, String sessionId, String subscriptionId) {
         Stream stream;
         synchronized (streams) {
-            stream = streams.computeIfAbsent(deploymentId, id -> new Stream());
+            stream = streams.computeIfAbsent(runId, id -> new Stream());
         }
         synchronized (stream) {
             Subscription sub = new Subscription(sessionId, subscriptionId);
             stream.subscribers.add(sub);
             for (StreamMessage m : stream.buffer) {
-                send(deploymentId, sub, m);
+                send(runId, sub, m);
             }
         }
     }
 
-    int subscriberCount(String deploymentId) {
+    int subscriberCount(String runId) {
         Stream stream;
         synchronized (streams) {
-            stream = streams.get(deploymentId);
+            stream = streams.get(runId);
         }
         if (stream == null) {
             return 0;
@@ -154,11 +154,11 @@ public class ComposeOutputStreamService {
         }
     }
 
-    private void send(String deploymentId, Subscription sub, StreamMessage message) {
+    private void send(String runId, Subscription sub, StreamMessage message) {
         SimpMessageHeaderAccessor accessor = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
         accessor.setSessionId(sub.sessionId);
         accessor.setSubscriptionId(sub.subscriptionId);
-        accessor.setDestination(TOPIC_PREFIX + deploymentId);
+        accessor.setDestination(TOPIC_PREFIX + runId);
         accessor.setContentType(org.springframework.util.MimeTypeUtils.APPLICATION_JSON);
         accessor.setLeaveMutable(true);
         byte[] payload = mapper.writeValueAsString(message).getBytes(StandardCharsets.UTF_8);

@@ -4,9 +4,9 @@ import dev.bethge.shipir.PostgresTestConfiguration;
 import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
-import dev.bethge.shipir.compose.StackService;
+import dev.bethge.shipir.compose.DeploymentService;
 import dev.bethge.shipir.compose.dto.EnvEntry;
-import dev.bethge.shipir.compose.dto.StackCreateRequest;
+import dev.bethge.shipir.compose.dto.DeploymentCreateRequest;
 import dev.bethge.shipir.compose.execution.ComposeExecutionService;
 import dev.bethge.shipir.compose.execution.ComposeProcessResult;
 import dev.bethge.shipir.docker.client.DockerSystemService;
@@ -76,7 +76,7 @@ class WriteToolsTest {
     @Autowired
     PasswordEncoder encoder;
     @Autowired
-    StackService stacks;
+    DeploymentService deployments;
     @Autowired
     ObjectMapper mapper;
     @MockitoBean
@@ -85,7 +85,7 @@ class WriteToolsTest {
     DockerSystemService docker;
 
     UUID hostId;
-    UUID stackId;
+    UUID deploymentId;
 
     @BeforeEach
     void setUp() {
@@ -93,7 +93,7 @@ class WriteToolsTest {
         jdbc.update("DELETE FROM notifications");
         jdbc.update("DELETE FROM notification_webhooks");
         jdbc.update("DELETE FROM git_credentials");
-        jdbc.update("DELETE FROM stacks");
+        jdbc.update("DELETE FROM deployments");
         jdbc.update("DELETE FROM docker_hosts");
         for (Role role : Role.values()) {
             String name = role.name().toLowerCase();
@@ -108,7 +108,7 @@ class WriteToolsTest {
         when(execution.execute(any(), any(), any(), any(), any())).thenReturn(ok);
         when(execution.execute(any(), any(), any(), any(), any(), any())).thenReturn(ok);
         when(docker.ping(any())).thenReturn(new ConnectionTestResult(true, "27.0", null, null));
-        stackId = stacks.create(hostId, new StackCreateRequest("web", YAML, List.of(new EnvEntry("API_TOKEN", ENV_SECRET))),
+        deploymentId = deployments.create(hostId, new DeploymentCreateRequest("web", YAML, List.of(new EnvEntry("API_TOKEN", ENV_SECRET))),
                 "admin").id();
         jdbc.update("DELETE FROM audit_log");
     }
@@ -126,7 +126,7 @@ class WriteToolsTest {
     }
 
     private static String stack(UUID host, UUID stack) {
-        return "{\"hostId\":\"" + host + "\",\"stackId\":\"" + stack + "\"}";
+        return "{\"hostId\":\"" + host + "\",\"deploymentId\":\"" + stack + "\"}";
     }
 
     private Map<String, Object> auditEntry(String action) {
@@ -159,21 +159,21 @@ class WriteToolsTest {
     void toolSetPerRole() {
         assertThat(registry.toolsFor(Role.VIEWER)).noneMatch(AiTool::write);
         assertThat(registry.toolsFor(Role.OPERATOR)).filteredOn(AiTool::write).extracting(AiTool::name)
-                .containsExactlyInAnyOrder("deploy_stack", "stop_stack", "rollback_stack", "git_redeploy_stack",
-                        "create_stack", "update_stack", "delete_stack", "set_auto_update", "mark_notifications_read");
+                .containsExactlyInAnyOrder("run_deployment", "stop_deployment", "rollback_deployment", "git_redeploy_deployment",
+                        "create_deployment", "update_deployment", "delete_deployment", "set_auto_update", "mark_notifications_read");
         assertThat(registry.toolsFor(Role.ADMIN)).filteredOn(AiTool::write).extracting(AiTool::name)
-                .containsExactlyInAnyOrder("deploy_stack", "stop_stack", "rollback_stack", "git_redeploy_stack",
-                        "create_stack", "update_stack", "delete_stack", "set_auto_update", "mark_notifications_read",
+                .containsExactlyInAnyOrder("run_deployment", "stop_deployment", "rollback_deployment", "git_redeploy_deployment",
+                        "create_deployment", "update_deployment", "delete_deployment", "set_auto_update", "mark_notifications_read",
                         "create_host", "rename_host", "delete_host", "set_webhook_enabled", "delete_webhook",
                         "delete_git_credential");
     }
 
     @Test
     void writeToolsNeverRunWithoutConfirmation() {
-        ToolResult result = registry.execute("delete_stack", stack(hostId, stackId), ctx(Role.ADMIN));
+        ToolResult result = registry.execute("delete_deployment", stack(hostId, deploymentId), ctx(Role.ADMIN));
 
         assertThat(result.content()).contains("CONFIRMATION_REQUIRED");
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM stacks", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM deployments", Integer.class)).isEqualTo(1);
     }
 
     @Test
@@ -184,7 +184,7 @@ class WriteToolsTest {
             assertThat(p.accepted()).as(tool).isFalse();
             assertThat(p.error().content()).as(tool).contains("UNKNOWN_TOOL");
         }
-        assertThat(registry.propose("deploy_stack", stack(hostId, stackId), ctx(Role.VIEWER), SESSION).accepted()).isFalse();
+        assertThat(registry.propose("run_deployment", stack(hostId, deploymentId), ctx(Role.VIEWER), SESSION).accepted()).isFalse();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM docker_hosts", Integer.class)).isEqualTo(1);
     }
 
@@ -193,91 +193,91 @@ class WriteToolsTest {
         String args = mapper.writeValueAsString(Map.of("hostId", hostId.toString(), "name", "api", "yaml", YAML,
                 "env", "DB_PASSWORD=" + ENV_SECRET + "\n# comment\nMODE=prod"));
 
-        ToolResult result = confirmed("create_stack", args, Role.OPERATOR);
+        ToolResult result = confirmed("create_deployment", args, Role.OPERATOR);
 
         assertThat(result.error()).as(result.content()).isFalse();
         JsonNode json = mapper.readTree(result.content());
         assertThat(json.get("name").asString()).isEqualTo("api");
         assertThat(json.get("envKeys")).extracting(JsonNode::asString).containsExactly("DB_PASSWORD", "MODE");
         assertThat(result.content()).doesNotContain(ENV_SECRET);
-        assertAuditedViaAi("STACK_CREATE", Role.OPERATOR);
-        assertThat(auditEntry("STACK_CREATE").get("details").toString()).doesNotContain(ENV_SECRET);
+        assertAuditedViaAi("DEPLOYMENT_CREATE", Role.OPERATOR);
+        assertThat(auditEntry("DEPLOYMENT_CREATE").get("details").toString()).doesNotContain(ENV_SECRET);
     }
 
     @Test
     void createStackReportsServiceErrorsAsResults() {
         String args = mapper.writeValueAsString(Map.of("hostId", hostId.toString(), "name", "web", "yaml", YAML));
 
-        ToolResult result = confirmed("create_stack", args, Role.OPERATOR);
+        ToolResult result = confirmed("create_deployment", args, Role.OPERATOR);
 
         assertThat(result.error()).isTrue();
-        assertThat(result.content()).contains("STACK_NAME_TAKEN");
-        assertThat(auditEntry("STACK_CREATE").get("outcome")).isEqualTo("FAILURE");
+        assertThat(result.content()).contains("DEPLOYMENT_NAME_TAKEN");
+        assertThat(auditEntry("DEPLOYMENT_CREATE").get("outcome")).isEqualTo("FAILURE");
     }
 
     @Test
     void updateStackSavesADraft() {
         String yaml = "services:\n  web:\n    image: nginx:1.27\n";
-        String args = mapper.writeValueAsString(Map.of("hostId", hostId.toString(), "stackId", stackId.toString(), "yaml", yaml));
+        String args = mapper.writeValueAsString(Map.of("hostId", hostId.toString(), "deploymentId", deploymentId.toString(), "yaml", yaml));
 
-        ToolResult result = confirmed("update_stack", args, Role.OPERATOR);
+        ToolResult result = confirmed("update_deployment", args, Role.OPERATOR);
 
         assertThat(result.error()).as(result.content()).isFalse();
         assertThat(mapper.readTree(result.content()).get("yaml").asString()).contains("nginx:1.27");
         assertThat(mapper.readTree(result.content()).get("envKeys")).extracting(JsonNode::asString).containsExactly("API_TOKEN");
-        assertAuditedViaAi("STACK_UPDATE", Role.OPERATOR);
+        assertAuditedViaAi("DEPLOYMENT_UPDATE", Role.OPERATOR);
     }
 
     @Test
     void deployStopRollbackAndDeleteRunThroughTheServices() throws InterruptedException {
-        ToolResult deploy = confirmed("deploy_stack", stack(hostId, stackId), Role.OPERATOR);
+        ToolResult deploy = confirmed("run_deployment", stack(hostId, deploymentId), Role.OPERATOR);
         assertThat(deploy.error()).as(deploy.content()).isFalse();
-        assertThat(mapper.readTree(deploy.content()).get("deploymentId").asString()).isNotBlank();
-        assertAuditedViaAi("STACK_DEPLOY", Role.OPERATOR);
-        awaitAudit("STACK_DEPLOY_RESULT");
+        assertThat(mapper.readTree(deploy.content()).get("runId").asString()).isNotBlank();
+        assertAuditedViaAi("DEPLOYMENT_DEPLOY", Role.OPERATOR);
+        awaitAudit("DEPLOYMENT_DEPLOY_RESULT");
 
-        ToolResult stop = confirmed("stop_stack", stack(hostId, stackId), Role.OPERATOR);
+        ToolResult stop = confirmed("stop_deployment", stack(hostId, deploymentId), Role.OPERATOR);
         assertThat(stop.error()).as(stop.content()).isFalse();
-        assertAuditedViaAi("STACK_STOP", Role.OPERATOR);
+        assertAuditedViaAi("DEPLOYMENT_STOP", Role.OPERATOR);
 
-        UUID version = jdbc.queryForObject("SELECT id FROM stack_versions WHERE stack_id = ? ORDER BY created_at LIMIT 1",
-                UUID.class, stackId);
-        ToolResult rollback = confirmed("rollback_stack", "{\"hostId\":\"" + hostId + "\",\"stackId\":\"" + stackId
+        UUID version = jdbc.queryForObject("SELECT id FROM deployment_versions WHERE deployment_id = ? ORDER BY created_at LIMIT 1",
+                UUID.class, deploymentId);
+        ToolResult rollback = confirmed("rollback_deployment", "{\"hostId\":\"" + hostId + "\",\"deploymentId\":\"" + deploymentId
                 + "\",\"versionId\":\"" + version + "\"}", Role.OPERATOR);
         assertThat(rollback.error()).as(rollback.content()).isFalse();
-        assertAuditedViaAi("STACK_ROLLBACK", Role.OPERATOR);
-        awaitAudit("STACK_ROLLBACK_RESULT");
+        assertAuditedViaAi("DEPLOYMENT_ROLLBACK", Role.OPERATOR);
+        awaitAudit("DEPLOYMENT_ROLLBACK_RESULT");
 
-        ToolResult delete = confirmed("delete_stack", stack(hostId, stackId), Role.OPERATOR);
+        ToolResult delete = confirmed("delete_deployment", stack(hostId, deploymentId), Role.OPERATOR);
         assertThat(delete.error()).as(delete.content()).isFalse();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM stacks", Integer.class)).isZero();
-        assertAuditedViaAi("STACK_DELETE", Role.OPERATOR);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM deployments", Integer.class)).isZero();
+        assertAuditedViaAi("DEPLOYMENT_DELETE", Role.OPERATOR);
     }
 
     @Test
     void gitToolsRejectFileStacksWithTheServiceCode() {
-        ToolResult redeploy = confirmed("git_redeploy_stack", stack(hostId, stackId), Role.OPERATOR);
+        ToolResult redeploy = confirmed("git_redeploy_deployment", stack(hostId, deploymentId), Role.OPERATOR);
         assertThat(redeploy.error()).isTrue();
-        assertThat(redeploy.content()).contains("NOT_A_GIT_STACK");
+        assertThat(redeploy.content()).contains("NOT_A_GIT_DEPLOYMENT");
 
-        ToolResult auto = confirmed("set_auto_update", "{\"hostId\":\"" + hostId + "\",\"stackId\":\"" + stackId
+        ToolResult auto = confirmed("set_auto_update", "{\"hostId\":\"" + hostId + "\",\"deploymentId\":\"" + deploymentId
                 + "\",\"enabled\":true,\"intervalSeconds\":120}", Role.OPERATOR);
         assertThat(auto.error()).isTrue();
-        assertThat(auto.content()).contains("NOT_A_GIT_STACK");
+        assertThat(auto.content()).contains("NOT_A_GIT_DEPLOYMENT");
     }
 
     @Test
     void setAutoUpdateConfiguresAGitStack() {
-        jdbc.update("UPDATE stacks SET source_type = 'GIT', git_repo_url = 'https://example.com/r.git', git_ref = 'main', "
-                + "git_compose_path = 'compose.yaml' WHERE id = ?", stackId);
+        jdbc.update("UPDATE deployments SET source_type = 'GIT', git_repo_url = 'https://example.com/r.git', git_ref = 'main', "
+                + "git_compose_path = 'compose.yaml' WHERE id = ?", deploymentId);
 
-        ToolResult result = confirmed("set_auto_update", "{\"hostId\":\"" + hostId + "\",\"stackId\":\"" + stackId
+        ToolResult result = confirmed("set_auto_update", "{\"hostId\":\"" + hostId + "\",\"deploymentId\":\"" + deploymentId
                 + "\",\"enabled\":true,\"intervalSeconds\":120}", Role.OPERATOR);
 
         assertThat(result.error()).as(result.content()).isFalse();
-        assertThat(jdbc.queryForObject("SELECT auto_update_interval_seconds FROM stacks WHERE id = ?", Integer.class, stackId))
+        assertThat(jdbc.queryForObject("SELECT auto_update_interval_seconds FROM deployments WHERE id = ?", Integer.class, deploymentId))
                 .isEqualTo(120);
-        assertAuditedViaAi("STACK_AUTO_UPDATE_CONFIG", Role.OPERATOR);
+        assertAuditedViaAi("DEPLOYMENT_AUTO_UPDATE_CONFIG", Role.OPERATOR);
     }
 
     @Test
@@ -307,7 +307,7 @@ class WriteToolsTest {
 
     @Test
     void hostToolsCreateRenameAndDeleteLocalEnvironments() {
-        jdbc.update("DELETE FROM stacks");
+        jdbc.update("DELETE FROM deployments");
         jdbc.update("DELETE FROM docker_hosts");
 
         ToolResult created = confirmed("create_host", "{\"name\":\"Server\"}", Role.ADMIN);
@@ -352,14 +352,14 @@ class WriteToolsTest {
         jdbc.update("INSERT INTO git_credentials (name, username, token_ciphertext, token_hint, created_by) "
                 + "SELECT 'cred', 'bob', ?, '...1234', id FROM users WHERE username = 'admin'", new byte[]{1, 2, 3});
         UUID id = jdbc.queryForObject("SELECT id FROM git_credentials", UUID.class);
-        jdbc.update("UPDATE stacks SET source_type = 'GIT', git_repo_url = 'https://example.com/r.git', git_ref = 'main', "
-                + "git_compose_path = 'compose.yaml', git_credential_id = ? WHERE id = ?", id, stackId);
+        jdbc.update("UPDATE deployments SET source_type = 'GIT', git_repo_url = 'https://example.com/r.git', git_ref = 'main', "
+                + "git_compose_path = 'compose.yaml', git_credential_id = ? WHERE id = ?", id, deploymentId);
 
         ToolResult inUse = confirmed("delete_git_credential", "{\"credentialId\":\"" + id + "\"}", Role.ADMIN);
         assertThat(inUse.error()).isTrue();
         assertThat(inUse.content()).contains("CREDENTIAL_IN_USE");
 
-        jdbc.update("DELETE FROM stacks");
+        jdbc.update("DELETE FROM deployments");
         ToolResult deleted = confirmed("delete_git_credential", "{\"credentialId\":\"" + id + "\"}", Role.ADMIN);
         assertThat(deleted.error()).as(deleted.content()).isFalse();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM git_credentials", Integer.class)).isZero();
@@ -371,12 +371,12 @@ class WriteToolsTest {
                 org.springframework.security.authentication.UsernamePasswordAuthenticationToken.authenticated(
                         "operator", null, List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_OPERATOR"))));
         try {
-            stacks.delete(hostId, stackId);
+            deployments.delete(hostId, deploymentId);
         } finally {
             org.springframework.security.core.context.SecurityContextHolder.clearContext();
         }
 
-        Map<String, Object> row = auditEntry("STACK_DELETE");
+        Map<String, Object> row = auditEntry("DEPLOYMENT_DELETE");
         assertThat(row.get("username")).isEqualTo("operator");
         assertThat(row.get("details")).isNull();
     }

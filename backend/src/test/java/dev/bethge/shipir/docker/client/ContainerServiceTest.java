@@ -9,7 +9,7 @@ import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
 import dev.bethge.shipir.docker.DockerProperties;
 import dev.bethge.shipir.docker.dto.ContainerDto;
-import dev.bethge.shipir.docker.dto.StackSummaryDto;
+import dev.bethge.shipir.docker.dto.DeploymentSummaryDto;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -100,15 +100,15 @@ class ContainerServiceTest {
     }
 
     @Test
-    void containersWithoutComposeLabelAreNotPartOfAnyStack() {
+    void containersWithoutComposeLabelAreNotPartOfAnyDeployment() {
         Container solo = container("solo", "running", "Up", Map.of());
         Container nullLabels = container("other", "running", "Up", null);
 
-        assertThat(serviceReturning(List.of(solo, nullLabels)).listStacks(UUID.randomUUID(), ENDPOINT)).isEmpty();
+        assertThat(serviceReturning(List.of(solo, nullLabels)).listDeployments(UUID.randomUUID(), ENDPOINT)).isEmpty();
     }
 
     @Test
-    void derivesStackStatusAndCounts() {
+    void derivesDeploymentStatusAndCounts() {
         Map<String, String> shop = Map.of("com.docker.compose.project", "shop",
                 "com.docker.compose.project.working_dir", "/srv/shop");
         Map<String, String> blog = Map.of("com.docker.compose.project", "blog");
@@ -119,12 +119,12 @@ class ContainerServiceTest {
                 container("arch-a", "exited", "Exited", off),
                 container("solo", "running", "Up", Map.of()));
 
-        List<StackSummaryDto> stacks = serviceReturning(all).listStacks(UUID.randomUUID(), ENDPOINT);
+        List<DeploymentSummaryDto> deployments = serviceReturning(all).listDeployments(UUID.randomUUID(), ENDPOINT);
 
-        assertThat(stacks).containsExactly(
-                new StackSummaryDto("archive", 1, 0, StackSummaryDto.Status.STOPPED, null),
-                new StackSummaryDto("blog", 2, 1, StackSummaryDto.Status.PARTIAL, null),
-                new StackSummaryDto("shop", 2, 2, StackSummaryDto.Status.RUNNING, "/srv/shop"));
+        assertThat(deployments).containsExactly(
+                new DeploymentSummaryDto("archive", 1, 0, DeploymentSummaryDto.Status.STOPPED, null),
+                new DeploymentSummaryDto("blog", 2, 1, DeploymentSummaryDto.Status.PARTIAL, null),
+                new DeploymentSummaryDto("shop", 2, 2, DeploymentSummaryDto.Status.RUNNING, "/srv/shop"));
     }
 
     private ContainerService realService(Duration read) {
@@ -140,7 +140,7 @@ class ContainerServiceTest {
         assertThatThrownBy(() -> service.listContainers(UUID.randomUUID(), endpoint))
                 .isInstanceOfSatisfying(DockerConnectionException.class,
                         e -> assertThat(e.getCode()).isEqualTo(DockerErrorCode.UNREACHABLE));
-        assertThatThrownBy(() -> service.listStacks(UUID.randomUUID(), endpoint))
+        assertThatThrownBy(() -> service.listDeployments(UUID.randomUUID(), endpoint))
                 .isInstanceOfSatisfying(DockerConnectionException.class,
                         e -> assertThat(e.getCode()).isEqualTo(DockerErrorCode.UNREACHABLE));
     }

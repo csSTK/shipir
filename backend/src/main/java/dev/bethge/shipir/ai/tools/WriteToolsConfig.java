@@ -2,12 +2,12 @@ package dev.bethge.shipir.ai.tools;
 
 import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.compose.EnvFile;
-import dev.bethge.shipir.compose.StackDeploymentService;
-import dev.bethge.shipir.compose.StackService;
+import dev.bethge.shipir.compose.DeploymentRunService;
+import dev.bethge.shipir.compose.DeploymentService;
 import dev.bethge.shipir.compose.dto.AutoUpdateRequest;
 import dev.bethge.shipir.compose.dto.EnvEntry;
-import dev.bethge.shipir.compose.dto.StackCreateRequest;
-import dev.bethge.shipir.compose.dto.StackUpdateRequest;
+import dev.bethge.shipir.compose.dto.DeploymentCreateRequest;
+import dev.bethge.shipir.compose.dto.DeploymentUpdateRequest;
 import dev.bethge.shipir.git.GitCredentialService;
 import dev.bethge.shipir.host.ConnectionType;
 import dev.bethge.shipir.host.HostService;
@@ -31,7 +31,7 @@ import java.util.function.BiFunction;
  * Each one calls the same service method as the REST endpoint and needs at least the role that endpoint needs, except
  * {@code mark_notifications_read}, which is OPERATOR here so a VIEWER never sees a write tool. Secrets never travel
  * through the chat: only LOCAL environments can be created, webhook and Git credential tools cannot set URLs or
- * tokens, and the stack {@code env} argument is masked in the confirmation view. The acting user is
+ * tokens, and the deployment {@code env} argument is masked in the confirmation view. The acting user is
  * {@link ToolContext#username()}, never an argument.
  */
 @Configuration(proxyBeanMethods = false)
@@ -46,76 +46,76 @@ class WriteToolsConfig {
         this.mapper = mapper;
     }
 
-    // ---- stacks (ADMIN and OPERATOR) ----
+    // ---- deployments (ADMIN and OPERATOR) ----
 
     @Bean
-    AiTool deployStackTool(StackDeploymentService deployments) {
-        return write("deploy_stack", "Deploy (docker compose up) the current draft of a managed stack. Runs asynchronously; returns a deployment id.",
-                stackSchema(), Role.OPERATOR, (a, c) -> deployments.deploy(uuid(a, "hostId"), uuid(a, "stackId"), c.username()));
+    AiTool deployDeploymentTool(DeploymentRunService deployments) {
+        return write("run_deployment", "Deploy (docker compose up) the current draft of a managed deployment. Runs asynchronously; returns a run id.",
+                deploymentSchema(), Role.OPERATOR, (a, c) -> deployments.deploy(uuid(a, "hostId"), uuid(a, "deploymentId"), c.username()));
     }
 
     @Bean
-    AiTool stopStackTool(StackDeploymentService deployments) {
-        return write("stop_stack", "Stop a managed stack (docker compose down).",
-                stackSchema(), Role.OPERATOR, (a, c) -> deployments.stop(uuid(a, "hostId"), uuid(a, "stackId")));
+    AiTool stopDeploymentTool(DeploymentRunService deployments) {
+        return write("stop_deployment", "Stop a managed deployment (docker compose down).",
+                deploymentSchema(), Role.OPERATOR, (a, c) -> deployments.stop(uuid(a, "hostId"), uuid(a, "deploymentId")));
     }
 
     @Bean
-    AiTool rollbackStackTool(StackDeploymentService deployments) {
-        return write("rollback_stack", "Redeploy an earlier version of a managed stack (see list_stack_versions). Runs asynchronously.",
-                schema(Map.of("hostId", UUID_PROP, "stackId", UUID_PROP, "versionId", UUID_PROP), "hostId", "stackId", "versionId"),
-                Role.OPERATOR, (a, c) -> deployments.rollback(uuid(a, "hostId"), uuid(a, "stackId"), uuid(a, "versionId"), c.username()));
+    AiTool rollbackDeploymentTool(DeploymentRunService deployments) {
+        return write("rollback_deployment", "Redeploy an earlier version of a managed deployment (see list_deployment_versions). Runs asynchronously.",
+                schema(Map.of("hostId", UUID_PROP, "deploymentId", UUID_PROP, "versionId", UUID_PROP), "hostId", "deploymentId", "versionId"),
+                Role.OPERATOR, (a, c) -> deployments.rollback(uuid(a, "hostId"), uuid(a, "deploymentId"), uuid(a, "versionId"), c.username()));
     }
 
     @Bean
-    AiTool gitRedeployStackTool(StackDeploymentService deployments) {
-        return write("git_redeploy_stack", "Pull the latest commit of a Git-based stack and redeploy it. Runs asynchronously.",
-                stackSchema(), Role.OPERATOR, (a, c) -> deployments.gitRedeploy(uuid(a, "hostId"), uuid(a, "stackId"), c.username()));
+    AiTool gitRedeployDeploymentTool(DeploymentRunService deployments) {
+        return write("git_redeploy_deployment", "Pull the latest commit of a Git-based deployment and redeploy it. Runs asynchronously.",
+                deploymentSchema(), Role.OPERATOR, (a, c) -> deployments.gitRedeploy(uuid(a, "hostId"), uuid(a, "deploymentId"), c.username()));
     }
 
     @Bean
-    AiTool createStackTool(StackService stacks) {
+    AiTool createDeploymentTool(DeploymentService deployments) {
         Map<String, Object> props = new LinkedHashMap<>();
         props.put("hostId", UUID_PROP);
         props.put("name", Map.of("type", "string", "description", "Lowercase letters, digits, '-' and '_' (max 63)."));
         props.put("yaml", Map.of("type", "string", "description", "Compose file content."));
         props.put("env", Map.of("type", "string", "description", ENV_DESCRIPTION));
-        return write("create_stack", "Create a managed stack from Compose YAML (not deployed yet; use deploy_stack afterwards).",
-                schema(props, "hostId", "name", "yaml"), Role.OPERATOR, (a, c) -> stacks.create(uuid(a, "hostId"),
-                        new StackCreateRequest((String) a.get("name"), (String) a.get("yaml"), env(a)), c.username()));
+        return write("create_deployment", "Create a managed deployment from Compose YAML (not deployed yet; use run_deployment afterwards).",
+                schema(props, "hostId", "name", "yaml"), Role.OPERATOR, (a, c) -> deployments.create(uuid(a, "hostId"),
+                        new DeploymentCreateRequest((String) a.get("name"), (String) a.get("yaml"), env(a)), c.username()));
     }
 
     @Bean
-    AiTool updateStackTool(StackService stacks) {
+    AiTool updateDeploymentTool(DeploymentService deployments) {
         Map<String, Object> props = new LinkedHashMap<>();
         props.put("hostId", UUID_PROP);
-        props.put("stackId", UUID_PROP);
+        props.put("deploymentId", UUID_PROP);
         props.put("yaml", Map.of("type", "string", "description", "New Compose file content."));
         props.put("env", Map.of("type", "string", "description", ENV_DESCRIPTION + " Omit to keep the stored variables."));
-        return write("update_stack", "Save new Compose YAML (and optionally variables) as a draft of a managed stack; deploy_stack applies it.",
-                schema(props, "hostId", "stackId", "yaml"), Role.OPERATOR, (a, c) -> stacks.update(uuid(a, "hostId"),
-                        uuid(a, "stackId"), new StackUpdateRequest((String) a.get("yaml"), env(a)), c.username()));
+        return write("update_deployment", "Save new Compose YAML (and optionally variables) as a draft of a managed deployment; run_deployment applies it.",
+                schema(props, "hostId", "deploymentId", "yaml"), Role.OPERATOR, (a, c) -> deployments.update(uuid(a, "hostId"),
+                        uuid(a, "deploymentId"), new DeploymentUpdateRequest((String) a.get("yaml"), env(a)), c.username()));
     }
 
     @Bean
-    AiTool deleteStackTool(StackService stacks) {
-        return write("delete_stack", "Delete a managed stack: runs docker compose down and removes it and its version history from Shipir.",
-                stackSchema(), Role.OPERATOR, (a, c) -> {
-                    stacks.delete(uuid(a, "hostId"), uuid(a, "stackId"));
+    AiTool deleteDeploymentTool(DeploymentService deployments) {
+        return write("delete_deployment", "Delete a managed deployment: runs docker compose down and removes it and its version history from Shipir.",
+                deploymentSchema(), Role.OPERATOR, (a, c) -> {
+                    deployments.delete(uuid(a, "hostId"), uuid(a, "deploymentId"));
                     return OK;
                 });
     }
 
     @Bean
-    AiTool setAutoUpdateTool(StackService stacks) {
+    AiTool setAutoUpdateTool(DeploymentService deployments) {
         Map<String, Object> props = new LinkedHashMap<>();
         props.put("hostId", UUID_PROP);
-        props.put("stackId", UUID_PROP);
+        props.put("deploymentId", UUID_PROP);
         props.put("enabled", Map.of("type", "boolean"));
         props.put("intervalSeconds", Map.of("type", "integer", "minimum", 60, "description", "Check interval, at least 60."));
-        return write("set_auto_update", "Turn automatic redeploys on or off for a Git-based stack.",
-                schema(props, "hostId", "stackId", "enabled"), Role.OPERATOR, (a, c) -> stacks.configureAutoUpdate(
-                        uuid(a, "hostId"), uuid(a, "stackId"), new AutoUpdateRequest((Boolean) a.get("enabled"),
+        return write("set_auto_update", "Turn automatic redeploys on or off for a Git-based deployment.",
+                schema(props, "hostId", "deploymentId", "enabled"), Role.OPERATOR, (a, c) -> deployments.configureAutoUpdate(
+                        uuid(a, "hostId"), uuid(a, "deploymentId"), new AutoUpdateRequest((Boolean) a.get("enabled"),
                                 a.get("intervalSeconds") instanceof Number n ? n.intValue() : null)));
     }
 
@@ -153,7 +153,7 @@ class WriteToolsConfig {
 
     @Bean
     AiTool deleteHostTool(HostService hosts) {
-        return write("delete_host", "Delete an environment from Shipir, including its managed stacks' records (containers on the host are not touched).",
+        return write("delete_host", "Delete an environment from Shipir, including its managed deployments' records (containers on the host are not touched).",
                 hostSchema(), Role.ADMIN, (a, c) -> {
                     hosts.delete(uuid(a, "hostId"));
                     return OK;
@@ -183,7 +183,7 @@ class WriteToolsConfig {
 
     @Bean
     AiTool deleteGitCredentialTool(GitCredentialService credentials) {
-        return write("delete_git_credential", "Delete a Git credential that no stack uses.",
+        return write("delete_git_credential", "Delete a Git credential that no deployment uses.",
                 schema(Map.of("credentialId", UUID_PROP), "credentialId"), Role.ADMIN, (a, c) -> {
                     credentials.delete(uuid(a, "credentialId"));
                     return OK;
@@ -210,8 +210,8 @@ class WriteToolsConfig {
         return schema(Map.of("hostId", UUID_PROP), "hostId");
     }
 
-    private static Map<String, Object> stackSchema() {
-        return schema(Map.of("hostId", UUID_PROP, "stackId", UUID_PROP), "hostId", "stackId");
+    private static Map<String, Object> deploymentSchema() {
+        return schema(Map.of("hostId", UUID_PROP, "deploymentId", UUID_PROP), "hostId", "deploymentId");
     }
 
     private static UUID uuid(Map<String, Object> args, String name) {

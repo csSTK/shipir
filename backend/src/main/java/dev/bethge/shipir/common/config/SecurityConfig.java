@@ -74,12 +74,15 @@ class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/logout",
                                 "/api/auth/password-reset/request", "/api/auth/password-reset/confirm").permitAll()
-                        // managed stacks: every role reads (env values only ADMIN/OPERATOR), ADMIN/OPERATOR write
-                        .requestMatchers(HttpMethod.GET, "/api/hosts/*/managed-stacks/*/env").hasAnyRole("ADMIN", "OPERATOR")
-                        .requestMatchers(HttpMethod.GET, "/api/hosts/*/managed-stacks", "/api/hosts/*/managed-stacks/*",
-                                "/api/hosts/*/managed-stacks/*/versions").authenticated()
-                        .requestMatchers("/api/hosts/*/managed-stacks", "/api/hosts/*/managed-stacks/**").hasAnyRole("ADMIN", "OPERATOR")
+                        // managed deployments: every role reads (env values only ADMIN/OPERATOR), ADMIN/OPERATOR write
+                        .requestMatchers(HttpMethod.GET, "/api/hosts/*/managed-deployments/*/env").hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.GET, "/api/hosts/*/managed-deployments", "/api/hosts/*/managed-deployments/*",
+                                "/api/hosts/*/managed-deployments/*/versions").authenticated()
+                        .requestMatchers("/api/hosts/*/managed-deployments", "/api/hosts/*/managed-deployments/**").hasAnyRole("ADMIN", "OPERATOR")
                         // environments: every role reads, only ADMIN writes (create, test, rename, delete)
+                        .requestMatchers(HttpMethod.DELETE, "/api/hosts/*/deployments/*").hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.DELETE, "/api/hosts/*/containers/*", "/api/hosts/*/images/*",
+                                "/api/hosts/*/volumes/*", "/api/hosts/*/networks/*").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.GET, "/api/hosts", "/api/hosts/**").authenticated()
                         .requestMatchers("/api/hosts", "/api/hosts/**").hasRole("ADMIN")
                         .requestMatchers("/api/compose/generate").hasAnyRole("ADMIN", "OPERATOR")

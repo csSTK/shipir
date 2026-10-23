@@ -50,7 +50,7 @@ public class ChatOrchestrator {
 
     static final String SYSTEM_PROMPT = """
             You are the Shipir assistant, built into a web platform for managing Docker environments, containers \
-            and Compose stacks. You act on behalf of the signed-in user and have exactly their permissions; \
+            and Compose deployments. You act on behalf of the signed-in user and have exactly their permissions; \
             tools you do not see are not available to them.
             Use the read tools to look things up instead of guessing. Tools that change something never run \
             immediately: the user is shown the action and must confirm it first, so propose the change and wait \

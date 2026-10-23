@@ -65,7 +65,7 @@ const user = (id: string, seq: number, content: string) => ({ id, seq, role: 'US
 const assistant = (id: string, seq: number, content: string) => ({ ...user(id, seq, content), role: 'ASSISTANT' })
 const pendingTool = {
   id: 'm2', seq: 3, role: 'TOOL', content: 'Waiting for confirmation', status: 'PENDING', toolCallId: 'c1', createdAt: '2026-10-23T10:00:00Z',
-  toolCalls: [{ id: 'c1', name: 'deploy_stack', arguments: { hostId: 'h1', stackId: 'st1', env: '<hidden>' }, token: 't', description: 'Deploy stack "shop" on Local' }],
+  toolCalls: [{ id: 'c1', name: 'run_deployment', arguments: { hostId: 'h1', deploymentId: 'st1', env: '<hidden>' }, token: 't', description: 'Deploy "shop" on Local' }],
 }
 
 beforeEach(() => {
@@ -84,9 +84,9 @@ const calls = (method: string) => seen.filter((c) => c.method === method)
 
 describe('ChatPage', () => {
   it('lists sessions and opens one with its history', async () => {
-    env.messages = [user('m1', 1, 'What runs on Local?'), assistant('m2', 2, 'Three stacks.')]
+    env.messages = [user('m1', 1, 'What runs on Local?'), assistant('m2', 2, 'Three deployments.')]
     renderAt('/assistant/s1')
-    expect(await screen.findByText('Three stacks.')).toBeInTheDocument()
+    expect(await screen.findByText('Three deployments.')).toBeInTheDocument()
     expect(screen.getByText('What runs on Local?')).toBeInTheDocument()
     const list = screen.getByRole('navigation', { name: 'Chats' })
     expect(within(list).getByRole('link', { name: /Old chat/ })).toHaveAttribute('href', '/assistant/s2')
@@ -102,8 +102,8 @@ describe('ChatPage', () => {
     frame({ runId: RUN, type: 'TOKEN', text: 'Hi ' })
     frame({ runId: RUN, type: 'TOKEN', text: 'there' })
     expect(screen.getByText('Hi there')).toBeInTheDocument()
-    frame({ runId: RUN, type: 'TOOL_CALL', toolName: 'list_stacks' })
-    expect(screen.getByText(/list stacks/i)).toBeInTheDocument()
+    frame({ runId: RUN, type: 'TOOL_CALL', toolName: 'list_deployments' })
+    expect(screen.getByText(/list deployments/i)).toBeInTheDocument()
     env.messages = [user('m1', 1, 'hello'), assistant('m2', 2, 'Hi there, stored')]
     frame({ runId: RUN, type: 'DONE', outcome: 'COMPLETE' })
     expect(await screen.findByText('Hi there, stored')).toBeInTheDocument()
@@ -122,7 +122,7 @@ describe('ChatPage', () => {
   it('confirms a pending action through the API and shows what will happen', async () => {
     env.messages = [user('m1', 1, 'deploy shop'), pendingTool]
     renderAt('/assistant/s1')
-    expect(await screen.findByText('Deploy stack "shop" on Local')).toBeInTheDocument()
+    expect(await screen.findByText('Deploy "shop" on Local')).toBeInTheDocument()
     expect(screen.getByText('<hidden>')).toBeInTheDocument()
     expect(screen.getByLabelText('Message')).toBeDisabled()
     env.messages = [user('m1', 1, 'deploy shop'), { ...pendingTool, status: 'CONFIRMED' }]

@@ -13,7 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /** Resource endpoints against the real local Docker socket. */
 class HostResourcesApiTest extends HostApiTestBase {
 
-    private static final String[] RESOURCES = {"stacks", "containers", "images", "networks", "volumes"};
+    private static final String[] RESOURCES = {"deployments", "containers", "images", "networks", "volumes"};
 
     private String localHostId() {
         jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "

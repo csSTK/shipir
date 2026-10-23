@@ -86,17 +86,17 @@ public class GitCredentialService {
     @Transactional
     public void delete(UUID id) {
         GitCredential c = find(id);
-        if (credentials.countStacksUsing(id) > 0) {
+        if (credentials.countDeploymentsUsing(id) > 0) {
             throw new GitException(HttpStatus.CONFLICT, "CREDENTIAL_IN_USE",
-                    "The credential is used by at least one stack");
+                    "The credential is used by at least one deployment");
         }
         credentials.delete(c);
         try {
             credentials.flush();
         } catch (DataIntegrityViolationException e) {
-            // a stack referenced it between the check and the delete (FK is RESTRICT)
+            // a deployment referenced it between the check and the delete (FK is RESTRICT)
             throw new GitException(HttpStatus.CONFLICT, "CREDENTIAL_IN_USE",
-                    "The credential is used by at least one stack");
+                    "The credential is used by at least one deployment");
         }
     }
 

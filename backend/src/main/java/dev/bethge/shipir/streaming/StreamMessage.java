@@ -7,7 +7,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * deployment (clients can detect gaps); the last frame has {@code type=STATUS}.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public record StreamMessage(long seq, Type type, String line, DeploymentStatus status) {
+public record StreamMessage(long seq, Type type, String line, RunStatus status) {
 
     public enum Type { LINE, STATUS }
 }

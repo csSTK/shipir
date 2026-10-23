@@ -1,7 +1,11 @@
+import { useState } from 'react'
+import { useCurrentUser } from '../auth/index.ts'
+import { deleteColumn } from '../hosts/deleteColumn.tsx'
+import { DeleteResourceDialog } from '../hosts/DeleteResourceDialog.tsx'
 import { useParams } from 'react-router-dom'
 import { describeResourceError, formatSize } from '../hosts/format.ts'
 import { Badge, ResourceTable, type ResourceColumn } from '../../shared/ui/index.ts'
-import { useImages, type Image } from './api.ts'
+import { useDeleteImage, useImages, type Image } from './api.ts'
 import './ImagesPage.css'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -41,14 +45,19 @@ const columns: ResourceColumn<Image>[] = [
 /** `/environments/:id/images`: all images of one environment. */
 export function ImagesPage() {
   const { id = '' } = useParams()
+  const { data: user } = useCurrentUser()
+  const canWrite = user?.role === 'ADMIN' || user?.role === 'OPERATOR'
   const { data, isPending, error, refetch } = useImages(id)
+  const del = useDeleteImage(id)
+  const [target, setTarget] = useState<Image | null>(null)
+  const tableColumns = canWrite ? [...columns, deleteColumn<Image>('image', (i) => i.repoTags[0] ?? shortId(i.id), setTarget)] : columns
 
   return (
     <section className="images">
       <h2 className="images__title">Images</h2>
       <ResourceTable
         label="images"
-        columns={columns}
+        columns={tableColumns}
         rows={data}
         rowKey={(i) => i.id}
         searchText={(i) => `${i.repoTags.join(' ')} ${shortId(i.id)}`}
@@ -58,6 +67,14 @@ export function ImagesPage() {
         error={error ? describeResourceError(error) : null}
         onRetry={() => void refetch()}
       />
+      {target && (
+        <DeleteResourceDialog
+          kind="image"
+          name={target.repoTags[0] ?? shortId(target.id)}
+          onDelete={() => del.mutateAsync(target.id)}
+          onClose={() => setTarget(null)}
+        />
+      )}
     </section>
   )
 }

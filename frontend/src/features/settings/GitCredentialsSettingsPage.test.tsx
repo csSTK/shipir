@@ -127,7 +127,7 @@ describe('GitCredentialsSettingsPage', () => {
     await screen.findByText('GitHub work')
     fireEvent.click(screen.getByRole('button', { name: 'Delete GitHub work' }))
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
-    expect(await screen.findByText(/still used by one or more stacks/)).toBeInTheDocument()
+    expect(await screen.findByText(/still used by one or more deployments/)).toBeInTheDocument()
   })
 
   it('tests the connection and shows each outcome', async () => {
