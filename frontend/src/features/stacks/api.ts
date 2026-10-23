@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../shared/api/client.ts'
+import type { ComposeSpecPayload } from './wizard/model.ts'
 
 export type StackStatus = 'RUNNING' | 'PARTIAL' | 'STOPPED'
 
@@ -165,5 +166,13 @@ export function useRollbackStack(hostId: string) {
     mutationFn: ({ stackId, versionId }: { stackId: string; versionId: string }) =>
       apiFetch<Deployment>(`${managedBase(hostId)}/${stackId}/versions/${versionId}/rollback`, { method: 'POST' }),
     onSuccess: () => void invalidate(),
+  })
+}
+
+/** Turns the wizard spec into Compose YAML (`POST /api/compose/generate`); 400 INVALID_COMPOSE_SPEC lists violations in `details`. */
+export function useGenerateCompose() {
+  return useMutation({
+    mutationFn: (spec: ComposeSpecPayload) =>
+      apiFetch<{ yaml: string }>('/compose/generate', { method: 'POST', body: { spec } }),
   })
 }

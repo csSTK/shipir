@@ -195,4 +195,60 @@ describe('StacksPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create stack' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('line 1: not a mapping')
   })
+
+  describe('form wizard', () => {
+    const generated = 'services:\n  web:\n    image: nginx\n'
+
+    async function openWizard() {
+      serve(stacks, { role: 'ADMIN' })
+      renderPage()
+      await screen.findByText('/srv/shop')
+      fireEvent.click(screen.getByRole('button', { name: 'Add stack' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'Form wizard' }))
+    }
+
+    it('generates YAML, previews it and continues in the editor with referenced variables', async () => {
+      await openWizard()
+      fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'web' } })
+      fireEvent.change(screen.getByLabelText('Service 1 name'), { target: { value: 'web' } })
+      fireEvent.change(screen.getByLabelText('Service 1 image'), { target: { value: 'nginx' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Add env var to service 1' }))
+      fireEvent.change(screen.getByLabelText('Service 1 env 1 name'), { target: { value: 'TOKEN' } })
+      fireEvent.click(screen.getByLabelText('From stack variable'))
+      fireEvent.change(screen.getByLabelText('Service 1 env 1 reference'), { target: { value: 'API_TOKEN' } })
+      apiFetch.mockResolvedValue({ yaml: generated })
+      fireEvent.click(screen.getByRole('button', { name: 'Preview YAML' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'Continue in editor' }))
+      expect(apiFetch).toHaveBeenCalledWith('/compose/generate', {
+        method: 'POST',
+        body: {
+          spec: expect.objectContaining({
+            services: [expect.objectContaining({ name: 'web', image: 'nginx', environment: [{ key: 'TOKEN', value: null, ref: 'API_TOKEN' }] })],
+          }),
+        },
+      })
+      expect(screen.getByRole('radio', { name: 'YAML' })).toBeChecked()
+      const editors = await screen.findAllByLabelText('Compose file')
+      expect(editors.some((e) => (e as HTMLTextAreaElement).value === generated)).toBe(true)
+      expect(screen.getByLabelText('Variable 1 name')).toHaveValue('API_TOKEN')
+    })
+
+    it('blocks the preview while the form is invalid and does not call the server', async () => {
+      await openWizard()
+      apiFetch.mockClear()
+      fireEvent.click(screen.getByRole('button', { name: 'Preview YAML' }))
+      expect(await screen.findByText('Fix the highlighted fields first.')).toBeInTheDocument()
+      expect(apiFetch).not.toHaveBeenCalled()
+    })
+
+    it('lists all server violations', async () => {
+      await openWizard()
+      fireEvent.change(screen.getByLabelText('Service 1 name'), { target: { value: 'web' } })
+      fireEvent.change(screen.getByLabelText('Service 1 image'), { target: { value: 'nginx' } })
+      apiFetch.mockRejectedValue(new ApiError(400, 'bad', 'INVALID_COMPOSE_SPEC', undefined, ['services[0]: port clash', 'services[1]: unknown network']))
+      fireEvent.click(screen.getByRole('button', { name: 'Preview YAML' }))
+      const alert = await screen.findByText('services[0]: port clash')
+      expect(alert.closest('[role="alert"]')).toHaveTextContent('services[1]: unknown network')
+    })
+  })
 })

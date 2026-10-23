@@ -172,6 +172,9 @@ Frontend (`frontend/`):
 - `src/features/stacks/StackContentPanel.tsx`: stack YAML + env keys, Edit/Save draft (uses `editor/`)
 - `src/features/stacks/DeploymentPanel.tsx`: seam: deployment started notice (replaced by live STOMP output in shipr-e42.16)
 - `e2e/stack-detail.spec.ts`: operator create -> deploy -> rollback -> delete, viewer read-only
+- `src/features/stacks/wizard/{model.ts,ComposeWizard.tsx,wizard.css,index.ts}`: Compose form wizard (services: image/command/restart/ports/env literal or `.env` ref/volumes/networks/depends_on; top-level networks/volumes); `model.ts` = form state, `validateWizard`, `buildSpec` (generate payload), `referencedEnvKeys`; one-way (no YAML -> form); preview via `useGenerateCompose` (`api.ts`, `POST /compose/generate`)
+- `src/features/stacks/AddStackDialog.tsx`: also 'Form wizard' / 'YAML' mode switch; 'Continue in editor' fills the YAML editor and adds empty env rows for referenced keys
+- `e2e/compose-wizard.spec.ts`: wizard builds 2 services + network + env ref, preview, continue, create; local and server (INVALID_COMPOSE_SPEC) errors
 - `e2e/resources.spec.ts`: stacks/containers pages: search, sort, stack filter, UNREACHABLE/TIMEOUT, empty
 - `src/features/hosts/api.ts`: host types, `HOSTS_KEY`/`HOSTS_OVERVIEW_KEY`, `useHosts/useHostsOverview` (30 s + focus refetch, `HostOverview`), `useCreateHost/useTestConnection/useRenameHost/useDeleteHost` (create/delete also invalidate current user)
 - `src/features/hosts/EnvironmentForm.{tsx,css}`: Local / Remote (TCP+TLS) form, PEM file pickers (names only shown), connection test, inline server errors; props `onCreated`, `submitLabel`
