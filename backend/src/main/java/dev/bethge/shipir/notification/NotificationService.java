@@ -78,12 +78,12 @@ public class NotificationService {
 
     /** @return false if the notification does not exist or belongs to someone else */
     @Transactional
-    boolean markRead(UUID id, UUID userId) {
+    public boolean markRead(UUID id, UUID userId) {
         return notifications.markRead(id, userId, clock.instant()) > 0;
     }
 
     @Transactional
-    void markAllRead(UUID userId) {
+    public void markAllRead(UUID userId) {
         notifications.markAllRead(userId, clock.instant());
     }
 

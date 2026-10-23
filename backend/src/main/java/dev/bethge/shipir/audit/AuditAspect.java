@@ -1,6 +1,7 @@
 package dev.bethge.shipir.audit;
 
 import dev.bethge.shipir.auth.UserRepository;
+import dev.bethge.shipir.common.security.AiInvocationContext;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -18,6 +19,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -77,10 +80,21 @@ class AuditAspect {
                     : users.findByUsername(authName).map(u -> u.getId()).orElse(null);
             String targetType = a.targetType().isEmpty() ? null : a.targetType();
             auditService.record(new AuditRecord(userId, truncate(username, 50), a.action(), outcome,
-                    targetType, eval(a.targetId(), ctx), null));
+                    targetType, eval(a.targetId(), ctx), aiDetails()));
         } catch (RuntimeException e) {
             log.warn("Could not write audit entry for {}: {}", a.action(), e.toString());
         }
+    }
+
+    /** {via: AI, chatSessionId} while the AI assistant acts for the user, null for normal requests. */
+    private static Map<String, Object> aiDetails() {
+        if (!AiInvocationContext.active()) {
+            return null;
+        }
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("via", "AI");
+        AiInvocationContext.chatSessionId().ifPresent(id -> details.put("chatSessionId", id.toString()));
+        return details;
     }
 
     private String eval(String expression, EvaluationContext ctx) {

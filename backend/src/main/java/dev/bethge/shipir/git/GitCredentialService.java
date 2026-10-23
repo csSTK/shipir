@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-class GitCredentialService {
+public class GitCredentialService {
 
     private final GitCredentialRepository credentials;
     private final UserRepository users;
@@ -36,7 +36,7 @@ class GitCredentialService {
     }
 
     @Transactional(readOnly = true)
-    List<GitCredentialResponse> list() {
+    public List<GitCredentialResponse> list() {
         return credentials.findAll().stream()
                 .sorted(Comparator.comparing(GitCredential::getName, String.CASE_INSENSITIVE_ORDER))
                 .map(GitCredentialService::toResponse)
@@ -84,7 +84,7 @@ class GitCredentialService {
 
     @Auditable(action = "GIT_CREDENTIAL_DELETE", targetType = "GIT_CREDENTIAL", targetId = "#id")
     @Transactional
-    void delete(UUID id) {
+    public void delete(UUID id) {
         GitCredential c = find(id);
         if (credentials.countStacksUsing(id) > 0) {
             throw new GitException(HttpStatus.CONFLICT, "CREDENTIAL_IN_USE",

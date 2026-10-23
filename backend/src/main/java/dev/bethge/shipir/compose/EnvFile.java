@@ -10,7 +10,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /** Renders env entries to .env text and parses that text back. Only understands what {@link #render} writes. */
-final class EnvFile {
+public final class EnvFile {
 
     private static final Pattern KEY = Pattern.compile("[A-Za-z_][A-Za-z0-9_]{0,254}");
     private static final Pattern PLAIN = Pattern.compile("[A-Za-z0-9_./:@%+,-]*");
@@ -37,7 +37,7 @@ final class EnvFile {
         return out.toString();
     }
 
-    static List<EnvEntry> parse(String text) {
+    public static List<EnvEntry> parse(String text) {
         List<EnvEntry> entries = new ArrayList<>();
         for (String line : text.split("\n")) {
             int eq = line.indexOf('=');

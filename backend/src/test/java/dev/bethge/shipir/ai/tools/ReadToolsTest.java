@@ -273,15 +273,18 @@ class ReadToolsTest {
 
     @Test
     void roleFilteringOfTheRealToolSet() {
-        assertThat(registry.toolsFor(Role.ADMIN)).extracting(AiTool::name).containsExactlyInAnyOrder(
+        assertThat(readTools(Role.ADMIN)).extracting(AiTool::name).containsExactlyInAnyOrder(
                 "list_hosts", "host_overview", "list_stacks", "get_managed_stack", "list_stack_versions",
                 "list_containers", "list_images", "list_networks", "list_volumes", "list_notifications",
                 "list_audit_log");
         for (Role role : List.of(Role.OPERATOR, Role.VIEWER)) {
-            assertThat(registry.toolsFor(role)).extracting(AiTool::name)
+            assertThat(readTools(role)).extracting(AiTool::name)
                     .hasSize(10).doesNotContain("list_audit_log");
         }
-        assertThat(registry.toolsFor(Role.ADMIN)).noneMatch(AiTool::write);
+    }
+
+    private List<AiTool> readTools(Role role) {
+        return registry.toolsFor(role).stream().filter(t -> !t.write()).toList();
     }
 
     @Test
@@ -300,7 +303,7 @@ class ReadToolsTest {
                 "get_managed_stack", stack(hostId, stackId),
                 "list_stack_versions", stack(hostId, stackId));
         StringBuilder all = new StringBuilder();
-        for (AiTool tool : registry.toolsFor(Role.ADMIN)) {
+        for (AiTool tool : readTools(Role.ADMIN)) {
             String args = argsByTool.getOrDefault(tool.name(),
                     tool.parameters().toString().contains("hostId") ? host(tcpHostId) : "{}");
             ToolResult result = run(tool.name(), args, Role.ADMIN);

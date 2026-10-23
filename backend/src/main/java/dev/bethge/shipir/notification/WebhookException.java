@@ -3,7 +3,7 @@ package dev.bethge.shipir.notification;
 import org.springframework.http.HttpStatus;
 
 /** A webhook request that cannot be fulfilled; carries the HTTP status and a stable error code. */
-class WebhookException extends RuntimeException {
+public class WebhookException extends RuntimeException {
 
     private final HttpStatus status;
     private final String code;
@@ -18,7 +18,7 @@ class WebhookException extends RuntimeException {
         return status;
     }
 
-    String code() {
+    public String code() {
         return code;
     }
 }

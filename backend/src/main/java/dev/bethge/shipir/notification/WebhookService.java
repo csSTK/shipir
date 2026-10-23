@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-class WebhookService {
+public class WebhookService {
 
     private final NotificationWebhookRepository webhooks;
     private final UserRepository users;
@@ -37,7 +37,7 @@ class WebhookService {
     }
 
     @Transactional(readOnly = true)
-    List<WebhookResponse> list() {
+    public List<WebhookResponse> list() {
         return webhooks.findAll().stream()
                 .sorted(Comparator.comparing(NotificationWebhook::getName, String.CASE_INSENSITIVE_ORDER))
                 .map(WebhookService::toResponse)
@@ -66,7 +66,7 @@ class WebhookService {
 
     @Auditable(action = "WEBHOOK_UPDATE", targetType = "WEBHOOK", targetId = "#id")
     @Transactional
-    WebhookResponse update(UUID id, WebhookRequest request) {
+    public WebhookResponse update(UUID id, WebhookRequest request) {
         NotificationWebhook w = find(id);
         if (!w.getName().equals(request.name()) && webhooks.existsByName(request.name())) {
             throw nameTaken();
@@ -87,7 +87,7 @@ class WebhookService {
 
     @Auditable(action = "WEBHOOK_DELETE", targetType = "WEBHOOK", targetId = "#id")
     @Transactional
-    void delete(UUID id) {
+    public void delete(UUID id) {
         webhooks.delete(find(id));
         webhooks.flush();
     }

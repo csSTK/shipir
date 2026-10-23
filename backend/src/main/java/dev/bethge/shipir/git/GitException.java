@@ -3,7 +3,7 @@ package dev.bethge.shipir.git;
 import org.springframework.http.HttpStatus;
 
 /** A Git credential request that cannot be fulfilled; carries the HTTP status and a stable error code. */
-class GitException extends RuntimeException {
+public class GitException extends RuntimeException {
 
     private final HttpStatus status;
     private final String code;
@@ -18,7 +18,7 @@ class GitException extends RuntimeException {
         return status;
     }
 
-    String code() {
+    public String code() {
         return code;
     }
 }

@@ -59,7 +59,7 @@ public class HostService {
 
     /** Not transactional: the (slow) connection test must not hold a database connection. */
     @Auditable(action = "HOST_CREATE", targetType = "HOST", targetId = "#result?.id")
-    HostResponse create(CreateHostRequest request, String username) {
+    public HostResponse create(CreateHostRequest request, String username) {
         DockerEndpoint endpoint = toEndpoint(request.connectionType(), request.host(), request.port(),
                 request.tlsCaPem(), request.tlsCertPem(), request.tlsKeyPem());
         if (request.connectionType() == ConnectionType.TCP && !cipher.isConfigured()) {
@@ -95,7 +95,7 @@ public class HostService {
 
     @Auditable(action = "HOST_RENAME", targetType = "HOST", targetId = "#id")
     @Transactional
-    HostResponse rename(UUID id, String name) {
+    public HostResponse rename(UUID id, String name) {
         DockerHost host = find(id);
         if (!host.getName().equals(name) && hosts.existsByName(name)) {
             throw nameTaken();
@@ -112,7 +112,7 @@ public class HostService {
 
     @Auditable(action = "HOST_DELETE", targetType = "HOST", targetId = "#id")
     @Transactional
-    void delete(UUID id) {
+    public void delete(UUID id) {
         hosts.delete(find(id));
         hosts.flush();
         connections.evict(id);
