@@ -83,6 +83,10 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/hosts/*/deployments/*").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.DELETE, "/api/hosts/*/containers/*", "/api/hosts/*/images/*",
                                 "/api/hosts/*/volumes/*", "/api/hosts/*/networks/*").hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.POST, "/api/hosts/*/containers/*/start", "/api/hosts/*/containers/*/stop",
+                                "/api/hosts/*/containers/*/restart", "/api/hosts/*/containers/*/pause",
+                                "/api/hosts/*/containers/*/unpause", "/api/hosts/*/containers/*/kill")
+                        .hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.GET, "/api/hosts", "/api/hosts/**").authenticated()
                         .requestMatchers("/api/hosts", "/api/hosts/**").hasRole("ADMIN")
                         .requestMatchers("/api/compose/generate").hasAnyRole("ADMIN", "OPERATOR")

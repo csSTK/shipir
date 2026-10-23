@@ -34,6 +34,9 @@ public class HostResourcesService {
 
     private static final Pattern RESOURCE_ID = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}");
 
+    private static final int DEFAULT_TIMEOUT_SECONDS = 10;
+    private static final int MAX_TIMEOUT_SECONDS = 300;
+
     private final DockerHostRepository hosts;
     private final HostEndpointResolver endpoints;
     private final ContainerService containers;
@@ -112,6 +115,79 @@ public class HostResourcesService {
         });
     }
 
+    @Auditable(action = "CONTAINER_START", targetType = "CONTAINER", targetId = "#containerId")
+    void startContainer(UUID hostId, String containerId) {
+        validateResourceId(containerId);
+        call(hostId, (id, endpoint) -> {
+            containers.startContainer(id, endpoint, containerId);
+            return null;
+        });
+    }
+
+    @Auditable(action = "CONTAINER_STOP", targetType = "CONTAINER", targetId = "#containerId")
+    void stopContainer(UUID hostId, String containerId, String timeout) {
+        validateResourceId(containerId);
+        int seconds = parseTimeout(timeout);
+        call(hostId, (id, endpoint) -> {
+            containers.stopContainer(id, endpoint, containerId, seconds);
+            return null;
+        });
+    }
+
+    @Auditable(action = "CONTAINER_RESTART", targetType = "CONTAINER", targetId = "#containerId")
+    void restartContainer(UUID hostId, String containerId, String timeout) {
+        validateResourceId(containerId);
+        int seconds = parseTimeout(timeout);
+        call(hostId, (id, endpoint) -> {
+            containers.restartContainer(id, endpoint, containerId, seconds);
+            return null;
+        });
+    }
+
+    @Auditable(action = "CONTAINER_PAUSE", targetType = "CONTAINER", targetId = "#containerId")
+    void pauseContainer(UUID hostId, String containerId) {
+        validateResourceId(containerId);
+        call(hostId, (id, endpoint) -> {
+            containers.pauseContainer(id, endpoint, containerId);
+            return null;
+        });
+    }
+
+    @Auditable(action = "CONTAINER_UNPAUSE", targetType = "CONTAINER", targetId = "#containerId")
+    void unpauseContainer(UUID hostId, String containerId) {
+        validateResourceId(containerId);
+        call(hostId, (id, endpoint) -> {
+            containers.unpauseContainer(id, endpoint, containerId);
+            return null;
+        });
+    }
+
+    @Auditable(action = "CONTAINER_KILL", targetType = "CONTAINER", targetId = "#containerId")
+    void killContainer(UUID hostId, String containerId) {
+        validateResourceId(containerId);
+        call(hostId, (id, endpoint) -> {
+            containers.killContainer(id, endpoint, containerId);
+            return null;
+        });
+    }
+
+    /** Grace period in seconds: absent = 10, otherwise an integer in 0..300. */
+    private static int parseTimeout(String raw) {
+        if (raw == null) {
+            return DEFAULT_TIMEOUT_SECONDS;
+        }
+        try {
+            int value = Integer.parseInt(raw);
+            if (value >= 0 && value <= MAX_TIMEOUT_SECONDS) {
+                return value;
+            }
+        } catch (NumberFormatException ignored) {
+            // falls through to the 400 below
+        }
+        throw new HostException(HttpStatus.BAD_REQUEST, "INVALID_PARAMETER",
+                "timeout must be a whole number of seconds between 0 and " + MAX_TIMEOUT_SECONDS);
+    }
+
     /** Ids and names are a single path segment of plain characters; nothing else reaches the daemon. */
     private static void validateResourceId(String value) {
         if (value == null || !RESOURCE_ID.matcher(value).matches()) {
@@ -130,6 +206,10 @@ public class HostResourcesService {
             }
             if (e.getCode() == DockerErrorCode.IN_USE) {
                 throw new HostException(HttpStatus.CONFLICT, "RESOURCE_IN_USE", "Resource is in use");
+            }
+            if (e.getCode() == DockerErrorCode.INVALID_STATE) {
+                throw new HostException(HttpStatus.CONFLICT, "INVALID_CONTAINER_STATE",
+                        "The container is not in a state that allows this action");
             }
             if (e.getCode() == DockerErrorCode.BUILTIN_NETWORK) {
                 throw new HostException(HttpStatus.CONFLICT, "RESOURCE_IN_USE",

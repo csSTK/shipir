@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -17,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
-/** Live resources of one environment: reads for every role, deletes for ADMIN/OPERATOR (SecurityConfig). */
+/** Live resources of one environment: reads for every role, deletes and container actions for ADMIN/OPERATOR (SecurityConfig). */
 @RestController
 @RequestMapping("/api/hosts/{id}")
 class HostResourcesController {
@@ -76,5 +77,43 @@ class HostResourcesController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void removeNetwork(@PathVariable UUID id, @PathVariable String networkId) {
         service.removeNetwork(id, networkId);
+    }
+
+    @PostMapping("/containers/{containerId}/start")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void startContainer(@PathVariable UUID id, @PathVariable String containerId) {
+        service.startContainer(id, containerId);
+    }
+
+    @PostMapping("/containers/{containerId}/stop")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void stopContainer(@PathVariable UUID id, @PathVariable String containerId,
+                       @RequestParam(required = false) String timeout) {
+        service.stopContainer(id, containerId, timeout);
+    }
+
+    @PostMapping("/containers/{containerId}/restart")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void restartContainer(@PathVariable UUID id, @PathVariable String containerId,
+                          @RequestParam(required = false) String timeout) {
+        service.restartContainer(id, containerId, timeout);
+    }
+
+    @PostMapping("/containers/{containerId}/pause")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void pauseContainer(@PathVariable UUID id, @PathVariable String containerId) {
+        service.pauseContainer(id, containerId);
+    }
+
+    @PostMapping("/containers/{containerId}/unpause")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void unpauseContainer(@PathVariable UUID id, @PathVariable String containerId) {
+        service.unpauseContainer(id, containerId);
+    }
+
+    @PostMapping("/containers/{containerId}/kill")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void killContainer(@PathVariable UUID id, @PathVariable String containerId) {
+        service.killContainer(id, containerId);
     }
 }
