@@ -10,7 +10,7 @@ import dev.bethge.shipir.docker.client.VolumeService;
 import dev.bethge.shipir.docker.dto.ImageDto;
 import dev.bethge.shipir.docker.dto.NetworkDto;
 import dev.bethge.shipir.docker.dto.VolumeDto;
-import dev.bethge.shipir.docker.dto.StackSummaryDto;
+import dev.bethge.shipir.docker.dto.DeploymentSummaryDto;
 import dev.bethge.shipir.docker.dto.DockerSystemInfoDto;
 import org.junit.jupiter.api.Test;
 
@@ -39,7 +39,7 @@ class DockerApiBoundaryTest {
                 DockerEndpoint.TlsMaterial.class, DockerErrorCode.class, DockerConnectionException.class,
                 DockerProperties.class, DockerHostConnectionManager.class, DockerSystemService.class,
                 ConnectionTestResult.class, DockerSystemInfoDto.class, ContainerService.class,
-                ContainerDto.class, StackSummaryDto.class, ImageService.class, NetworkService.class,
+                ContainerDto.class, DeploymentSummaryDto.class, ImageService.class, NetworkService.class,
                 VolumeService.class, ImageDto.class, NetworkDto.class, VolumeDto.class)) {
             for (Method m : type.getDeclaredMethods()) {
                 if (!Modifier.isPublic(m.getModifiers()) || INTERNAL_METHODS.contains(m.getName())) continue;

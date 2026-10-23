@@ -11,8 +11,8 @@ import dev.bethge.shipir.docker.client.VolumeService;
 import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.ImageDto;
 import dev.bethge.shipir.docker.dto.NetworkDto;
-import dev.bethge.shipir.docker.dto.StackSummaryDto;
-import dev.bethge.shipir.host.dto.HostStackResponse;
+import dev.bethge.shipir.docker.dto.DeploymentSummaryDto;
+import dev.bethge.shipir.host.dto.HostDeploymentResponse;
 import dev.bethge.shipir.docker.dto.VolumeDto;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -35,24 +35,24 @@ class HostResourcesService {
     private final ImageService images;
     private final NetworkService networks;
     private final VolumeService volumes;
-    private final ManagedStackLookup managedStacks;
+    private final ManagedDeploymentLookup managedDeployments;
 
     HostResourcesService(DockerHostRepository hosts, HostEndpointResolver endpoints, ContainerService containers,
                          ImageService images, NetworkService networks, VolumeService volumes,
-                         ManagedStackLookup managedStacks) {
+                         ManagedDeploymentLookup managedDeployments) {
         this.hosts = hosts;
         this.endpoints = endpoints;
         this.containers = containers;
         this.images = images;
         this.networks = networks;
         this.volumes = volumes;
-        this.managedStacks = managedStacks;
+        this.managedDeployments = managedDeployments;
     }
 
-    List<HostStackResponse> stacks(UUID hostId) {
-        List<StackSummaryDto> found = call(hostId, containers::listStacks);
-        Map<String, UUID> managed = managedStacks.managedStackIds(hostId);
-        return found.stream().map(s -> HostStackResponse.of(s, managed.get(s.name()))).toList();
+    List<HostDeploymentResponse> deployments(UUID hostId) {
+        List<DeploymentSummaryDto> found = call(hostId, containers::listDeployments);
+        Map<String, UUID> managed = managedDeployments.managedDeploymentIds(hostId);
+        return found.stream().map(s -> HostDeploymentResponse.of(s, managed.get(s.name()))).toList();
     }
 
     List<ContainerDto> containers(UUID hostId) {

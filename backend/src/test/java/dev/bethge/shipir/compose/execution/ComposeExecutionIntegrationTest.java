@@ -1,6 +1,6 @@
 package dev.bethge.shipir.compose.execution;
 
-import dev.bethge.shipir.compose.StackProperties;
+import dev.bethge.shipir.compose.DeploymentProperties;
 import dev.bethge.shipir.compose.file.ComposeFileRepository;
 import dev.bethge.shipir.docker.DockerEndpoint;
 import org.junit.jupiter.api.Assumptions;
@@ -24,13 +24,13 @@ class ComposeExecutionIntegrationTest {
     Path tmp;
 
     @Test
-    void upAndDownOfTinyStack() throws IOException, InterruptedException {
+    void upAndDownOfTinyDeployment() throws IOException, InterruptedException {
         Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(), "No Docker daemon available");
         Process p = new ProcessBuilder("docker", "compose", "version").redirectErrorStream(true).start();
         p.getInputStream().readAllBytes();
         Assumptions.assumeTrue(p.waitFor() == 0, "docker compose CLI not available");
 
-        var files = new ComposeFileRepository(new StackProperties(tmp.resolve("stacks")));
+        var files = new ComposeFileRepository(new DeploymentProperties(tmp.resolve("deployments")));
         var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofMinutes(3)));
         UUID hostId = UUID.randomUUID();
         String name = "shipir-it-" + UUID.randomUUID().toString().substring(0, 8);
@@ -50,7 +50,7 @@ class ComposeExecutionIntegrationTest {
 
     @Test
     void failingCommandMapsExitCode() {
-        var files = new ComposeFileRepository(new StackProperties(tmp.resolve("stacks2")));
+        var files = new ComposeFileRepository(new DeploymentProperties(tmp.resolve("deployments2")));
         var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(30)));
         UUID hostId = UUID.randomUUID();
         files.write(hostId, "bad", "services:\n  a:\n    imagee: x\n", null);

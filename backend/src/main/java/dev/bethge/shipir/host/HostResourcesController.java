@@ -3,7 +3,7 @@ package dev.bethge.shipir.host;
 import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.ImageDto;
 import dev.bethge.shipir.docker.dto.NetworkDto;
-import dev.bethge.shipir.host.dto.HostStackResponse;
+import dev.bethge.shipir.host.dto.HostDeploymentResponse;
 import dev.bethge.shipir.docker.dto.VolumeDto;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,9 +24,9 @@ class HostResourcesController {
         this.service = service;
     }
 
-    @GetMapping("/stacks")
-    List<HostStackResponse> stacks(@PathVariable UUID id) {
-        return service.stacks(id);
+    @GetMapping("/deployments")
+    List<HostDeploymentResponse> deployments(@PathVariable UUID id) {
+        return service.deployments(id);
     }
 
     @GetMapping("/containers")

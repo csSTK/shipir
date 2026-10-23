@@ -38,8 +38,8 @@ class PathValidationUtilTest {
 
     @Test
     void acceptsValidNestedPaths() {
-        assertThat(PathValidationUtil.resolve(base, "stack/compose.yaml"))
-            .isEqualTo(base.toAbsolutePath().normalize().resolve("stack/compose.yaml"));
+        assertThat(PathValidationUtil.resolve(base, "deployment/compose.yaml"))
+            .isEqualTo(base.toAbsolutePath().normalize().resolve("deployment/compose.yaml"));
         assertThat(PathValidationUtil.resolve(base, "a/./b/c.env").toString()).endsWith("a/b/c.env");
     }
 
@@ -73,27 +73,27 @@ class PathValidationUtilTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"a", "web", "my-stack_1", "0abc", "a-b_c"})
-    void acceptsValidStackNames(String name) {
-        assertThat(PathValidationUtil.validateStackName(name)).isEqualTo(name);
+    @ValueSource(strings = {"a", "web", "my-deployment_1", "0abc", "a-b_c"})
+    void acceptsValidDeploymentNames(String name) {
+        assertThat(PathValidationUtil.validateDeploymentName(name)).isEqualTo(name);
     }
 
     @Test
-    void acceptsMaxLengthStackName() {
-        assertThat(PathValidationUtil.validateStackName("a".repeat(63))).hasSize(63);
+    void acceptsMaxLengthDeploymentName() {
+        assertThat(PathValidationUtil.validateDeploymentName("a".repeat(63))).hasSize(63);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"Web", "my.stack", "a/b", "a\\b", "-abc", "_abc", "a b", ".", "..", "a\0", "ä"})
+    @ValueSource(strings = {"Web", "my.deployment", "a/b", "a\\b", "-abc", "_abc", "a b", ".", "..", "a\0", "ä"})
     @NullAndEmptySource
-    void rejectsInvalidStackNames(String name) {
-        assertThatThrownBy(() -> PathValidationUtil.validateStackName(name))
+    void rejectsInvalidDeploymentNames(String name) {
+        assertThatThrownBy(() -> PathValidationUtil.validateDeploymentName(name))
             .isInstanceOf(PathValidationException.class);
     }
 
     @Test
-    void rejectsTooLongStackName() {
-        assertThatThrownBy(() -> PathValidationUtil.validateStackName("a".repeat(64)))
+    void rejectsTooLongDeploymentName() {
+        assertThatThrownBy(() -> PathValidationUtil.validateDeploymentName("a".repeat(64)))
             .isInstanceOf(PathValidationException.class);
     }
 }

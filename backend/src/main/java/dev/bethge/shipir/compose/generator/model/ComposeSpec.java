@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotEmpty;
 
 import java.util.List;
 
-/** Wizard input: the whole stack. Networks and volumes referenced by services must be declared here. */
+/** Wizard input: the whole deployment. Networks and volumes referenced by services must be declared here. */
 public record ComposeSpec(
         @NotEmpty List<ServiceSpec> services,
         List<NetworkSpec> networks,

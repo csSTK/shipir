@@ -1,4 +1,4 @@
 /**
- * Per-host and per-stack permissions.
+ * Per-host and per-deployment permissions.
  */
 package dev.bethge.shipir.permission;

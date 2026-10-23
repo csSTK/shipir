@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.UUID;
 
-/** Validates a stored stack with {@code docker compose config --quiet}. */
+/** Validates a stored deployment with {@code docker compose config --quiet}. */
 @Service
 public class ComposeValidationService {
 
@@ -19,13 +19,13 @@ public class ComposeValidationService {
         this.execution = execution;
     }
 
-    public ValidationResult validate(UUID hostId, String stackName, DockerEndpoint endpoint) {
-        return validate(hostId, stackName, endpoint, null);
+    public ValidationResult validate(UUID hostId, String deploymentName, DockerEndpoint endpoint) {
+        return validate(hostId, deploymentName, endpoint, null);
     }
 
-    /** Validates the compose file at {@code composeFile} inside the stack directory (Git checkout); null = default. */
-    public ValidationResult validate(UUID hostId, String stackName, DockerEndpoint endpoint, java.nio.file.Path composeFile) {
-        ComposeProcessResult result = execution.execute(hostId, stackName, ComposeCommand.CONFIG, endpoint, line -> { },
+    /** Validates the compose file at {@code composeFile} inside the deployment directory (Git checkout); null = default. */
+    public ValidationResult validate(UUID hostId, String deploymentName, DockerEndpoint endpoint, java.nio.file.Path composeFile) {
+        ComposeProcessResult result = execution.execute(hostId, deploymentName, ComposeCommand.CONFIG, endpoint, line -> { },
                 composeFile);
         if (result.success()) {
             return new ValidationResult(true, List.of());

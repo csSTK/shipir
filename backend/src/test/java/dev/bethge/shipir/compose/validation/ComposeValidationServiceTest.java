@@ -1,6 +1,6 @@
 package dev.bethge.shipir.compose.validation;
 
-import dev.bethge.shipir.compose.StackProperties;
+import dev.bethge.shipir.compose.DeploymentProperties;
 import dev.bethge.shipir.compose.execution.ComposeExecutionService;
 import dev.bethge.shipir.compose.execution.ComposeProperties;
 import dev.bethge.shipir.compose.file.ComposeFileRepository;
@@ -33,7 +33,7 @@ class ComposeValidationServiceTest {
         Process p = new ProcessBuilder("docker", "compose", "version").redirectErrorStream(true).start();
         p.getInputStream().readAllBytes();
         Assumptions.assumeTrue(p.waitFor() == 0, "docker compose CLI not available");
-        files = new ComposeFileRepository(new StackProperties(tmp.resolve("stacks")));
+        files = new ComposeFileRepository(new DeploymentProperties(tmp.resolve("deployments")));
         validation = new ComposeValidationService(
                 new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(30))));
     }

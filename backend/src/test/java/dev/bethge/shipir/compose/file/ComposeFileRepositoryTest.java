@@ -4,7 +4,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import dev.bethge.shipir.common.util.PathValidationException;
-import dev.bethge.shipir.compose.StackProperties;
+import dev.bethge.shipir.compose.DeploymentProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,7 +33,7 @@ class ComposeFileRepositoryTest {
 
     @BeforeEach
     void setUp() {
-        repo = new ComposeFileRepository(new StackProperties(base));
+        repo = new ComposeFileRepository(new DeploymentProperties(base));
     }
 
     @Test
@@ -46,7 +46,7 @@ class ComposeFileRepositoryTest {
     }
 
     @Test
-    void readsEmptyForUnknownStack() {
+    void readsEmptyForUnknownDeployment() {
         assertThat(repo.readCompose(HOST, "nope")).isEmpty();
         assertThat(repo.readEnv(HOST, "nope")).isEmpty();
     }
@@ -63,7 +63,7 @@ class ComposeFileRepositoryTest {
     }
 
     @Test
-    void deleteRemovesStackDirectoryIncludingRepoCheckout() throws IOException {
+    void deleteRemovesDeploymentDirectoryIncludingRepoCheckout() throws IOException {
         repo.write(HOST, "web", "x", "A=1");
         Path checkout = repo.repoDir(HOST, "web");
         Files.createDirectories(checkout.resolve(".git"));
@@ -71,7 +71,7 @@ class ComposeFileRepositoryTest {
 
         repo.delete(HOST, "web");
 
-        assertThat(repo.stackDir(HOST, "web")).doesNotExist();
+        assertThat(repo.deploymentDir(HOST, "web")).doesNotExist();
         assertThat(repo.readCompose(HOST, "web")).isEmpty();
         repo.delete(HOST, "web");
     }
@@ -80,7 +80,7 @@ class ComposeFileRepositoryTest {
     void deleteDoesNotFollowSymlinksIntoOutsideDirectories(@TempDir Path outside) throws IOException {
         Files.writeString(outside.resolve("keep.txt"), "keep");
         repo.write(HOST, "web", "x", null);
-        Files.createSymbolicLink(repo.stackDir(HOST, "web").resolve("link"), outside);
+        Files.createSymbolicLink(repo.deploymentDir(HOST, "web").resolve("link"), outside);
 
         repo.delete(HOST, "web");
 
@@ -90,7 +90,7 @@ class ComposeFileRepositoryTest {
     @Test
     void writeLeavesNoTempFilesBehind() throws IOException {
         repo.write(HOST, "web", "v1", "A=1");
-        Path dir = repo.stackDir(HOST, "web");
+        Path dir = repo.deploymentDir(HOST, "web");
         try (Stream<Path> files = Files.list(dir)) {
             assertThat(files.map(p -> p.getFileName().toString())).containsExactlyInAnyOrder("compose.yaml", ".env");
         }
@@ -99,7 +99,7 @@ class ComposeFileRepositoryTest {
     @Test
     void failedWriteKeepsPreviousContentIntact() throws IOException {
         repo.write(HOST, "web", "v1", null);
-        Path compose = repo.stackDir(HOST, "web").resolve("compose.yaml");
+        Path compose = repo.deploymentDir(HOST, "web").resolve("compose.yaml");
         // a directory named like the target makes the final move fail after the temp file was written
         Files.delete(compose);
         Files.createDirectory(compose);
@@ -107,7 +107,7 @@ class ComposeFileRepositoryTest {
 
         assertThatThrownBy(() -> repo.write(HOST, "web", "v2", null)).isInstanceOf(java.io.UncheckedIOException.class);
 
-        try (Stream<Path> files = Files.list(repo.stackDir(HOST, "web"))) {
+        try (Stream<Path> files = Files.list(repo.deploymentDir(HOST, "web"))) {
             assertThat(files.map(p -> p.getFileName().toString())).containsExactly("compose.yaml");
         }
     }
@@ -115,7 +115,7 @@ class ComposeFileRepositoryTest {
     @Test
     void createsDirectoriesWith0700AndFilesWith0600() throws IOException {
         repo.write(HOST, "web", "x", "SECRET=1");
-        Path dir = repo.stackDir(HOST, "web");
+        Path dir = repo.deploymentDir(HOST, "web");
 
         assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(dir))).isEqualTo("rwx------");
         assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(dir.getParent()))).isEqualTo("rwx------");
@@ -125,15 +125,15 @@ class ComposeFileRepositoryTest {
 
     @Test
     void createsMissingBaseDirectory(@TempDir Path parent) {
-        Path missing = parent.resolve("nested/stacks");
-        new ComposeFileRepository(new StackProperties(missing)).write(HOST, "web", "x", null);
+        Path missing = parent.resolve("nested/deployments");
+        new ComposeFileRepository(new DeploymentProperties(missing)).write(HOST, "web", "x", null);
 
         assertThat(missing.resolve(HOST.toString()).resolve("web").resolve("compose.yaml")).exists();
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"../evil", "..", "a/b", "/etc", "..%2fevil", "a\\b", "UPPER", "", " ", ".hidden", "web\0"})
-    void rejectsMaliciousStackNames(String name) {
+    void rejectsMaliciousDeploymentNames(String name) {
         assertThatThrownBy(() -> repo.write(HOST, name, "x", "y")).isInstanceOf(PathValidationException.class);
         assertThatThrownBy(() -> repo.readCompose(HOST, name)).isInstanceOf(PathValidationException.class);
         assertThatThrownBy(() -> repo.readEnv(HOST, name)).isInstanceOf(PathValidationException.class);
@@ -142,7 +142,7 @@ class ComposeFileRepositoryTest {
     }
 
     @Test
-    void rejectsStackDirectoryThatIsASymlinkOutsideBase(@TempDir Path outside) throws IOException {
+    void rejectsDeploymentDirectoryThatIsASymlinkOutsideBase(@TempDir Path outside) throws IOException {
         Files.createDirectories(base.resolve(HOST.toString()));
         Files.createSymbolicLink(base.resolve(HOST.toString()).resolve("web"), outside);
 
@@ -151,8 +151,8 @@ class ComposeFileRepositoryTest {
     }
 
     @Test
-    void repoDirIsSubdirectoryOfStackDir() {
-        assertThat(repo.repoDir(HOST, "web")).isEqualTo(repo.stackDir(HOST, "web").resolve("repo"));
+    void repoDirIsSubdirectoryOfDeploymentDir() {
+        assertThat(repo.repoDir(HOST, "web")).isEqualTo(repo.deploymentDir(HOST, "web").resolve("repo"));
     }
 
     @Test

@@ -1,7 +1,7 @@
 package dev.bethge.shipir.compose.file;
 
 import dev.bethge.shipir.common.util.PathValidationUtil;
-import dev.bethge.shipir.compose.StackProperties;
+import dev.bethge.shipir.compose.DeploymentProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Repository;
 
@@ -23,11 +23,11 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 /**
- * Stores {@code <base>/<hostId>/<stackName>/{compose.yaml,.env}} on disk. Every path is resolved through
+ * Stores {@code <base>/<hostId>/<deploymentName>/{compose.yaml,.env}} on disk. Every path is resolved through
  * {@link PathValidationUtil}. Directories are 0700, files 0600. File contents (especially {@code .env}) are never logged.
  */
 @Repository
-@EnableConfigurationProperties(StackProperties.class)
+@EnableConfigurationProperties(DeploymentProperties.class)
 public class ComposeFileRepository {
 
     public static final String COMPOSE_FILE = "compose.yaml";
@@ -41,13 +41,13 @@ public class ComposeFileRepository {
 
     private final Path baseDir;
 
-    public ComposeFileRepository(StackProperties properties) {
+    public ComposeFileRepository(DeploymentProperties properties) {
         this.baseDir = properties.baseDir().toAbsolutePath().normalize();
     }
 
     /** Writes compose.yaml and, if {@code envContent} is non-null, .env; a null {@code envContent} removes an existing .env. */
-    public void write(UUID hostId, String stackName, String composeContent, String envContent) {
-        Path dir = ensureStackDir(hostId, stackName);
+    public void write(UUID hostId, String deploymentName, String composeContent, String envContent) {
+        Path dir = ensureDeploymentDir(hostId, deploymentName);
         writeAtomically(dir.resolve(COMPOSE_FILE), composeContent);
         if (envContent != null) {
             writeAtomically(dir.resolve(ENV_FILE), envContent);
@@ -56,52 +56,52 @@ public class ComposeFileRepository {
         }
     }
 
-    public Optional<String> readCompose(UUID hostId, String stackName) {
-        return read(stackDir(hostId, stackName).resolve(COMPOSE_FILE));
+    public Optional<String> readCompose(UUID hostId, String deploymentName) {
+        return read(deploymentDir(hostId, deploymentName).resolve(COMPOSE_FILE));
     }
 
-    public Optional<String> readEnv(UUID hostId, String stackName) {
-        return read(stackDir(hostId, stackName).resolve(ENV_FILE));
+    public Optional<String> readEnv(UUID hostId, String deploymentName) {
+        return read(deploymentDir(hostId, deploymentName).resolve(ENV_FILE));
     }
 
-    /** Removes the whole stack directory including a Git checkout in {@code repo/}. Symlinks are removed, never followed. */
-    public void delete(UUID hostId, String stackName) {
-        Path dir = stackDir(hostId, stackName);
+    /** Removes the whole deployment directory including a Git checkout in {@code repo/}. Symlinks are removed, never followed. */
+    public void delete(UUID hostId, String deploymentName) {
+        Path dir = deploymentDir(hostId, deploymentName);
         if (!Files.exists(dir, LinkOption.NOFOLLOW_LINKS)) {
             return;
         }
         try (Stream<Path> walk = Files.walk(dir)) {
             walk.sorted(Comparator.reverseOrder()).forEach(ComposeFileRepository::deleteOrThrow);
         } catch (IOException e) {
-            throw new UncheckedIOException("Could not delete stack directory", e);
+            throw new UncheckedIOException("Could not delete deployment directory", e);
         }
     }
 
-    /** Validated stack directory (may not exist yet); working directory for compose execution. */
-    public Path stackDir(UUID hostId, String stackName) {
-        return PathValidationUtil.resolve(existingBaseDir(), segment(hostId, stackName));
+    /** Validated deployment directory (may not exist yet); working directory for compose execution. */
+    public Path deploymentDir(UUID hostId, String deploymentName) {
+        return PathValidationUtil.resolve(existingBaseDir(), segment(hostId, deploymentName));
     }
 
-    /** Validated Git checkout location {@code <stackDir>/repo} (may not exist yet). */
-    public Path repoDir(UUID hostId, String stackName) {
-        return PathValidationUtil.resolve(existingBaseDir(), segment(hostId, stackName) + "/" + REPO_DIR);
+    /** Validated Git checkout location {@code <deploymentDir>/repo} (may not exist yet). */
+    public Path repoDir(UUID hostId, String deploymentName) {
+        return PathValidationUtil.resolve(existingBaseDir(), segment(hostId, deploymentName) + "/" + REPO_DIR);
     }
 
     /**
-     * Validated location of a Git stack's compose file {@code <stackDir>/repo/<composePath>} (symlinks leaving the
+     * Validated location of a Git deployment's compose file {@code <deploymentDir>/repo/<composePath>} (symlinks leaving the
      * checkout are rejected); working directory source for relative paths in the compose file.
      *
      * @throws dev.bethge.shipir.common.util.PathValidationException for traversal, absolute or escaping paths
      */
-    public Path repoComposeFile(UUID hostId, String stackName, String composePath) {
-        return PathValidationUtil.resolve(repoDir(hostId, stackName), composePath);
+    public Path repoComposeFile(UUID hostId, String deploymentName, String composePath) {
+        return PathValidationUtil.resolve(repoDir(hostId, deploymentName), composePath);
     }
 
-    private static String segment(UUID hostId, String stackName) {
+    private static String segment(UUID hostId, String deploymentName) {
         if (hostId == null) {
             throw new IllegalArgumentException("hostId is required");
         }
-        return hostId + "/" + PathValidationUtil.validateStackName(stackName);
+        return hostId + "/" + PathValidationUtil.validateDeploymentName(deploymentName);
     }
 
     private Path existingBaseDir() {
@@ -109,12 +109,12 @@ public class ComposeFileRepository {
             Files.createDirectories(baseDir, DIR_PERMISSIONS);
             return baseDir;
         } catch (IOException e) {
-            throw new UncheckedIOException("Could not create stacks base directory", e);
+            throw new UncheckedIOException("Could not create deployments base directory", e);
         }
     }
 
-    private Path ensureStackDir(UUID hostId, String stackName) {
-        Path dir = stackDir(hostId, stackName);
+    private Path ensureDeploymentDir(UUID hostId, String deploymentName) {
+        Path dir = deploymentDir(hostId, deploymentName);
         try {
             Files.createDirectories(dir.getParent(), DIR_PERMISSIONS);
             if (!Files.isDirectory(dir)) {
@@ -122,7 +122,7 @@ public class ComposeFileRepository {
             }
             return dir;
         } catch (IOException e) {
-            throw new UncheckedIOException("Could not create stack directory", e);
+            throw new UncheckedIOException("Could not create deployment directory", e);
         }
     }
 

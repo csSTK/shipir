@@ -9,7 +9,7 @@ interface GitCredentialRepository extends JpaRepository<GitCredential, UUID> {
 
     boolean existsByName(String name);
 
-    /** Native on purpose: git/ must not depend on the compose/ stack entity. */
-    @Query(value = "SELECT count(*) FROM stacks WHERE git_credential_id = :id", nativeQuery = true)
-    long countStacksUsing(UUID id);
+    /** Native on purpose: git/ must not depend on the compose/ deployment entity. */
+    @Query(value = "SELECT count(*) FROM deployments WHERE git_credential_id = :id", nativeQuery = true)
+    long countDeploymentsUsing(UUID id);
 }

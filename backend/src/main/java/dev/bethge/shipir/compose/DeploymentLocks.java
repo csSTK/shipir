@@ -7,21 +7,21 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** At most one deploy, stop, rollback or delete per stack at a time (in-memory, single instance). */
+/** At most one deploy, stop, rollback or delete per deployment at a time (in-memory, single instance). */
 @Component
 class DeploymentLocks {
 
     private final Set<UUID> held = ConcurrentHashMap.newKeySet();
 
-    /** @throws StackException 409 DEPLOYMENT_IN_PROGRESS if the stack is busy */
-    void acquire(UUID stackId) {
-        if (!held.add(stackId)) {
-            throw new StackException(HttpStatus.CONFLICT, "DEPLOYMENT_IN_PROGRESS",
-                    "Another deployment of this stack is still running");
+    /** @throws DeploymentException 409 DEPLOYMENT_IN_PROGRESS if the deployment is busy */
+    void acquire(UUID deploymentId) {
+        if (!held.add(deploymentId)) {
+            throw new DeploymentException(HttpStatus.CONFLICT, "DEPLOYMENT_IN_PROGRESS",
+                    "Another run of this deployment is still in progress");
         }
     }
 
-    void release(UUID stackId) {
-        held.remove(stackId);
+    void release(UUID deploymentId) {
+        held.remove(deploymentId);
     }
 }
