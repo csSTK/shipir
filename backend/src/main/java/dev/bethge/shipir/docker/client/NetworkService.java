@@ -10,4 +10,10 @@ public interface NetworkService {
 
     /** All networks of the host with usage derived from the container list. Throws {@code DockerConnectionException}. */
     List<NetworkDto> list(UUID hostId, DockerEndpoint endpoint);
+
+    /**
+     * Removes a network. Throws {@code DockerConnectionException} with NOT_FOUND, IN_USE (containers attached)
+     * or BUILTIN_NETWORK (bridge, host, none; refused without removing).
+     */
+    void removeNetwork(UUID hostId, DockerEndpoint endpoint, String id);
 }

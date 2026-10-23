@@ -58,4 +58,12 @@ public class VolumeServiceImpl implements VolumeService {
             return null;
         }
     }
+
+    @Override
+    public void removeVolume(UUID hostId, DockerEndpoint endpoint, String name) {
+        calls.call(hostId, endpoint, client -> {
+            client.removeVolumeCmd(name).exec();
+            return null;
+        });
+    }
 }

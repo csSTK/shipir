@@ -100,4 +100,12 @@ public class ContainerServiceImpl implements ContainerService {
     private static String stripSlash(String name) {
         return name != null && name.startsWith("/") ? name.substring(1) : name;
     }
+
+    @Override
+    public void removeContainer(UUID hostId, DockerEndpoint endpoint, String id, boolean force) {
+        calls.call(hostId, endpoint, client -> {
+            client.removeContainerCmd(id).withForce(force).withRemoveVolumes(false).exec();
+            return null;
+        });
+    }
 }

@@ -14,4 +14,10 @@ public interface ContainerService {
 
     /** Compose projects of the host, grouped by the {@code com.docker.compose.project} label, sorted by name. */
     List<DeploymentSummaryDto> listDeployments(UUID hostId, DockerEndpoint endpoint);
+
+    /**
+     * Removes a container; a running one only with {@code force}. Anonymous volumes are kept.
+     * Throws {@code DockerConnectionException} with NOT_FOUND or IN_USE (running, no force).
+     */
+    void removeContainer(UUID hostId, DockerEndpoint endpoint, String id, boolean force);
 }

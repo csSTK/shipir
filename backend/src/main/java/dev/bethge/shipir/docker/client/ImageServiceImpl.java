@@ -48,4 +48,12 @@ public class ImageServiceImpl implements ImageService {
         if (repoTags == null) return List.of();
         return Arrays.stream(repoTags).filter(t -> t != null && !NONE_TAG.equals(t)).toList();
     }
+
+    @Override
+    public void removeImage(UUID hostId, DockerEndpoint endpoint, String id) {
+        calls.call(hostId, endpoint, client -> {
+            client.removeImageCmd(id).withForce(false).exec();
+            return null;
+        });
+    }
 }
