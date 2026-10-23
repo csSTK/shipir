@@ -12,11 +12,13 @@ import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.ImageDto;
 import dev.bethge.shipir.docker.dto.NetworkDto;
 import dev.bethge.shipir.docker.dto.StackSummaryDto;
+import dev.bethge.shipir.host.dto.HostStackResponse;
 import dev.bethge.shipir.docker.dto.VolumeDto;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.BiFunction;
 
@@ -33,19 +35,24 @@ class HostResourcesService {
     private final ImageService images;
     private final NetworkService networks;
     private final VolumeService volumes;
+    private final ManagedStackLookup managedStacks;
 
     HostResourcesService(DockerHostRepository hosts, HostEndpointResolver endpoints, ContainerService containers,
-                         ImageService images, NetworkService networks, VolumeService volumes) {
+                         ImageService images, NetworkService networks, VolumeService volumes,
+                         ManagedStackLookup managedStacks) {
         this.hosts = hosts;
         this.endpoints = endpoints;
         this.containers = containers;
         this.images = images;
         this.networks = networks;
         this.volumes = volumes;
+        this.managedStacks = managedStacks;
     }
 
-    List<StackSummaryDto> stacks(UUID hostId) {
-        return call(hostId, containers::listStacks);
+    List<HostStackResponse> stacks(UUID hostId) {
+        List<StackSummaryDto> found = call(hostId, containers::listStacks);
+        Map<String, UUID> managed = managedStacks.managedStackIds(hostId);
+        return found.stream().map(s -> HostStackResponse.of(s, managed.get(s.name()))).toList();
     }
 
     List<ContainerDto> containers(UUID hostId) {
