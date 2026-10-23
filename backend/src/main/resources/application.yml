@@ -5,6 +5,8 @@ shipir:
     read-timeout: 10s
   host:
     overview-timeout: 5s
+  stacks:
+    base-dir: ${SHIPIR_STACKS_BASE_DIR:./data/stacks}
   initial-admin:
     username: ${SHIPIR_INITIAL_ADMIN_USERNAME:admin}
     password: ${SHIPIR_INITIAL_ADMIN_PASSWORD:}

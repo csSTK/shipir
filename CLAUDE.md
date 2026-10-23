@@ -97,6 +97,8 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `docker/dto/{ImageDto,NetworkDto,VolumeDto}.java`: image (id, repoTags, size, created, inUse), network (subnet, internal, containerCount), volume (mountpoint, created, inUse)
 - `docker/dto/{ConnectionTestResult,DockerSystemInfoDto}.java`: ping result, host overview counts incl. healthy/unhealthy
 - `backend/src/test/java/dev/bethge/shipir/docker/**`: endpoint, manager (fake factory), properties defaults, no-docker-java-in-API check, service unit (missing/hanging socket), Docker integration tests, dind TLS integration test, PEM parsing (`tls/PemSslConfigTest`, `tls/TestPki` generates certs)
+- `compose/StackProperties.java`: `shipir.stacks.base-dir` (env `SHIPIR_STACKS_BASE_DIR`, default `./data/stacks`)
+- `compose/file/ComposeFileRepository.java`: `<base>/<hostId>/<stackName>/{compose.yaml,.env}` write (temp + atomic move)/read/delete, dirs 0700, files 0600, `stackDir`/`repoDir` (Git checkout `repo/`), all paths via `PathValidationUtil`, contents never logged; test `ComposeFileRepositoryTest`
 - `backend/pom.xml`: Maven build, Java 25, Spring Boot 4.1.1 parent, docker-java 3.7.1 (core + httpclient5), starters web/websocket/security/validation/data-jpa/flyway/test, spring-security-test, flyway-database-postgresql, postgresql driver, Testcontainers (test)
 - `backend/mvnw`, `backend/.mvn/wrapper/`: Maven wrapper
 - `backend/Dockerfile`: multi-stage image: Temurin 25 build (tests skipped), JRE alpine runtime + docker-cli/docker-cli-compose, user uid 10001, `/data/stacks` (`SHIPIR_STACKS_BASE_DIR`), env-only config
