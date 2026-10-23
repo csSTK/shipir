@@ -51,6 +51,7 @@ describe('AppShell', () => {
     const group = screen.getByRole('group', { name: 'Settings' })
     expect(within(group).getByRole('link', { name: 'Retention' })).toBeInTheDocument()
     expect(within(group).getByRole('link', { name: 'Audit log' })).toBeInTheDocument()
+    expect(within(group).getByRole('link', { name: 'Git credentials' })).toBeInTheDocument()
     cleanup()
     for (const role of ['OPERATOR', 'VIEWER'] as const) {
       renderShell(role)

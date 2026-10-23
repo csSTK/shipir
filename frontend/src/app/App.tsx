@@ -1,7 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { EnvironmentDashboard, EnvironmentsOverview } from '../features/hosts/index.ts'
 import { AccountPage } from '../features/account/index.ts'
-import { AuditLogPage, RetentionSettingsPage, WebhooksSettingsPage } from '../features/settings/index.ts'
+import { AuditLogPage, GitCredentialsSettingsPage, RetentionSettingsPage, WebhooksSettingsPage } from '../features/settings/index.ts'
 import { ContainersPage } from '../features/containers/index.ts'
 import { ImagesPage } from '../features/images/index.ts'
 import { NetworksPage } from '../features/networks/index.ts'
@@ -41,6 +41,7 @@ function AuthGate() {
         <Route path="/account" element={<AccountPage user={user} />} />
         <Route path="/settings/notifications" element={isAdmin ? <WebhooksSettingsPage /> : <NotAllowedPage />} />
         <Route path="/settings/retention" element={isAdmin ? <RetentionSettingsPage /> : <NotAllowedPage />} />
+        <Route path="/settings/git" element={isAdmin ? <GitCredentialsSettingsPage /> : <NotAllowedPage />} />
         <Route path="/settings/audit-log" element={isAdmin ? <AuditLogPage /> : <NotAllowedPage />} />
         <Route path="/settings/*" element={<NotAllowedPage />} />
         <Route path="*" element={<EnvironmentsOverview role={user.role} />} />

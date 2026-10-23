@@ -156,3 +156,66 @@ export function useAuditLog(query: AuditLogQuery) {
     placeholderData: (previous) => previous,
   })
 }
+
+/** The token is never returned by the API, only a hint. */
+export interface GitCredential {
+  id: string
+  name: string
+  username: string
+  tokenHint: string
+  createdAt: string
+  updatedAt: string
+}
+
+/** `token` is required on create and omitted on update to keep the stored one. */
+export interface GitCredentialInput {
+  name: string
+  username: string
+  token?: string
+}
+
+export type GitConnectionStatus = 'OK' | 'AUTH_FAILED' | 'NOT_FOUND' | 'UNREACHABLE'
+
+export const GIT_CREDENTIALS_KEY = ['git-credentials'] as const
+const GIT_BASE = '/git/credentials'
+
+export function useGitCredentials() {
+  return useQuery({ queryKey: GIT_CREDENTIALS_KEY, queryFn: () => apiFetch<GitCredential[]>(GIT_BASE) })
+}
+
+function useInvalidateGit() {
+  const queryClient = useQueryClient()
+  return () => queryClient.invalidateQueries({ queryKey: GIT_CREDENTIALS_KEY })
+}
+
+export function useCreateGitCredential() {
+  const invalidate = useInvalidateGit()
+  return useMutation({
+    mutationFn: (input: GitCredentialInput) => apiFetch<GitCredential>(GIT_BASE, { method: 'POST', body: input }),
+    onSuccess: () => void invalidate(),
+  })
+}
+
+export function useUpdateGitCredential() {
+  const invalidate = useInvalidateGit()
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: GitCredentialInput }) =>
+      apiFetch<GitCredential>(`${GIT_BASE}/${id}`, { method: 'PUT', body: input }),
+    onSuccess: () => void invalidate(),
+  })
+}
+
+export function useDeleteGitCredential() {
+  const invalidate = useInvalidateGit()
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<void>(`${GIT_BASE}/${id}`, { method: 'DELETE' }),
+    onSuccess: () => void invalidate(),
+  })
+}
+
+export function useTestGitCredential() {
+  return useMutation({
+    mutationFn: ({ id, repoUrl }: { id: string; repoUrl: string }) =>
+      apiFetch<{ status: GitConnectionStatus }>(`${GIT_BASE}/${id}/test`, { method: 'POST', body: { repoUrl } }),
+  })
+}
