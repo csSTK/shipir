@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V17 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V18 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To17Successfully() {
+    void flywayAppliedVersions1To18Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18");
     }
 
     @Test
@@ -185,7 +185,7 @@ class SchemaMigrationTest {
                 WHERE table_schema = 'public' AND data_type = 'timestamp with time zone'
                   AND table_name IN ('users','docker_hosts','deployments','deployment_versions')
                 """, Integer.class);
-        assertThat(count).isEqualTo(8); // 2 users + 1 hosts + 3 deployments + 2 versions
+        assertThat(count).isEqualTo(9); // 3 users + 1 hosts + 3 deployments + 2 versions
     }
 
     @Test
@@ -196,6 +196,24 @@ class SchemaMigrationTest {
                 """);
         assertThat(column.get("data_type")).isEqualTo("timestamp with time zone");
         assertThat(column.get("is_nullable")).isEqualTo("YES");
+    }
+
+    @Test
+    void usersDisabledAtIsNullableTimestamptz() {
+        Map<String, Object> column = jdbc.queryForMap("""
+                SELECT data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'disabled_at'
+                """);
+        assertThat(column.get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(column.get("is_nullable")).isEqualTo("YES");
+    }
+
+    @Test
+    void userInsertedWithoutDisabledAtIsEnabled() {
+        UUID user = insertUser("alice");
+        Timestamp disabledAt = jdbc.queryForObject(
+                "SELECT disabled_at FROM users WHERE id = ?", Timestamp.class, user);
+        assertThat(disabledAt).isNull();
     }
 
     @Test

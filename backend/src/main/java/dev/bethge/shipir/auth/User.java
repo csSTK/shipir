@@ -37,6 +37,10 @@ public class User {
     @Column(name = "password_changed_at")
     private Instant passwordChangedAt;
 
+    /** NULL while the user is enabled. Set when an ADMIN disables the account. */
+    @Column(name = "disabled_at")
+    private Instant disabledAt;
+
     protected User() {
     }
 
@@ -49,6 +53,10 @@ public class User {
 
     public boolean isSetupRequired() {
         return passwordChangedAt == null;
+    }
+
+    public boolean isDisabled() {
+        return disabledAt != null;
     }
 
     /** Stores the new hash and stamps {@code passwordChangedAt}, which ends the first-start setup. */
@@ -79,5 +87,9 @@ public class User {
 
     public Instant getPasswordChangedAt() {
         return passwordChangedAt;
+    }
+
+    public Instant getDisabledAt() {
+        return disabledAt;
     }
 }
