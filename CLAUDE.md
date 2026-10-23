@@ -44,7 +44,7 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `backend/src/test/java/dev/bethge/shipir/host/`: `HostApiTestBase` (login helpers, local socket), `HostApiTest`, `HostOverview{Api,Resilience}Test` (real LOCAL; stubbed port: failing/hanging/undecryptable hosts), `HostApiWithoutEncryptionKeyTest`, `HostEncryptionStartupCheckTest`
 - `auth/{User,Role,UserRepository}.java`: user entity (`isSetupRequired()`), ADMIN/OPERATOR/VIEWER enum, repository
 - `auth/InitialAdminSeeder.java`, `auth/InitialAdminProperties.java`: seeds first admin on empty DB from `shipir.initial-admin.*` (fails startup without password)
-- `auth/AuthController.java`: `/api/auth/{login,logout,me,password}` (password: 204, rotates session id + CSRF, local handlers for 400 INVALID_CURRENT_PASSWORD / PASSWORD_POLICY); login rotates session id + CSRF token, same 401 body for any failure
+- `auth/AuthController.java`: `/api/auth/{login,logout,me,password,password-reset/{request,confirm}}` (reset: request always 202, confirm 204 / 400 INVALID_RESET_CODE or PASSWORD_POLICY, no login; password: 204, rotates session id + CSRF, local handlers for 400 INVALID_CURRENT_PASSWORD / PASSWORD_POLICY); login rotates session id + CSRF token, same 401 body for any failure
 - `auth/PasswordPolicy.java`: 15-128 chars (String.length), upper/lower/digit/symbol, not username (case-insens.), not current; returns all `Violation` codes
 - `auth/UserService.java`: `changePassword` (current check, policy, new hash + `passwordChangedAt`), package-private exceptions
 - `auth/UserSetupStatus.java`: implements `SetupStatus`: step PASSWORD (password unchanged) / ENVIRONMENT (ADMIN, no host via `EnvironmentPresence`) / none
@@ -52,8 +52,8 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `auth/{PasswordResetCodeSender,NoOpPasswordResetCodeSender,PasswordResetProperties}.java`: delivery port (default drops code), `shipir.password-reset.{code-ttl=5m,max-attempts=5}`
 - `auth/{PasswordResetService,InvalidResetCodeException}.java`: `requestReset` (unknown user no-op), `confirmReset` (constant-time compare, attempt counter, policy, single use; one uniform exception)
 - `auth/DatabaseUserDetailsService.java`: `UserDetailsService` backed by `UserRepository` (`ROLE_<role>`)
-- `auth/dto/{LoginRequest,PasswordChangeRequest,CurrentUserResponse,PasswordPolicyErrorResponse}.java`: request bodies (toString hides passwords), `{username, role, setupRequired, setupStep}`, `{code, message, violations}`
-- `common/config/SecurityConfig.java`: session-based filter chain: cookie CSRF (`XSRF-TOKEN` on every response), JSON 401/403, `/api/**` authenticated except login/logout, `/api/hosts` writes ADMIN-only, `AuthenticationManager`, wires `SetupGateFilter`
+- `auth/dto/{LoginRequest,PasswordResetRequest,PasswordResetConfirmRequest,PasswordChangeRequest,CurrentUserResponse,PasswordPolicyErrorResponse}.java`: request bodies (toString hides passwords), `{username, role, setupRequired, setupStep}`, `{code, message, violations}`
+- `common/config/SecurityConfig.java`: session-based filter chain: cookie CSRF (`XSRF-TOKEN` on every response), JSON 401/403, `/api/**` authenticated except login/logout/password-reset request+confirm, `/api/hosts` writes ADMIN-only, `AuthenticationManager`, wires `SetupGateFilter`
 - `common/security/{SetupGateFilter,SetupStatus,SetupStep,EnvironmentPresence}.java`: gate: users with a pending step get 403 SETUP_REQUIRED on `/api/**` except GET me, POST logout/password (+ POST /api/hosts, /api/hosts/connection-test during ENVIRONMENT); ports implemented by auth (`SetupStatus`) and host (`EnvironmentPresence`)
 - `host/HostEnvironmentPresence.java`: `EnvironmentPresence` adapter (`hasAnyHost` = repository count > 0)
 - `common/exception/{ErrorResponse,GlobalExceptionHandler}.java`: `{code, message, details}` record; handler for validation/malformed body (400)
@@ -65,6 +65,7 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `backend/src/test/resources/application.properties`: test initial-admin password
 - `backend/src/test/java/dev/bethge/shipir/auth/AuthEndpointsTest.java`: MockMvc + Testcontainers: login/me/logout, CSRF, session fixation, identical 401, JSON 401
 - `backend/src/test/java/dev/bethge/shipir/auth/PasswordPolicyTest.java`, `PasswordChangeTest.java`, `SetupEnvironmentStepTest.java`: policy rules (unit); setup gate + password change flow, PASSWORD/ENVIRONMENT steps (MockMvc, own DB via `@DirtiesContext`)
+- `backend/src/test/java/dev/bethge/shipir/auth/PasswordResetEndpointsTest.java`: reset endpoints (MockMvc, capturing sender, CSRF, errors, toString)
 - `backend/src/test/java/dev/bethge/shipir/auth/InitialAdminSeeder{,Startup}Test.java`: seeding, no-op rerun, missing password, no password in logs
 - `backend/src/test/java/dev/bethge/shipir/auth/PasswordResetServiceTest.java`: reset flow (Testcontainers, capturing sender, mutable clock, hash-only row, log capture)
 - `docker/{DockerEndpoint,DockerErrorCode,DockerConnectionException,DockerProperties}.java`: own types: `Local|Tcp(TlsMaterial, toString hides PEMs)`, UNREACHABLE/TIMEOUT/TLS_ERROR/PERMISSION_DENIED/INVALID_TLS_MATERIAL, `shipir.docker.{local-socket,connect-timeout,read-timeout}`

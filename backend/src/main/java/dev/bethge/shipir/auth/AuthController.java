@@ -4,6 +4,8 @@ import dev.bethge.shipir.auth.dto.CurrentUserResponse;
 import dev.bethge.shipir.auth.dto.LoginRequest;
 import dev.bethge.shipir.auth.dto.PasswordChangeRequest;
 import dev.bethge.shipir.auth.dto.PasswordPolicyErrorResponse;
+import dev.bethge.shipir.auth.dto.PasswordResetConfirmRequest;
+import dev.bethge.shipir.auth.dto.PasswordResetRequest;
 import dev.bethge.shipir.common.exception.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -42,6 +44,7 @@ class AuthController {
     private final UserRepository users;
     private final UserService userService;
     private final UserSetupStatus setupStatus;
+    private final PasswordResetService passwordResetService;
 
     AuthController(AuthenticationManager authenticationManager,
                    SecurityContextRepository securityContextRepository,
@@ -49,7 +52,8 @@ class AuthController {
                    CsrfTokenRepository csrfTokenRepository,
                    UserRepository users,
                    UserService userService,
-                   UserSetupStatus setupStatus) {
+                   UserSetupStatus setupStatus,
+                   PasswordResetService passwordResetService) {
         this.authenticationManager = authenticationManager;
         this.securityContextRepository = securityContextRepository;
         this.sessionAuthenticationStrategy = sessionAuthenticationStrategy;
@@ -57,6 +61,7 @@ class AuthController {
         this.users = users;
         this.userService = userService;
         this.setupStatus = setupStatus;
+        this.passwordResetService = passwordResetService;
     }
 
     @PostMapping("/login")
@@ -95,6 +100,26 @@ class AuthController {
         // Privilege change: rotate the session id and CSRF token; the security context stays in the session.
         sessionAuthenticationStrategy.onAuthentication(authentication, request, response);
         return ResponseEntity.noContent().build();
+    }
+
+    /** Always 202, whether or not the user exists, so the response never reveals accounts. */
+    @PostMapping("/password-reset/request")
+    ResponseEntity<Void> requestPasswordReset(@Valid @RequestBody PasswordResetRequest body) {
+        passwordResetService.requestReset(body.username());
+        return ResponseEntity.accepted().build();
+    }
+
+    /** Does not log the user in. */
+    @PostMapping("/password-reset/confirm")
+    ResponseEntity<Void> confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest body) {
+        passwordResetService.confirmReset(body.username(), body.code(), body.newPassword());
+        return ResponseEntity.noContent().build();
+    }
+
+    @ExceptionHandler(InvalidResetCodeException.class)
+    ResponseEntity<ErrorResponse> invalidResetCode() {
+        return ResponseEntity.badRequest()
+                .body(new ErrorResponse("INVALID_RESET_CODE", "The reset code is invalid or has expired"));
     }
 
     @ExceptionHandler(UserService.InvalidCurrentPasswordException.class)

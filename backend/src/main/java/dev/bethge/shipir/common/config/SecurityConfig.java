@@ -72,7 +72,8 @@ class SecurityConfig {
                         .authenticationEntryPoint(entryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/logout",
+                                "/api/auth/password-reset/request", "/api/auth/password-reset/confirm").permitAll()
                         // environments: every role reads, only ADMIN writes (create, test, rename, delete)
                         .requestMatchers(HttpMethod.GET, "/api/hosts", "/api/hosts/**").authenticated()
                         .requestMatchers("/api/hosts", "/api/hosts/**").hasRole("ADMIN")
