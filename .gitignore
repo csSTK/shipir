@@ -47,3 +47,6 @@ build/
 
 # Local secrets (copy from .env.example)
 .env
+
+# Local Compose stack files (shipir.stacks.base-dir default), may contain .env secrets
+backend/data/

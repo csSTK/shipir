@@ -1,0 +1,93 @@
+/* Live deployment output. Motion is opacity/transform only and off for reduced motion. */
+.do {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px 16px;
+  border-radius: 14px;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  animation: do-in 0.25s ease-out;
+}
+.do__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.do__title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.do__id {
+  font-size: 0.8125rem;
+  opacity: 0.65;
+}
+.do__body {
+  position: relative;
+}
+.do__log {
+  max-height: 22rem;
+  min-height: 6rem;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.do__log:focus-visible {
+  outline: 2px solid AccentColor;
+  outline-offset: 2px;
+}
+.do__empty {
+  opacity: 0.6;
+}
+.do__jump {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: AccentColor;
+  color: AccentColorText;
+  cursor: pointer;
+  box-shadow: 0 2px 8px color-mix(in srgb, black 25%, transparent);
+  animation: do-in 0.2s ease-out;
+  transition: transform 0.12s ease-out;
+}
+.do__jump:active {
+  transform: scale(0.96);
+}
+.do__jump:focus-visible {
+  outline: 2px solid AccentColor;
+  outline-offset: 2px;
+}
+@keyframes do-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .do,
+  .do__jump {
+    animation: none;
+  }
+  .do__jump {
+    transition: none;
+  }
+}
+@media (prefers-contrast: more) {
+  .do__log {
+    outline: 1px solid currentColor;
+  }
+}

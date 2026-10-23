@@ -1,3 +1,26 @@
+shipir:
+  docker:
+    local-socket: unix:///var/run/docker.sock
+    connect-timeout: 3s
+    read-timeout: 10s
+  host:
+    overview-timeout: 5s
+  compose:
+    timeout: 10m
+  git:
+    poll-enabled: true
+    poll-tick: 60s
+  stacks:
+    base-dir: ${SHIPIR_STACKS_BASE_DIR:./data/stacks}
+  initial-admin:
+    username: ${SHIPIR_INITIAL_ADMIN_USERNAME:admin}
+    password: ${SHIPIR_INITIAL_ADMIN_PASSWORD:}
+server:
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
 spring:
   application:
     name: shipir

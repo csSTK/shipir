@@ -1,0 +1,23 @@
+.images {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.images__title {
+  margin: 0;
+  font-size: 1.75rem;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+.images__tags {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.images__id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em;
+}

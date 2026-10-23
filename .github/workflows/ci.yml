@@ -1,0 +1,50 @@
+name: CI
+
+# Dev and PR checks: path-filtered tests only. e2e and image builds are not run here.
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # dorny/paths-filter reads the changed files of a pull request via the API
+  pull-requests: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/tests.yml'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/tests.yml'
+              - '.github/workflows/ci.yml'
+
+  tests:
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' }}
+    uses: ./.github/workflows/tests.yml
+    permissions:
+      contents: read
+    with:
+      backend: ${{ needs.changes.outputs.backend == 'true' }}
+      frontend: ${{ needs.changes.outputs.frontend == 'true' }}
+      e2e: false

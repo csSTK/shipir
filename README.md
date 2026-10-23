@@ -16,6 +16,8 @@ This is a learning and portfolio project focused on Java backend development. Th
   - Create stacks with a form wizard that generates the YAML, or write it yourself in an advanced editor with schema validation.
   - Deploy, stop and pull, with live output.
   - Every deploy is versioned, so you can see history and roll back.
+  - Environment variables per stack, stored encrypted.
+  - Stacks from a (private) Git repository with an access token: Pull & redeploy, and optional polling that redeploys on new commits.
 - **Config editor:** edit a stack's config files in the browser, with protection against path traversal and an automatic backup before every write.
 - **Live streaming:** container logs, Docker events, Compose output and an exec terminal over WebSocket.
 - **Access control:** users with roles (Admin, Operator, Viewer) plus fine-grained permissions per host and stack.
@@ -89,6 +91,7 @@ The connection is configured with five variables, all listed in `.env.example`:
 | `DB_PORT` | `5432` | Port on the host, also the published port of the container |
 | `DB_NAME` | `shipir` | Database name |
 | `DB_USER` | `shipir` | Database user |
+| `SHIPIR_INITIAL_ADMIN_PASSWORD` | none (required on first start) | Password of the initial `admin` account, created only while the users table is empty; the admin must change it on first login. Ignored afterwards |
 
 The compose file reads `DB_NAME`, `DB_USER` and `DB_PORT` from `.env` as well, so the container and the backend always agree.
 
@@ -111,15 +114,29 @@ The images on ghcr.io are private, so `docker login ghcr.io` is required before 
 
 Without a pull (or when the images don't exist on ghcr.io yet), `docker compose -f docker-compose.yml build` builds both images locally, and `up` uses them.
 
-Required in `.env`: `DB_PASSWORD` and `DB_HOST`. Compose stops with a message if either is missing. Optional: `DB_PORT`, `DB_NAME`, `DB_USER`, `SHIPIR_TAG` (image tag) and `SHIPIR_PORT` (host port, default `8080`).
+Required in `.env`: `DB_PASSWORD`, `DB_HOST` and `DOCKER_GID`. Compose stops with a message if one is missing. On the first start (empty database) also `SHIPIR_INITIAL_ADMIN_PASSWORD`; without it the backend refuses to start. Optional: `DB_PORT`, `DB_NAME`, `DB_USER`, `SHIPIR_TAG` (image tag), `SHIPIR_PORT` (host port, default `8080`) and `SHIPIR_ENCRYPTION_KEY` (see below).
+
+**First login:** sign in as `admin` with `SHIPIR_INITIAL_ADMIN_PASSWORD`. Shipir then asks for a new password (15–128 characters with upper- and lowercase letters, a digit and a symbol) before anything else is usable. Next, the admin adds the first Docker environment: the local Docker socket, or a remote Docker engine over TCP with TLS client certificates (needs `SHIPIR_ENCRYPTION_KEY`). Shipir tests the connection before saving it. Later logins skip both steps. After setup, every user lands on the environments overview (status and live stats per environment); only admins can add, rename or delete environments. Clicking an environment opens its dashboard; the sidebar then lists its stacks (Compose projects), containers, images, networks and volumes as read-only tables for every role.
+
+**Forgotten password:** the login page has a "Forgot password?" flow: enter the username, then a 6-digit one-time code (valid 5 minutes, single use, 5 attempts) and a new password. Shipir can't deliver the code yet (no mail service), so this isn't usable in a real installation until delivery is added.
+
+**Docker socket (security):** the backend mounts `/var/run/docker.sock` to manage containers on the local Docker host. Access to the Docker socket is effectively root on the host: anyone who can control the backend can control the machine. Therefore only the frontend port is published, the backend has no published port, and the stack should run on a host that only trusted operators can reach. `DOCKER_GID` is the group that owns the socket on the host; the backend user (uid `10001`) joins it through `group_add`. Find it on a Linux host with:
+
+```bash
+stat -c %g /var/run/docker.sock                        # prints e.g. 999; put it in .env as DOCKER_GID
+```
+
+**Encryption key:** `SHIPIR_ENCRYPTION_KEY` encrypts stored TLS material (AES-256-GCM) at rest. It is optional while only the local Docker host exists. Connections to remote Docker hosts over TCP+TLS require it, and the backend refuses to start if such hosts exist without a valid key. Generate one with `openssl rand -base64 32` (it must decode to exactly 32 bytes). Store it outside git and back it up: losing it makes the stored TLS material unreadable, and changing it breaks decryption of existing data.
 
 Only the frontend port is published. The backend is reachable only from the frontend on the compose network. The frontend starts even if the backend is not up yet; it reconnects on the next request.
 
-Images are published to GitHub Container Registry by `.github/workflows/images.yml`: `ghcr.io/csstk/shipir-backend` and `ghcr.io/csstk/shipir-frontend`. A push to `dev` publishes `dev`, a push to `prd` publishes `latest`, both plus the commit sha (`sha-<full sha>`); a `v*` tag (e.g. `v1.2.3`) publishes the semver tags (`1.2.3`, `1.2`, `1`). Pull requests only build, nothing is pushed. Set `SHIPIR_TAG` to pick one.
+Images are published to GitHub Container Registry (`ghcr.io/csstk/shipir-backend` and `ghcr.io/csstk/shipir-frontend`) by the workflows in `.github/workflows/`. A push to `dev` and every pull request runs `ci.yml`: only the tests of the changed area (`backend/`, `frontend/`), no e2e, no images. A push to `prd` runs `release.yml`: all tests and e2e, and only if they pass, the images are pushed as `latest` and `sha-<full sha>`. A `v*` tag (e.g. `v1.2.3`) runs `tag.yml`, which adds the semver tags (`1.2.3`, `1.2`, `1`; no `major` tag for `v0.x`) to the tested `sha-<commit>` image without rebuilding. Set `SHIPIR_TAG` to pick one.
 
-Branches: `dev` is the default branch where all work lands. `prd` holds released versions and only ever fast-forwards to a `dev` commit: release with `git push origin dev:prd`, then tag that commit `v*`.
+Branches: `dev` is the default branch where all work lands. `prd` holds released versions and only ever fast-forwards to a `dev` commit. Release: `git push origin dev:prd`, wait until `release.yml` is green, then push the `v*` tag on that commit. If `tag.yml` failed because the image did not exist yet, re-run it with `gh run rerun <id>`.
 
-Stop the stack with `docker compose -f docker-compose.yml down`. This does not touch the external database.
+Compose stack files live in the named volume `shipir-stacks`, mounted at `/data/stacks` in the backend (`SHIPIR_STACKS_BASE_DIR`, set in the image). The backend image includes the `docker compose` CLI, which runs as the app user (uid `10001`) and uses the same mounted Docker socket.
+
+Stop the stack with `docker compose -f docker-compose.yml down`. This does not touch the external database or the `shipir-stacks` volume. Only `down -v` deletes the stack files.
 
 ### Backend (Java 25, Spring Boot 4.1.1)
 
@@ -130,8 +147,14 @@ Stop the stack with `docker compose -f docker-compose.yml down`. This does not t
 To run the app against the local database, export the variables from `.env` into your shell first. The Spring app does not read `.env` itself:
 
 ```bash
-set -a; source .env; set +a                       # export DB_* and DB_PASSWORD from .env
+set -a; source .env; set +a                       # export all variables from .env (bash/zsh)
 ./backend/mvnw -f backend/pom.xml spring-boot:run # Run the app on http://localhost:8080 (runs Flyway migrations)
+```
+
+In fish, `source .env` fails on the `KEY=value` lines. Export them like this instead (values without quotes, fish would keep them):
+
+```fish
+for line in (string match -rv '^\s*(#|$)' < .env); set -gx (string split -m 1 = $line); end
 ```
 
 Tests don't need these variables: they start their own throwaway PostgreSQL via Testcontainers.

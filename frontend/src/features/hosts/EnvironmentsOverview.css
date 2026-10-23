@@ -1,0 +1,300 @@
+.envs {
+  --env-gap: 16px;
+  --env-radius: 14px;
+  --env-up: #1f9d55;
+  --env-down: #d92d20;
+  --env-surface: color-mix(in srgb, currentColor 5%, transparent);
+  --env-border: color-mix(in srgb, currentColor 12%, transparent);
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px var(--env-gap);
+  display: flex;
+  flex-direction: column;
+  gap: var(--env-gap);
+}
+
+.envs__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.envs__title {
+  margin: 0 auto 0 0;
+  font-size: 1.75rem;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.envs__search {
+  font: inherit;
+  font-size: 0.9375rem;
+  padding: 8px 12px;
+  min-width: 14rem;
+  border: 1px solid var(--env-border);
+  border-radius: 10px;
+  background: var(--env-surface);
+  color: inherit;
+}
+
+.envs__back {
+  align-self: flex-start;
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.9375rem;
+  opacity: 0.7;
+}
+
+.envs__message {
+  padding: 32px 16px;
+  text-align: center;
+  opacity: 0.75;
+}
+
+.envs__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Buttons: feedback on press, not on release */
+.env-btn {
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  padding: 8px 14px;
+  border: 1px solid var(--env-border);
+  border-radius: 10px;
+  background: var(--env-surface);
+  color: inherit;
+  cursor: pointer;
+  transition: transform 0.12s ease-out, background-color 0.15s ease;
+}
+
+.env-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.env-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.env-btn--primary {
+  background: AccentColor;
+  border-color: transparent;
+  color: AccentColorText;
+}
+
+.env-btn--plain {
+  border-color: transparent;
+  background: transparent;
+}
+
+.env-btn:focus-visible,
+.envs__search:focus-visible,
+.env-row__main:focus-visible {
+  outline: 2px solid AccentColor;
+  outline-offset: 2px;
+}
+
+/* Rows */
+.env-row {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--env-border);
+  border-radius: var(--env-radius);
+  background: var(--env-surface);
+  transition: transform 0.12s ease-out, background-color 0.15s ease;
+}
+
+.env-row:has(.env-row__main:active) {
+  transform: scale(0.99);
+}
+
+.env-row__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: var(--env-radius);
+  color: inherit;
+  text-decoration: none;
+}
+
+.env-row__main:hover {
+  background: color-mix(in srgb, currentColor 4%, transparent);
+}
+
+.env-row__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.env-row__name {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.env-row__type,
+.env-row__endpoint {
+  font-size: 0.8125rem;
+  opacity: 0.65;
+  letter-spacing: 0.01em;
+}
+
+.env-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+
+.env-badge--up {
+  color: var(--env-up);
+  background: color-mix(in srgb, var(--env-up) 15%, transparent);
+}
+
+.env-badge--down {
+  color: var(--env-down);
+  background: color-mix(in srgb, var(--env-down) 15%, transparent);
+}
+
+.env-row__error {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--env-down);
+}
+
+.env-row__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 4px 0 0;
+}
+
+.env-stat dt {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.55;
+}
+
+.env-stat dd {
+  margin: 0;
+  font-size: 0.9375rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+}
+
+.env-row__warn {
+  color: var(--env-down);
+}
+
+/* Skeleton */
+.env-row--skeleton {
+  height: 96px;
+  animation: env-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes env-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Add dialog: dims to focus, springs in with no overshoot */
+.env-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: color-mix(in srgb, #000 40%, transparent);
+  animation: env-fade 0.2s ease-out;
+}
+
+.env-dialog {
+  width: min(32rem, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 20px;
+  border-radius: 20px;
+  background: Canvas;
+  color: CanvasText;
+  box-shadow: 0 24px 60px color-mix(in srgb, #000 35%, transparent);
+  animation: env-pop 0.3s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.env-dialog:focus {
+  outline: none;
+}
+
+.env-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.env-dialog__head h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
+}
+
+@keyframes env-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes env-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .env-dialog {
+    animation: env-fade 0.2s ease-out;
+  }
+  .env-row--skeleton {
+    animation: none;
+  }
+  .env-btn,
+  .env-row {
+    transition: background-color 0.15s ease;
+  }
+  .env-btn:active:not(:disabled),
+  .env-row:has(.env-row__main:active) {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .env-scrim {
+    background: color-mix(in srgb, #000 60%, transparent);
+  }
+}
+
+@media (prefers-contrast: more) {
+  .envs {
+    --env-border: currentColor;
+  }
+}

@@ -1,0 +1,234 @@
+.env-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.env-form p {
+  margin: 0;
+}
+
+/* Segmented control */
+.env-form__segments {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 12px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.env-form__segment {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.12s ease-out;
+}
+
+.env-form__segment input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.env-form__segment:has(input:checked) {
+  background: Canvas;
+  box-shadow: 0 1px 3px color-mix(in srgb, #000 20%, transparent);
+  font-weight: 600;
+}
+
+/* Feedback on press, not on release */
+.env-form__segment:active {
+  transform: scale(0.97);
+  transition-duration: 0s;
+}
+
+.env-form__segment:has(input:focus-visible) {
+  outline: 3px solid color-mix(in srgb, #0a84ff 40%, transparent);
+  outline-offset: 1px;
+}
+
+/* Fields */
+.env-form__row {
+  display: flex;
+  gap: 12px;
+}
+
+.env-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.env-form__field--grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.env-form__field--port {
+  width: 6rem;
+}
+
+.env-form__field input {
+  font: inherit;
+  font-weight: 400;
+  font-size: 1rem;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  color: inherit;
+  min-width: 0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.env-form__field input:focus-visible {
+  outline: none;
+  border-color: #0a84ff;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #0a84ff 30%, transparent);
+}
+
+.env-form__field input[aria-invalid='true'] {
+  border-color: #d70015;
+}
+
+/* File pickers: the native input is visually hidden, the label is the target */
+.env-form__file {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.env-form__file-button {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px dashed color-mix(in srgb, currentColor 30%, transparent);
+  font-size: 1rem;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+  transition: transform 0.12s ease-out, border-color 0.15s ease;
+}
+
+.env-form__file:active .env-form__file-button {
+  transform: scale(0.98);
+  transition-duration: 0s;
+}
+
+.env-form__file-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.env-form__file:has(input:focus-visible) .env-form__file-button {
+  border-color: #0a84ff;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #0a84ff 30%, transparent);
+}
+
+.env-form__file-button span[aria-hidden='true'] {
+  color: #1a7f37;
+}
+
+/* Status */
+.env-form__status,
+.env-form__alert {
+  min-height: 1.25em;
+  font-size: 0.875rem;
+}
+
+.env-form__ok {
+  color: #1a7f37;
+}
+
+.env-form__error,
+.env-form__alert {
+  color: #d70015;
+}
+
+@media (prefers-color-scheme: dark) {
+  .env-form__ok,
+  .env-form__file-button span[aria-hidden='true'] {
+    color: #4ade80;
+  }
+  .env-form__error,
+  .env-form__alert,
+  .env-form__field input[aria-invalid='true'] {
+    color: #ff6961;
+  }
+  .env-form__field input[aria-invalid='true'] {
+    border-color: #ff6961;
+  }
+}
+
+/* Buttons */
+.env-form__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.env-form__button {
+  font: inherit;
+  font-weight: 600;
+  padding: 11px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: #0a84ff;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.12s ease-out, filter 0.12s ease-out, opacity 0.15s ease;
+}
+
+.env-form__button--secondary {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: inherit;
+}
+
+.env-form__button:active:not(:disabled) {
+  transform: scale(0.97);
+  filter: brightness(0.9);
+  transition-duration: 0s;
+}
+
+.env-form__button:focus-visible {
+  outline: 3px solid color-mix(in srgb, #0a84ff 40%, transparent);
+  outline-offset: 2px;
+}
+
+.env-form__button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .env-form__segment,
+  .env-form__file-button,
+  .env-form__button,
+  .env-form__field input {
+    transition: none;
+  }
+  .env-form__segment:active,
+  .env-form__file:active .env-form__file-button,
+  .env-form__button:active:not(:disabled) {
+    transform: none;
+  }
+}
