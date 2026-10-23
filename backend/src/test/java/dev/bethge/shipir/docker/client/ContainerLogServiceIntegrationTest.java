@@ -78,8 +78,10 @@ class ContainerLogServiceIntegrationTest {
             await(five);
         }
 
-        assertThat(lines).extracting(LogLine::text).containsSubsequence("old1", "old2").contains("oldErr")
-                .endsWith("new1", "newErr");
+        // stdout and stderr are separate streams: only the order within stdout is guaranteed.
+        List<String> texts = lines.stream().map(LogLine::text).toList();
+        assertThat(texts).containsSubsequence("old1", "old2").contains("oldErr");
+        assertThat(texts.subList(texts.size() - 2, texts.size())).containsExactlyInAnyOrder("new1", "newErr");
         assertThat(lines).filteredOn(l -> l.text().equals("oldErr") || l.text().equals("newErr"))
                 .allMatch(l -> l.stream() == LogLine.Stream.STDERR);
         assertThat(lines).filteredOn(l -> l.text().startsWith("old1")).allMatch(l -> l.stream() == LogLine.Stream.STDOUT);
