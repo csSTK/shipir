@@ -132,7 +132,9 @@ Images are published to GitHub Container Registry (`ghcr.io/csstk/shipir-backend
 
 Branches: `dev` is the default branch where all work lands. `prd` holds released versions and only ever fast-forwards to a `dev` commit. Release: `git push origin dev:prd`, wait until `release.yml` is green, then push the `v*` tag on that commit. If `tag.yml` failed because the image did not exist yet, re-run it with `gh run rerun <id>`.
 
-Stop the stack with `docker compose -f docker-compose.yml down`. This does not touch the external database.
+Compose stack files live in the named volume `shipir-stacks`, mounted at `/data/stacks` in the backend (`SHIPIR_STACKS_BASE_DIR`, set in the image). The backend image includes the `docker compose` CLI, which runs as the app user (uid `10001`) and uses the same mounted Docker socket.
+
+Stop the stack with `docker compose -f docker-compose.yml down`. This does not touch the external database or the `shipir-stacks` volume. Only `down -v` deletes the stack files.
 
 ### Backend (Java 25, Spring Boot 4.1.1)
 

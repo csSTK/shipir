@@ -99,7 +99,7 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `backend/src/test/java/dev/bethge/shipir/docker/**`: endpoint, manager (fake factory), properties defaults, no-docker-java-in-API check, service unit (missing/hanging socket), Docker integration tests, dind TLS integration test, PEM parsing (`tls/PemSslConfigTest`, `tls/TestPki` generates certs)
 - `backend/pom.xml`: Maven build, Java 25, Spring Boot 4.1.1 parent, docker-java 3.7.1 (core + httpclient5), starters web/websocket/security/validation/data-jpa/flyway/test, spring-security-test, flyway-database-postgresql, postgresql driver, Testcontainers (test)
 - `backend/mvnw`, `backend/.mvn/wrapper/`: Maven wrapper
-- `backend/Dockerfile`: multi-stage image: Temurin 25 build (tests skipped), JRE alpine runtime, user uid 10001, env-only config
+- `backend/Dockerfile`: multi-stage image: Temurin 25 build (tests skipped), JRE alpine runtime + docker-cli/docker-cli-compose, user uid 10001, `/data/stacks` (`SHIPIR_STACKS_BASE_DIR`), env-only config
 - `backend/.dockerignore`: excludes `target/`, `.env`, keys, IDE and git files from the image build
 - `backend/src/main/resources/application.yml`: app name, datasource (`DB_HOST/PORT/NAME/USER` with local defaults, `${DB_PASSWORD}` no default), JPA validate/no OSIV, Flyway
 - `backend/src/main/resources/db/migration/V{1..4}__create_{users,docker_hosts,stacks,stack_versions}.sql`, `V5__add_users_password_changed_at.sql`, `V6__add_docker_hosts_tls_columns.sql`, `V7__create_password_reset_codes.sql`, `V9__create_notifications.sql`, `V10__create_notification_webhooks.sql`, `V11__create_retention_settings.sql`: Flyway schema (TIMESTAMPTZ, FKs to users RESTRICT, host/stack FKs CASCADE; V5 NULL = first-start setup pending; V6 docker_hosts: encrypted TLS BYTEA columns, connection shape/TLS/name constraints; V7 password_reset_codes: hashed codes, attempt counter, CASCADE with user; V8 audit_log: username snapshot, outcome check, user FK SET NULL, indexes on occurred_at and (action, occurred_at)); V9 notifications: type CHECK HOST_DOWN/HOST_UP, host_id SET NULL keeps host_name, preferences PK (user_id, type); V10 notification_webhooks: URL as ciphertext + hint only, event_types text[], created_by RESTRICT; V11 retention_settings: singleton (id CHECK 1), days 1-3650, seeded 365/30, updated_by SET NULL
@@ -164,7 +164,7 @@ Frontend (`frontend/`):
 
 Repo root:
 - `docker-compose.dev.yml`: local PostgreSQL 16 for development (healthcheck, `DB_*` from `.env`)
-- `docker-compose.yml`: hosting stack, backend + frontend (`ghcr.io/csstk/shipir-*` or local build), external PostgreSQL, only frontend port published, passes `SHIPIR_INITIAL_ADMIN_PASSWORD` and `SHIPIR_ENCRYPTION_KEY`, mounts Docker socket (`group_add: DOCKER_GID`)
+- `docker-compose.yml`: hosting stack, backend + frontend (`ghcr.io/csstk/shipir-*` or local build), external PostgreSQL, only frontend port published, passes `SHIPIR_INITIAL_ADMIN_PASSWORD` and `SHIPIR_ENCRYPTION_KEY`, mounts Docker socket (`group_add: DOCKER_GID`), named volume `shipir-stacks` at `/data/stacks`
 - `.env.example`: documents `DB_*` (`DB_PASSWORD` required), `SHIPIR_INITIAL_ADMIN_PASSWORD` (empty DB only), `DOCKER_GID` (required, hosting), `SHIPIR_ENCRYPTION_KEY`, `SHIPIR_TAG`, `SHIPIR_PORT`; `.env` is gitignored
 
 CI:

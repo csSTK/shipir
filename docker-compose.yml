@@ -23,6 +23,8 @@ services:
       - "${DOCKER_GID:?Set DOCKER_GID in .env to the owner group of /var/run/docker.sock (see .env.example)}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # Compose stack files (SHIPIR_STACKS_BASE_DIR in the image). Named volume: survives `down`, removed only by `down -v`.
+      - shipir-stacks:/data/stacks
     # No ports: the backend is reachable only from the frontend on the compose network.
     restart: unless-stopped
 
@@ -36,3 +38,6 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+
+volumes:
+  shipir-stacks:
