@@ -107,14 +107,17 @@ Frontend (`frontend/`):
 - `src/app/layout/PlaceholderPages.tsx`: `PlaceholderPage`, `NotAllowedPage` (non-ADMIN on /settings/*)
 - `e2e/shell.spec.ts`: sidebar/user menu navigation, viewer not allowed on settings
 - `src/features/notifications/{api.ts,NotificationsPage.tsx,.css,index.ts}`: `useNotifications(unreadOnly)`, `useUnreadCount` (30 s + focus), `useMarkRead/useMarkAllRead`; `/notifications` page (assumed API: Page `{content,totalElements}`, `{count}`, POST `/{id}/read`, `/read-all`); Sidebar shows the unread badge
-- `src/features/{containers,stacks}/index.ts`: empty feature entry points
+- `src/shared/ui/{ResourceTable.tsx,.css,index.ts}`: shared list table for environment resources: `ResourceTable<T>` (columns with optional `sortValue`, search, loading skeleton, error + Retry, empty/no-match states; props `label`, `rows`, `isPending`, `error` (mapped message), `toolbar`) and `Badge` (tone ok/warn/bad/muted); reuse for images/networks/volumes
+- `src/features/containers/{api.ts,ContainersPage.tsx,.css,index.ts}`: `useContainers(hostId)`; `/environments/:id/containers` table, `?stack=<project>` filter chip
+- `src/features/stacks/{api.ts,StacksPage.tsx,.css,index.ts}`: `useStacks(hostId)`; `/environments/:id/stacks` table, stack name links to containers filtered by stack
+- `e2e/resources.spec.ts`: stacks/containers pages: search, sort, stack filter, UNREACHABLE/TIMEOUT, empty
 - `src/features/hosts/api.ts`: host types, `HOSTS_KEY`/`HOSTS_OVERVIEW_KEY`, `useHosts/useHostsOverview` (30 s + focus refetch, `HostOverview`), `useCreateHost/useTestConnection/useRenameHost/useDeleteHost` (create/delete also invalidate current user)
 - `src/features/hosts/EnvironmentForm.{tsx,css}`: Local / Remote (TCP+TLS) form, PEM file pickers (names only shown), connection test, inline server errors; props `onCreated`, `submitLabel`
 - `src/features/hosts/{EnvironmentsOverview.tsx,.css}`: home screen: environment rows (status, stats), search, refresh, skeleton/error/empty states, ADMIN add dialog, renders `EnvironmentActions` per row for ADMIN
 - `src/features/hosts/EnvironmentActions.{tsx,css}`: ADMIN row Rename/Delete buttons + dialogs (HOST_NAME_TAKEN inline, delete warns about stacks)
 - `src/features/hosts/EnvironmentDashboard.{tsx,css,test.tsx}`: `/environments/:id`: status, Docker version, resource tiles (counts from overview) linking to resource routes; DOWN error, not-found
 - `src/features/hosts/resources.ts`: `ENV_RESOURCES` (stacks/containers/images/networks/volumes) for sidebar, tiles
-- `src/features/hosts/format.ts`: memory/plural formatting, overview error code to message
+- `src/features/hosts/format.ts`: memory/plural formatting, overview error code to message, `describeResourceError(err)` for `/hosts/{id}/...` failures
 - `src/features/hosts/index.ts`: exports form, overview, page, hooks, types
 - `src/test/setup.ts`: jest-dom matchers for Vitest
 - `playwright.config.ts`: Playwright config (Chromium, `e2e/` dir, starts Vite dev server)

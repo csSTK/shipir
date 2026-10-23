@@ -1,5 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { ENV_RESOURCES, EnvironmentDashboard, EnvironmentsOverview } from '../features/hosts/index.ts'
+import { ContainersPage } from '../features/containers/index.ts'
+import { StacksPage } from '../features/stacks/index.ts'
 import { NotificationsPage } from '../features/notifications/index.ts'
 import { LoginPage, SetupPage, useCurrentUser, useLogout } from '../features/auth/index.ts'
 import { AppShell } from './layout/AppShell.tsx'
@@ -32,8 +34,8 @@ function AuthGate() {
         <Route path="/" element={<EnvironmentsOverview role={user.role} />} />
         <Route path="/environments/:id" element={<EnvironmentDashboard />} />
         {/* One line per resource: later tasks swap the placeholder for the real list page. */}
-        <Route path="/environments/:id/stacks" element={<ResourcePlaceholder slug="stacks" />} />
-        <Route path="/environments/:id/containers" element={<ResourcePlaceholder slug="containers" />} />
+        <Route path="/environments/:id/stacks" element={<StacksPage />} />
+        <Route path="/environments/:id/containers" element={<ContainersPage />} />
         <Route path="/environments/:id/images" element={<ResourcePlaceholder slug="images" />} />
         <Route path="/environments/:id/networks" element={<ResourcePlaceholder slug="networks" />} />
         <Route path="/environments/:id/volumes" element={<ResourcePlaceholder slug="volumes" />} />

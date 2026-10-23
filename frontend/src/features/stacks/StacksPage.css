@@ -1,0 +1,39 @@
+.stacks {
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.stacks__title {
+  margin: 0;
+  font-size: 1.75rem;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+.stacks__link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-block;
+  transition: transform 120ms ease-out;
+}
+.stacks__link:hover {
+  text-decoration: underline;
+}
+.stacks__link:active {
+  transform: scale(0.97);
+}
+.stacks__link:focus-visible {
+  outline: 2px solid AccentColor;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stacks__link {
+    transition: none;
+  }
+  .stacks__link:active {
+    transform: none;
+  }
+}

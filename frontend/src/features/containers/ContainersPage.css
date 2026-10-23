@@ -1,0 +1,46 @@
+.containers {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.containers__title {
+  margin: 0;
+  font-size: 1.75rem;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+.containers__ports {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.containers__chip {
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, AccentColor 18%, transparent);
+  color: inherit;
+  cursor: pointer;
+  transition: transform 120ms ease-out;
+}
+.containers__chip:active {
+  transform: scale(0.96);
+}
+.containers__chip:focus-visible {
+  outline: 2px solid AccentColor;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .containers__chip {
+    transition: none;
+  }
+  .containers__chip:active {
+    transform: none;
+  }
+}
