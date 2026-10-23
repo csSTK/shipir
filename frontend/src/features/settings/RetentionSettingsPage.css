@@ -1,0 +1,95 @@
+.rt {
+  --rt-down: #d92d20;
+  --rt-ok: #1f9d55;
+  --rt-border: color-mix(in srgb, currentColor 12%, transparent);
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rt-title {
+  margin: 0;
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+.rt-muted {
+  margin: 0;
+  font-size: 0.875rem;
+  opacity: 0.7;
+}
+
+.rt-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9375rem;
+}
+
+.rt-field input {
+  font: inherit;
+  padding: 9px 12px;
+  border: 1px solid var(--rt-border);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+}
+
+.rt-error {
+  margin: 0;
+  color: var(--rt-down);
+  font-size: 0.875rem;
+}
+
+.rt-ok {
+  margin: 0;
+  color: var(--rt-ok);
+  font-size: 0.875rem;
+}
+
+.rt-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rt-btn {
+  font: inherit;
+  font-size: 0.9375rem;
+  padding: 8px 18px;
+  border: 1px solid var(--rt-border);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 100ms ease-out, opacity 100ms ease-out;
+}
+
+.rt-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.rt-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.rt-btn--primary {
+  background: #0a84ff;
+  border-color: transparent;
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rt-btn {
+    transition: none;
+  }
+}

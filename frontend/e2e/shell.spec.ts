@@ -5,6 +5,7 @@ const me = (role: string) => ({ body: { username: 'pat', role, setupRequired: fa
 test('admin navigates via the sidebar and opens settings from the user menu', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', me('ADMIN'))
   api.mock('GET', '/api/hosts/overview', { body: [] })
+  api.mock('GET', '/api/settings/retention', { body: { auditLogDays: 90, notificationDays: 30 } })
   await page.goto('/')
 
   const nav = page.getByRole('navigation', { name: 'Main' })

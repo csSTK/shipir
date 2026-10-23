@@ -72,6 +72,9 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `common/security/{SecretCipher,EncryptionProperties}.java`: AES-256-GCM for secrets at rest (`version+IV+ciphertext`); key `shipir.encryption-key` (env `SHIPIR_ENCRYPTION_KEY`, base64 32 bytes, `openssl rand -base64 32`), optional (empty/blank = `isConfigured()` false); invalid key fails startup
 - `common/security/{EncryptionKeyMissing,InvalidEncryptionKey,SecretDecryption}Exception.java`: cipher exceptions, messages never contain key or plaintext
 - `backend/src/test/java/dev/bethge/shipir/common/security/SecretCipherTest.java`: round trip, tamper, wrong key, key validation, empty key, no logging
+- `retention/{RetentionSettings,RetentionSettingsRepository,RetentionService,RetentionController}.java`, `retention/dto/*`: singleton `retention_settings` (V11), ADMIN `GET/PUT /api/settings/retention` (1-3650, PUT `@Auditable` RETENTION_UPDATE)
+- `retention/{RetentionPurgeService,RetentionPurgeJob}.java`: purge (rows strictly older than now-days, audit_log + notifications via bulk deletes, writes RETENTION_PURGE audit entry as `system`); cron `shipir.retention.purge-cron` (03:00 UTC), off with `shipir.retention.purge-enabled=false`
+- `backend/src/test/java/dev/bethge/shipir/retention/`: `RetentionTestBase` (fixed Clock), `RetentionApiTest`, `RetentionPurgeTest`
 - `common/config/PasswordEncoderConfig.java`: Argon2id `PasswordEncoder` bean (DelegatingPasswordEncoder, bcrypt match-only)
 - `common/config/ClockConfig.java`: `Clock` bean (system UTC)
 - `backend/src/test/resources/application.properties`: test initial-admin password
@@ -118,6 +121,7 @@ Frontend (`frontend/`):
 - `src/features/account/AccountPage.{tsx,css,test.tsx}`: `/account` (props `user`): read-only username/role, password change (reuses `useChangePassword` + `passwordPolicy.ts`), notification preference switches (optimistic save)
 - `src/features/notifications/api.ts`: also `useNotificationPreferences`/`useSavePreferences` (GET/PUT `/notifications/preferences`)
 - `src/features/settings/{api.ts,WebhooksSettingsPage.tsx,.css,.test.tsx,index.ts}`: ADMIN webhook management at `/settings/notifications` (list with urlHint, create/edit dialog with never-prefilled URL, delete, send test)
+- `src/features/settings/{RetentionSettingsPage.tsx,.css,.test.tsx}`: ADMIN retention form at `/settings/retention` (audit log / notification days 1-3650, client check, inline errors); hooks `useRetentionSettings`/`useSaveRetentionSettings` in `api.ts`
 - `e2e/webhooks.spec.ts`: admin creates webhook + test, operator blocked
 - `src/features/{containers,stacks}/index.ts`: empty feature entry points
 - `src/features/hosts/api.ts`: host types, `HOSTS_KEY`/`HOSTS_OVERVIEW_KEY`, `useHosts/useHostsOverview` (30 s + focus refetch, `HostOverview`), `useCreateHost/useTestConnection/useRenameHost/useDeleteHost` (create/delete also invalidate current user)
@@ -132,6 +136,7 @@ Frontend (`frontend/`):
 - `tsconfig.e2e.json`: type-checks `e2e/` and `playwright.config.ts` (referenced from `tsconfig.json`)
 - `e2e/fixtures/api.ts`: Playwright `test` with auto `api` fixture: mocks `/api/**` per method+path, fails on unmocked calls (own spec: `api.spec.ts`)
 - `e2e/account.spec.ts`: user menu > Settings, password change, preference toggle
+- `e2e/retention.spec.ts`: admin changes retention and saves, server 400 inline
 - `e2e/app.spec.ts`: smoke spec, Shipir heading (signed in)
 - `e2e/auth.spec.ts`: login happy path + sign out, wrong password
 - `e2e/environments.spec.ts`: overview list/search, viewer vs admin add, admin rename/delete, taken name, operator no actions, error, placeholder navigation

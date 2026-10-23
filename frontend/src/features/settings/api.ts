@@ -78,3 +78,25 @@ export function useTestWebhook() {
     onSettled: () => void invalidate(),
   })
 }
+
+/** Retention periods in days, 1 to 3650. Purge runs once a day on the server. */
+export interface RetentionSettings {
+  auditLogDays: number
+  notificationDays: number
+}
+
+export const RETENTION_KEY = ['settings-retention'] as const
+const RETENTION_PATH = '/settings/retention'
+
+export function useRetentionSettings() {
+  return useQuery({ queryKey: RETENTION_KEY, queryFn: () => apiFetch<RetentionSettings>(RETENTION_PATH) })
+}
+
+export function useSaveRetentionSettings() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: RetentionSettings) =>
+      apiFetch<RetentionSettings>(RETENTION_PATH, { method: 'PUT', body: input }),
+    onSuccess: (saved) => queryClient.setQueryData(RETENTION_KEY, saved),
+  })
+}
