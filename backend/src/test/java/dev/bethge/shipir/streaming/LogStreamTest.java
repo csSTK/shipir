@@ -316,6 +316,99 @@ class LogStreamTest {
         verify(logService, never()).follow(any(), any(DockerEndpoint.class), any(), anyInt(), anyBoolean(), any(), any());
     }
 
+    private BlockingQueue<String> subscribe(StompSession s, String destination, String... headers) {
+        StompHeaders h = new StompHeaders();
+        h.setDestination(destination);
+        for (int i = 0; i < headers.length; i += 2) {
+            h.add(headers[i], headers[i + 1]);
+        }
+        BlockingQueue<String> q = new LinkedBlockingQueue<>();
+        s.subscribe(h, new StompFrameHandler() {
+            @Override
+            public Type getPayloadType(StompHeaders headers) {
+                return byte[].class;
+            }
+
+            @Override
+            public void handleFrame(StompHeaders headers, Object payload) {
+                q.add(new String((byte[]) payload, StandardCharsets.UTF_8));
+            }
+        });
+        return q;
+    }
+
+    @Test
+    void tailHeaderIsPassedToDocker() throws Exception {
+        StompSession s = connect();
+        subscribe(s, topic("tail500"), "tail", "500");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> follows.get() == 1);
+        verify(logService).follow(any(), any(DockerEndpoint.class), eq("tail500"), eq(500), eq(false), any(), any());
+        subscribe(s, topic("tailall"), "tail", "all");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> follows.get() == 2);
+        verify(logService).follow(any(), any(DockerEndpoint.class), eq("tailall"), eq(-1), eq(false), any(), any());
+        s.disconnect();
+    }
+
+    @Test
+    void defaultTailComesFromProperties() throws Exception {
+        StompSession s = connect();
+        subscribe(s, topic("deftail"));
+        await().atMost(5, TimeUnit.SECONDS).until(() -> follows.get() == 1);
+        verify(logService).follow(any(), any(DockerEndpoint.class), eq("deftail"), eq(200), eq(false), any(), any());
+        s.disconnect();
+    }
+
+    @Test
+    void invalidOptionsAreRefusedWithoutFollow() throws Exception {
+        for (String[] bad : new String[][]{{"tail", "50"}, {"tail", "-1"}, {"tail", "abc"}, {"timestamps", "yes"}}) {
+            StompSession s = connect();
+            subscribe(s, topic("badopt"), bad);
+            await().atMost(5, TimeUnit.SECONDS).until(() -> !s.isConnected());
+        }
+        verify(logService, never()).follow(any(), any(DockerEndpoint.class), any(), anyInt(), anyBoolean(), any(), any());
+    }
+
+    @Test
+    void timestampsAreOnlyInFramesWhenRequested() throws Exception {
+        StompSession s = connect();
+        BlockingQueue<String> q = subscribe(s, topic("ts"), "timestamps", "true");
+        awaitFollowing("ts", 1);
+        verify(logService).follow(any(), any(DockerEndpoint.class), eq("ts"), eq(200), eq(true), any(), any());
+        onLine.accept(new LogLine(LogLine.Stream.STDOUT, "stamped", Instant.parse("2026-01-02T03:04:05.123Z")));
+        assertThat(q.poll(5, TimeUnit.SECONDS)).contains("\"timestamp\":\"2026-01-02T03:04:05.123Z\"");
+        s.disconnect();
+
+        StompSession plain = connect();
+        BlockingQueue<String> pq = subscribe(plain, topic("nots"));
+        awaitFollowing("nots", 1);
+        onLine.accept(line("plain"));
+        assertThat(pq.poll(5, TimeUnit.SECONDS)).doesNotContain("timestamp");
+        plain.disconnect();
+    }
+
+    @Test
+    void sameOptionsShareOneFollowDifferentOptionsGetOwn() throws Exception {
+        StompSession a = connect();
+        StompSession b = connect();
+        StompSession c = connect();
+        subscribe(a, topic("opts"), "tail", "100");
+        subscribe(b, topic("opts"), "tail", "100");
+        var target = LogStreamHandler.parse(topic("opts"));
+        await().atMost(5, TimeUnit.SECONDS).until(() -> handler.subscriberCount(target) == 2);
+        assertThat(follows.get()).isEqualTo(1);
+        subscribe(c, topic("opts"), "tail", "100", "timestamps", "true");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> follows.get() == 2);
+        assertThat(handler.activeStreams()).isEqualTo(2);
+
+        a.disconnect();
+        b.disconnect();
+        await().atMost(5, TimeUnit.SECONDS).until(() -> handler.subscriberCount(target) == 1);
+        verify(closeable, times(1)).close();
+        c.disconnect();
+        await().atMost(5, TimeUnit.SECONDS).until(() -> handler.activeStreams() == 0);
+        verify(closeable, times(2)).close();
+    }
+
     /** Accepts any content type so the test sees the raw JSON bytes the server sent. */
     private static final class RawBytesConverter extends org.springframework.messaging.converter.AbstractMessageConverter {
         RawBytesConverter() {

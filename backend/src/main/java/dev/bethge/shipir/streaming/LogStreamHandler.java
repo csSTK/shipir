@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 /**
  * Live container logs on {@code /topic/hosts/{hostId}/containers/{containerId}/logs}.
  *
- * <p>Subscriptions are reference counted per (host, container): the first SUBSCRIBE starts one Docker follow
+ * <p>Subscriptions are reference counted per (host, container, tail, timestamps): the first SUBSCRIBE starts one Docker follow
  * (on a virtual thread, so the STOMP thread never waits for Docker), later subscribers share it and get a
  * bounded replay of recent lines, the last UNSUBSCRIBE or disconnect closes it. Frames go directly to each
  * subscription under the stream lock, so replay and live delivery stay ordered. When the container stops, a
@@ -44,10 +44,19 @@ public class LogStreamHandler {
     record Target(UUID hostId, String containerId) {
     }
 
+    /** Parsed SUBSCRIBE options; {@code tail} is the line count, negative = all. */
+    record Options(int tail, boolean timestamps) {
+    }
+
+    /** Streams are shared per container and options. */
+    private record Key(Target target, Options options) {
+    }
+
     private record Subscription(String sessionId, String subscriptionId) {
     }
 
     private static final class Stream {
+        final Key key;
         final Target target;
         final Deque<LogStreamMessage> buffer = new ArrayDeque<>();
         final List<Subscription> subscribers = new ArrayList<>();
@@ -59,12 +68,13 @@ public class LogStreamHandler {
         int windowLines;
         int dropped;
 
-        Stream(Target target) {
-            this.target = target;
+        Stream(Key key) {
+            this.key = key;
+            this.target = key.target();
         }
     }
 
-    private final Map<Target, Stream> streams = new HashMap<>();
+    private final Map<Key, Stream> streams = new HashMap<>();
     private final ContainerLogService logs;
     private final DockerHostRepository hosts;
     private final HostEndpointResolver endpoints;
@@ -96,6 +106,32 @@ public class LogStreamHandler {
     }
 
     /**
+     * Reads the {@code tail} (100, 500, 1000, all; default from properties) and {@code timestamps} (true, false;
+     * default false) SUBSCRIBE headers. Throws {@link IllegalArgumentException} for any other value.
+     */
+    Options parseOptions(String tailHeader, String timestampsHeader) {
+        int tail = properties.tail();
+        if (tailHeader != null) {
+            tail = switch (tailHeader) {
+                case "100" -> 100;
+                case "500" -> 500;
+                case "1000" -> 1000;
+                case "all" -> -1;
+                default -> throw new IllegalArgumentException("Invalid tail");
+            };
+        }
+        boolean timestamps = false;
+        if (timestampsHeader != null) {
+            timestamps = switch (timestampsHeader) {
+                case "true" -> true;
+                case "false" -> false;
+                default -> throw new IllegalArgumentException("Invalid timestamps");
+            };
+        }
+        return new Options(tail, timestamps);
+    }
+
+    /**
      * Permission hook: may this user follow the logs of this container? Today every authenticated user may
      * (read access); the permissions epic narrows it per host here.
      */
@@ -104,16 +140,17 @@ public class LogStreamHandler {
     }
 
     /** Registers a subscription, replays the buffer and starts the Docker follow for the first subscriber. */
-    void subscribe(Target target, String sessionId, String subscriptionId) {
+    void subscribe(Target target, Options options, String sessionId, String subscriptionId) {
+        Key key = new Key(target, options);
         Stream stream;
         boolean first;
         while (true) {
             synchronized (streams) {
-                stream = streams.get(target);
+                stream = streams.get(key);
                 first = stream == null;
                 if (first) {
-                    stream = new Stream(target);
-                    streams.put(target, stream);
+                    stream = new Stream(key);
+                    streams.put(key, stream);
                 }
             }
             synchronized (stream) {
@@ -152,17 +189,19 @@ public class LogStreamHandler {
         }
     }
 
+    /** Subscribers of a container across all option variants. */
     int subscriberCount(Target target) {
-        Stream stream;
+        List<Stream> matching;
         synchronized (streams) {
-            stream = streams.get(target);
+            matching = streams.values().stream().filter(s -> s.target.equals(target)).toList();
         }
-        if (stream == null) {
-            return 0;
+        int count = 0;
+        for (Stream stream : matching) {
+            synchronized (stream) {
+                count += stream.subscribers.size();
+            }
         }
-        synchronized (stream) {
-            return stream.subscribers.size();
-        }
+        return count;
     }
 
     int activeStreams() {
@@ -182,7 +221,7 @@ public class LogStreamHandler {
                 follow = stream.follow;
                 stream.follow = null;
             }
-            streams.remove(stream.target, stream);
+            streams.remove(stream.key, stream);
         }
         closeQuietly(follow);
     }
@@ -194,7 +233,8 @@ public class LogStreamHandler {
                     .orElseThrow(() -> new DockerConnectionException(
                             dev.bethge.shipir.docker.DockerErrorCode.NOT_FOUND, "Host not found", null));
             var endpoint = endpoints.endpointOf(host);
-            Closeable follow = logs.follow(target.hostId(), endpoint, target.containerId(), properties.tail(), false,
+            Closeable follow = logs.follow(target.hostId(), endpoint, target.containerId(),
+                    stream.key.options().tail(), stream.key.options().timestamps(),
                     line -> onLine(stream, line), failure -> onEnd(stream, failure));
             boolean stop;
             synchronized (stream) {
@@ -226,7 +266,7 @@ public class LogStreamHandler {
                 stream.windowLines = 0;
                 if (stream.dropped > 0) {
                     publish(stream, LogStreamMessage.Type.LINE, "STDERR",
-                            "[" + stream.dropped + " lines skipped: rate limit]", null);
+                            "[" + stream.dropped + " lines skipped: rate limit]", null, null);
                     stream.dropped = 0;
                 }
             }
@@ -239,7 +279,9 @@ public class LogStreamHandler {
             if (text.length() > properties.maxLineLength()) {
                 text = text.substring(0, properties.maxLineLength()) + " [truncated]";
             }
-            publish(stream, LogStreamMessage.Type.LINE, line.stream().name(), text, null);
+            String timestamp = line.timestamp() == null || !stream.key.options().timestamps()
+                    ? null : line.timestamp().toString();
+            publish(stream, LogStreamMessage.Type.LINE, line.stream().name(), text, null, timestamp);
         }
     }
 
@@ -266,15 +308,16 @@ public class LogStreamHandler {
             return;
         }
         stream.ended = true;
-        publish(stream, LogStreamMessage.Type.STATUS, null, code, status);
+        publish(stream, LogStreamMessage.Type.STATUS, null, code, status, null);
     }
 
     /** Caller holds the stream lock. */
     private void publish(Stream stream, LogStreamMessage.Type type, String streamName, String line,
-                         LogStreamMessage.Status status) {
-        var message = new LogStreamMessage(stream.nextSeq++, type, streamName, line, status);
+                         LogStreamMessage.Status status, String timestamp) {
+        var message = new LogStreamMessage(stream.nextSeq++, type, streamName, line, status, timestamp);
         stream.buffer.addLast(message);
-        while (stream.buffer.size() > properties.bufferLines() && stream.buffer.peekFirst().type() == LogStreamMessage.Type.LINE) {
+        int capacity = Math.max(properties.bufferLines(), stream.key.options().tail());
+        while (stream.buffer.size() > capacity && stream.buffer.peekFirst().type() == LogStreamMessage.Type.LINE) {
             stream.buffer.removeFirst();
         }
         for (Subscription s : stream.subscribers) {

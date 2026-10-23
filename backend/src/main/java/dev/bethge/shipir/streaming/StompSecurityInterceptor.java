@@ -68,7 +68,14 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                     if (!logStreams.mayFollow(accessor.getUser().getName(), logTarget)) {
                         throw new MessageDeliveryException("Subscription destination not allowed");
                     }
-                    logStreams.subscribe(logTarget, accessor.getSessionId(), accessor.getSubscriptionId());
+                    LogStreamHandler.Options options;
+                    try {
+                        options = logStreams.parseOptions(accessor.getFirstNativeHeader("tail"),
+                                accessor.getFirstNativeHeader("timestamps"));
+                    } catch (IllegalArgumentException e) {
+                        throw new MessageDeliveryException("Invalid log stream option");
+                    }
+                    logStreams.subscribe(logTarget, options, accessor.getSessionId(), accessor.getSubscriptionId());
                     break;
                 }
                 var m = DEPLOYMENT_TOPIC.matcher(destination);
