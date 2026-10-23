@@ -169,7 +169,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 | Docker access | `docker-java`, wrapped behind our own interfaces |
 | Compose execution | `docker compose` as a subprocess (`ProcessBuilder`). No reimplementation of the Compose spec |
 | Real-time | WebSocket with STOMP (logs, events, compose output, exec terminal) |
-| Auth | Spring Security, RBAC (JWT vs. session still open) |
+| Auth | Spring Security, server-side session (HttpOnly cookie + CSRF), RBAC |
 | Tests | JUnit 5, Testcontainers (Postgres + Docker), ArchUnit later |
 
 ## Build & Test
@@ -213,7 +213,7 @@ dev.bethge.shipir
 ├── common/
 │   ├── config/        SecurityConfig, WebSocketConfig, AsyncConfig, OpenApiConfig
 │   ├── exception/     ApiException, GlobalExceptionHandler, ErrorResponse
-│   ├── security/      JwtService, JwtAuthFilter, CurrentUser
+│   ├── security/      CurrentUser, session auth support
 │   └── util/          PathValidationUtil   (path traversal protection, centralized)
 ├── docker/            Abstraction over docker-java (hexagonal: ports + adapters)
 │   ├── DockerHostConnectionManager   (one DockerClient per host; LOCAL = Unix socket, TCP = TLS)

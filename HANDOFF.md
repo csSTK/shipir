@@ -14,7 +14,7 @@ This file holds the parts of the original planning handoff that aren't permanent
 
 - [x] **DECIDED:** Maven, with the Maven wrapper (`backend/mvnw`).
 - [x] **DECIDED:** Java 25 (LTS), Spring Boot 4.1.1 (pinned via `spring-boot-starter-parent`).
-- [ ] Auth: JWT or server-side session?
+- [x] **DECIDED:** Auth uses a server-side Spring Security session (HttpOnly cookie, cookie-based CSRF token for the SPA), not JWT. Reason: instant revocation on logout/password change, simplest for a same-origin SPA behind nginx, STOMP reuses the cookie.
 - [x] **DECIDED:** Classic Spring MVC + WebSocket/STOMP (no WebFlux).
 - [x] **DECIDED:** Project name is "Shipir". Base package is `dev.bethge.shipir`. Repo layout: `backend/` (Java/Maven) and `frontend/` (React/TypeScript).
 - [x] **DECIDED:** Database and user are named `shipir`. The connection is configured via `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER` (defaults `localhost`/`5432`/`shipir`/`shipir`) and `DB_PASSWORD` (no default), shared by `application.yml` and `docker-compose.dev.yml`. Reason: a native Postgres on 5432 must be able to coexist with the Docker dev DB (`DB_PORT=5433`).
