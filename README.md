@@ -133,8 +133,14 @@ Stop the stack with `docker compose -f docker-compose.yml down`. This does not t
 To run the app against the local database, export the variables from `.env` into your shell first. The Spring app does not read `.env` itself:
 
 ```bash
-set -a; source .env; set +a                       # export DB_* and DB_PASSWORD from .env
+set -a; source .env; set +a                       # export all variables from .env (bash/zsh)
 ./backend/mvnw -f backend/pom.xml spring-boot:run # Run the app on http://localhost:8080 (runs Flyway migrations)
+```
+
+In fish, `source .env` fails on the `KEY=value` lines. Export them like this instead (values without quotes, fish would keep them):
+
+```fish
+for line in (string match -rv '^\s*(#|$)' < .env); set -gx (string split -m 1 = $line); end
 ```
 
 Tests don't need these variables: they start their own throwaway PostgreSQL via Testcontainers.
