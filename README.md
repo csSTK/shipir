@@ -22,6 +22,7 @@ This is a learning and portfolio project focused on Java backend development. Th
 - **Live streaming:** container logs, Docker events, Compose output and an exec terminal over WebSocket.
 - **Access control:** users with roles (Admin, Operator, Viewer) plus fine-grained permissions per host and stack.
 - **Audit log:** a record of who did what, and when.
+- **AI assistant:** an in-app chat (any OpenAI-compatible API, NVIDIA build by default; an admin sets the key at Settings > AI assistant) that answers from live data and acts as the signed-in user with their role. Every change waits for an explicit Confirm. Chats are saved, can be reopened, and can be shared read-only with admins for debugging.
 
 ## Tech stack
 
@@ -52,7 +53,6 @@ A few deliberate design choices:
 
 - Hosted SaaS with a cloud control plane and customer-side agents
 - Provisioning hosts for third parties
-- AI assistant
 
 ## Getting started
 
