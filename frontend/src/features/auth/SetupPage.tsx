@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ApiError } from '../../shared/api/client.ts'
-import { useChangePassword } from './api.ts'
+import { useQueryClient } from '@tanstack/react-query'
+import { EnvironmentForm } from '../hosts/index.ts'
+import { CURRENT_USER_KEY, useChangePassword, type SetupStep } from './api.ts'
 import { checkPassword, isPasswordValid, violationMessage } from './passwordPolicy.ts'
 import './SetupPage.css'
 
@@ -17,8 +19,73 @@ function errorMessages(error: unknown): string[] {
   return ['Could not set the password. Please try again.']
 }
 
-/** Forced first-start step: replace the initial password before anything else is reachable. */
-export function SetupPage({ username }: { username: string }) {
+const STEPS: { id: SetupStep; label: string }[] = [
+  { id: 'PASSWORD', label: 'Password' },
+  { id: 'ENVIRONMENT', label: 'Environment' },
+]
+
+function StepIndicator({ step }: { step: SetupStep }) {
+  return (
+    <ol className="setup__steps" aria-label="Setup steps">
+      {STEPS.map(({ id, label }, index) => {
+        const current = STEPS.findIndex((s) => s.id === step)
+        return (
+          <li
+            key={id}
+            className="setup__step"
+            data-state={index < current ? 'done' : index === current ? 'current' : 'todo'}
+            aria-current={index === current ? 'step' : undefined}
+          >
+            <span aria-hidden="true" className="setup__step-number">
+              {index < current ? '✓' : index + 1}
+            </span>
+            {label}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+/** Second first-start step: an admin adds the first Docker environment before the app opens. */
+function EnvironmentStep() {
+  const queryClient = useQueryClient()
+  const [finishing, setFinishing] = useState(false)
+  return (
+    <div className="setup__card setup__panel">
+      <h1 className="setup__title">Add your first environment</h1>
+      <p className="setup__intro">
+        An environment is a Docker engine Shipir manages: this machine or a remote host. You can add more
+        later.
+      </p>
+      <EnvironmentForm
+        submitLabel="Continue"
+        onCreated={() => {
+          setFinishing(true)
+          // The gate leaves the setup once /auth/me reports no pending step.
+          void queryClient.refetchQueries({ queryKey: CURRENT_USER_KEY })
+        }}
+      />
+      <div className="setup__success" role="status">
+        {finishing && 'Environment added. Opening Shipir…'}
+      </div>
+    </div>
+  )
+}
+
+/** Forced first-start flow: replace the initial password, then add the first environment. */
+export function SetupPage({ username, step = 'PASSWORD' }: { username: string; step?: SetupStep }) {
+  return (
+    <main className="setup">
+      <div className="setup__wrap">
+        <StepIndicator step={step} />
+        {step === 'ENVIRONMENT' ? <EnvironmentStep key="environment" /> : <PasswordStep key="password" username={username} />}
+      </div>
+    </main>
+  )
+}
+
+function PasswordStep({ username }: { username: string }) {
   const changePassword = useChangePassword()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
@@ -50,8 +117,8 @@ export function SetupPage({ username }: { username: string }) {
   }
 
   return (
-    <main className="setup">
-      <form className="setup__card" onSubmit={onSubmit}>
+    <>
+      <form className="setup__card setup__panel" onSubmit={onSubmit}>
         <h1 className="setup__title">Set your password</h1>
         <p className="setup__intro">
           This is the first start of Shipir. The initial password is known to whoever installed it, so
@@ -109,6 +176,6 @@ export function SetupPage({ username }: { username: string }) {
           {changePassword.isPending ? 'Saving…' : 'Set password'}
         </button>
       </form>
-    </main>
+    </>
   )
 }

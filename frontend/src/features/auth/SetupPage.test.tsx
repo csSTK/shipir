@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { queryClient } from '../../app/queryClient.ts'
 import { ApiError, apiFetch } from '../../shared/api/client.ts'
 import { SetupPage } from './SetupPage.tsx'
+import { useCurrentUser } from './api.ts'
 
 vi.mock('../../shared/api/client.ts', async (importActual) => ({
   ...(await importActual<typeof import('../../shared/api/client.ts')>()),
@@ -129,5 +130,79 @@ describe('SetupPage', () => {
     fillValid()
     fireEvent.click(submit())
     expect(await screen.findByRole('alert')).toHaveTextContent(/try again/i)
+  })
+})
+
+describe('SetupPage steps', () => {
+  const stepIndicator = () => screen.getByRole('list', { name: /setup steps/i })
+
+  it('renders the password step with a step indicator by default', () => {
+    renderPage()
+    expect(screen.getByRole('heading', { name: 'Set your password' })).toBeInTheDocument()
+    expect(stepIndicator()).toHaveTextContent(/password/i)
+    expect(stepIndicator()).toHaveTextContent(/environment/i)
+    expect(screen.getByText(/password/i, { selector: '[aria-current="step"]' })).toBeInTheDocument()
+  })
+
+  it('renders the environment step when step is ENVIRONMENT', () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SetupPage username="admin" step="ENVIRONMENT" />
+      </QueryClientProvider>,
+    )
+    expect(screen.getByRole('heading', { name: /add your first environment/i })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Current password')).not.toBeInTheDocument()
+    expect(screen.getByText(/environment/i, { selector: '[aria-current="step"]' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /local docker socket/i })).toBeInTheDocument()
+  })
+
+  it('creates the environment and refetches /auth/me', async () => {
+    let me = { username: 'admin', role: 'ADMIN', setupRequired: true, setupStep: 'ENVIRONMENT' }
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/auth/me') return me as never
+      if (path === '/hosts') {
+        me = { ...me, setupRequired: false, setupStep: null as never }
+        return { id: '1', name: 'Local', connectionType: 'LOCAL' } as never
+      }
+      throw new Error(`unexpected ${path}`)
+    })
+    function Harness() {
+      const { data } = useCurrentUser()
+      if (!data) return null
+      return data.setupStep ? (
+        <SetupPage username={data.username} step={data.setupStep} />
+      ) : (
+        <p>App</p>
+      )
+    }
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Harness />
+      </QueryClientProvider>,
+    )
+    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Local' } })
+    fireEvent.click(screen.getByRole('button', { name: /continue|add environment|finish/i }))
+
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith('/hosts', {
+        method: 'POST',
+        body: { name: 'Local', connectionType: 'LOCAL' },
+      }),
+    )
+    expect(await screen.findByText('App')).toBeInTheDocument()
+    expect(apiFetchMock.mock.calls.filter(([path]) => path === '/auth/me').length).toBeGreaterThan(1)
+  })
+
+  it('shows a connection failure and stays on the environment step', async () => {
+    apiFetchMock.mockRejectedValue(new ApiError(400, '{}', 'CONNECTION_FAILED', undefined, ['UNREACHABLE']))
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SetupPage username="admin" step="ENVIRONMENT" />
+      </QueryClientProvider>,
+    )
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Local' } })
+    fireEvent.click(screen.getByRole('button', { name: /continue|add environment|finish/i }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not reach/i)
+    expect(screen.getByRole('heading', { name: /add your first environment/i })).toBeInTheDocument()
   })
 })

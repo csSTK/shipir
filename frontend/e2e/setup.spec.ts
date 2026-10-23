@@ -1,7 +1,8 @@
 import { expect, test } from './fixtures/api.ts'
 
-const initial = { username: 'admin', role: 'ADMIN', setupRequired: true }
-const ready = { username: 'admin', role: 'ADMIN', setupRequired: false }
+const initial = { username: 'admin', role: 'ADMIN', setupRequired: true, setupStep: 'PASSWORD' }
+const needsEnvironment = { username: 'admin', role: 'ADMIN', setupRequired: true, setupStep: 'ENVIRONMENT' }
+const ready = { username: 'admin', role: 'ADMIN', setupRequired: false, setupStep: null }
 const GOOD = 'Abcdefghijklm1!'
 
 test('login -> setup screen -> valid password -> app shown', async ({ page, api }) => {
@@ -24,10 +25,54 @@ test('login -> setup screen -> valid password -> app shown', async ({ page, api 
   await expect(submit).toBeEnabled()
 
   api.mock('POST', '/api/auth/password', { status: 204 })
+  api.mock('GET', '/api/auth/me', { body: needsEnvironment })
+  await submit.click()
+  await expect(page.getByRole('heading', { name: 'Add your first environment' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Set your password' })).toHaveCount(0)
+})
+
+test('environment step: add Local -> app shown', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', { body: needsEnvironment })
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Add your first environment' })).toBeVisible()
+  await page.getByLabel('Name').fill('Local')
+
+  api.mock('POST', '/api/hosts', {
+    status: 201,
+    body: { id: '1', name: 'Local', connectionType: 'LOCAL', host: null, port: null, tls: false, createdAt: '2026-01-01T00:00:00Z' },
+  })
   api.mock('GET', '/api/auth/me', { body: ready })
   api.mock('GET', '/api/hosts/overview', { body: [] })
-  await submit.click()
+  await page.getByRole('button', { name: 'Continue' }).click()
   await expect(page.getByRole('heading', { name: 'Shipir' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Add your first environment' })).toHaveCount(0)
+})
+
+test('reload during the environment step lands on step 2', async ({ page, api }) => {
+  // No /api/hosts/overview mock: the fixture fails the test if the app requests it.
+  api.mock('GET', '/api/auth/me', { body: needsEnvironment })
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Add your first environment' })).toBeVisible()
+
+  await page.reload()
+
+  await expect(page.getByRole('heading', { name: 'Add your first environment' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Set your password' })).toHaveCount(0)
+  await expect(page.getByRole('listitem').filter({ hasText: 'Environment' }).first()).toHaveAttribute('aria-current', 'step')
+})
+
+test('environment step: connection failure is shown and the user stays on step 2', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', { body: needsEnvironment })
+  api.mock('POST', '/api/hosts', {
+    status: 400,
+    body: { code: 'CONNECTION_FAILED', message: 'failed', details: ['UNREACHABLE'] },
+  })
+  await page.goto('/')
+  await page.getByLabel('Name').fill('Local')
+  await page.getByRole('button', { name: 'Continue' }).click()
+
+  await expect(page.getByRole('alert')).toContainText('Could not reach the Docker host')
+  await expect(page.getByRole('heading', { name: 'Add your first environment' })).toBeVisible()
 })
 
 test('shows the server error for a wrong current password', async ({ page, api }) => {

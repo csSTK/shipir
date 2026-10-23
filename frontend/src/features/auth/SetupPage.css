@@ -166,3 +166,95 @@
     transition: none;
   }
 }
+
+.setup__wrap {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.setup__wrap .setup__card {
+  max-width: none;
+}
+
+.setup__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 20px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.setup__step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0.55;
+}
+
+.setup__step[data-state='current'],
+.setup__step[data-state='done'] {
+  opacity: 1;
+}
+
+.setup__step-number {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.75rem;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+}
+
+.setup__step[data-state='current'] .setup__step-number {
+  background: #0a84ff;
+  border-color: #0a84ff;
+  color: #fff;
+}
+
+.setup__step[data-state='done'] .setup__step-number {
+  color: #1a7f37;
+  border-color: currentColor;
+}
+
+@media (prefers-color-scheme: dark) {
+  .setup__step[data-state='done'] .setup__step-number {
+    color: #4ade80;
+  }
+}
+
+/* Step transition: a short settle-in; reduced motion gets a plain cross-fade. */
+.setup__panel {
+  animation: setup-panel-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes setup-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setup__panel {
+    animation: setup-panel-fade 0.2s ease;
+  }
+  @keyframes setup-panel-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}

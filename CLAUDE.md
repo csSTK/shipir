@@ -87,7 +87,7 @@ Frontend (`frontend/`):
 - `src/app/providers.tsx`, `src/app/queryClient.ts`: React Query setup
 - `src/shared/api/client.ts`: `apiFetch<T>` + `ApiError` (status, code, violations, details), JSON fetch against `/api`, same-origin credentials, `X-XSRF-TOKEN` from cookie on non-GET
 - `src/features/auth/{api.ts,LoginPage.tsx,LoginPage.css,index.ts}`: `useCurrentUser/useLogin/useLogout/useChangePassword` hooks, login form
-- `src/features/auth/{SetupPage.tsx,SetupPage.css,passwordPolicy.ts}`: first-start forced password change; client mirror of backend password rules + violation messages
+- `src/features/auth/{SetupPage.tsx,SetupPage.css,passwordPolicy.ts}`: first-start setup, 2 steps with indicator (`step` prop = `setupStep`: PASSWORD form, ENVIRONMENT embeds hosts `EnvironmentForm` then refetches me); client mirror of backend password rules
 - `src/features/{containers,stacks}/index.ts`: empty feature entry points
 - `src/features/hosts/api.ts`: host types, `HOSTS_KEY`/`HOSTS_OVERVIEW_KEY`, `useHosts/useHostsOverview` (30 s + focus refetch, `HostOverview`), `useCreateHost/useTestConnection/useRenameHost/useDeleteHost` (create/delete also invalidate current user)
 - `src/features/hosts/EnvironmentForm.{tsx,css}`: Local / Remote (TCP+TLS) form, PEM file pickers (names only shown), connection test, inline server errors; props `onCreated`, `submitLabel`
@@ -103,7 +103,7 @@ Frontend (`frontend/`):
 - `e2e/app.spec.ts`: smoke spec, Shipir heading (signed in)
 - `e2e/auth.spec.ts`: login happy path + sign out, wrong password
 - `e2e/environments.spec.ts`: overview list/search, viewer vs admin add, admin rename/delete, taken name, operator no actions, error, placeholder navigation
-- `e2e/setup.spec.ts`: setup screen flow, server error, no setup when setupRequired=false
+- `e2e/setup.spec.ts`: setup flow (password -> environment step -> app), reload on step 2, connection failure, server error, no setup when done
 - `Dockerfile`: multi-stage image (pnpm build, nginx-unprivileged on :8080; `BACKEND_URL`, `NGINX_RESOLVER`)
 - `nginx/default.conf.template`: envsubst nginx config: SPA fallback, asset caching, `/api` + `/ws` proxy (re-resolving upstream)
 - `.dockerignore`: keeps node_modules, dist, test output out of the build context

@@ -10,7 +10,9 @@ function AuthGate() {
   if (isPending) return <div aria-busy="true" />
   if (isError) return <p role="alert">Could not reach the server.</p>
   if (user === null) return <LoginPage />
-  if (user.setupRequired) return <SetupPage username={user.username} />
+  // setupStep is authoritative; older responses only carry setupRequired (= password step).
+  const setupStep = user.setupStep ?? (user.setupRequired ? 'PASSWORD' : null)
+  if (setupStep) return <SetupPage username={user.username} step={setupStep} />
 
   return (
     <main>

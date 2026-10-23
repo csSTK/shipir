@@ -1,10 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError, apiFetch } from '../../shared/api/client.ts'
 
+export type SetupStep = 'PASSWORD' | 'ENVIRONMENT'
+
 export interface CurrentUser {
   username: string
   role: 'ADMIN' | 'OPERATOR' | 'VIEWER'
   setupRequired: boolean
+  /** Which first-start step is pending; `null` once setup is complete. */
+  setupStep?: SetupStep | null
 }
 
 export interface LoginRequest {
