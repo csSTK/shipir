@@ -169,7 +169,7 @@ class ComposeExecutionServiceTest {
         writeScript("#!/bin/sh\necho \"CERT:$DOCKER_CERT_PATH\"\nsleep 60 &\necho $! > " + pidFile + "\nwait\n");
         List<String> lines = new ArrayList<>();
         long start = System.nanoTime();
-        ComposeProcessResult result = service(Duration.ofMillis(800))
+        ComposeProcessResult result = service(Duration.ofSeconds(3))
                 .execute(hostId, "web", ComposeCommand.UP, tls(), lines::add);
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(10));
         assertThat(result.timedOut()).isTrue();
