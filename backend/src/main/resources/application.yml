@@ -3,6 +3,8 @@ shipir:
     local-socket: unix:///var/run/docker.sock
     connect-timeout: 3s
     read-timeout: 10s
+  host:
+    overview-timeout: 5s
   initial-admin:
     username: ${SHIPIR_INITIAL_ADMIN_USERNAME:admin}
     password: ${SHIPIR_INITIAL_ADMIN_PASSWORD:}

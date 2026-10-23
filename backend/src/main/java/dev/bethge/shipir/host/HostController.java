@@ -3,6 +3,7 @@ package dev.bethge.shipir.host;
 import dev.bethge.shipir.docker.dto.ConnectionTestResult;
 import dev.bethge.shipir.host.dto.ConnectionTestRequest;
 import dev.bethge.shipir.host.dto.CreateHostRequest;
+import dev.bethge.shipir.host.dto.HostOverviewResponse;
 import dev.bethge.shipir.host.dto.HostResponse;
 import dev.bethge.shipir.host.dto.UpdateHostRequest;
 import jakarta.validation.Valid;
@@ -27,14 +28,22 @@ import java.util.UUID;
 class HostController {
 
     private final HostService service;
+    private final HostOverviewService overview;
 
-    HostController(HostService service) {
+    HostController(HostService service, HostOverviewService overview) {
         this.service = service;
+        this.overview = overview;
     }
 
     @GetMapping
     List<HostResponse> list() {
         return service.list();
+    }
+
+    /** Live state of every environment; slow or broken ones are reported as DOWN, never as an error. */
+    @GetMapping("/overview")
+    List<HostOverviewResponse> overview() {
+        return overview.overview();
     }
 
     @PostMapping

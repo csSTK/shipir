@@ -37,10 +37,11 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `audit/AuditLogEntry.java`, `compose/Stack.java`, `compose/generator/ComposeGeneratorService.java`, `config_editor/ConfigFile.java`, `permission/Permission.java`, `streaming/LogStreamHandler.java`: empty placeholders
 - `host/{DockerHost,ConnectionType,DockerHostRepository}.java`: environment entity (TLS columns are ciphertext), LOCAL/TCP enum, repository
 - `host/{HostController,HostService,HostException,HostExceptionHandler}.java`: `/api/hosts` list/create/connection-test/rename/delete (create pings first: 422 CONNECTION_FAILED; 400/409 codes via `HostException`)
+- `host/{HostOverviewService,HostOverviewProperties}.java`: `GET /api/hosts/overview` (in `HostController`): parallel live `info` per host on virtual threads, shared deadline `shipir.host.overview-timeout` (5s), failures -> DOWN + error code (docker codes, TIMEOUT, DECRYPTION_FAILED, ENCRYPTION_KEY_MISSING, UNKNOWN)
 - `host/HostEndpointResolver.java`: public, builds `DockerEndpoint` from a `DockerHost` (decrypts TLS)
 - `host/HostEncryptionStartupCheck.java`: fails startup if TCP hosts exist without `shipir.encryption-key`
-- `host/dto/*.java`: create/test/update requests (toString hides PEMs), `HostResponse` (`tls` boolean only)
-- `backend/src/test/java/dev/bethge/shipir/host/`: `HostApiTestBase` (login helpers, local socket), `HostApiTest`, `HostApiWithoutEncryptionKeyTest`, `HostEncryptionStartupCheckTest`
+- `host/dto/*.java`: create/test/update requests (toString hides PEMs), `HostResponse` (`tls` boolean only), `HostOverviewResponse` (stats null when DOWN)
+- `backend/src/test/java/dev/bethge/shipir/host/`: `HostApiTestBase` (login helpers, local socket), `HostApiTest`, `HostOverview{Api,Resilience}Test` (real LOCAL; stubbed port: failing/hanging/undecryptable hosts), `HostApiWithoutEncryptionKeyTest`, `HostEncryptionStartupCheckTest`
 - `auth/{User,Role,UserRepository}.java`: user entity (`isSetupRequired()`), ADMIN/OPERATOR/VIEWER enum, repository
 - `auth/InitialAdminSeeder.java`, `auth/InitialAdminProperties.java`: seeds first admin on empty DB from `shipir.initial-admin.*` (fails startup without password)
 - `auth/AuthController.java`: `/api/auth/{login,logout,me,password}` (password: 204, rotates session id + CSRF, local handlers for 400 INVALID_CURRENT_PASSWORD / PASSWORD_POLICY); login rotates session id + CSRF token, same 401 body for any failure
