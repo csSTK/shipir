@@ -49,10 +49,11 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 Frontend (`frontend/`):
 - `vite.config.ts`: dev proxy (`/api`, `/ws` → :8080), Vitest config
 - `src/main.tsx`: entry, mounts `App`
-- `src/app/App.tsx`: root component, `Providers` + auth gate (loading, `LoginPage` on 401, `setup-slot` placeholder while `setupRequired`, app + sign out)
+- `src/app/App.tsx`: root component, `Providers` + auth gate (loading, `LoginPage` on 401, `SetupPage` while `setupRequired`, app + sign out)
 - `src/app/providers.tsx`, `src/app/queryClient.ts`: React Query setup
-- `src/shared/api/client.ts`: `apiFetch<T>` + `ApiError` (status, code), JSON fetch against `/api`, same-origin credentials, `X-XSRF-TOKEN` from cookie on non-GET
-- `src/features/auth/{api.ts,LoginPage.tsx,LoginPage.css,index.ts}`: `useCurrentUser/useLogin/useLogout` hooks, login form
+- `src/shared/api/client.ts`: `apiFetch<T>` + `ApiError` (status, code, violations), JSON fetch against `/api`, same-origin credentials, `X-XSRF-TOKEN` from cookie on non-GET
+- `src/features/auth/{api.ts,LoginPage.tsx,LoginPage.css,index.ts}`: `useCurrentUser/useLogin/useLogout/useChangePassword` hooks, login form
+- `src/features/auth/{SetupPage.tsx,SetupPage.css,passwordPolicy.ts}`: first-start forced password change; client mirror of backend password rules + violation messages
 - `src/features/{containers,hosts,stacks}/index.ts`: empty feature entry points
 - `src/test/setup.ts`: jest-dom matchers for Vitest
 - `playwright.config.ts`: Playwright config (Chromium, `e2e/` dir, starts Vite dev server)
@@ -60,6 +61,7 @@ Frontend (`frontend/`):
 - `e2e/fixtures/api.ts`: Playwright `test` with auto `api` fixture: mocks `/api/**` per method+path, fails on unmocked calls (own spec: `api.spec.ts`)
 - `e2e/app.spec.ts`: smoke spec, Shipir heading (signed in)
 - `e2e/auth.spec.ts`: login happy path + sign out, wrong password
+- `e2e/setup.spec.ts`: setup screen flow, server error, no setup when setupRequired=false
 - `Dockerfile`: multi-stage image (pnpm build, nginx-unprivileged on :8080; `BACKEND_URL`, `NGINX_RESOLVER`)
 - `nginx/default.conf.template`: envsubst nginx config: SPA fallback, asset caching, `/api` + `/ws` proxy (re-resolving upstream)
 - `.dockerignore`: keeps node_modules, dist, test output out of the build context

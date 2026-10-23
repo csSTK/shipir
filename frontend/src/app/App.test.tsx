@@ -85,11 +85,11 @@ describe('App auth gate', () => {
     expect(screen.getByLabelText('Username')).toBeDisabled()
   })
 
-  it('renders the setup slot, not the app, while setupRequired', async () => {
+  it('renders the setup page, not the app, while setupRequired', async () => {
     route({ 'GET /auth/me': () => ({ username: 'admin', role: 'ADMIN', setupRequired: true }) })
     render(<App />)
 
-    expect(await screen.findByTestId('setup-slot')).toBeInTheDocument()
+    expect(await screen.findByLabelText('New password')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Sign out' })).not.toBeInTheDocument()
   })
 

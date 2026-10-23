@@ -1,3 +1,4 @@
 export { LoginPage } from './LoginPage.tsx'
-export { useCurrentUser, useLogin, useLogout } from './api.ts'
+export { SetupPage } from './SetupPage.tsx'
+export { useChangePassword, useCurrentUser, useLogin, useLogout } from './api.ts'
 export type { CurrentUser } from './api.ts'

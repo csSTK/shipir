@@ -60,4 +60,22 @@ describe('apiFetch', () => {
 
     await expect(apiFetch('/x')).rejects.toMatchObject({ status: 403, code: 'SETUP_REQUIRED' })
   })
+
+  it('exposes code and violations from a JSON error body', async () => {
+    const body = { code: 'PASSWORD_POLICY', violations: ['TOO_SHORT', 'MISSING_DIGIT'] }
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify(body), { status: 400 }))))
+
+    await expect(apiFetch('/auth/password', { method: 'POST', body: {} })).rejects.toMatchObject({
+      status: 400,
+      code: 'PASSWORD_POLICY',
+      violations: ['TOO_SHORT', 'MISSING_DIGIT'],
+    })
+  })
+
+  it('ignores a violations field that is not a string array', async () => {
+    const body = { code: 'X', violations: [1, 2] }
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify(body), { status: 400 }))))
+
+    await expect(apiFetch('/x')).rejects.toMatchObject({ code: 'X', violations: undefined })
+  })
 })

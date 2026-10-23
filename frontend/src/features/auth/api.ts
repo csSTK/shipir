@@ -50,3 +50,21 @@ export function useLogout() {
     },
   })
 }
+
+export interface ChangePasswordRequest {
+  currentPassword: string
+  newPassword: string
+}
+
+/** Replaces the initial password; on success `/auth/me` is refetched so the gate drops the setup step. */
+export function useChangePassword() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: ChangePasswordRequest) =>
+      apiFetch<void>('/auth/password', { method: 'POST', body: request }),
+    // Not awaited: the mutation reports success right away, the gate swaps pages once /me refetched.
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: CURRENT_USER_KEY })
+    },
+  })
+}

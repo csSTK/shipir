@@ -1,4 +1,4 @@
-import { LoginPage, useCurrentUser, useLogout } from '../features/auth/index.ts'
+import { LoginPage, SetupPage, useCurrentUser, useLogout } from '../features/auth/index.ts'
 import { Providers } from './providers.tsx'
 
 function AuthGate() {
@@ -8,8 +8,7 @@ function AuthGate() {
   if (isPending) return <div aria-busy="true" />
   if (isError) return <p role="alert">Could not reach the server.</p>
   if (user === null) return <LoginPage />
-  // Placeholder: the setup page (shipr-a1h.6) replaces this element.
-  if (user.setupRequired) return <div data-testid="setup-slot" />
+  if (user.setupRequired) return <SetupPage username={user.username} />
 
   return (
     <main>

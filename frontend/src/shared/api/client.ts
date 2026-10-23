@@ -6,12 +6,15 @@ export class ApiError extends Error {
   readonly status: number
   /** Machine-readable error code from the response body (e.g. `SETUP_REQUIRED`), if any. */
   readonly code?: string
+  /** Rule violation codes from the response body (e.g. `PASSWORD_POLICY`), if any. */
+  readonly violations?: string[]
 
-  constructor(status: number, message: string, code?: string) {
+  constructor(status: number, message: string, code?: string, violations?: string[]) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.violations = violations
   }
 }
 
@@ -27,16 +30,21 @@ function readCookie(name: string): string | undefined {
   return entry ? decodeURIComponent(entry.slice(prefix.length)) : undefined
 }
 
-function parseErrorCode(text: string): string | undefined {
+function parseErrorBody(text: string): { code?: string; violations?: string[] } {
   try {
     const parsed: unknown = JSON.parse(text)
-    if (parsed && typeof parsed === 'object' && 'code' in parsed && typeof parsed.code === 'string') {
-      return parsed.code
-    }
+    if (!parsed || typeof parsed !== 'object') return {}
+    const code = 'code' in parsed && typeof parsed.code === 'string' ? parsed.code : undefined
+    const violations =
+      'violations' in parsed &&
+      Array.isArray(parsed.violations) &&
+      parsed.violations.every((v): v is string => typeof v === 'string')
+        ? parsed.violations
+        : undefined
+    return { code, violations }
   } catch {
-    // body is not JSON
+    return {} // body is not JSON
   }
-  return undefined
 }
 
 /** Typed JSON fetch wrapper for the backend REST API. `path` is relative to /api. */
@@ -57,7 +65,8 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   if (!response.ok) {
     const text = await response.text()
-    throw new ApiError(response.status, text || response.statusText, parseErrorCode(text))
+    const { code, violations } = parseErrorBody(text)
+    throw new ApiError(response.status, text || response.statusText, code, violations)
   }
   if (response.status === 204) {
     return undefined as T
