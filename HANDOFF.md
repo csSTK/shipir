@@ -41,9 +41,9 @@ This file holds the parts of the original planning handoff that aren't permanent
 
 ## Planned migrations
 
-`V1__create_users`, `V2__create_docker_hosts`, `V3__create_stacks`, `V4__create_stack_versions`, `V5__create_config_files`, `V6__create_permissions`, `V7__create_audit_log`.
+Implemented in `backend/src/main/resources/db/migration/`: `V1__create_users`, `V2__create_docker_hosts`, `V3__create_stacks`, `V4__create_stack_versions`, `V5__add_users_password_changed_at`, `V6__add_docker_hosts_tls_columns`, `V7__create_password_reset_codes` (drafts removed; see the decided review notes below).
 
-V1–V4 are implemented in `backend/src/main/resources/db/migration/` (drafts removed; see the decided review notes below).
+Still planned, numbered from V8 on: `create_config_files`, `create_permissions`, `create_audit_log`.
 
 ### Rough model for the remaining tables
 
