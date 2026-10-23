@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V7 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V8 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To7Successfully() {
+    void flywayAppliedVersions1To8Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8");
     }
 
     @Test
@@ -363,6 +363,85 @@ class SchemaMigrationTest {
                   AND indexdef LIKE '%(user_id)%'
                 """, Integer.class);
         assertThat(count).isGreaterThanOrEqualTo(1);
+    }
+
+    @Test
+    void auditLogHasExpectedColumnsAndTypes() {
+        List<Map<String, Object>> columns = jdbc.queryForList("""
+                SELECT column_name, data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'audit_log'
+                """);
+        Map<String, Map<String, Object>> byName = columns.stream()
+                .collect(java.util.stream.Collectors.toMap(c -> (String) c.get("column_name"), c -> c));
+        assertThat(byName.keySet()).containsExactlyInAnyOrder(
+                "id", "occurred_at", "user_id", "username", "action", "outcome",
+                "target_type", "target_id", "details");
+
+        assertThat(byName.get("id").get("data_type")).isEqualTo("uuid");
+        assertThat(byName.get("occurred_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("occurred_at").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("user_id").get("data_type")).isEqualTo("uuid");
+        assertThat(byName.get("user_id").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("username").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("action").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("outcome").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("target_type").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("target_id").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("details").get("data_type")).isEqualTo("jsonb");
+        assertThat(byName.get("details").get("is_nullable")).isEqualTo("YES");
+    }
+
+    @Test
+    void auditLogOccurredAtDefaultsToNow() {
+        jdbc.update("INSERT INTO audit_log (username, action, outcome) VALUES ('alice', 'AUTH_LOGIN', 'SUCCESS')");
+        Timestamp occurredAt = jdbc.queryForObject(
+                "SELECT occurred_at FROM audit_log WHERE username = 'alice'", Timestamp.class);
+        assertThat(occurredAt).isNotNull();
+    }
+
+    @Test
+    void auditLogIdDefaultsToGeneratedUuid() {
+        jdbc.update("INSERT INTO audit_log (username, action, outcome) VALUES ('alice', 'AUTH_LOGIN', 'FAILURE')");
+        UUID id = jdbc.queryForObject("SELECT id FROM audit_log WHERE username = 'alice'", UUID.class);
+        assertThat(id).isNotNull();
+    }
+
+    @Test
+    void auditLogAcceptsFailedLoginWithoutUser() {
+        jdbc.update("INSERT INTO audit_log (username, action, outcome) VALUES ('unknown', 'AUTH_LOGIN', 'FAILURE')");
+        Integer count = jdbc.queryForObject(
+                "SELECT count(*) FROM audit_log WHERE user_id IS NULL AND username = 'unknown'", Integer.class);
+        assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    void auditLogOutcomeCheckRejectsOtherValues() {
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO audit_log (username, action, outcome) VALUES ('alice', 'AUTH_LOGIN', 'PENDING')"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("audit_log_outcome_check");
+    }
+
+    @Test
+    void deletingUserKeepsAuditRowWithNullUserAndUsernameSnapshot() {
+        UUID user = insertUser("alice");
+        jdbc.update("INSERT INTO audit_log (user_id, username, action, outcome) VALUES (?, 'alice', 'AUTH_LOGIN', 'SUCCESS')", user);
+
+        jdbc.update("DELETE FROM users WHERE id = ?", user);
+
+        Map<String, Object> row = jdbc.queryForMap("SELECT user_id, username FROM audit_log");
+        assertThat(row.get("user_id")).isNull();
+        assertThat(row.get("username")).isEqualTo("alice");
+    }
+
+    @Test
+    void auditLogHasIndexesOnOccurredAtAndActionOccurredAt() {
+        List<String> definitions = jdbc.queryForList("""
+                SELECT indexdef FROM pg_indexes
+                WHERE schemaname = 'public' AND tablename = 'audit_log'
+                """, String.class);
+        assertThat(definitions).anyMatch(d -> d.contains("(occurred_at DESC)"));
+        assertThat(definitions).anyMatch(d -> d.contains("(action, occurred_at)"));
     }
 
     private int count(String table) {
