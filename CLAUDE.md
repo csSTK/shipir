@@ -38,10 +38,12 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `host/{DockerHost,ConnectionType,DockerHostRepository}.java`: environment entity (TLS columns are ciphertext), LOCAL/TCP enum, repository
 - `host/{HostController,HostService,HostException,HostExceptionHandler}.java`: `/api/hosts` list/create/connection-test/rename/delete (create pings first: 422 CONNECTION_FAILED; 400/409 codes via `HostException`)
 - `host/{HostOverviewService,HostOverviewProperties}.java`: `GET /api/hosts/overview` (in `HostController`): parallel live `info` per host on virtual threads, shared deadline `shipir.host.overview-timeout` (5s), failures -> DOWN + error code (docker codes, TIMEOUT, DECRYPTION_FAILED, ENCRYPTION_KEY_MISSING, UNKNOWN)
+- `host/{HostHealthCheckScheduler,HostStatusChangedEvent}.java`: `@Scheduled` (`shipir.host.health-check-interval`=60s, `health-check-enabled`=true; test properties disable it) reuses `HostOverviewService`, in-memory last status per host (first observation = baseline), publishes `HostStatusChangedEvent` on UP/DOWN flips, forgets deleted hosts
+- `common/config/SchedulingConfig.java`: `@EnableScheduling`
 - `host/HostEndpointResolver.java`: public, builds `DockerEndpoint` from a `DockerHost` (decrypts TLS)
 - `host/HostEncryptionStartupCheck.java`: fails startup if TCP hosts exist without `shipir.encryption-key`
 - `host/dto/*.java`: create/test/update requests (toString hides PEMs), `HostResponse` (`tls` boolean only), `HostOverviewResponse` (stats null when DOWN)
-- `backend/src/test/java/dev/bethge/shipir/host/`: `HostApiTestBase` (login helpers, local socket), `HostApiTest`, `HostOverview{Api,Resilience}Test` (real LOCAL; stubbed port: failing/hanging/undecryptable hosts), `HostApiWithoutEncryptionKeyTest`, `HostEncryptionStartupCheckTest`
+- `backend/src/test/java/dev/bethge/shipir/host/`: `HostHealthCheckSchedulerTest` (unit, stubbed docker, fixed clock), `HostApiTestBase` (login helpers, local socket), `HostApiTest`, `HostOverview{Api,Resilience}Test` (real LOCAL; stubbed port: failing/hanging/undecryptable hosts), `HostApiWithoutEncryptionKeyTest`, `HostEncryptionStartupCheckTest`
 - `auth/{User,Role,UserRepository}.java`: user entity (`isSetupRequired()`), ADMIN/OPERATOR/VIEWER enum, repository
 - `auth/InitialAdminSeeder.java`, `auth/InitialAdminProperties.java`: seeds first admin on empty DB from `shipir.initial-admin.*` (fails startup without password)
 - `auth/AuthController.java`: `/api/auth/{login,logout,me,password,password-reset/{request,confirm}}` (reset: request always 202, confirm 204 / 400 INVALID_RESET_CODE or PASSWORD_POLICY, no login; password: 204, rotates session id + CSRF, local handlers for 400 INVALID_CURRENT_PASSWORD / PASSWORD_POLICY); login rotates session id + CSRF token, same 401 body for any failure
@@ -80,10 +82,10 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `backend/Dockerfile`: multi-stage image: Temurin 25 build (tests skipped), JRE alpine runtime, user uid 10001, env-only config
 - `backend/.dockerignore`: excludes `target/`, `.env`, keys, IDE and git files from the image build
 - `backend/src/main/resources/application.yml`: app name, datasource (`DB_HOST/PORT/NAME/USER` with local defaults, `${DB_PASSWORD}` no default), JPA validate/no OSIV, Flyway
-- `backend/src/main/resources/db/migration/V{1..4}__create_{users,docker_hosts,stacks,stack_versions}.sql`, `V5__add_users_password_changed_at.sql`, `V6__add_docker_hosts_tls_columns.sql`, `V7__create_password_reset_codes.sql`: Flyway schema (TIMESTAMPTZ, FKs to users RESTRICT, host/stack FKs CASCADE; V5 NULL = first-start setup pending; V6 docker_hosts: encrypted TLS BYTEA columns, connection shape/TLS/name constraints; V7 password_reset_codes: hashed codes, attempt counter, CASCADE with user)
+- `backend/src/main/resources/db/migration/V{1..4}__create_{users,docker_hosts,stacks,stack_versions}.sql`, `V5__add_users_password_changed_at.sql`, `V6__add_docker_hosts_tls_columns.sql`, `V7__create_password_reset_codes.sql`: Flyway schema (TIMESTAMPTZ, FKs to users RESTRICT, host/stack FKs CASCADE; V5 NULL = first-start setup pending; V6 docker_hosts: encrypted TLS BYTEA columns, connection shape/TLS/name constraints; V7 password_reset_codes: hashed codes, attempt counter, CASCADE with user; V8 audit_log: username snapshot, outcome check, user FK SET NULL, indexes on occurred_at and (action, occurred_at))
 - `backend/src/test/java/dev/bethge/shipir/ShipirApplicationTests.java`: context-load + Postgres 16 test
 - `backend/src/test/java/dev/bethge/shipir/DatasourcePropertiesTest.java`: resolves application.yml datasource defaults and `DB_*` overrides (no context, no DB)
-- `backend/src/test/java/dev/bethge/shipir/migration/SchemaMigrationTest.java`: V1-V7 schema test (timestamptz, unique, cascade, restrict, password_changed_at, docker_hosts checks, password_reset_codes columns/checks/cascade), `@Transactional` rollback
+- `backend/src/test/java/dev/bethge/shipir/migration/SchemaMigrationTest.java`: V1-V8 schema test (timestamptz, unique, cascade, restrict, password_changed_at, docker_hosts checks, password_reset_codes columns/checks/cascade, audit_log columns/outcome check/user SET NULL/indexes), `@Transactional` rollback
 - `backend/src/test/java/dev/bethge/shipir/PostgresTestConfiguration.java`: reusable `@TestConfiguration`, `@ServiceConnection` postgres:16-alpine; integration tests `@Import` it
 
 Frontend (`frontend/`):
@@ -95,6 +97,9 @@ Frontend (`frontend/`):
 - `src/features/auth/{api.ts,LoginPage.tsx,LoginPage.css,index.ts}`: `useCurrentUser/useLogin/useLogout/useChangePassword/useRequestPasswordReset/useConfirmPasswordReset` hooks, login form with `Forgot password?` view switch + success notice
 - `src/features/auth/PasswordResetPage.{tsx,css,test.tsx}`: reset flow (username -> neutral message + 6-digit code, new password with live rules; INVALID_RESET_CODE / PASSWORD_POLICY inline)
 - `src/features/auth/{SetupPage.tsx,SetupPage.css,passwordPolicy.ts}`: first-start setup, 2 steps with indicator (`step` prop = `setupStep`: PASSWORD form, ENVIRONMENT embeds hosts `EnvironmentForm` then refetches me); client mirror of backend password rules
+- `src/app/layout/{AppShell,Sidebar,UserMenu}.tsx` (+ `.css`, `AppShell.test.tsx`): app shell: top bar (brand, user menu with Settings -> /account and Sign out), sidebar (Environments, Notifications, ADMIN-only Settings group), narrow-screen toggle
+- `src/app/layout/PlaceholderPages.tsx`: `PlaceholderPage`, `NotAllowedPage` (non-ADMIN on /settings/*)
+- `e2e/shell.spec.ts`: sidebar/user menu navigation, viewer not allowed on settings
 - `src/features/{containers,stacks}/index.ts`: empty feature entry points
 - `src/features/hosts/api.ts`: host types, `HOSTS_KEY`/`HOSTS_OVERVIEW_KEY`, `useHosts/useHostsOverview` (30 s + focus refetch, `HostOverview`), `useCreateHost/useTestConnection/useRenameHost/useDeleteHost` (create/delete also invalidate current user)
 - `src/features/hosts/EnvironmentForm.{tsx,css}`: Local / Remote (TCP+TLS) form, PEM file pickers (names only shown), connection test, inline server errors; props `onCreated`, `submitLabel`

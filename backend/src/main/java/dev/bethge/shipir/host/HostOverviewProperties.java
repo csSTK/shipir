@@ -7,5 +7,7 @@ import java.time.Duration;
 
 /** Bound from {@code shipir.host.*}. */
 @ConfigurationProperties("shipir.host")
-record HostOverviewProperties(@DefaultValue("5s") Duration overviewTimeout) {
+record HostOverviewProperties(@DefaultValue("5s") Duration overviewTimeout,
+                              @DefaultValue("60s") Duration healthCheckInterval,
+                              @DefaultValue("true") boolean healthCheckEnabled) {
 }
