@@ -57,7 +57,11 @@ class HostApiTest extends HostApiTestBase {
                 .andExpect(jsonPath("$.name").value("Renamed"));
 
         mvc.perform(admin.write(delete("/api/hosts/" + id))).andExpect(status().isNoContent());
-        mvc.perform(get("/api/hosts").session(admin.session())).andExpect(jsonPath("$").isEmpty());
+        // no environment left: the admin is back at the ENVIRONMENT setup step
+        mvc.perform(get("/api/hosts").session(admin.session()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("SETUP_REQUIRED"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM docker_hosts", Integer.class)).isZero();
     }
 
     @Test
@@ -125,6 +129,7 @@ class HostApiTest extends HostApiTestBase {
     @Test
     void unknownHostIsNotFound() throws Exception {
         Login admin = login("admin");
+        createLocal(admin, "Existing"); // without any environment the setup gate would answer 403
         String id = "00000000-0000-0000-0000-000000000001";
         mvc.perform(admin.write(delete("/api/hosts/" + id))).andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("HOST_NOT_FOUND"));

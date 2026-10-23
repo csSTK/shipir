@@ -18,11 +18,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
+import java.util.Optional;
 
 /**
- * First-start gate: an authenticated user who still has to choose their own password may only reach
- * {@code GET /api/auth/me}, {@code POST /api/auth/logout} and {@code POST /api/auth/password}.
- * Everything else under {@code /api/} gets 403 {@code SETUP_REQUIRED}. Unauthenticated requests pass
+ * First-start gate: an authenticated user with a pending {@link SetupStep} may only reach
+ * {@code GET /api/auth/me}, {@code POST /api/auth/logout} and {@code POST /api/auth/password}; during
+ * {@link SetupStep#ENVIRONMENT} also {@code POST /api/hosts} and {@code POST /api/hosts/connection-test}.
+ * Everything else under {@code /api/} gets 403 {@code SETUP_REQUIRED} (the message names the step). Unauthenticated requests pass
  * through so the normal 401 handling applies.
  */
 public final class SetupGateFilter extends OncePerRequestFilter {
@@ -32,6 +34,9 @@ public final class SetupGateFilter extends OncePerRequestFilter {
             PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.GET, "/api/auth/me"),
             PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/auth/logout"),
             PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/auth/password"));
+    private static final RequestMatcher ENVIRONMENT_STEP_ALLOWED = new OrRequestMatcher(
+            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/hosts"),
+            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/hosts/connection-test"));
 
     private final SetupStatus setupStatus;
     private final JsonMapper mapper;
@@ -46,14 +51,18 @@ public final class SetupGateFilter extends OncePerRequestFilter {
                                     FilterChain chain) throws ServletException, IOException {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken)
-                && API.matches(request) && !ALLOWED.matches(request)
-                && setupStatus.isSetupRequired(auth.getName())) {
-            response.setStatus(HttpStatus.FORBIDDEN.value());
-            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            response.setCharacterEncoding("UTF-8");
-            mapper.writeValue(response.getWriter(),
-                    new ErrorResponse("SETUP_REQUIRED", "Set your own password before using Shipir"));
-            return;
+                && API.matches(request) && !ALLOWED.matches(request)) {
+            Optional<SetupStep> step = setupStatus.currentStep(auth.getName());
+            if (step.isPresent() && !(step.get() == SetupStep.ENVIRONMENT && ENVIRONMENT_STEP_ALLOWED.matches(request))) {
+                String message = step.get() == SetupStep.PASSWORD
+                        ? "Set your own password before using Shipir"
+                        : "Add your first environment before using Shipir";
+                response.setStatus(HttpStatus.FORBIDDEN.value());
+                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                response.setCharacterEncoding("UTF-8");
+                mapper.writeValue(response.getWriter(), new ErrorResponse("SETUP_REQUIRED", message));
+                return;
+            }
         }
         chain.doFilter(request, response);
     }

@@ -160,9 +160,14 @@ class PasswordChangeTest {
 
         mvc.perform(get("/api/auth/me").session(rotated))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.setupRequired").value(false));
-        mvc.perform(get("/api/containers").session(rotated))
-                .andExpect(status().isNotFound()); // past the gate: no such endpoint
+                // the admin has no environment yet, so setup continues with the ENVIRONMENT step
+                .andExpect(jsonPath("$.setupRequired").value(true))
+                .andExpect(jsonPath("$.setupStep").value("ENVIRONMENT"));
+        // password gate lifted: the environment step's endpoint is reachable (400 validation, not 403)
+        mvc.perform(post("/api/hosts/connection-test").session(rotated)
+                        .cookie(csrf).header("X-XSRF-TOKEN", csrf.getValue())
+                        .contentType(APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
 
         Cookie freshCsrf = csrfCookie();
         MvcResult oldLogin = mvc.perform(post("/api/auth/login")

@@ -41,19 +41,22 @@ class AuthController {
     private final CsrfTokenRepository csrfTokenRepository;
     private final UserRepository users;
     private final UserService userService;
+    private final UserSetupStatus setupStatus;
 
     AuthController(AuthenticationManager authenticationManager,
                    SecurityContextRepository securityContextRepository,
                    SessionAuthenticationStrategy sessionAuthenticationStrategy,
                    CsrfTokenRepository csrfTokenRepository,
                    UserRepository users,
-                   UserService userService) {
+                   UserService userService,
+                   UserSetupStatus setupStatus) {
         this.authenticationManager = authenticationManager;
         this.securityContextRepository = securityContextRepository;
         this.sessionAuthenticationStrategy = sessionAuthenticationStrategy;
         this.csrfTokenRepository = csrfTokenRepository;
         this.users = users;
         this.userService = userService;
+        this.setupStatus = setupStatus;
     }
 
     @PostMapping("/login")
@@ -73,14 +76,14 @@ class AuthController {
         SecurityContextHolder.setContext(context);
         securityContextRepository.saveContext(context, request, response);
         return users.findByUsername(authentication.getName())
-                .<ResponseEntity<?>>map(u -> ResponseEntity.ok(CurrentUserResponse.from(u)))
+                .<ResponseEntity<?>>map(u -> ResponseEntity.ok(CurrentUserResponse.from(u, setupStatus.stepFor(u))))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(INVALID_CREDENTIALS));
     }
 
     @GetMapping("/me")
     ResponseEntity<?> me(Authentication authentication) {
         return users.findByUsername(authentication.getName())
-                .<ResponseEntity<?>>map(u -> ResponseEntity.ok(CurrentUserResponse.from(u)))
+                .<ResponseEntity<?>>map(u -> ResponseEntity.ok(CurrentUserResponse.from(u, setupStatus.stepFor(u))))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(new ErrorResponse("UNAUTHENTICATED", "Authentication required")));
     }
