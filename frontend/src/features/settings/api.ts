@@ -325,3 +325,79 @@ export function useSharedChatSession(id: string | null) {
     enabled: id !== null,
   })
 }
+
+export type UserRole = 'ADMIN' | 'OPERATOR' | 'VIEWER'
+
+export interface ManagedUser {
+  id: string
+  username: string
+  role: UserRole
+  disabled: boolean
+  /** True until the user has chosen their own password. */
+  passwordChangeRequired: boolean
+  createdAt: string
+  disabledAt: string | null
+}
+
+/** Returned once on create and on password reset; never retrievable again. */
+export interface OneTimePassword {
+  id: string
+  username: string
+  role: UserRole
+  oneTimePassword: string
+}
+
+export const USERS_KEY = ['users'] as const
+const USERS_BASE = '/users'
+
+export function useUsers() {
+  return useQuery({ queryKey: USERS_KEY, queryFn: () => apiFetch<ManagedUser[]>(USERS_BASE) })
+}
+
+function useInvalidateUsers() {
+  const queryClient = useQueryClient()
+  return () => queryClient.invalidateQueries({ queryKey: USERS_KEY })
+}
+
+export function useCreateUser() {
+  const invalidate = useInvalidateUsers()
+  return useMutation({
+    mutationFn: (input: { username: string; role: UserRole }) =>
+      apiFetch<OneTimePassword>(USERS_BASE, { method: 'POST', body: input }),
+    onSuccess: () => void invalidate(),
+  })
+}
+
+export function useChangeUserRole() {
+  const invalidate = useInvalidateUsers()
+  return useMutation({
+    mutationFn: ({ id, role }: { id: string; role: UserRole }) =>
+      apiFetch<ManagedUser>(`${USERS_BASE}/${id}/role`, { method: 'PUT', body: { role } }),
+    onSuccess: () => void invalidate(),
+  })
+}
+
+export function useSetUserDisabled() {
+  const invalidate = useInvalidateUsers()
+  return useMutation({
+    mutationFn: ({ id, disabled }: { id: string; disabled: boolean }) =>
+      apiFetch<ManagedUser>(`${USERS_BASE}/${id}/${disabled ? 'disable' : 'enable'}`, { method: 'POST' }),
+    onSuccess: () => void invalidate(),
+  })
+}
+
+export function useResetUserPassword() {
+  const invalidate = useInvalidateUsers()
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<OneTimePassword>(`${USERS_BASE}/${id}/reset-password`, { method: 'POST' }),
+    onSuccess: () => void invalidate(),
+  })
+}
+
+export function useDeleteUser() {
+  const invalidate = useInvalidateUsers()
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<void>(`${USERS_BASE}/${id}`, { method: 'DELETE' }),
+    onSuccess: () => void invalidate(),
+  })
+}

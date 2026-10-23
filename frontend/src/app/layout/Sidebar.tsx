@@ -64,6 +64,9 @@ export function Sidebar({ role, open, onNavigate }: Props) {
           <span id="sidebar-settings" className="sidebar__heading">
             Settings
           </span>
+          <NavLink to="/settings/users" className={link} onClick={onNavigate}>
+            Users
+          </NavLink>
           <NavLink to="/settings/notifications" className={link} onClick={onNavigate}>
             Notifications
           </NavLink>
