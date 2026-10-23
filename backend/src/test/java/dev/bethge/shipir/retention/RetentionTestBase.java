@@ -62,8 +62,9 @@ abstract class RetentionTestBase {
     void resetState() {
         jdbc.update("DELETE FROM notifications");
         jdbc.update("DELETE FROM audit_log");
+        jdbc.update("DELETE FROM chat_sessions");
         jdbc.update("UPDATE retention_settings SET audit_log_days = 365, notification_days = 30, "
-                + "updated_at = now(), updated_by = NULL");
+                + "chat_session_days = 90, updated_at = now(), updated_by = NULL");
         for (Role role : Role.values()) {
             String name = role.name().toLowerCase();
             User u = users.findByUsername(name).orElseGet(() -> new User(name, "x", role));
@@ -103,7 +104,17 @@ abstract class RetentionTestBase {
                 java.sql.Timestamp.from(at));
     }
 
-    UUID unused() {
-        return UUID.randomUUID();
+    /** Inserts a chat session of the admin user with the given updated_at; returns its id. */
+    UUID insertChatSession(Instant updatedAt) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO chat_sessions (id, user_id, title, created_at, updated_at) "
+                        + "SELECT ?, id, 'chat', ?, ? FROM users WHERE username = 'admin'",
+                id, java.sql.Timestamp.from(updatedAt), java.sql.Timestamp.from(updatedAt));
+        return id;
+    }
+
+    void insertChatMessage(UUID sessionId, int seq) {
+        jdbc.update("INSERT INTO chat_messages (session_id, seq, role, content) VALUES (?, ?, 'USER', 'hi')",
+                sessionId, seq);
     }
 }

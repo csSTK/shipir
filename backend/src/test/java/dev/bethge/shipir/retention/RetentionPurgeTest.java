@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 
 import java.time.Duration;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -67,6 +68,7 @@ class RetentionPurgeTest extends RetentionTestBase {
         insertAudit(NOW.minus(Duration.ofDays(400)), "OLD");
         insertAudit(NOW.minus(Duration.ofDays(401)), "OLD");
         insertNotification(NOW.minus(Duration.ofDays(40)));
+        insertChatSession(NOW.minus(Duration.ofDays(120)));
         purge.purge();
         assertThat(count("SELECT count(*) FROM audit_log WHERE action = 'RETENTION_PURGE' "
                 + "AND username = 'system' AND user_id IS NULL")).isEqualTo(1);
@@ -74,6 +76,52 @@ class RetentionPurgeTest extends RetentionTestBase {
                 + "WHERE action = 'RETENTION_PURGE'", String.class)).isEqualTo("2");
         assertThat(jdbc.queryForObject("SELECT details->>'notificationsDeleted' FROM audit_log "
                 + "WHERE action = 'RETENTION_PURGE'", String.class)).isEqualTo("1");
+        assertThat(jdbc.queryForObject("SELECT details->>'chatSessionsDeleted' FROM audit_log "
+                + "WHERE action = 'RETENTION_PURGE'", String.class)).isEqualTo("1");
+    }
+
+    @Test
+    void deletesOldChatSessionsAndKeepsRecentOnes() {
+        UUID old = insertChatSession(NOW.minus(Duration.ofDays(91)));
+        UUID recent = insertChatSession(NOW.minus(Duration.ofDays(89)));
+        insertChatMessage(old, 1);
+        insertChatMessage(old, 2);
+        insertChatMessage(recent, 1);
+        purge.purge();
+        assertThat(count("SELECT count(*) FROM chat_sessions WHERE id = ?", old)).isZero();
+        assertThat(count("SELECT count(*) FROM chat_sessions WHERE id = ?", recent)).isEqualTo(1);
+    }
+
+    @Test
+    void chatMessagesOfPurgedSessionsAreCascaded() {
+        UUID old = insertChatSession(NOW.minus(Duration.ofDays(91)));
+        UUID recent = insertChatSession(NOW.minus(Duration.ofDays(89)));
+        insertChatMessage(old, 1);
+        insertChatMessage(old, 2);
+        insertChatMessage(recent, 1);
+        purge.purge();
+        assertThat(count("SELECT count(*) FROM chat_messages WHERE session_id = ?", old)).isZero();
+        assertThat(count("SELECT count(*) FROM chat_messages WHERE session_id = ?", recent)).isEqualTo(1);
+    }
+
+    @Test
+    void chatSessionBoundaryIsKeptAtCutoffAndOneSecondOlderIsDeleted() {
+        UUID atCutoff = insertChatSession(NOW.minus(Duration.ofDays(90)));
+        UUID beforeCutoff = insertChatSession(NOW.minus(Duration.ofDays(90)).minusSeconds(1));
+        purge.purge();
+        assertThat(count("SELECT count(*) FROM chat_sessions WHERE id = ?", atCutoff)).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM chat_sessions WHERE id = ?", beforeCutoff)).isZero();
+    }
+
+    @Test
+    void usesConfiguredChatSessionDays() {
+        jdbc.update("UPDATE retention_settings SET chat_session_days = 7");
+        UUID old = insertChatSession(NOW.minus(Duration.ofDays(8)));
+        UUID recent = insertChatSession(NOW.minus(Duration.ofDays(6)));
+        PurgeCounts c = counts();
+        assertThat(c.chatSessions()).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM chat_sessions WHERE id = ?", old)).isZero();
+        assertThat(count("SELECT count(*) FROM chat_sessions WHERE id = ?", recent)).isEqualTo(1);
     }
 
     @Test
@@ -81,11 +129,11 @@ class RetentionPurgeTest extends RetentionTestBase {
         assertThat(context.getBeanNamesForType(RetentionPurgeJob.class)).isEmpty();
     }
 
-    private record PurgeCounts(int audit, int notifications) {
+    private record PurgeCounts(int audit, int notifications, int chatSessions) {
     }
 
     private PurgeCounts counts() {
         RetentionPurgeService.PurgeResult r = purge.purge();
-        return new PurgeCounts(r.auditLogDeleted(), r.notificationsDeleted());
+        return new PurgeCounts(r.auditLogDeleted(), r.notificationsDeleted(), r.chatSessionsDeleted());
     }
 }

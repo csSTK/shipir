@@ -24,6 +24,9 @@ class RetentionSettings {
     @Column(name = "notification_days", nullable = false)
     private int notificationDays;
 
+    @Column(name = "chat_session_days", nullable = false)
+    private int chatSessionDays;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -35,11 +38,16 @@ class RetentionSettings {
 
     int getAuditLogDays() { return auditLogDays; }
     int getNotificationDays() { return notificationDays; }
+    int getChatSessionDays() { return chatSessionDays; }
     Instant getUpdatedAt() { return updatedAt; }
 
-    void update(int auditLogDays, int notificationDays, Instant now, UUID by) {
+    /** A null {@code chatSessionDays} keeps the current value (requests from clients that predate the field). */
+    void update(int auditLogDays, int notificationDays, Integer chatSessionDays, Instant now, UUID by) {
         this.auditLogDays = auditLogDays;
         this.notificationDays = notificationDays;
+        if (chatSessionDays != null) {
+            this.chatSessionDays = chatSessionDays;
+        }
         this.updatedAt = now;
         this.updatedBy = by;
     }

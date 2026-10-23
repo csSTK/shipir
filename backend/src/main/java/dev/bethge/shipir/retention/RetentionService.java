@@ -31,7 +31,7 @@ class RetentionService {
     @Transactional
     RetentionSettingsResponse update(RetentionSettingsRequest request, String username) {
         RetentionSettings s = load();
-        s.update(request.auditLogDays(), request.notificationDays(), clock.instant(),
+        s.update(request.auditLogDays(), request.notificationDays(), request.chatSessionDays(), clock.instant(),
                 users.findByUsername(username).map(u -> u.getId()).orElse(null));
         settings.flush();
         return toResponse(s);
@@ -43,6 +43,7 @@ class RetentionService {
     }
 
     private static RetentionSettingsResponse toResponse(RetentionSettings s) {
-        return new RetentionSettingsResponse(s.getAuditLogDays(), s.getNotificationDays(), s.getUpdatedAt());
+        return new RetentionSettingsResponse(s.getAuditLogDays(), s.getNotificationDays(), s.getChatSessionDays(),
+                s.getUpdatedAt());
     }
 }

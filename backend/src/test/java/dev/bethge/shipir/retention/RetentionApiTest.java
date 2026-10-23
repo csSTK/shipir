@@ -55,6 +55,41 @@ class RetentionApiTest extends RetentionTestBase {
     }
 
     @Test
+    void chatSessionDaysDefaultsToNinetyAndCanBeChanged() throws Exception {
+        Login l = login("admin");
+        mvc.perform(get("/api/settings/retention").session(l.session()))
+                .andExpect(jsonPath("$.chatSessionDays").value(90));
+        mvc.perform(l.write(put("/api/settings/retention")).contentType(APPLICATION_JSON)
+                        .content("{\"auditLogDays\":90,\"notificationDays\":7,\"chatSessionDays\":14}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.chatSessionDays").value(14));
+        assertThat(jdbc.queryForObject("SELECT chat_session_days FROM retention_settings", Integer.class))
+                .isEqualTo(14);
+    }
+
+    @Test
+    void omittedChatSessionDaysKeepsCurrentValue() throws Exception {
+        jdbc.update("UPDATE retention_settings SET chat_session_days = 21");
+        Login l = login("admin");
+        mvc.perform(l.write(put("/api/settings/retention")).contentType(APPLICATION_JSON).content(body(90, 7)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.chatSessionDays").value(21));
+    }
+
+    @Test
+    void rejectsChatSessionDaysOutOfRange() throws Exception {
+        Login l = login("admin");
+        for (String bad : new String[]{"0", "3651", "\"x\""}) {
+            mvc.perform(l.write(put("/api/settings/retention")).contentType(APPLICATION_JSON)
+                            .content("{\"auditLogDays\":90,\"notificationDays\":7,\"chatSessionDays\":" + bad + "}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").exists());
+        }
+        assertThat(jdbc.queryForObject("SELECT chat_session_days FROM retention_settings", Integer.class))
+                .isEqualTo(90);
+    }
+
+    @Test
     void operatorAndViewerAreForbidden() throws Exception {
         for (String user : new String[]{"operator", "viewer"}) {
             Login l = login(user);
