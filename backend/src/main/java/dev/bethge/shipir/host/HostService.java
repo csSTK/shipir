@@ -1,5 +1,6 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.auth.UserRepository;
 import dev.bethge.shipir.common.security.SecretCipher;
 import dev.bethge.shipir.docker.DockerConnectionException;
@@ -57,6 +58,7 @@ class HostService {
     }
 
     /** Not transactional: the (slow) connection test must not hold a database connection. */
+    @Auditable(action = "HOST_CREATE", targetType = "HOST", targetId = "#result?.id")
     HostResponse create(CreateHostRequest request, String username) {
         DockerEndpoint endpoint = toEndpoint(request.connectionType(), request.host(), request.port(),
                 request.tlsCaPem(), request.tlsCertPem(), request.tlsKeyPem());
@@ -91,6 +93,7 @@ class HostService {
         }
     }
 
+    @Auditable(action = "HOST_RENAME", targetType = "HOST", targetId = "#id")
     @Transactional
     HostResponse rename(UUID id, String name) {
         DockerHost host = find(id);
@@ -107,6 +110,7 @@ class HostService {
         return toResponse(host);
     }
 
+    @Auditable(action = "HOST_DELETE", targetType = "HOST", targetId = "#id")
     @Transactional
     void delete(UUID id) {
         hosts.delete(find(id));

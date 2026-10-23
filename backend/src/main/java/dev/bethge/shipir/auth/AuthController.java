@@ -1,5 +1,6 @@
 package dev.bethge.shipir.auth;
 
+import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.auth.dto.CurrentUserResponse;
 import dev.bethge.shipir.auth.dto.LoginRequest;
 import dev.bethge.shipir.auth.dto.PasswordChangeRequest;
@@ -65,6 +66,7 @@ class AuthController {
     }
 
     @PostMapping("/login")
+    @Auditable(action = "LOGIN", targetType = "USER", username = "#body.username()")
     ResponseEntity<?> login(@Valid @RequestBody LoginRequest body,
                             HttpServletRequest request, HttpServletResponse response) {
         Authentication authentication;
@@ -94,6 +96,7 @@ class AuthController {
     }
 
     @PostMapping("/password")
+    @Auditable(action = "PASSWORD_CHANGE", targetType = "USER")
     ResponseEntity<Void> changePassword(@Valid @RequestBody PasswordChangeRequest body, Authentication authentication,
                                         HttpServletRequest request, HttpServletResponse response) {
         userService.changePassword(authentication.getName(), body.currentPassword(), body.newPassword());
@@ -111,6 +114,7 @@ class AuthController {
 
     /** Does not log the user in. */
     @PostMapping("/password-reset/confirm")
+    @Auditable(action = "PASSWORD_RESET_CONFIRM", targetType = "USER", username = "#body.username()")
     ResponseEntity<Void> confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest body) {
         passwordResetService.confirmReset(body.username(), body.code(), body.newPassword());
         return ResponseEntity.noContent().build();
@@ -135,6 +139,7 @@ class AuthController {
     }
 
     @PostMapping("/logout")
+    @Auditable(action = "LOGOUT", targetType = "USER")
     ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
         HttpSession session = request.getSession(false);
         if (session != null) {

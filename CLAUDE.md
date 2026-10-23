@@ -34,7 +34,10 @@ Current state: project skeleton in place. Backend in `backend/` with Maven and S
 Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `ShipirApplication.java`: Spring Boot entry point
 - `**/package-info.java`: one-line Javadoc per package of the architecture tree
-- `audit/AuditLogEntry.java`, `compose/Stack.java`, `compose/generator/ComposeGeneratorService.java`, `config_editor/ConfigFile.java`, `permission/Permission.java`, `streaming/LogStreamHandler.java`: empty placeholders
+- `compose/Stack.java`, `compose/generator/ComposeGeneratorService.java`, `config_editor/ConfigFile.java`, `permission/Permission.java`, `streaming/LogStreamHandler.java`: empty placeholders
+- `audit/{AuditLogEntry,AuditRecord,AuditLogRepository,AuditService}.java`: `audit_log` entity (details JSONB), input record, repository, `record` in REQUIRES_NEW tx
+- `audit/{Auditable,AuditAspect}.java`: `@Auditable(action, targetType, targetId SpEL, username SpEL)`; aspect writes SUCCESS/FAILURE (error-status `ResponseEntity` = FAILURE, exceptions rethrown), user from SecurityContext, recording errors swallowed; used on `AuthController` login/logout/password/reset-confirm and `HostService` create/rename/delete
+- `backend/src/test/java/dev/bethge/shipir/audit/`: `AuditAspectTest` (rows per action, null user_id on failed login, rollback survival, no secrets), `AuditServiceFailureTest` (audit exception does not fail request)
 - `host/{DockerHost,ConnectionType,DockerHostRepository}.java`: environment entity (TLS columns are ciphertext), LOCAL/TCP enum, repository
 - `host/{HostController,HostService,HostException,HostExceptionHandler}.java`: `/api/hosts` list/create/connection-test/rename/delete (create pings first: 422 CONNECTION_FAILED; 400/409 codes via `HostException`)
 - `host/{HostOverviewService,HostOverviewProperties}.java`: `GET /api/hosts/overview` (in `HostController`): parallel live `info` per host on virtual threads, shared deadline `shipir.host.overview-timeout` (5s), failures -> DOWN + error code (docker codes, TIMEOUT, DECRYPTION_FAILED, ENCRYPTION_KEY_MISSING, UNKNOWN)
