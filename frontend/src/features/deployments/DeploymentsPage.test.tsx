@@ -251,4 +251,82 @@ describe('DeploymentsPage', () => {
       expect(alert.closest('[role="alert"]')).toHaveTextContent('services[1]: unknown network')
     })
   })
+
+  describe('removing unmanaged deployments', () => {
+    const managedShop = { id: 'm1', name: 'shop', status: 'RUNNING', source: 'FILE', lastDeployedAt: null, createdAt: 'x' }
+
+    /** Serves the list and answers DELETE of a project with `remove`. */
+    function serveWithDelete(role: string, remove: () => Promise<unknown>) {
+      apiFetch.mockImplementation((path: string, init?: { method?: string }) => {
+        if (path === '/auth/me') return Promise.resolve(me(role))
+        if (path === '/hosts/h1/deployments') return Promise.resolve(deployments)
+        if (path === '/hosts/h1/managed-deployments') return Promise.resolve([managedShop])
+        if (path.startsWith('/hosts/h1/deployments/') && init?.method === 'DELETE') return remove()
+        return Promise.reject(new ApiError(404, 'x', 'NOT_FOUND'))
+      })
+    }
+
+    async function openRemove(name: string) {
+      renderPage()
+      await screen.findByText('/srv/shop')
+      fireEvent.click(screen.getByRole('button', { name: `Remove ${name}` }))
+      return screen.findByRole('dialog')
+    }
+
+    it('hides Remove from viewers', async () => {
+      serveWithDelete('VIEWER', () => Promise.resolve(undefined))
+      renderPage()
+      await screen.findByText('/srv/shop')
+      expect(screen.queryByRole('button', { name: 'Remove blog' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Remove shop' })).not.toBeInTheDocument()
+    })
+
+    it('does not offer Remove for managed deployments', async () => {
+      serveWithDelete('OPERATOR', () => Promise.resolve(undefined))
+      renderPage()
+      await screen.findByText('/srv/shop')
+      expect(screen.queryByRole('button', { name: 'Remove shop' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Remove blog' })).toBeInTheDocument()
+    })
+
+    it('asks for confirmation and deletes keeping volumes by default', async () => {
+      const remove = vi.fn(() => Promise.resolve(undefined))
+      serveWithDelete('OPERATOR', remove)
+      const dialog = await openRemove('blog')
+      expect(within(dialog).getByLabelText('Also remove volumes')).not.toBeChecked()
+      expect(remove).not.toHaveBeenCalled()
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
+      await vi.waitFor(() => expect(remove).toHaveBeenCalled())
+      expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/deployments/blog?removeVolumes=false', { method: 'DELETE' })
+      expect(await screen.findByRole('status')).toHaveTextContent('blog removed.')
+    })
+
+    it('sends removeVolumes=true when the option is checked', async () => {
+      const remove = vi.fn(() => Promise.resolve(undefined))
+      serveWithDelete('ADMIN', remove)
+      const dialog = await openRemove('old')
+      fireEvent.click(within(dialog).getByLabelText('Also remove volumes'))
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
+      await vi.waitFor(() => expect(remove).toHaveBeenCalled())
+      expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/deployments/old?removeVolumes=true', { method: 'DELETE' })
+    })
+
+    it('cancel closes the dialog without deleting', async () => {
+      const remove = vi.fn(() => Promise.resolve(undefined))
+      serveWithDelete('OPERATOR', remove)
+      const dialog = await openRemove('blog')
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(remove).not.toHaveBeenCalled()
+    })
+
+    it('shows COMPOSE_DOWN_FAILED inline and keeps the deployment listed', async () => {
+      serveWithDelete('OPERATOR', () => Promise.reject(new ApiError(502, 'x', 'COMPOSE_DOWN_FAILED', undefined, ['boom'])))
+      const dialog = await openRemove('blog')
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent('Docker could not stop the deployment')
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+      expect(names()).toContain('blog')
+    })
+  })
 })

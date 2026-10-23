@@ -7,12 +7,14 @@ import {
   useDeployDeployment,
   useManagedDeployments,
   useDeployments,
+  useRemoveUnmanagedDeployment,
   useStopDeployment,
   type ManagedDeployment,
   type DeploymentStatus,
   type DeploymentSummary,
 } from './api.ts'
 import { AddDeploymentDialog } from './AddDeploymentDialog.tsx'
+import { ConfirmDialog } from './ConfirmDialog.tsx'
 import { describeDeploymentError } from './deploymentErrors.ts'
 import './DeploymentUi.css'
 import './DeploymentsPage.css'
@@ -53,8 +55,13 @@ export function DeploymentsPage() {
   const managed = useManagedDeployments(id)
   const deploy = useDeployDeployment(id)
   const stop = useStopDeployment(id)
+  const remove = useRemoveUnmanagedDeployment(id)
   const [adding, setAdding] = useState(false)
   const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
+  /** Unmanaged project awaiting confirmation of its removal. */
+  const [removing, setRemoving] = useState<string | null>(null)
+  const [removeVolumes, setRemoveVolumes] = useState(false)
+  const [removeError, setRemoveError] = useState<string | null>(null)
 
   const rows = useMemo(
     () => (live.data ? joinRows(live.data, managed.data ?? []) : undefined),
@@ -74,6 +81,27 @@ export function DeploymentsPage() {
         onError: (e) => setNotice({ tone: 'error', text: describeDeploymentError(e, `Could not stop ${deployment.name}.`) }),
       })
     }
+  }
+
+  function closeRemove() {
+    setRemoving(null)
+    setRemoveVolumes(false)
+    setRemoveError(null)
+  }
+
+  function confirmRemove() {
+    if (!removing) return
+    const name = removing
+    remove.mutate(
+      { name, removeVolumes },
+      {
+        onSuccess: () => {
+          closeRemove()
+          setNotice({ tone: 'ok', text: `${name} removed.` })
+        },
+        onError: (e) => setRemoveError(describeDeploymentError(e, `Could not remove ${name}.`)),
+      },
+    )
   }
 
   const columns: ResourceColumn<Row>[] = [
@@ -129,6 +157,20 @@ export function DeploymentsPage() {
               Stop
             </button>
           </span>
+        ) : r.live ? (
+          <button
+            type="button"
+            className="sk-btn sk-btn--plain sk-btn--danger-text"
+            aria-label={`Remove ${r.name}`}
+            onClick={() => {
+              setNotice(null)
+              setRemoveError(null)
+              setRemoving(r.name)
+            }}
+            disabled={remove.isPending}
+          >
+            Remove
+          </button>
         ) : (
           '–'
         ),
@@ -163,6 +205,24 @@ export function DeploymentsPage() {
         onRetry={() => void live.refetch()}
       />
       {adding && <AddDeploymentDialog hostId={id} onClose={() => setAdding(false)} />}
+      {removing && (
+        <ConfirmDialog
+          title="Remove deployment"
+          confirmLabel="Remove"
+          danger
+          pending={remove.isPending}
+          error={removeError}
+          onConfirm={confirmRemove}
+          onClose={closeRemove}
+        >
+          Stop and remove the containers of <strong>{removing}</strong> with <code>docker compose down</code>. Shipir does not manage this
+          deployment, so its Compose file stays where it is.
+          <label className="deployments__check">
+            <input type="checkbox" checked={removeVolumes} onChange={(e) => setRemoveVolumes(e.target.checked)} /> Also remove volumes
+          </label>
+          {removeVolumes ? ' Data in its volumes will be deleted.' : ' Its volumes are kept.'}
+        </ConfirmDialog>
+      )}
     </section>
   )
 }

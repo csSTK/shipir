@@ -51,3 +51,18 @@
   margin: 0;
   font-size: 0.875rem;
 }
+.deployments__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  user-select: none;
+}
+.deployments__check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: AccentColor;
+}

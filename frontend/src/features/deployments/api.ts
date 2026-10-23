@@ -230,3 +230,20 @@ export function useSetAutoUpdate(hostId: string) {
     onSuccess: () => void invalidate(),
   })
 }
+
+export interface RemoveUnmanagedInput {
+  /** Compose project name, as listed by `GET /hosts/{id}/deployments`. */
+  name: string
+  /** Also deletes the project's named volumes; off keeps data. */
+  removeVolumes: boolean
+}
+
+/** Runs `compose down` for an unmanaged project (`DELETE /hosts/{id}/deployments/{name}`, 204). 409 MANAGED_DEPLOYMENT for Shipir-managed ones. */
+export function useRemoveUnmanagedDeployment(hostId: string) {
+  const invalidate = useInvalidateDeployments(hostId)
+  return useMutation({
+    mutationFn: ({ name, removeVolumes }: RemoveUnmanagedInput) =>
+      apiFetch<void>(`/hosts/${hostId}/deployments/${encodeURIComponent(name)}?removeVolumes=${removeVolumes}`, { method: 'DELETE' }),
+    onSuccess: () => void invalidate(),
+  })
+}
