@@ -1,0 +1,66 @@
+name: Tag
+
+# Gives the already tested prd image its semver tags when a v* tag is pushed.
+# No build and no tests: the tag must point at a commit that release.yml has
+# already published as sha-<commit>.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  retag:
+    name: ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [backend, frontend]
+    env:
+      # Lowercase explicitly: GHCR requires it, github.repository_owner may be mixed-case.
+      IMAGE_PREFIX: ghcr.io/csstk/shipir
+    steps:
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Semver tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+
+      - name: Check that the tested image exists
+        env:
+          SOURCE: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}:sha-${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          if ! docker buildx imagetools inspect "$SOURCE" > /dev/null; then
+            echo "::error::Image $SOURCE does not exist. Either the tag is not on a commit that went through prd, or release.yml on prd has not finished yet. Wait for release.yml on prd to finish, then re-run this job: gh run rerun $RUN_ID"
+            exit 1
+          fi
+
+      - name: Add semver tags to the tested image
+        env:
+          SOURCE: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}:sha-${{ github.sha }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          args=()
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && args+=(--tag "$tag")
+          done <<< "$TAGS"
+          docker buildx imagetools create "${args[@]}" "$SOURCE"

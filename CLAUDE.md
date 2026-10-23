@@ -91,6 +91,7 @@ CI:
 - `.github/workflows/tests.yml`: reusable tests (`workflow_call`/`workflow_dispatch`, inputs `backend`/`frontend`/`e2e`): Maven verify, pnpm lint/test/build, Playwright (report artifact on failure)
 - `.github/workflows/ci.yml`: push to `dev` and PRs: paths-filter (`backend/**`, `frontend/**`, CI files) calls `tests.yml` with `e2e: false`; concurrency cancels superseded runs
 - `.github/workflows/release.yml`: on push to `prd`, runs `tests.yml` (all suites), then builds and pushes backend/frontend images (matrix) to ghcr.io/csstk/shipir-{backend,frontend} tagged `sha-<full sha>` and `latest`
+- `.github/workflows/tag.yml`: on `v*` tag push, re-tags the existing `sha-<commit>` images with semver tags (`imagetools create`, no build); fails if the sha image is missing
 
 Repo tooling:
 - `.claude/agents/implementer-{sonnet,haiku}.md`: implementation subagents (see Model Policy); follow `next-task-implement`, never commit or close beads
