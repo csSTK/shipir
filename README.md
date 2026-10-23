@@ -118,9 +118,9 @@ Required in `.env`: `DB_PASSWORD` and `DB_HOST`. Compose stops with a message if
 
 Only the frontend port is published. The backend is reachable only from the frontend on the compose network. The frontend starts even if the backend is not up yet; it reconnects on the next request.
 
-Images are published to GitHub Container Registry by `.github/workflows/images.yml`: `ghcr.io/csstk/shipir-backend` and `ghcr.io/csstk/shipir-frontend`. A push to `dev` publishes `dev`, a push to `prd` publishes `latest`, both plus the commit sha (`sha-<full sha>`); a `v*` tag (e.g. `v1.2.3`) publishes the semver tags (`1.2.3`, `1.2`, `1`). Pull requests only build, nothing is pushed. Set `SHIPIR_TAG` to pick one.
+Images are published to GitHub Container Registry (`ghcr.io/csstk/shipir-backend` and `ghcr.io/csstk/shipir-frontend`) by the workflows in `.github/workflows/`. A push to `dev` and every pull request runs `ci.yml`: only the tests of the changed area (`backend/`, `frontend/`), no e2e, no images. A push to `prd` runs `release.yml`: all tests and e2e, and only if they pass, the images are pushed as `latest` and `sha-<full sha>`. A `v*` tag (e.g. `v1.2.3`) runs `tag.yml`, which adds the semver tags (`1.2.3`, `1.2`, `1`; no `major` tag for `v0.x`) to the tested `sha-<commit>` image without rebuilding. Set `SHIPIR_TAG` to pick one.
 
-Branches: `dev` is the default branch where all work lands. `prd` holds released versions and only ever fast-forwards to a `dev` commit: release with `git push origin dev:prd`, then tag that commit `v*`.
+Branches: `dev` is the default branch where all work lands. `prd` holds released versions and only ever fast-forwards to a `dev` commit. Release: `git push origin dev:prd`, wait until `release.yml` is green, then push the `v*` tag on that commit. If `tag.yml` failed because the image did not exist yet, re-run it with `gh run rerun <id>`.
 
 Stop the stack with `docker compose -f docker-compose.yml down`. This does not touch the external database.
 

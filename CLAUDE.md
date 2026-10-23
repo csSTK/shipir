@@ -112,7 +112,7 @@ Repo tooling:
 ## Branches
 
 - `dev`: default branch. All work (epic branches, `/next-task`) branches from and merges into `dev`.
-- `prd`: release branch, only ever a fast-forward of `dev`. Release: `git push origin dev:prd`, then tag `v*` on that commit. Never commit to `prd` directly; GitHub blocks force-push and deletion.
+- `prd`: release branch, only ever a fast-forward of `dev`. Release: `git push origin dev:prd`, wait until `release.yml` is green, then tag `v*` on that commit (`tag.yml` re-tags the tested image). If `tag.yml` failed because the image was missing, re-run it (`gh run rerun <id>`). Never commit to `prd` directly; GitHub blocks force-push and deletion.
 - Agents never push `prd` or tags without the user asking.
 
 ## Model Policy
