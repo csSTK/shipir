@@ -72,3 +72,25 @@ export function useChangePassword() {
     },
   })
 }
+
+/** Always 202 for any username, so the response never reveals whether the account exists. */
+export function useRequestPasswordReset() {
+  return useMutation({
+    mutationFn: (request: { username: string }) =>
+      apiFetch<void>('/auth/password-reset/request', { method: 'POST', body: request }),
+  })
+}
+
+export interface ConfirmPasswordResetRequest {
+  username: string
+  code: string
+  newPassword: string
+}
+
+/** 204 on success; 400 INVALID_RESET_CODE or PASSWORD_POLICY otherwise. */
+export function useConfirmPasswordReset() {
+  return useMutation({
+    mutationFn: (request: ConfirmPasswordResetRequest) =>
+      apiFetch<void>('/auth/password-reset/confirm', { method: 'POST', body: request }),
+  })
+}

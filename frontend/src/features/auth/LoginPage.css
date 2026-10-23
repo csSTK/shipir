@@ -99,3 +99,44 @@
     transform: none;
   }
 }
+
+.login__notice {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #1a7f37;
+}
+
+@media (prefers-color-scheme: dark) {
+  .login__notice {
+    color: #4ade80;
+  }
+}
+
+.login__link {
+  font: inherit;
+  font-size: 0.875rem;
+  align-self: center;
+  padding: 6px 8px;
+  border: 0;
+  background: none;
+  color: #0a84ff;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: opacity 0.12s ease-out;
+}
+
+.login__link:active {
+  opacity: 0.6;
+  transition-duration: 0s;
+}
+
+.login__link:focus-visible {
+  outline: 3px solid color-mix(in srgb, #0a84ff 40%, transparent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login__link {
+    transition: none;
+  }
+}
