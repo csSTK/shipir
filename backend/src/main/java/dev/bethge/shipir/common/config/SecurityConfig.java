@@ -88,6 +88,7 @@ class SecurityConfig {
                         .requestMatchers("/api/git/**").hasRole("ADMIN")
                         .requestMatchers("/api/settings/retention").hasRole("ADMIN")
                         .requestMatchers("/api/settings/ai", "/api/settings/ai/**").hasRole("ADMIN")
+                        .requestMatchers("/api/ai/shared-sessions", "/api/ai/shared-sessions/**").hasRole("ADMIN")
                         .anyRequest().authenticated());
         return http.build();
     }
