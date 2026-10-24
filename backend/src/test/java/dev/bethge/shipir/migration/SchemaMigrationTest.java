@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V24 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V25 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To24Successfully() {
+    void flywayAppliedVersions1To25Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25");
     }
 
     @Test
@@ -197,7 +197,7 @@ class SchemaMigrationTest {
                 WHERE table_schema = 'public' AND data_type = 'timestamp with time zone'
                   AND table_name IN ('users','docker_hosts','deployments','deployment_versions')
                 """, Integer.class);
-        assertThat(count).isEqualTo(9); // 3 users + 1 hosts + 3 deployments + 2 versions
+        assertThat(count).isEqualTo(10); // 4 users (incl. totp_enabled_at) + 1 hosts + 3 deployments + 2 versions
     }
 
     @Test
@@ -1502,6 +1502,161 @@ class SchemaMigrationTest {
         insertPermission(user, null, deployment, "OPERATE");
         jdbc.update("DELETE FROM deployments WHERE id = ?", deployment);
         assertThat(count("permissions")).isZero();
+    }
+
+    @Test
+    void usersTotpColumnsAreNullableWithExpectedTypes() {
+        List<Map<String, Object>> columns = jdbc.queryForList("""
+                SELECT column_name, data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'users'
+                  AND column_name IN ('totp_secret_ciphertext', 'totp_enabled_at', 'totp_last_used_step')
+                """);
+        Map<String, Map<String, Object>> byName = columns.stream()
+                .collect(java.util.stream.Collectors.toMap(c -> (String) c.get("column_name"), c -> c));
+        assertThat(byName.keySet()).containsExactlyInAnyOrder(
+                "totp_secret_ciphertext", "totp_enabled_at", "totp_last_used_step");
+        assertThat(byName.get("totp_secret_ciphertext").get("data_type")).isEqualTo("bytea");
+        assertThat(byName.get("totp_enabled_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("totp_last_used_step").get("data_type")).isEqualTo("bigint");
+        assertThat(byName.values()).allSatisfy(column -> assertThat(column.get("is_nullable")).isEqualTo("YES"));
+    }
+
+    @Test
+    void newUsersHaveTotpDisabledByDefault() {
+        UUID user = insertUser("alice");
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT totp_secret_ciphertext, totp_enabled_at, totp_last_used_step FROM users WHERE id = ?", user);
+        assertThat(row.values()).allSatisfy(value -> assertThat(value).isNull());
+    }
+
+    @Test
+    void totpEnabledWithoutSecretIsRejected() {
+        UUID user = insertUser("alice");
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE users SET totp_enabled_at = now() WHERE id = ?", user))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("users_totp_enabled_requires_secret_check");
+    }
+
+    @Test
+    void totpSecretWithEnabledAtAndLastUsedStepIsStored() {
+        UUID user = insertUser("alice");
+        jdbc.update("UPDATE users SET totp_secret_ciphertext = ?, totp_enabled_at = now(), totp_last_used_step = 1 WHERE id = ?",
+                new byte[] {1, 2, 3}, user);
+        Long step = jdbc.queryForObject("SELECT totp_last_used_step FROM users WHERE id = ?", Long.class, user);
+        assertThat(step).isEqualTo(1L);
+    }
+
+    @Test
+    void negativeTotpLastUsedStepIsRejected() {
+        UUID user = insertUser("alice");
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE users SET totp_secret_ciphertext = ?, totp_last_used_step = -1 WHERE id = ?",
+                new byte[] {1}, user))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("users_totp_last_used_step_check");
+    }
+
+    @Test
+    void userRecoveryCodesHasExpectedColumnsAndTypes() {
+        List<Map<String, Object>> columns = jdbc.queryForList("""
+                SELECT column_name, data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'user_recovery_codes'
+                """);
+        Map<String, Map<String, Object>> byName = columns.stream()
+                .collect(java.util.stream.Collectors.toMap(c -> (String) c.get("column_name"), c -> c));
+        // Hash only: there is no column that could hold a plaintext code.
+        assertThat(byName.keySet()).containsExactlyInAnyOrder("id", "user_id", "code_hash", "used_at", "created_at");
+        assertThat(byName.get("id").get("data_type")).isEqualTo("uuid");
+        assertThat(byName.get("user_id").get("data_type")).isEqualTo("uuid");
+        assertThat(byName.get("user_id").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("code_hash").get("data_type")).isEqualTo("text");
+        assertThat(byName.get("code_hash").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("used_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("used_at").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("created_at").get("is_nullable")).isEqualTo("NO");
+    }
+
+    @Test
+    void recoveryCodeIdAndCreatedAtHaveDefaultsAndUsedAtStartsNull() {
+        UUID user = insertUser("alice");
+        jdbc.update("INSERT INTO user_recovery_codes (user_id, code_hash) VALUES (?, 'hash')", user);
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT id, used_at, created_at FROM user_recovery_codes WHERE user_id = ?", user);
+        assertThat(row.get("id")).isNotNull();
+        assertThat(row.get("used_at")).isNull();
+        assertThat(row.get("created_at")).isNotNull();
+    }
+
+    @Test
+    void recoveryCodeWithoutHashIsRejected() {
+        UUID user = insertUser("alice");
+        assertThatThrownBy(() -> jdbc.update("INSERT INTO user_recovery_codes (user_id, code_hash) VALUES (?, NULL)", user))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("code_hash");
+    }
+
+    @Test
+    void recoveryCodeWithUnknownUserIsRejected() {
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO user_recovery_codes (user_id, code_hash) VALUES (?, 'hash')", UUID.randomUUID()))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("user_recovery_codes_user_id_fkey");
+    }
+
+    @Test
+    void deletingUserCascadesToRecoveryCodes() {
+        UUID user = insertUser("alice");
+        jdbc.update("INSERT INTO user_recovery_codes (user_id, code_hash) VALUES (?, 'hash')", user);
+        jdbc.update("DELETE FROM users WHERE id = ?", user);
+        assertThat(count("user_recovery_codes")).isZero();
+    }
+
+    @Test
+    void securitySettingsHasExactlyOneDefaultRowWith2faForAdminsOff() {
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT id, require_2fa_for_admins, updated_by FROM security_settings");
+        assertThat(rows).hasSize(1);
+        assertThat(((Number) rows.get(0).get("id")).intValue()).isEqualTo(1);
+        assertThat(rows.get(0).get("require_2fa_for_admins")).isEqualTo(false);
+        assertThat(rows.get(0).get("updated_by")).isNull();
+    }
+
+    @Test
+    void securitySettingsHasExpectedColumnsAndTypes() {
+        List<Map<String, Object>> columns = jdbc.queryForList("""
+                SELECT column_name, data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'security_settings'
+                """);
+        Map<String, Map<String, Object>> byName = columns.stream()
+                .collect(java.util.stream.Collectors.toMap(c -> (String) c.get("column_name"), c -> c));
+        assertThat(byName.keySet()).containsExactlyInAnyOrder(
+                "id", "require_2fa_for_admins", "updated_at", "updated_by");
+        assertThat(byName.get("id").get("data_type")).isEqualTo("smallint");
+        assertThat(byName.get("require_2fa_for_admins").get("data_type")).isEqualTo("boolean");
+        assertThat(byName.get("require_2fa_for_admins").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("updated_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("updated_by").get("data_type")).isEqualTo("uuid");
+        assertThat(byName.get("updated_by").get("is_nullable")).isEqualTo("YES");
+    }
+
+    @Test
+    void securitySettingsSecondRowIsRejected() {
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO security_settings (id, require_2fa_for_admins) VALUES (2, true)"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("security_settings_id_check");
+    }
+
+    @Test
+    void deletingUserWhoUpdatedSecuritySettingsSetsUpdatedByNull() {
+        UUID admin = insertUser("settings-editor");
+        jdbc.update("UPDATE security_settings SET require_2fa_for_admins = true, updated_by = ? WHERE id = 1", admin);
+        jdbc.update("DELETE FROM users WHERE id = ?", admin);
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT require_2fa_for_admins, updated_by FROM security_settings WHERE id = 1");
+        assertThat(row.get("require_2fa_for_admins")).isEqualTo(true);
+        assertThat(row.get("updated_by")).isNull();
     }
 
     private UUID insertChatSession(UUID user) {
