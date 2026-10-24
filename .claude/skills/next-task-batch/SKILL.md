@@ -5,7 +5,7 @@ description: Implement several beads epics in one run. Orders them by their depe
 
 # next-task-batch
 
-A loop over `next-task`. Run on Opus (Model Policy in CLAUDE.md); if the session isn't on Opus, say so and suggest `/model opus`.
+A loop over `next-task`. Run on Sonnet (Model Policy in CLAUDE.md); if the session isn't on Sonnet, say so and suggest `/model sonnet`.
 
 **Input:** two or more epic IDs, optionally followed by `--watch-ci` (`$ARGUMENTS`). If any ID is missing or not an epic (`bd show`), stop and ask before starting anything; point to `/next-task-beads` for non-epic beads. Never add epics yourself.
 

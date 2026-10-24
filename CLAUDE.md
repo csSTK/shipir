@@ -361,8 +361,9 @@ Repo tooling:
 
 ## Model Policy
 
-- **Planning uses Opus.** Planning means architecture and stack decisions, breaking work into epics and tasks, writing issue descriptions and acceptance criteria, and setting dependencies. Run planning sessions on Opus (`/model opus`).
-- **Implementation is done only by Sonnet or Haiku.** Opus does not write production code. When the session runs on Opus, delegate each implementation task to the `implementer-sonnet` or `implementer-haiku` subagent (`.claude/agents/`), passing the bead ID.
+- **Planning uses Opus.** Planning means architecture and stack decisions, breaking work into epics and tasks, writing issue descriptions and acceptance criteria, and setting dependencies (`text-to-task`). Run planning sessions on Opus (`/model opus`).
+- **Orchestration uses Sonnet.** The `/next-task*` skills coordinate implementation and do not plan. Run them on Sonnet (`/model sonnet`).
+- **Implementation is done only by Sonnet or Haiku sub-agents.** Opus does not write production code. Delegate each implementation task to the `implementer-sonnet` or `implementer-haiku` subagent (`.claude/agents/`), passing the bead ID.
 - **Pick the implementation model by scope:**
   - **Haiku**: small, well-specified, low-risk changes, such as boilerplate, renames, simple DTOs or entities, config tweaks, docs, and straightforward tests.
   - **Sonnet**: everything else, such as multi-file features, non-trivial logic, debugging, refactors, concurrency/streaming, and anything touching auth, permissions, remote host access or the audit log.
