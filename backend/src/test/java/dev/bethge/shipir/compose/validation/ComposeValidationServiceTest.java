@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -35,7 +36,7 @@ class ComposeValidationServiceTest {
         Assumptions.assumeTrue(p.waitFor() == 0, "docker compose CLI not available");
         files = new ComposeFileRepository(new DeploymentProperties(tmp.resolve("deployments")));
         validation = new ComposeValidationService(
-                new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(30))));
+                new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(30)), List::of));
     }
 
     private ValidationResult validate() {
@@ -70,7 +71,7 @@ class ComposeValidationServiceTest {
     void timeoutResultIsInvalid() {
         files.write(hostId, "web", "services: {}\n", null);
         var v = new ComposeValidationService(
-                new ComposeExecutionService(files, new ComposeProperties(Duration.ofMillis(1))));
+                new ComposeExecutionService(files, new ComposeProperties(Duration.ofMillis(1)), List::of));
         ValidationResult r = v.validate(hostId, "web", new DockerEndpoint.Local("unix:///var/run/docker.sock"));
         assertThat(r.valid()).isFalse();
         assertThat(r.errors()).isNotEmpty();

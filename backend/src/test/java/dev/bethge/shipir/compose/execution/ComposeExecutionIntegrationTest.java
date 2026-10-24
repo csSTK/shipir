@@ -31,7 +31,7 @@ class ComposeExecutionIntegrationTest {
         Assumptions.assumeTrue(p.waitFor() == 0, "docker compose CLI not available");
 
         var files = new ComposeFileRepository(new DeploymentProperties(tmp.resolve("deployments")));
-        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofMinutes(3)));
+        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofMinutes(3)), List::of);
         UUID hostId = UUID.randomUUID();
         String name = "shipir-it-" + UUID.randomUUID().toString().substring(0, 8);
         files.write(hostId, name, "services:\n  sleeper:\n    image: busybox:1.36\n    command: sleep 300\n", null);
@@ -51,7 +51,7 @@ class ComposeExecutionIntegrationTest {
     @Test
     void failingCommandMapsExitCode() {
         var files = new ComposeFileRepository(new DeploymentProperties(tmp.resolve("deployments2")));
-        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(30)));
+        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(30)), List::of);
         UUID hostId = UUID.randomUUID();
         files.write(hostId, "bad", "services:\n  a:\n    imagee: x\n", null);
         ComposeProcessResult r = service.execute(hostId, "bad", ComposeCommand.CONFIG,
@@ -68,7 +68,7 @@ class ComposeExecutionIntegrationTest {
         Assumptions.assumeTrue(p.waitFor() == 0, "docker compose CLI not available");
 
         var files = new ComposeFileRepository(new DeploymentProperties(tmp.resolve("deployments3")));
-        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofMinutes(3)));
+        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofMinutes(3)), List::of);
         UUID hostId = UUID.randomUUID();
         String name = "shipir-it-" + UUID.randomUUID().toString().substring(0, 8);
         files.write(hostId, name, "services:\n  sleeper:\n    image: busybox:1.36\n    command: sleep 300\n", null);

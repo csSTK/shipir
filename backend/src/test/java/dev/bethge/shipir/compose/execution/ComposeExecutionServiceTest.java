@@ -29,6 +29,7 @@ class ComposeExecutionServiceTest {
     private final UUID hostId = UUID.randomUUID();
     private ComposeFileRepository files;
     private Path script;
+    private RegistryAuthSource auths = List::of;
 
     @BeforeEach
     void setUp() throws IOException {
@@ -54,7 +55,7 @@ class ComposeExecutionServiceTest {
     }
 
     private ComposeExecutionService service(Duration timeout) {
-        return new ComposeExecutionService(files, new ComposeProperties(timeout), List.of(script.toString()));
+        return new ComposeExecutionService(files, new ComposeProperties(timeout), auths, List.of(script.toString()));
     }
 
     private static DockerEndpoint.Local local() {
@@ -100,7 +101,7 @@ class ComposeExecutionServiceTest {
 
     @Test
     void shellMetacharactersInDeploymentNameAreRejectedBeforeProcessStart() {
-        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(5)),
+        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(5)), List::of,
                 List.of(tmp.resolve("does-not-exist").toString()));
         for (String bad : List.of("web; rm -rf /", "../x", "a b", "$(id)", "Web", "", "a/b")) {
             assertThatThrownBy(() -> service.execute(hostId, bad, ComposeCommand.UP, local(), l -> { }))
@@ -149,7 +150,7 @@ class ComposeExecutionServiceTest {
 
     @Test
     void certDirRemovedWhenProcessCannotStart() {
-        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(5)),
+        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(5)), List::of,
                 List.of(tmp.resolve("missing").toString()));
         assertThatThrownBy(() -> service.execute(hostId, "web", ComposeCommand.UP, tls(), l -> { }))
                 .isInstanceOf(ComposeExecutionException.class);
@@ -239,6 +240,97 @@ class ComposeExecutionServiceTest {
             assertThatThrownBy(() -> service(Duration.ofSeconds(10))
                     .executeProject(name, ComposeCommand.DOWN, local(), line -> { }))
                     .isInstanceOf(PathValidationException.class);
+        }
+    }
+
+    private static final String CONFIG_SCRIPT = """
+            #!/bin/sh
+            echo "CONF:$DOCKER_CONFIG"
+            if [ -n "$DOCKER_CONFIG" ]; then
+              echo "DIRMODE:$(stat -c %a "$DOCKER_CONFIG" 2>/dev/null || stat -f %Lp "$DOCKER_CONFIG")"
+              echo "FILEMODE:$(stat -c %a "$DOCKER_CONFIG/config.json" 2>/dev/null || stat -f %Lp "$DOCKER_CONFIG/config.json")"
+              echo "JSON:$(cat "$DOCKER_CONFIG/config.json")"
+            fi
+            exit ${FAKE_EXIT:-0}
+            """;
+
+    private void withAuths(RegistryAuthSource.Auth... list) throws IOException {
+        auths = () -> List.of(list);
+        writeScript(CONFIG_SCRIPT);
+    }
+
+    @Test
+    void registryAuthsAreWrittenToTemporaryDockerConfigAndRemoved() throws IOException {
+        withAuths(new RegistryAuthSource.Auth("ghcr.io", "robot", "s3cret"),
+                new RegistryAuthSource.Auth("docker.io", "hubuser", "hubpass"));
+        List<String> lines = new ArrayList<>();
+        run(ComposeCommand.UP, local(), lines);
+        Path dir = Path.of(line(lines, "CONF:").substring(5));
+        assertThat(line(lines, "DIRMODE:")).isEqualTo("DIRMODE:700");
+        assertThat(line(lines, "FILEMODE:")).isEqualTo("FILEMODE:600");
+        String ghcr = java.util.Base64.getEncoder().encodeToString("robot:s3cret".getBytes());
+        String hub = java.util.Base64.getEncoder().encodeToString("hubuser:hubpass".getBytes());
+        assertThat(line(lines, "JSON:").replace(" ", ""))
+                .contains("\"ghcr.io\":{\"auth\":\"" + ghcr + "\"}")
+                .contains("\"https://index.docker.io/v1/\":{\"auth\":\"" + hub + "\"}")
+                .doesNotContain("\"docker.io\"");
+        assertThat(dir).doesNotExist();
+    }
+
+    @Test
+    void registryConfigDirRemovedAfterFailureAndWhenProcessCannotStart() throws IOException {
+        withAuths(new RegistryAuthSource.Auth("ghcr.io", "robot", "s3cret"));
+        writeScript(CONFIG_SCRIPT.replace("exit ${FAKE_EXIT:-0}", "exit 3"));
+        List<String> lines = new ArrayList<>();
+        assertThat(run(ComposeCommand.UP, local(), lines).exitCode()).isEqualTo(3);
+        assertThat(Path.of(line(lines, "CONF:").substring(5))).doesNotExist();
+
+        long before = tempConfigDirs();
+        var missing = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(5)), auths,
+                List.of(tmp.resolve("missing").toString()));
+        assertThatThrownBy(() -> missing.execute(hostId, "web", ComposeCommand.UP, local(), l -> { }))
+                .isInstanceOf(ComposeExecutionException.class);
+        assertThat(tempConfigDirs()).isEqualTo(before);
+    }
+
+    @Test
+    void registryConfigDirRemovedAfterTimeout() throws IOException {
+        withAuths(new RegistryAuthSource.Auth("ghcr.io", "robot", "s3cret"));
+        writeScript("#!/bin/sh\necho \"CONF:$DOCKER_CONFIG\"\nsleep 30\n");
+        List<String> lines = new ArrayList<>();
+        ComposeProcessResult result = service(Duration.ofMillis(500))
+                .execute(hostId, "web", ComposeCommand.UP, local(), lines::add);
+        assertThat(result.timedOut()).isTrue();
+        assertThat(Path.of(line(lines, "CONF:").substring(5))).doesNotExist();
+    }
+
+    @Test
+    void noRegistryAuthsLeavesDockerConfigUntouched() throws IOException {
+        writeScript(CONFIG_SCRIPT);
+        List<String> lines = new ArrayList<>();
+        long before = tempConfigDirs();
+        run(ComposeCommand.UP, local(), lines);
+        assertThat(line(lines, "CONF:")).isEqualTo("CONF:" + System.getenv().getOrDefault("DOCKER_CONFIG", ""));
+        assertThat(tempConfigDirs()).isEqualTo(before);
+    }
+
+    @Test
+    void executeProjectAlsoGetsRegistryAuths() throws IOException {
+        withAuths(new RegistryAuthSource.Auth("ghcr.io", "robot", "s3cret"));
+        List<String> lines = new ArrayList<>();
+        service(Duration.ofSeconds(20)).executeProject("web", ComposeCommand.DOWN, local(), lines::add);
+        assertThat(line(lines, "JSON:")).contains("ghcr.io");
+        assertThat(Path.of(line(lines, "CONF:").substring(5))).doesNotExist();
+    }
+
+    @Test
+    void registryAuthToStringHidesSecret() {
+        assertThat(new RegistryAuthSource.Auth("h", "u", "s3cret").toString()).doesNotContain("s3cret");
+    }
+
+    private static long tempConfigDirs() throws IOException {
+        try (var s = Files.list(Path.of(System.getProperty("java.io.tmpdir")))) {
+            return s.filter(p -> p.getFileName().toString().startsWith("shipir-docker-config-")).count();
         }
     }
 }

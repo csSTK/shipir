@@ -40,20 +40,25 @@ public class ComposeExecutionService {
             PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"));
     private static final List<String> DOCKER_ENV =
             List.of("DOCKER_HOST", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH", "DOCKER_CONTEXT");
+    private static final String DOCKER_HUB_CONFIG_KEY = "https://index.docker.io/v1/";
 
     private final ComposeFileRepository files;
     private final ComposeProperties properties;
+    private final RegistryAuthSource registryAuths;
     private final List<String> executable;
 
     @Autowired
-    public ComposeExecutionService(ComposeFileRepository files, ComposeProperties properties) {
-        this(files, properties, List.of("docker", "compose"));
+    public ComposeExecutionService(ComposeFileRepository files, ComposeProperties properties,
+                                   RegistryAuthSource registryAuths) {
+        this(files, properties, registryAuths, List.of("docker", "compose"));
     }
 
     /** Test seam: replaces {@code docker compose} with another executable. */
-    ComposeExecutionService(ComposeFileRepository files, ComposeProperties properties, List<String> executable) {
+    ComposeExecutionService(ComposeFileRepository files, ComposeProperties properties,
+                            RegistryAuthSource registryAuths, List<String> executable) {
         this.files = files;
         this.properties = properties;
+        this.registryAuths = registryAuths;
         this.executable = List.copyOf(executable);
     }
 
@@ -100,6 +105,7 @@ public class ComposeExecutionService {
         cmd.addAll(command.args());
 
         Path certDir = null;
+        Path configDir = null;
         try {
             ProcessBuilder builder = new ProcessBuilder(cmd).redirectErrorStream(true);
             if (Files.isDirectory(dir)) {
@@ -108,9 +114,11 @@ public class ComposeExecutionService {
             Map<String, String> env = builder.environment();
             DOCKER_ENV.forEach(env::remove);
             certDir = applyEndpoint(env, endpoint);
+            configDir = applyRegistryAuths(env);
             return run(builder, onLine);
         } finally {
             deleteRecursively(certDir);
+            deleteRecursively(configDir);
         }
     }
 
@@ -128,14 +136,17 @@ public class ComposeExecutionService {
         cmd.addAll(List.of("-p", projectName));
         cmd.addAll(command.args());
         Path certDir = null;
+        Path configDir = null;
         try {
             ProcessBuilder builder = new ProcessBuilder(cmd).redirectErrorStream(true);
             Map<String, String> env = builder.environment();
             DOCKER_ENV.forEach(env::remove);
             certDir = applyEndpoint(env, endpoint);
+            configDir = applyRegistryAuths(env);
             return run(builder, onLine);
         } finally {
             deleteRecursively(certDir);
+            deleteRecursively(configDir);
         }
     }
 
@@ -235,6 +246,42 @@ public class ComposeExecutionService {
                 env.put("DOCKER_CERT_PATH", certDir.toString());
                 return certDir;
             }
+        }
+    }
+
+    /**
+     * Writes a Docker {@code config.json} with all stored registry logins into a 0700 temp dir and points
+     * {@code DOCKER_CONFIG} at it; returns the dir, or null (environment untouched) when there are no logins.
+     */
+    private Path applyRegistryAuths(Map<String, String> env) {
+        List<RegistryAuthSource.Auth> auths = registryAuths.auths();
+        if (auths == null || auths.isEmpty()) {
+            return null;
+        }
+        Path configDir = null;
+        try {
+            configDir = Files.createTempDirectory("shipir-docker-config-", DIR_PERMISSIONS);
+            writeFile(configDir.resolve("config.json"), configJson(auths));
+        } catch (IOException e) {
+            deleteRecursively(configDir);
+            throw new ComposeExecutionException("Could not prepare registry credentials", e);
+        }
+        env.put("DOCKER_CONFIG", configDir.toString());
+        return configDir;
+    }
+
+    private static String configJson(List<RegistryAuthSource.Auth> auths) {
+        var entries = new java.util.LinkedHashMap<String, Object>();
+        for (RegistryAuthSource.Auth a : auths) {
+            String key = "docker.io".equals(a.registryHost()) ? DOCKER_HUB_CONFIG_KEY : a.registryHost();
+            String token = java.util.Base64.getEncoder()
+                    .encodeToString((a.username() + ":" + a.secret()).getBytes(StandardCharsets.UTF_8));
+            entries.put(key, Map.of("auth", token));
+        }
+        try {
+            return new tools.jackson.databind.json.JsonMapper().writeValueAsString(Map.of("auths", entries));
+        } catch (RuntimeException e) {
+            throw new ComposeExecutionException("Could not prepare registry credentials", null);
         }
     }
 
