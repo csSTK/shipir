@@ -19,11 +19,26 @@ shipir:
   container-files:
     max-bytes: 100MB
     max-scan-bytes: 64MB
+  openapi:
+    # OpenAPI spec at /api/v3/api-docs and Swagger UI at /api/docs; both need a login (anyRequest().authenticated()).
+    # Set SHIPIR_OPENAPI_ENABLED=false to switch both off.
+    enabled: ${SHIPIR_OPENAPI_ENABLED:true}
   stacks:
     base-dir: ${SHIPIR_STACKS_BASE_DIR:./data/stacks}
   initial-admin:
     username: ${SHIPIR_INITIAL_ADMIN_USERNAME:admin}
     password: ${SHIPIR_INITIAL_ADMIN_PASSWORD:}
+springdoc:
+  api-docs:
+    enabled: ${shipir.openapi.enabled}
+    path: /api/v3/api-docs
+  swagger-ui:
+    enabled: ${shipir.openapi.enabled}
+    path: /api/docs
+    csrf:
+      enabled: true
+  webjars:
+    prefix: /api/swagger-ui-assets
 server:
   servlet:
     session:

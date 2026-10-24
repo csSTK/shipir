@@ -148,6 +148,7 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `backend/src/test/java/dev/bethge/shipir/ai/chat/ChatOrchestratorNoEncryptionKeyTest.java`: no `shipir.encryption-key`: create_deployment with env -> ENCRYPTION_KEY_MISSING tool result, no PENDING, no env value stored; without env still proposed
 - `backend/src/test/java/dev/bethge/shipir/ai/chat/ChatSessionApiTest.java`: CRUD, ownership 404, admin shared-only/read-only, unshare revokes, paging, audit, append/history
 - `common/config/PasswordEncoderConfig.java`: Argon2id `PasswordEncoder` bean (DelegatingPasswordEncoder, bcrypt match-only)
+- `common/config/OpenApiConfig.java` + `springdoc` in `application.yml`: springdoc 3.0.3 (Boot 4); spec `/api/v3/api-docs`, Swagger UI `/api/docs` (assets `/api/swagger-ui-assets`), all under `/api` so they need login (no SecurityConfig change); `shipir.openapi.enabled` (env `SHIPIR_OPENAPI_ENABLED`, default true) switches spec, UI and `OpenAPI` bean off; security schemes `sessionCookie` + `csrfHeader` (X-XSRF-TOKEN); tests `common/config/OpenApi{,Disabled}Test`
 - `common/config/ClockConfig.java`: `Clock` bean (system UTC)
 - `backend/src/test/resources/application.properties`: test initial-admin password
 - `backend/src/test/java/dev/bethge/shipir/auth/AuthEndpointsTest.java`: MockMvc + Testcontainers: login/me/logout, CSRF, session fixation, identical 401, JSON 401
