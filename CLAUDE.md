@@ -176,6 +176,7 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `backend/src/test/java/dev/bethge/shipir/notification/`: `NotificationTestBase`, `NotificationApiTest` (MockMvc), `NotificationListenerTest` (event -> rows)
 - `backend/src/test/java/dev/bethge/shipir/migration/SchemaMigrationTest.java`: V1-V20 schema test (users disabled_at nullable, ai_settings, chat_sessions/messages, chat_session_days, git_credentials, registry_credentials columns/unique name+host/no plaintext secret/created_by RESTRICT, deployments deploy columns/checks, retention_settings singleton/range/seed/updated_by SET NULL, notification_webhooks columns/unique/no plaintext URL/created_by RESTRICT, timestamptz, unique, cascade, restrict, password_changed_at, docker_hosts checks, password_reset_codes columns/checks/cascade, audit_log columns/outcome check/user SET NULL/indexes, notifications/notification_preferences), `@Transactional` rollback
 - `backend/src/test/java/dev/bethge/shipir/migration/AiProviderConfigsMigrationTest.java`: own DB, stops at V19, customises ai_settings, applies V20, checks data move
+- `backend/src/test/java/dev/bethge/shipir/migration/RenameStacksToDeploymentsMigrationTest.java`: own DB, stops at V15, applies V16, checks stacks->deployments rename keeps data
 - `backend/src/test/java/dev/bethge/shipir/PostgresTestConfiguration.java`: reusable `@TestConfiguration`, `@ServiceConnection` postgres:16-alpine; integration tests `@Import` it
 
 Frontend (`frontend/`):
