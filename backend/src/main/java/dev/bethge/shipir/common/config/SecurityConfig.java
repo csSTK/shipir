@@ -109,7 +109,8 @@ class SecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/logout",
-                                "/api/auth/password-reset/request", "/api/auth/password-reset/confirm").permitAll()
+                                "/api/auth/password-reset/request", "/api/auth/password-reset/confirm",
+                                "/api/auth/2fa/verify").permitAll()
                         // managed deployments: every role reads (env values only ADMIN/OPERATOR), ADMIN/OPERATOR write
                         .requestMatchers(HttpMethod.GET, "/api/hosts/*/managed-deployments/*/env").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.GET, "/api/hosts/*/managed-deployments", "/api/hosts/*/managed-deployments/*",
@@ -143,6 +144,7 @@ class SecurityConfig {
                         .requestMatchers("/api/backup", "/api/backup/**").hasRole("ADMIN")
                         .requestMatchers("/api/registries", "/api/registries/**").hasRole("ADMIN")
                         .requestMatchers("/api/settings/retention").hasRole("ADMIN")
+                        .requestMatchers("/api/settings/security").hasRole("ADMIN")
                         .requestMatchers("/api/settings/ai", "/api/settings/ai/**").hasRole("ADMIN")
                         .requestMatchers("/api/ai/shared-sessions", "/api/ai/shared-sessions/**").hasRole("ADMIN")
                         .anyRequest().authenticated());

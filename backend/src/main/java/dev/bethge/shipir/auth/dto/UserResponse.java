@@ -11,10 +11,12 @@ import java.util.UUID;
  * is null for exactly that period.
  */
 public record UserResponse(UUID id, String username, Role role, boolean disabled, boolean passwordChangeRequired,
-                           Instant createdAt, Instant passwordChangedAt, Instant disabledAt) {
+                           Instant createdAt, Instant passwordChangedAt, Instant disabledAt,
+                           boolean twoFactorEnabled) {
 
     public static UserResponse from(User u) {
         return new UserResponse(u.getId(), u.getUsername(), u.getRole(), u.isDisabled(), u.isSetupRequired(),
-                u.getCreatedAt(), u.getPasswordChangedAt(), u.getDisabledAt());
+                u.getCreatedAt(), u.getPasswordChangedAt(), u.getDisabledAt(),
+                u.isTwoFactorEnabled());
     }
 }

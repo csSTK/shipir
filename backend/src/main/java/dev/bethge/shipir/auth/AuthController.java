@@ -10,6 +10,8 @@ import dev.bethge.shipir.auth.dto.PasswordChangeRequest;
 import dev.bethge.shipir.auth.dto.PasswordPolicyErrorResponse;
 import dev.bethge.shipir.auth.dto.PasswordResetConfirmRequest;
 import dev.bethge.shipir.auth.dto.PasswordResetRequest;
+import dev.bethge.shipir.auth.totp.TotpService;
+import dev.bethge.shipir.auth.totp.dto.MfaRequiredResponse;
 import dev.bethge.shipir.common.exception.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -59,6 +61,7 @@ class AuthController {
     private final LoginThrottle throttle;
     private final ClientAddressResolver clientAddress;
     private final AuditService auditService;
+    private final TotpService totp;
 
     AuthController(AuthenticationManager authenticationManager,
                    SecurityContextRepository securityContextRepository,
@@ -70,7 +73,8 @@ class AuthController {
                    PasswordResetService passwordResetService,
                    LoginThrottle throttle,
                    ClientAddressResolver clientAddress,
-                   AuditService auditService) {
+                   AuditService auditService,
+                   TotpService totp) {
         this.authenticationManager = authenticationManager;
         this.securityContextRepository = securityContextRepository;
         this.sessionAuthenticationStrategy = sessionAuthenticationStrategy;
@@ -82,10 +86,13 @@ class AuthController {
         this.throttle = throttle;
         this.clientAddress = clientAddress;
         this.auditService = auditService;
+        this.totp = totp;
     }
 
     @PostMapping("/login")
-    @Auditable(action = "LOGIN", targetType = "USER", username = "#body.username()")
+    // A 2FA user's password step is only half a login: marked mfaPending in the details; the completed login is MFA_VERIFY.
+    @Auditable(action = "LOGIN", targetType = "USER", username = "#body.username()",
+            details = "#result.body instanceof T(dev.bethge.shipir.auth.totp.dto.MfaRequiredResponse) ? {'mfaPending': true} : null")
     ResponseEntity<?> login(@Valid @RequestBody LoginRequest body,
                             HttpServletRequest request, HttpServletResponse response) {
         String address = clientAddress.resolve(request);
@@ -102,15 +109,23 @@ class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(INVALID_CREDENTIALS);
         }
         throttle.recordSuccess(LoginThrottle.Scope.LOGIN, body.username());
+        User user = users.findByUsername(authentication.getName()).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(INVALID_CREDENTIALS);
+        }
+        if (user.isTwoFactorEnabled()) {
+            // Password is right, second factor missing: nothing is authenticated yet, the session only remembers
+            // who may submit a code to /api/auth/2fa/verify.
+            totp.beginPending(request, user.getUsername());
+            return ResponseEntity.ok(new MfaRequiredResponse(true));
+        }
         // Rotate the session id (fixation protection) and the CSRF token before the context is stored.
         sessionAuthenticationStrategy.onAuthentication(authentication, request, response);
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
         securityContextRepository.saveContext(context, request, response);
-        return users.findByUsername(authentication.getName())
-                .<ResponseEntity<?>>map(u -> ResponseEntity.ok(CurrentUserResponse.from(u, setupStatus.stepFor(u))))
-                .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(INVALID_CREDENTIALS));
+        return ResponseEntity.ok(CurrentUserResponse.from(user, setupStatus.stepFor(user)));
     }
 
     @GetMapping("/me")

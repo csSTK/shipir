@@ -41,6 +41,18 @@ public class User {
     @Column(name = "disabled_at")
     private Instant disabledAt;
 
+    /** AES-GCM ciphertext of the base32 TOTP secret; set at setup, before the user has confirmed a code. */
+    @Column(name = "totp_secret_ciphertext")
+    private byte[] totpSecretCiphertext;
+
+    /** NULL until the first valid code confirmed the secret; only then is two-factor active. */
+    @Column(name = "totp_enabled_at")
+    private Instant totpEnabledAt;
+
+    /** Time step of the last accepted code (replay protection). */
+    @Column(name = "totp_last_used_step")
+    private Long totpLastUsedStep;
+
     protected User() {
     }
 
@@ -81,6 +93,40 @@ public class User {
     public void resetPasswordHash(String newPasswordHash) {
         this.passwordHash = newPasswordHash;
         this.passwordChangedAt = null;
+    }
+
+    public boolean isTwoFactorEnabled() {
+        return totpEnabledAt != null;
+    }
+
+    /** Stores a not yet confirmed secret (replaces an earlier unconfirmed one). */
+    public void beginTotpEnrolment(byte[] secretCiphertext) {
+        this.totpSecretCiphertext = secretCiphertext;
+        this.totpEnabledAt = null;
+        this.totpLastUsedStep = null;
+    }
+
+    public void enableTotp(Instant at, long usedStep) {
+        this.totpEnabledAt = at;
+        this.totpLastUsedStep = usedStep;
+    }
+
+    public void recordTotpStep(long usedStep) {
+        this.totpLastUsedStep = usedStep;
+    }
+
+    public void clearTotp() {
+        this.totpSecretCiphertext = null;
+        this.totpEnabledAt = null;
+        this.totpLastUsedStep = null;
+    }
+
+    public byte[] getTotpSecretCiphertext() {
+        return totpSecretCiphertext;
+    }
+
+    public Long getTotpLastUsedStep() {
+        return totpLastUsedStep;
     }
 
     public UUID getId() {

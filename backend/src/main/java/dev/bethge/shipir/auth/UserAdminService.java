@@ -3,6 +3,7 @@ package dev.bethge.shipir.auth;
 import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.auth.dto.OneTimePasswordResponse;
 import dev.bethge.shipir.auth.dto.UserResponse;
+import dev.bethge.shipir.auth.totp.TotpService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -34,9 +35,12 @@ class UserAdminService {
     private final PasswordEncoder encoder;
     private final SessionInvalidator sessions;
     private final Clock clock;
+    private final TotpService totp;
     private final SecureRandom random = new SecureRandom();
 
-    UserAdminService(UserRepository users, PasswordEncoder encoder, SessionInvalidator sessions, Clock clock) {
+    UserAdminService(UserRepository users, PasswordEncoder encoder, SessionInvalidator sessions, Clock clock,
+                     TotpService totp) {
+        this.totp = totp;
         this.users = users;
         this.encoder = encoder;
         this.sessions = sessions;
@@ -120,6 +124,18 @@ class UserAdminService {
         user.resetPasswordHash(encoder.encode(password));
         sessions.expireSessionsOf(user.getUsername());
         return new OneTimePasswordResponse(user.getId(), user.getUsername(), user.getRole(), password);
+    }
+
+    @Auditable(action = "MFA_RESET", targetType = "USER", targetId = "#id")
+    @Transactional
+    void resetTwoFactor(UUID id, String actor) {
+        User user = find(id);
+        if (isSelf(user, actor)) {
+            throw new UserAdminException(HttpStatus.BAD_REQUEST, "SELF_RESET_2FA",
+                    "Another administrator must reset your two-factor authentication");
+        }
+        totp.reset(user);
+        sessions.expireSessionsOf(user.getUsername());
     }
 
     /**

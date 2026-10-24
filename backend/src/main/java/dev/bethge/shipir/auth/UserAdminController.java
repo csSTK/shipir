@@ -64,6 +64,13 @@ class UserAdminController {
         return service.resetPassword(id, authentication.getName());
     }
 
+    /** Lost authenticator: removes the user's secret and recovery codes and ends their sessions. */
+    @PostMapping("/{id}/reset-2fa")
+    ResponseEntity<Void> resetTwoFactor(@PathVariable UUID id, Authentication authentication) {
+        service.resetTwoFactor(id, authentication.getName());
+        return ResponseEntity.noContent().build();
+    }
+
     @DeleteMapping("/{id}")
     ResponseEntity<Void> delete(@PathVariable UUID id, Authentication authentication) {
         service.delete(id, authentication.getName());
