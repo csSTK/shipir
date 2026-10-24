@@ -1,0 +1,53 @@
+# DEMO ONLY: throwaway stack with seed data (demo users, one sample deployment). Not for real use.
+# The database password below is public and the demo users have public passwords (README, Demo section).
+# Usage: docker compose -f docker-compose.demo.yml up --build
+# Needs DOCKER_GID in .env (group owning /var/run/docker.sock), as docker-compose.yml. Everything else is fixed.
+# Data lives in named volumes: `docker compose -f docker-compose.demo.yml down -v` deletes them.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: shipir
+      POSTGRES_USER: shipir
+      POSTGRES_PASSWORD: shipir-demo-only
+    volumes:
+      - shipir-demo-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shipir -d shipir"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build: ./backend
+    environment:
+      SPRING_PROFILES_ACTIVE: demo
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: shipir
+      DB_USER: shipir
+      DB_PASSWORD: shipir-demo-only
+      SHIPIR_STACKS_BASE_DIR: /data/stacks
+    depends_on:
+      postgres:
+        condition: service_healthy
+    group_add:
+      - "${DOCKER_GID:?Set DOCKER_GID in .env to the owner group of /var/run/docker.sock (see .env.example)}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - shipir-demo-stacks:/data/stacks
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    environment:
+      BACKEND_URL: http://backend:8080
+    ports:
+      - "${SHIPIR_PORT:-8080}:8080"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  shipir-demo-db:
+  shipir-demo-stacks:

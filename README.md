@@ -143,6 +143,25 @@ Deployment files live in the named volume `shipir-stacks`, mounted at `/data/sta
 
 Stop the stack with `docker compose -f docker-compose.yml down`. This does not touch the external database or the `shipir-stacks` volume. Only `down -v` deletes the stack files.
 
+### Demo (public credentials, never for real use)
+
+`docker-compose.demo.yml` runs a throwaway stack: PostgreSQL, backend and frontend, with the Spring profile `demo` active. The profile loads seed data (`backend/src/main/resources/db/testdata/`, a repeatable Flyway migration) into the empty database: one user per role, one LOCAL environment, a sample deployment `demo-web` (stopped, not yet deployed) and a few notifications and audit entries.
+
+| User | Password | Role |
+|---|---|---|
+| `demo-admin` | `Demo-Admin-2026!` | ADMIN |
+| `demo-operator` | `Demo-Operator-2026!` | OPERATOR (operate on the demo environment) |
+| `demo-viewer` | `Demo-Viewer-2026!` | VIEWER (view only) |
+
+These passwords and the database password in the demo compose file are **public**. Anyone who can reach a demo instance can sign in with them. Do not run the demo profile on an instance with real users, and do not reuse these passwords anywhere. Without the `demo` profile no seed data is applied.
+
+```bash
+DOCKER_GID=$(stat -c %g /var/run/docker.sock) docker compose -f docker-compose.demo.yml up --build   # app on http://localhost:8080
+docker compose -f docker-compose.demo.yml down -v      # stops the stack and deletes its volumes (database and stack files)
+```
+
+`DOCKER_GID` is required as in the hosting stack (see the Docker socket note above); set it in `.env` or inline. The demo uses the same socket mount, so it has the same root-equivalent access to the host.
+
 ### Backend (Java 25, Spring Boot 4.1.1)
 
 ```bash

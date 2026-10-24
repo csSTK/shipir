@@ -1,0 +1,5 @@
+# Demo profile (SPRING_PROFILES_ACTIVE=demo, see docker-compose.demo.yml and README "Demo").
+# Adds the seed data in db/testdata (public demo passwords). Never activate on an instance with real users.
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/testdata
