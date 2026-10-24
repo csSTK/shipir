@@ -111,6 +111,7 @@ class SecurityConfig {
                         .requestMatchers("/api/notifications/webhooks", "/api/notifications/webhooks/**").hasRole("ADMIN")
                         .requestMatchers("/api/users", "/api/users/**").hasRole("ADMIN")
                         .requestMatchers("/api/git/**").hasRole("ADMIN")
+                        .requestMatchers("/api/backup", "/api/backup/**").hasRole("ADMIN")
                         .requestMatchers("/api/registries", "/api/registries/**").hasRole("ADMIN")
                         .requestMatchers("/api/settings/retention").hasRole("ADMIN")
                         .requestMatchers("/api/settings/ai", "/api/settings/ai/**").hasRole("ADMIN")

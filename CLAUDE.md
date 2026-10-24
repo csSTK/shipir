@@ -116,6 +116,7 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `retention/{RetentionSettings,RetentionSettingsRepository,RetentionService,RetentionController}.java`, `retention/dto/*`: singleton `retention_settings` (V11, `chatSessionDays` V17), ADMIN `GET/PUT /api/settings/retention` (1-3650; `chatSessionDays` optional on PUT, omitted keeps value; PUT `@Auditable` RETENTION_UPDATE)
 - `retention/{RetentionPurgeService,RetentionPurgeJob}.java`: purge (rows strictly older than now-days, audit_log + notifications via bulk deletes, `chat_sessions` via native SQL (messages cascade), writes RETENTION_PURGE audit entry as `system`); cron `shipir.retention.purge-cron` (03:00 UTC), off with `shipir.retention.purge-enabled=false`
 - `backend/src/test/java/dev/bethge/shipir/retention/`: `RetentionTestBase` (fixed Clock, chat session/message insert helpers), `RetentionApiTest`, `RetentionPurgeTest`
+- `backup/{BackupService,BackupController,BackupException,TarWriter}.java`, `backup/dto/BackupRequest.java`: ADMIN `POST /api/backup` `{passphrase 12-128}` (CSRF, matcher in SecurityConfig) streams `shipir-backup-<ts>.tar.gz.enc` via `StreamingResponseBody`: tar.gz of `manifest.json`, `db/<table>.jsonl` (`to_jsonb` rows via read-only JDBC, all public tables except flyway history, secrets stay ciphertext, spooled per table to a temp file) and `stacks/**` (symlinks skipped, 64 KiB chunks); OpenSSL `enc` format (`Salted__`+8-byte salt, AES-256-CBC, PBKDF2-HMAC-SHA256 600000 iterations) + 40-byte trailer `macSalt(8)||HMAC-SHA256` (encrypt-then-MAC over everything before it, key = second PBKDF2 with `macSalt`); verify+decrypt CLI sequence (derive MAC key with `openssl enc -P -S <macSalt hex> -pass env:`, compare `openssl dgst -mac HMAC -macopt hexkey:`, then `head -c N | openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -md sha256 -pass env:SHIPIR_BACKUP_PASSPHRASE | tar -xzf -`) is in the `BackupService` Javadoc; `@Auditable` BACKUP_EXPORT (accepted) + BACKUP_EXPORT_RESULT after streaming (SUCCESS/FAILURE, no details); tests `backup/Backup{Api,Streaming}Test` (roles, CSRF, policy, round trip incl. real openssl, 512 MiB file chunked, audit)
 - `common/util/{PathValidationUtil,PathValidationException}.java`: central path guard: `resolve(base, relative)` (rejects empty/absolute/`..`/NUL/backslash/percent-encoding, symlink escape via real path of nearest existing ancestor), `validateDeploymentName` (`[a-z0-9][a-z0-9_-]{0,62}`); test `PathValidationUtilTest`
 - `git/{GitCredential,GitCredentialRepository,GitCredentialService,GitCredentialController,GitException}.java`, `git/dto/*`: ADMIN `/api/git/credentials` GET/POST, PUT/DELETE `/{id}`, POST `/{id}/test` (body `repoUrl`, https only; `{status}` OK/AUTH_FAILED/NOT_FOUND/UNREACHABLE); token via `SecretCipher` + `tokenHint`, `@Auditable` GIT_CREDENTIAL_CREATE/UPDATE/DELETE; 409 CREDENTIAL_IN_USE (native count on `deployments`) / CREDENTIAL_NAME_TAKEN / ENCRYPTION_KEY_MISSING, 400 INVALID_REPO_URL / TOKEN_REQUIRED, 404 CREDENTIAL_NOT_FOUND
 - `git/{GitRemoteChecker,GitProperties}.java`: JGit `ls-remote` + URL validation; `shipir.git.{connect-timeout=10s,allow-insecure-http=false}` (http only for test stubs)
@@ -321,6 +322,8 @@ Repo root:
 - `BACKLOG.md`: Portainer features not yet planned as beads
 - `docker-compose.dev.yml`: local PostgreSQL 16 for development (healthcheck, `DB_*` from `.env`)
 - `docker-compose.yml`: hosting stack, backend + frontend (`ghcr.io/csstk/shipir-*` or local build), external PostgreSQL, only frontend port published, passes `SHIPIR_INITIAL_ADMIN_PASSWORD` and `SHIPIR_ENCRYPTION_KEY`, mounts Docker socket (`group_add: DOCKER_GID`), named volume `shipir-stacks` at `/data/stacks`
+- `scripts/backup.sh`: hosting backup: `pg_dump` of the external DB + tar of the `shipir-stacks` volume into `backups/shipir-<time>/` (MANIFEST with key fingerprint, never the key)
+- `scripts/restore.sh`: restores such a backup into an empty DB and empty stacks volume (stops backend, typed confirmation, key fingerprint check)
 - `.env.example`: documents `DB_*` (`DB_PASSWORD` required), `SHIPIR_INITIAL_ADMIN_PASSWORD` (empty DB only), `DOCKER_GID` (required, hosting), `SHIPIR_ENCRYPTION_KEY`, `SHIPIR_TAG`, `SHIPIR_PORT`; `.env` is gitignored
 
 CI:
@@ -500,6 +503,7 @@ dev.bethge.shipir
 │   ├── tools/         tool registry: role-scoped tools over existing feature services
 │   └── chat/          chat sessions/messages, orchestration loop, confirmations, sharing
 ├── retention/         retention settings, daily purge of audit log, notifications and chat sessions
+├── backup/            BackupService, BackupController (ADMIN encrypted export of DB tables + stacks dir)
 ├── auth/              User, Role (ADMIN/OPERATOR/VIEWER), UserService, AuthController, DTOs
 ├── permission/        Permission (per host/stack), PermissionService, PermissionEvaluator (@PreAuthorize)
 └── audit/             AuditLogEntry, service, AuditAspect (AOP, @Auditable)
