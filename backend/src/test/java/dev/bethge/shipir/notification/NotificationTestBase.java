@@ -65,8 +65,8 @@ abstract class NotificationTestBase {
     }
 
     UUID insertHost(String name) {
-        return jdbc.queryForObject("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
-                + "SELECT ?, 'LOCAL', id FROM users WHERE username = 'admin' RETURNING id", UUID.class, name);
+        return jdbc.queryForObject("INSERT INTO docker_hosts (name, connection_type, host, port, owner_user_id) "
+                + "SELECT ?, 'TCP', 'docker.local', 2375, id FROM users WHERE username = 'admin' RETURNING id", UUID.class, name);
     }
 
     record Login(MockHttpSession session, Cookie csrf) {

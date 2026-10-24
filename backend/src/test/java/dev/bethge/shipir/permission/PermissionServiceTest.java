@@ -59,8 +59,8 @@ class PermissionServiceTest {
     }
 
     private UUID host(String name) {
-        return jdbc.queryForObject("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
-                + "VALUES (?, 'LOCAL', ?) RETURNING id", UUID.class, name, adminId);
+        return jdbc.queryForObject("INSERT INTO docker_hosts (name, connection_type, host, port, owner_user_id) "
+                + "VALUES (?, 'TCP', 'docker.local', 2375, ?) RETURNING id", UUID.class, name, adminId);
     }
 
     private UUID deployment(String name, UUID host) {

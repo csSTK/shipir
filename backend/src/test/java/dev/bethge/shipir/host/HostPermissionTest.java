@@ -26,8 +26,8 @@ class HostPermissionTest extends HostApiTestBase {
     void hosts() {
         jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
                 + "SELECT 'visible', 'LOCAL', id FROM users WHERE username = 'admin'");
-        jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
-                + "SELECT 'hidden', 'LOCAL', id FROM users WHERE username = 'admin'");
+        jdbc.update("INSERT INTO docker_hosts (name, connection_type, host, port, owner_user_id) "
+                + "SELECT 'hidden', 'TCP', 'hidden.local', 2375, id FROM users WHERE username = 'admin'");
         visible = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'visible'", UUID.class);
         hidden = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'hidden'", UUID.class);
     }

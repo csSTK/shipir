@@ -29,8 +29,8 @@ class DeploymentPermissionTest extends DeploymentTestBase {
         Login admin = login("admin");
         granted = create(admin, "granted");
         other = create(admin, "other");
-        jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
-                + "SELECT 'Second host', 'LOCAL', id FROM users WHERE username = 'admin'");
+        jdbc.update("INSERT INTO docker_hosts (name, connection_type, host, port, owner_user_id) "
+                + "SELECT 'Second host', 'TCP', 'second.local', 2375, id FROM users WHERE username = 'admin'");
         otherHost = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'Second host'", UUID.class);
     }
 
