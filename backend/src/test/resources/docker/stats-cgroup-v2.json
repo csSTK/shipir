@@ -1,0 +1,7 @@
+{
+  "read": "2026-10-24T10:00:01.000000000Z",
+  "cpu_stats": {"cpu_usage": {"total_usage": 500}, "system_cpu_usage": 1000},
+  "precpu_stats": {"cpu_usage": {"total_usage": 100}, "system_cpu_usage": 200},
+  "memory_stats": {"usage": 5000, "limit": 0, "stats": {"inactive_file": 1000}},
+  "blkio_stats": {}
+}

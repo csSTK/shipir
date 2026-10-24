@@ -1,0 +1,5 @@
+{
+  "read": "2026-10-24T10:00:01.000000000Z",
+  "cpu_stats": {"cpu_usage": {"total_usage": 300}, "system_cpu_usage": 2000, "online_cpus": 2},
+  "precpu_stats": {"cpu_usage": {"total_usage": 0}, "system_cpu_usage": 0, "online_cpus": 0}
+}
