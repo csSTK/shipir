@@ -5,6 +5,7 @@ import com.github.dockerjava.api.model.Container;
 import com.github.dockerjava.api.model.Network;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
 import dev.bethge.shipir.docker.dto.NetworkDto;
@@ -73,5 +74,13 @@ public class NetworkServiceImpl implements NetworkService {
             }
             return null;
         });
+    }
+
+    @Override
+    public List<PruneCandidateDto> listPrunable(UUID hostId, DockerEndpoint endpoint) {
+        return list(hostId, endpoint).stream()
+                .filter(n -> n.containerCount() == 0 && !BUILTIN.contains(n.name()))
+                .map(n -> new PruneCandidateDto(n.id(), n.name(), null, null))
+                .toList();
     }
 }

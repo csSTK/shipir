@@ -3,6 +3,7 @@ package dev.bethge.shipir.docker.client;
 import com.github.dockerjava.api.model.Container;
 import com.github.dockerjava.api.model.Image;
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
 import dev.bethge.shipir.docker.dto.ImageDto;
 import org.springframework.stereotype.Service;
@@ -55,5 +56,13 @@ public class ImageServiceImpl implements ImageService {
             client.removeImageCmd(id).withForce(false).exec();
             return null;
         });
+    }
+
+    @Override
+    public List<PruneCandidateDto> listPrunable(UUID hostId, DockerEndpoint endpoint, boolean includeTagged) {
+        return list(hostId, endpoint).stream()
+                .filter(i -> !i.inUse() && (includeTagged || i.repoTags().isEmpty()))
+                .map(i -> new PruneCandidateDto(i.id(), i.repoTags().isEmpty() ? null : i.repoTags().get(0), i.size(), null))
+                .toList();
     }
 }

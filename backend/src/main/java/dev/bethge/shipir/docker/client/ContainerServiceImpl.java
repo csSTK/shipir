@@ -13,6 +13,7 @@ import com.github.dockerjava.api.model.Ports;
 import com.github.dockerjava.api.model.RestartPolicy;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
 import dev.bethge.shipir.docker.dto.ContainerDetailsDto;
@@ -30,6 +31,7 @@ import java.util.TreeMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -280,5 +282,14 @@ public class ContainerServiceImpl implements ContainerService {
             }
             throw e;
         }
+    }
+
+    @Override
+    public List<PruneCandidateDto> listPrunable(UUID hostId, DockerEndpoint endpoint) {
+        return calls.call(hostId, endpoint, client -> client.listContainersCmd().withShowAll(true).withShowSize(true)
+                .exec().stream()
+                .filter(c -> !Set.of("running", "paused", "restarting").contains(c.getState()))
+                .map(c -> new PruneCandidateDto(c.getId(), toDto(c).name(), c.getSizeRw(), label(c, PROJECT_LABEL)))
+                .toList());
     }
 }

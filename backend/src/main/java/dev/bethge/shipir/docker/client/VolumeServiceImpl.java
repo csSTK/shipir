@@ -5,6 +5,7 @@ import com.github.dockerjava.api.command.ListVolumesResponse;
 import com.github.dockerjava.api.model.Container;
 import com.github.dockerjava.api.model.ContainerMount;
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
 import dev.bethge.shipir.docker.dto.VolumeDto;
 import org.springframework.stereotype.Service;
@@ -64,6 +65,27 @@ public class VolumeServiceImpl implements VolumeService {
         calls.call(hostId, endpoint, client -> {
             client.removeVolumeCmd(name).exec();
             return null;
+        });
+    }
+
+    @Override
+    public List<PruneCandidateDto> listPrunable(UUID hostId, DockerEndpoint endpoint) {
+        return calls.call(hostId, endpoint, client -> {
+            Set<String> mounted = client.listContainersCmd().withShowAll(true).exec().stream()
+                    .map(Container::getMounts)
+                    .filter(Objects::nonNull)
+                    .flatMap(List::stream)
+                    .map(ContainerMount::getName)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            ListVolumesResponse response = client.listVolumesCmd().exec();
+            List<InspectVolumeResponse> volumes = response == null ? null : response.getVolumes();
+            if (volumes == null) return List.<PruneCandidateDto>of();
+            return volumes.stream()
+                    .filter(v -> !mounted.contains(v.getName()))
+                    .map(v -> new PruneCandidateDto(v.getName(), v.getName(), null,
+                            v.getLabels() == null ? null : v.getLabels().get("com.docker.compose.project")))
+                    .toList();
         });
     }
 }

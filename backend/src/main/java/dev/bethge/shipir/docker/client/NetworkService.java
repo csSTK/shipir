@@ -1,6 +1,7 @@
 package dev.bethge.shipir.docker.client;
 
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import dev.bethge.shipir.docker.dto.NetworkDto;
 
 import java.util.List;
@@ -16,4 +17,7 @@ public interface NetworkService {
      * or BUILTIN_NETWORK (bridge, host, none; refused without removing).
      */
     void removeNetwork(UUID hostId, DockerEndpoint endpoint, String id);
+
+    /** Networks a prune removes: user-defined (not bridge, host, none) with no attached container. */
+    List<PruneCandidateDto> listPrunable(UUID hostId, DockerEndpoint endpoint);
 }

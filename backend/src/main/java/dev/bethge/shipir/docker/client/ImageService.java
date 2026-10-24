@@ -1,6 +1,7 @@
 package dev.bethge.shipir.docker.client;
 
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import dev.bethge.shipir.docker.dto.ImageDto;
 
 import java.util.List;
@@ -13,4 +14,10 @@ public interface ImageService {
 
     /** Removes an image, never forced. Throws {@code DockerConnectionException} with NOT_FOUND or IN_USE. */
     void removeImage(UUID hostId, DockerEndpoint endpoint, String id);
+
+    /**
+     * Images a prune removes: images no container (any state) uses; with {@code includeTagged} false only dangling
+     * (untagged) ones. Size is the image size (layers shared with other images are not freed).
+     */
+    List<PruneCandidateDto> listPrunable(UUID hostId, DockerEndpoint endpoint, boolean includeTagged);
 }

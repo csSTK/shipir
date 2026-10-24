@@ -5,12 +5,16 @@ import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.ImageDto;
 import dev.bethge.shipir.docker.dto.NetworkDto;
 import dev.bethge.shipir.host.dto.HostDeploymentResponse;
+import dev.bethge.shipir.host.dto.PrunePreviewResponse;
+import dev.bethge.shipir.host.dto.PruneRequest;
+import dev.bethge.shipir.host.dto.PruneResponse;
 import dev.bethge.shipir.docker.dto.VolumeDto;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -121,5 +125,17 @@ class HostResourcesController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void killContainer(@PathVariable UUID id, @PathVariable String containerId) {
         service.killContainer(id, containerId);
+    }
+
+    @GetMapping("/prune/preview")
+    PrunePreviewResponse prunePreview(@PathVariable UUID id,
+                                      @RequestParam(required = false) PruneRequest.ImageScope images,
+                                      @RequestParam(defaultValue = "false") boolean includeManagedVolumes) {
+        return service.prunePreview(id, images, includeManagedVolumes);
+    }
+
+    @PostMapping("/prune")
+    PruneResponse prune(@PathVariable UUID id, @RequestBody PruneRequest request) {
+        return service.prune(id, request);
     }
 }

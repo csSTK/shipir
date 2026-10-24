@@ -1,6 +1,7 @@
 package dev.bethge.shipir.docker.client;
 
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import dev.bethge.shipir.docker.dto.ContainerDetailsDto;
 import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.DeploymentSummaryDto;
@@ -44,4 +45,7 @@ public interface ContainerService {
 
     /** Sends SIGKILL to a running container. */
     void killContainer(UUID hostId, DockerEndpoint endpoint, String id);
+
+    /** Containers a prune removes: every container that is not running, paused or restarting (size = writable layer). */
+    List<PruneCandidateDto> listPrunable(UUID hostId, DockerEndpoint endpoint);
 }

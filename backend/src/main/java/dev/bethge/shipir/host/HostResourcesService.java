@@ -16,7 +16,11 @@ import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.ImageDto;
 import dev.bethge.shipir.docker.dto.NetworkDto;
 import dev.bethge.shipir.docker.dto.DeploymentSummaryDto;
+import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import dev.bethge.shipir.host.dto.HostDeploymentResponse;
+import dev.bethge.shipir.host.dto.PrunePreviewResponse;
+import dev.bethge.shipir.host.dto.PruneRequest;
+import dev.bethge.shipir.host.dto.PruneResponse;
 import dev.bethge.shipir.docker.dto.VolumeDto;
 import dev.bethge.shipir.permission.CurrentAccess;
 import org.springframework.http.HttpStatus;
@@ -24,8 +28,10 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 /**
@@ -141,6 +147,85 @@ public class HostResourcesService {
         if (!access.canOperate(hostId)) {
             throw new HostException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied");
         }
+    }
+
+    /** Everything a prune with the given scope would remove now. Host-level OPERATE, like the prune itself. */
+    public PrunePreviewResponse prunePreview(UUID hostId, PruneRequest.ImageScope imageScope, boolean includeManagedVolumes) {
+        requireOperate(hostId);
+        Set<String> managed = managedDeployments.managedDeploymentIds(hostId).keySet();
+        return call(hostId, (id, endpoint) -> {
+            List<PruneCandidateDto> allVolumes = volumes.listPrunable(id, endpoint);
+            List<PruneCandidateDto> keptVolumes = filterVolumes(allVolumes, managed, includeManagedVolumes);
+            return new PrunePreviewResponse(
+                    PrunePreviewResponse.Category.of(containers.listPrunable(id, endpoint)),
+                    PrunePreviewResponse.Category.of(images.listPrunable(id, endpoint, imageScope == PruneRequest.ImageScope.UNUSED)),
+                    PrunePreviewResponse.Category.of(keptVolumes),
+                    PrunePreviewResponse.Category.of(networks.listPrunable(id, endpoint)),
+                    allVolumes.size() - keptVolumes.size());
+        });
+    }
+
+    /**
+     * Removes unused resources in the order containers, volumes, networks, images (candidates are listed per step,
+     * so earlier steps free later ones). Nothing is forced: a candidate that became in use or vanished is skipped.
+     */
+    @Auditable(action = "RESOURCE_PRUNE", targetType = "HOST", targetId = "#hostId",
+            details = "{containers: #result.containers.removed, images: #result.images.removed, "
+                    + "volumes: #result.volumes.removed, networks: #result.networks.removed, "
+                    + "reclaimedBytes: #result.reclaimedBytes, imageScope: #request.images?.name(), "
+                    + "includeManagedVolumes: #request.withManagedVolumes()}")
+    PruneResponse prune(UUID hostId, PruneRequest request) {
+        requireOperate(hostId);
+        if (request.nothingSelected()) {
+            throw new HostException(HttpStatus.BAD_REQUEST, "NOTHING_SELECTED", "Select at least one resource type");
+        }
+        Set<String> managed = managedDeployments.managedDeploymentIds(hostId).keySet();
+        return call(hostId, (id, endpoint) -> {
+            PruneResponse.Result c = PruneResponse.Result.NONE, v = c, n = c, i = c;
+            if (request.pruneContainers()) {
+                c = removeAll(containers.listPrunable(id, endpoint), cid -> containers.removeContainer(id, endpoint, cid, false));
+            }
+            if (request.pruneVolumes()) {
+                v = removeAll(filterVolumes(volumes.listPrunable(id, endpoint), managed, request.withManagedVolumes()),
+                        name -> volumes.removeVolume(id, endpoint, name));
+            }
+            if (request.pruneNetworks()) {
+                n = removeAll(networks.listPrunable(id, endpoint), nid -> networks.removeNetwork(id, endpoint, nid));
+            }
+            if (request.images() != null) {
+                i = removeAll(images.listPrunable(id, endpoint, request.images() == PruneRequest.ImageScope.UNUSED),
+                        iid -> images.removeImage(id, endpoint, iid));
+            }
+            return new PruneResponse(c, i, v, n, c.reclaimedBytes() + i.reclaimedBytes() + v.reclaimedBytes() + n.reclaimedBytes());
+        });
+    }
+
+    private static List<PruneCandidateDto> filterVolumes(List<PruneCandidateDto> all, Set<String> managedProjects,
+                                                         boolean includeManaged) {
+        return includeManaged ? all
+                : all.stream().filter(v -> v.composeProject() == null || !managedProjects.contains(v.composeProject())).toList();
+    }
+
+    /** Removes each candidate; NOT_FOUND / IN_USE / BUILTIN_NETWORK mean it changed meanwhile and count as skipped. */
+    private static PruneResponse.Result removeAll(List<PruneCandidateDto> candidates, Consumer<String> remove) {
+        int removed = 0;
+        int skipped = 0;
+        long bytes = 0;
+        for (PruneCandidateDto candidate : candidates) {
+            try {
+                remove.accept(candidate.id());
+                removed++;
+                bytes += candidate.sizeBytes() == null ? 0 : candidate.sizeBytes();
+            } catch (DockerConnectionException e) {
+                DockerErrorCode code = e.getCode();
+                if (code != DockerErrorCode.NOT_FOUND && code != DockerErrorCode.IN_USE
+                        && code != DockerErrorCode.BUILTIN_NETWORK) {
+                    throw e;
+                }
+                skipped++;
+            }
+        }
+        return new PruneResponse.Result(removed, skipped, bytes);
     }
 
     @Auditable(action = "CONTAINER_DELETE", targetType = "CONTAINER", targetId = "#containerId")
