@@ -39,7 +39,7 @@ async function mockBroker(page: Page, onSubscribe: (send: (body: object) => void
       const text = String(raw)
       if (text.startsWith('CONNECT') || text.startsWith('STOMP')) {
         ws.send(stompFrame('CONNECTED', { version: '1.2', 'heart-beat': '0,0' }))
-      } else if (text.startsWith('SUBSCRIBE')) {
+      } else if (text.startsWith('SUBSCRIBE') && !text.includes('/events')) {
         const headers = Object.fromEntries(
           text.split('\n').slice(1).map((l) => l.split(':')).filter((p) => p.length >= 2).map(([k, ...v]) => [k, v.join(':')]),
         )

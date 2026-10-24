@@ -43,7 +43,7 @@ async function mockBroker(
       if (text.startsWith('CONNECT') || text.startsWith('STOMP')) {
         connectHeaders.push(text)
         ws.send(stompFrame('CONNECTED', { version: '1.2', 'heart-beat': '0,0' }))
-      } else if (text.startsWith('SUBSCRIBE')) {
+      } else if (text.startsWith('SUBSCRIBE') && !text.includes('/events')) {
         const id = /id:(.*)/.exec(text)?.[1] ?? '0'
         attempt += 1
         onSubscribe(

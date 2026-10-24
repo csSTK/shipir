@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useMatch, useParams } from 'react-router-dom'
 import { EnvironmentDashboard, EnvironmentsOverview } from '../features/hosts/index.ts'
 import { AccountPage } from '../features/account/index.ts'
 import { AiSettingsPage, AuditLogPage, GitCredentialsSettingsPage, RegistriesSettingsPage, RetentionSettingsPage, SharedChatSessionsPage, UsersSettingsPage, WebhooksSettingsPage } from '../features/settings/index.ts'
@@ -12,7 +12,14 @@ import { NotificationsPage } from '../features/notifications/index.ts'
 import { LoginPage, SetupPage, useCurrentUser, useLogout } from '../features/auth/index.ts'
 import { AppShell } from './layout/AppShell.tsx'
 import { NotAllowedPage } from './layout/PlaceholderPages.tsx'
+import { useHostEvents } from '../shared/realtime/useHostEvents.ts'
 import { Providers } from './providers.tsx'
+
+/** Subscribes to docker events of the environment in the URL; leaving `/environments/:id/*` unsubscribes. */
+function HostEventsBridge() {
+  useHostEvents(useMatch('/environments/:id/*')?.params.id)
+  return null
+}
 
 /** Old `/environments/:id/stacks[/:deploymentId]` URLs forward to `/deployments`. */
 function LegacyStacksRedirect() {
@@ -35,6 +42,7 @@ function AuthGate() {
 
   return (
     <AppShell user={user} onSignOut={() => logout.mutate()} signingOut={logout.isPending}>
+      <HostEventsBridge />
       <Routes>
         <Route path="/" element={<EnvironmentsOverview role={user.role} />} />
         <Route path="/environments/:id" element={<EnvironmentDashboard />} />

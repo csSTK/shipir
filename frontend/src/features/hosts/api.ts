@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../shared/api/client.ts'
+import { isEventStreamLive } from '../../shared/realtime/useHostEvents.ts'
 import { CURRENT_USER_KEY } from '../auth/api.ts'
 
 export type ConnectionType = 'LOCAL' | 'TCP'
@@ -74,13 +75,15 @@ export function useHosts() {
 }
 
 const OVERVIEW_REFRESH_MS = 30_000
+/** Polling fallback while the live event stream is connected. */
+const OVERVIEW_REFRESH_LIVE_MS = 120_000
 
 /** Live status and stats of every environment; refreshes every 30 s and when the window regains focus. */
 export function useHostsOverview() {
   return useQuery({
     queryKey: HOSTS_OVERVIEW_KEY,
     queryFn: () => apiFetch<HostOverview[]>('/hosts/overview'),
-    refetchInterval: OVERVIEW_REFRESH_MS,
+    refetchInterval: () => (isEventStreamLive() ? OVERVIEW_REFRESH_LIVE_MS : OVERVIEW_REFRESH_MS),
     refetchOnWindowFocus: true,
   })
 }
