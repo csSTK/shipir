@@ -4,6 +4,15 @@ A web platform for managing Docker containers and Compose stacks. Think of it as
 
 > **Status:** early development. The repo skeleton (backend + frontend) is set up; features are not implemented yet.
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/images/environments-overview.png" alt="Environments overview with one Docker environment named Local, showing its status, Docker version, CPU, memory and container counts" width="48%">
+  <img src="docs/images/deployment-wizard.png" alt="Add deployment dialog in form wizard mode, with two services (web and db), a shared network and an environment variable taken from a deployment variable" width="48%">
+  <img src="docs/images/container-logs.png" alt="Live container log of the demo-web container, with a stderr line highlighted in red" width="48%">
+  <img src="docs/images/ai-chat.png" alt="AI assistant chat that proposes deploying demo-web and waits for the user to confirm or reject the action" width="48%">
+</p>
+
 ## Why this project
 
 This is a learning and portfolio project focused on Java backend development. The priorities are clean architecture, meaningful tests and well-reasoned decisions over feature count.

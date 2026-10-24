@@ -226,6 +226,7 @@ Frontend (`frontend/`):
 - `src/app/layout/{CommandPalette.tsx,.css,.test.tsx,useSearch.ts}`, `e2e/command-palette.spec.ts`: Cmd/Ctrl+K palette (also top-bar 'Search' button) mounted in `AppShell`: combobox/listbox, arrows/Enter/Esc, focus trap; navigation commands (settings ADMIN-only) + debounced `GET /api/search?q=` (>=2 chars) grouped Environments/Deployments/Containers; `useSearch`, `routeFor(result)`
 - `src/app/layout/PlaceholderPages.tsx`: `PlaceholderPage`, `NotAllowedPage` (non-ADMIN on /settings/*)
 - `e2e/shell.spec.ts`: sidebar/user menu navigation, viewer not allowed on settings
+- `frontend/e2e/screenshots/capture.ts`: README screenshots to `docs/images/` (not a spec, outside the e2e run): Vite dev server on `E2E_PORT`, mocked `/api` + STOMP, demo-seed data
 - `src/features/notifications/{api.ts,NotificationsPage.tsx,.css,index.ts}`: `NOTIFICATION_TYPES`/`NOTIFICATION_TYPE_LABELS` (six types), `useNotifications(unreadOnly)`, `useUnreadCount` (30 s + focus), `useMarkRead/useMarkAllRead`; `/notifications` page (type label + glyph, links to the deployment/container target, name without link once removed); Sidebar shows the unread badge
 - `src/features/account/AccountPage.{tsx,css,test.tsx}`: `/account` (props `user`): read-only username/role, password change (reuses `useChangePassword` + `passwordPolicy.ts`), one notification preference switch per type (optimistic save)
 - `src/features/notifications/api.ts`: also `useNotificationPreferences`/`useSavePreferences` (GET/PUT `/notifications/preferences`)
