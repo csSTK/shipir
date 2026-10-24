@@ -5,6 +5,9 @@ shipir:
     read-timeout: 10s
   host:
     overview-timeout: 5s
+  images:
+    update-check-enabled: true
+    update-check-interval: 6h
   compose:
     timeout: 10m
   ai:

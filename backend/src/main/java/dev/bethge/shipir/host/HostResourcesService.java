@@ -74,11 +74,13 @@ public class HostResourcesService {
     private final CurrentAccess access;
     private final ComposeOutputStreamService streams;
     private final RegistryAuthSource registryAuths;
+    private final ImageUpdateStore imageUpdates;
 
     HostResourcesService(DockerHostRepository hosts, HostEndpointResolver endpoints, ContainerService containers,
                          ImageService images, NetworkService networks, VolumeService volumes,
                          ManagedDeploymentLookup managedDeployments, CurrentAccess access,
-                         ComposeOutputStreamService streams, RegistryAuthSource registryAuths) {
+                         ComposeOutputStreamService streams, RegistryAuthSource registryAuths,
+                         ImageUpdateStore imageUpdates) {
         this.hosts = hosts;
         this.endpoints = endpoints;
         this.containers = containers;
@@ -89,6 +91,7 @@ public class HostResourcesService {
         this.access = access;
         this.streams = streams;
         this.registryAuths = registryAuths;
+        this.imageUpdates = imageUpdates;
     }
 
     /**
@@ -100,11 +103,32 @@ public class HostResourcesService {
         List<DeploymentSummaryDto> found = call(hostId, containers::listDeployments);
         Map<String, UUID> managed = managedDeployments.managedDeploymentIds(hostId);
         var visible = access.visibleDeploymentIds(hostId);
+        Set<String> outdatedProjects = projectsWithUpdates(hostId);
         return found.stream()
-                .map(s -> HostDeploymentResponse.of(s, managed.get(s.name())))
+                .map(s -> HostDeploymentResponse.of(s, managed.get(s.name()), outdatedProjects.contains(s.name())))
                 .filter(r -> access.hostFullyVisible(hostId)
                         || (r.managedDeploymentId() != null && visible.orElseThrow().contains(r.managedDeploymentId())))
                 .toList();
+    }
+
+    /** Compose projects with a container whose image has a newer remote digest (no extra Docker call without any). */
+    private Set<String> projectsWithUpdates(UUID hostId) {
+        if (imageUpdates.isEmpty(hostId)) {
+            return Set.of();
+        }
+        try {
+            return call(hostId, containers::listContainers).stream()
+                    .filter(c -> c.composeProject() != null && hasUpdate(hostId, c.image()))
+                    .map(ContainerDto::composeProject)
+                    .collect(java.util.stream.Collectors.toSet());
+        } catch (HostException e) {
+            return Set.of();
+        }
+    }
+
+    private boolean hasUpdate(UUID hostId, String image) {
+        ImageReference ref = ImageReference.parse(image);
+        return ref != null && imageUpdates.hasUpdate(hostId, ref.key());
     }
 
     /** Containers of a fully visible host; with deployment grants only: those of the visible managed deployments. */
@@ -144,7 +168,12 @@ public class HostResourcesService {
     /** Images, networks and volumes belong to the whole host: empty unless the host is fully visible. */
     public List<ImageDto> images(UUID hostId) {
         requireView(hostId);
-        return access.hostFullyVisible(hostId) ? call(hostId, images::list) : List.of();
+        if (!access.hostFullyVisible(hostId)) {
+            return List.of();
+        }
+        return call(hostId, images::list).stream()
+                .map(i -> i.withUpdateAvailable(i.repoTags().stream().anyMatch(t -> hasUpdate(hostId, t))))
+                .toList();
     }
 
     public List<NetworkDto> networks(UUID hostId) {

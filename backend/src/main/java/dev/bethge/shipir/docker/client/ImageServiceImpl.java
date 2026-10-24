@@ -53,7 +53,8 @@ public class ImageServiceImpl implements ImageService {
     private static ImageDto toDto(Image i, Set<String> usedIds) {
         Long created = i.getCreated();
         return new ImageDto(i.getId(), tags(i.getRepoTags()), i.getSize(),
-                created == null ? null : Instant.ofEpochSecond(created), usedIds.contains(i.getId()));
+                created == null ? null : Instant.ofEpochSecond(created), usedIds.contains(i.getId()),
+                i.getRepoDigests() == null ? List.of() : List.of(i.getRepoDigests()), false);
     }
 
     /** Dangling images come with null, empty or a {@code <none>:<none>} tag; all mean "no tags". */

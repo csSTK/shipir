@@ -5,17 +5,11 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-import java.util.LinkedHashMap;
-import java.util.Locale;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Checks a login against the Registry v2 API: {@code GET /v2/} with Basic auth, following a Bearer token
@@ -28,8 +22,6 @@ class RegistryLoginChecker {
     static final String OK = "OK";
     static final String AUTH_FAILED = "AUTH_FAILED";
     static final String UNREACHABLE = "UNREACHABLE";
-
-    private static final Pattern CHALLENGE_PARAM = Pattern.compile("(\\w+)=\"([^\"]*)\"");
 
     private final RegistryProperties properties;
     private final HttpClient client;
@@ -71,27 +63,11 @@ class RegistryLoginChecker {
     }
 
     private String checkBearer(String challenge, String basic) throws IOException, InterruptedException {
-        Map<String, String> params = new LinkedHashMap<>();
-        Matcher m = CHALLENGE_PARAM.matcher(challenge);
-        while (m.find()) {
-            params.put(m.group(1).toLowerCase(Locale.ROOT), m.group(2));
-        }
-        String realm = params.get("realm");
-        if (realm == null) {
+        BearerChallenge parsed = BearerChallenge.parse(challenge);
+        URI tokenUri = parsed == null ? null : parsed.tokenUri(properties.allowInsecureHttp(), null);
+        if (tokenUri == null) {
             return UNREACHABLE;
         }
-        URI realmUri = URI.create(realm);
-        String scheme = realmUri.getScheme();
-        boolean schemeOk = "https".equalsIgnoreCase(scheme)
-                || (properties.allowInsecureHttp() && "http".equalsIgnoreCase(scheme));
-        if (!schemeOk || realmUri.getHost() == null || realmUri.getUserInfo() != null) {
-            return UNREACHABLE;
-        }
-        String service = params.get("service");
-        String query = realmUri.getRawQuery();
-        String extra = service == null ? "" : "service=" + URLEncoder.encode(service, StandardCharsets.UTF_8);
-        String joined = query == null ? extra : (extra.isEmpty() ? query : query + "&" + extra);
-        URI tokenUri = URI.create(realm.replaceFirst("\\?.*$", "") + (joined.isEmpty() ? "" : "?" + joined));
         int status = get(tokenUri, basic).statusCode();
         if (status == 200) {
             return OK;

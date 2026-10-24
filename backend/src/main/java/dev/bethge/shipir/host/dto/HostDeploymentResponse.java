@@ -12,10 +12,16 @@ public record HostDeploymentResponse(
         DeploymentSummaryDto.Status status,
         String workingDir,
         boolean managed,
-        UUID managedDeploymentId) {
+        UUID managedDeploymentId,
+        boolean updateAvailable) {
 
     public static HostDeploymentResponse of(DeploymentSummaryDto s, UUID managedDeploymentId) {
+        return of(s, managedDeploymentId, false);
+    }
+
+    /** {@code updateAvailable}: a container of the project runs an image with a newer remote digest. */
+    public static HostDeploymentResponse of(DeploymentSummaryDto s, UUID managedDeploymentId, boolean updateAvailable) {
         return new HostDeploymentResponse(s.name(), s.containerCount(), s.runningCount(), s.status(), s.workingDir(),
-                managedDeploymentId != null, managedDeploymentId);
+                managedDeploymentId != null, managedDeploymentId, updateAvailable);
     }
 }
