@@ -21,5 +21,9 @@ public enum DockerErrorCode {
     /** Create: a resource with that name already exists. */
     NAME_TAKEN,
     /** Create + start: the container was created but could not start (e.g. port taken); it has been removed again. */
-    START_FAILED
+    START_FAILED,
+    /** The container path is not an absolute path, contains NUL, or is not a directory where one is needed. */
+    INVALID_PATH,
+    /** A file transfer or directory scan exceeded the allowed number of bytes; aborted while streaming. */
+    SIZE_LIMIT_EXCEEDED
 }

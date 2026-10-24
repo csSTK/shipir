@@ -102,6 +102,8 @@ class DockerCallSupport {
             case PULL_FAILED -> "The image could not be pulled.";
             case NAME_TAKEN -> "A resource with this name already exists.";
             case START_FAILED -> "The container could not be started.";
+            case INVALID_PATH -> "The path in the container is not valid.";
+            case SIZE_LIMIT_EXCEEDED -> "The transfer exceeds the size limit.";
         };
         return new DockerConnectionException(code, message, e);
     }
