@@ -58,7 +58,8 @@ class HostContainerActionsRealDockerTest extends HostApiTestBase {
 
     @Test
     void unknownContainerIs404() throws Exception {
-        mvc.perform(login("operator").write(post("/api/hosts/{h}/containers/{c}/kill", localHostId(), "doesnotexist1")))
+        String host = localHostId();
+        mvc.perform(login("operator").write(post("/api/hosts/{h}/containers/{c}/kill", host, "doesnotexist1")))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
     }
 }

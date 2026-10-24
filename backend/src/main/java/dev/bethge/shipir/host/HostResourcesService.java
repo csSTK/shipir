@@ -16,6 +16,7 @@ import dev.bethge.shipir.docker.dto.NetworkDto;
 import dev.bethge.shipir.docker.dto.DeploymentSummaryDto;
 import dev.bethge.shipir.host.dto.HostDeploymentResponse;
 import dev.bethge.shipir.docker.dto.VolumeDto;
+import dev.bethge.shipir.permission.CurrentAccess;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -44,10 +45,11 @@ public class HostResourcesService {
     private final NetworkService networks;
     private final VolumeService volumes;
     private final ManagedDeploymentLookup managedDeployments;
+    private final CurrentAccess access;
 
     HostResourcesService(DockerHostRepository hosts, HostEndpointResolver endpoints, ContainerService containers,
                          ImageService images, NetworkService networks, VolumeService volumes,
-                         ManagedDeploymentLookup managedDeployments) {
+                         ManagedDeploymentLookup managedDeployments, CurrentAccess access) {
         this.hosts = hosts;
         this.endpoints = endpoints;
         this.containers = containers;
@@ -55,32 +57,74 @@ public class HostResourcesService {
         this.networks = networks;
         this.volumes = volumes;
         this.managedDeployments = managedDeployments;
+        this.access = access;
     }
 
+    /**
+     * Fully visible host: all projects. Host visible only through deployment grants: just the managed deployments the
+     * user may see (unmanaged projects are hidden). Not visible: 404 HOST_NOT_FOUND.
+     */
     public List<HostDeploymentResponse> deployments(UUID hostId) {
+        requireView(hostId);
         List<DeploymentSummaryDto> found = call(hostId, containers::listDeployments);
         Map<String, UUID> managed = managedDeployments.managedDeploymentIds(hostId);
-        return found.stream().map(s -> HostDeploymentResponse.of(s, managed.get(s.name()))).toList();
+        var visible = access.visibleDeploymentIds(hostId);
+        return found.stream()
+                .map(s -> HostDeploymentResponse.of(s, managed.get(s.name())))
+                .filter(r -> access.hostFullyVisible(hostId)
+                        || (r.managedDeploymentId() != null && visible.orElseThrow().contains(r.managedDeploymentId())))
+                .toList();
     }
 
+    /** Containers of a fully visible host; with deployment grants only: those of the visible managed deployments. */
     public List<ContainerDto> containers(UUID hostId) {
-        return call(hostId, containers::listContainers);
+        requireView(hostId);
+        List<ContainerDto> all = call(hostId, containers::listContainers);
+        if (access.hostFullyVisible(hostId)) {
+            return all;
+        }
+        Map<String, UUID> managed = managedDeployments.managedDeploymentIds(hostId);
+        var visible = access.visibleDeploymentIds(hostId).orElseThrow();
+        return all.stream()
+                .filter(c -> c.composeProject() != null && managed.get(c.composeProject()) != null
+                        && visible.contains(managed.get(c.composeProject())))
+                .toList();
     }
 
+    /** Images, networks and volumes belong to the whole host: empty unless the host is fully visible. */
     public List<ImageDto> images(UUID hostId) {
-        return call(hostId, images::list);
+        requireView(hostId);
+        return access.hostFullyVisible(hostId) ? call(hostId, images::list) : List.of();
     }
 
     public List<NetworkDto> networks(UUID hostId) {
-        return call(hostId, networks::list);
+        requireView(hostId);
+        return access.hostFullyVisible(hostId) ? call(hostId, networks::list) : List.of();
     }
 
     public List<VolumeDto> volumes(UUID hostId) {
-        return call(hostId, volumes::list);
+        requireView(hostId);
+        return access.hostFullyVisible(hostId) ? call(hostId, volumes::list) : List.of();
+    }
+
+    /** 404 when the host is not visible to the signed-in user (existence is not revealed). */
+    private void requireView(UUID hostId) {
+        if (!access.canView(hostId)) {
+            throw new HostException(HttpStatus.NOT_FOUND, "HOST_NOT_FOUND", "Environment not found");
+        }
+    }
+
+    /** Container actions and deletes act on the whole host: 404 if invisible, 403 without a host-level OPERATE grant. */
+    private void requireOperate(UUID hostId) {
+        requireView(hostId);
+        if (!access.canOperate(hostId)) {
+            throw new HostException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied");
+        }
     }
 
     @Auditable(action = "CONTAINER_DELETE", targetType = "CONTAINER", targetId = "#containerId")
     void removeContainer(UUID hostId, String containerId, boolean force) {
+        requireOperate(hostId);
         validateResourceId(containerId);
         call(hostId, (id, endpoint) -> {
             containers.removeContainer(id, endpoint, containerId, force);
@@ -90,6 +134,7 @@ public class HostResourcesService {
 
     @Auditable(action = "IMAGE_DELETE", targetType = "IMAGE", targetId = "#imageId")
     void removeImage(UUID hostId, String imageId) {
+        requireOperate(hostId);
         validateResourceId(imageId);
         call(hostId, (id, endpoint) -> {
             images.removeImage(id, endpoint, imageId);
@@ -99,6 +144,7 @@ public class HostResourcesService {
 
     @Auditable(action = "VOLUME_DELETE", targetType = "VOLUME", targetId = "#name")
     void removeVolume(UUID hostId, String name) {
+        requireOperate(hostId);
         validateResourceId(name);
         call(hostId, (id, endpoint) -> {
             volumes.removeVolume(id, endpoint, name);
@@ -108,6 +154,7 @@ public class HostResourcesService {
 
     @Auditable(action = "NETWORK_DELETE", targetType = "NETWORK", targetId = "#networkId")
     void removeNetwork(UUID hostId, String networkId) {
+        requireOperate(hostId);
         validateResourceId(networkId);
         call(hostId, (id, endpoint) -> {
             networks.removeNetwork(id, endpoint, networkId);
@@ -117,6 +164,7 @@ public class HostResourcesService {
 
     @Auditable(action = "CONTAINER_START", targetType = "CONTAINER", targetId = "#containerId")
     void startContainer(UUID hostId, String containerId) {
+        requireOperate(hostId);
         validateResourceId(containerId);
         call(hostId, (id, endpoint) -> {
             containers.startContainer(id, endpoint, containerId);
@@ -126,6 +174,7 @@ public class HostResourcesService {
 
     @Auditable(action = "CONTAINER_STOP", targetType = "CONTAINER", targetId = "#containerId")
     void stopContainer(UUID hostId, String containerId, String timeout) {
+        requireOperate(hostId);
         validateResourceId(containerId);
         int seconds = parseTimeout(timeout);
         call(hostId, (id, endpoint) -> {
@@ -136,6 +185,7 @@ public class HostResourcesService {
 
     @Auditable(action = "CONTAINER_RESTART", targetType = "CONTAINER", targetId = "#containerId")
     void restartContainer(UUID hostId, String containerId, String timeout) {
+        requireOperate(hostId);
         validateResourceId(containerId);
         int seconds = parseTimeout(timeout);
         call(hostId, (id, endpoint) -> {
@@ -146,6 +196,7 @@ public class HostResourcesService {
 
     @Auditable(action = "CONTAINER_PAUSE", targetType = "CONTAINER", targetId = "#containerId")
     void pauseContainer(UUID hostId, String containerId) {
+        requireOperate(hostId);
         validateResourceId(containerId);
         call(hostId, (id, endpoint) -> {
             containers.pauseContainer(id, endpoint, containerId);
@@ -155,6 +206,7 @@ public class HostResourcesService {
 
     @Auditable(action = "CONTAINER_UNPAUSE", targetType = "CONTAINER", targetId = "#containerId")
     void unpauseContainer(UUID hostId, String containerId) {
+        requireOperate(hostId);
         validateResourceId(containerId);
         call(hostId, (id, endpoint) -> {
             containers.unpauseContainer(id, endpoint, containerId);
@@ -164,6 +216,7 @@ public class HostResourcesService {
 
     @Auditable(action = "CONTAINER_KILL", targetType = "CONTAINER", targetId = "#containerId")
     void killContainer(UUID hostId, String containerId) {
+        requireOperate(hostId);
         validateResourceId(containerId);
         call(hostId, (id, endpoint) -> {
             containers.killContainer(id, endpoint, containerId);

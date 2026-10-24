@@ -94,11 +94,13 @@ public class DeploymentRunService {
 
     @Auditable(action = "DEPLOYMENT_DEPLOY", targetType = "DEPLOYMENT", targetId = "#id")
     public DeploymentRunResponse deploy(UUID hostId, UUID id, String username) {
+        deploymentService.requireOperate(hostId, id);
         return start(hostId, id, userIdOf(username), username, null, "DEPLOYMENT_DEPLOY_RESULT", false);
     }
 
     @Auditable(action = "DEPLOYMENT_ROLLBACK", targetType = "DEPLOYMENT", targetId = "#id")
     public DeploymentRunResponse rollback(UUID hostId, UUID id, UUID versionId, String username) {
+        deploymentService.requireOperate(hostId, id);
         return start(hostId, id, userIdOf(username), username, versionId, "DEPLOYMENT_ROLLBACK_RESULT", false);
     }
 
@@ -108,12 +110,14 @@ public class DeploymentRunService {
      */
     @Auditable(action = "DEPLOYMENT_GIT_REDEPLOY", targetType = "DEPLOYMENT", targetId = "#id")
     public DeploymentRunResponse gitRedeploy(UUID hostId, UUID id, String username) {
+        deploymentService.requireOperate(hostId, id);
         return start(hostId, id, userIdOf(username), username, null, "DEPLOYMENT_GIT_REDEPLOY_RESULT", true);
     }
 
     /** Runs {@code docker compose down} and waits for it; the files and the deployment record stay. */
     @Auditable(action = "DEPLOYMENT_STOP", targetType = "DEPLOYMENT", targetId = "#id")
     public DeploymentSummaryResponse stop(UUID hostId, UUID id) {
+        deploymentService.requireOperate(hostId, id);
         var host = deploymentService.requireHost(hostId);
         Deployment deployment = deploymentService.requireDeployment(hostId, id);
         DockerEndpoint endpoint = deploymentService.endpointOf(host);
@@ -144,6 +148,7 @@ public class DeploymentRunService {
 
     /** Version history, newest first. */
     public List<DeploymentVersionResponse> versions(UUID hostId, UUID id) {
+        deploymentService.requireView(hostId, id);
         deploymentService.requireHost(hostId);
         Deployment deployment = deploymentService.requireDeployment(hostId, id);
         List<DeploymentVersion> all = versions.findByDeploymentIdOrderByCreatedAtDesc(deployment.getId());

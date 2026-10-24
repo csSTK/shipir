@@ -28,6 +28,7 @@ import dev.bethge.shipir.host.DockerHostRepository;
 import dev.bethge.shipir.git.GitCheckout;
 import dev.bethge.shipir.git.GitRepositoryService;
 import dev.bethge.shipir.host.HostEndpointResolver;
+import dev.bethge.shipir.permission.CurrentAccess;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -63,12 +64,13 @@ public class DeploymentService {
     private final TransactionTemplate tx;
     private final DeploymentLocks locks;
     private final GitRepositoryService git;
+    private final CurrentAccess access;
 
     DeploymentService(DeploymentRepository deployments, DeploymentVersionRepository versions, DockerHostRepository hosts,
                  UserRepository users, HostEndpointResolver endpoints, ComposeFileRepository files,
                  ComposeValidationService validation, ComposeExecutionService execution, SecretCipher cipher,
                  Clock clock, PlatformTransactionManager txManager, DeploymentLocks locks,
-                 GitRepositoryService git) {
+                 GitRepositoryService git, CurrentAccess access) {
         this.deployments = deployments;
         this.versions = versions;
         this.hosts = hosts;
@@ -82,6 +84,7 @@ public class DeploymentService {
         this.tx = new TransactionTemplate(txManager);
         this.locks = locks;
         this.git = git;
+        this.access = access;
     }
 
     /** Validated on-disk directory of a managed deployment (may not exist before the first write); for the config editor. */
@@ -91,8 +94,11 @@ public class DeploymentService {
     }
 
     public List<DeploymentSummaryResponse> list(UUID hostId) {
+        requireHostView(hostId);
         requireHost(hostId);
+        var visible = access.visibleDeploymentIds(hostId);
         return deployments.findByHostIdOrderByNameAsc(hostId).stream()
+                .filter(s -> visible.isEmpty() || visible.get().contains(s.getId()))
                 .map(s -> new DeploymentSummaryResponse(s.getId(), s.getName(), s.getStatus(), s.getSourceType(),
                         s.getLastDeployedAt(), s.getCreatedAt()))
                 .toList();
@@ -100,6 +106,7 @@ public class DeploymentService {
 
     /** Current YAML and the names of the env variables; values stay masked (see {@link #env}). */
     public DeploymentDetailResponse get(UUID hostId, UUID id) {
+        requireView(hostId, id);
         requireHost(hostId);
         Deployment deployment = requireDeployment(hostId, id);
         String yaml = currentVersion(deployment).getYamlContent();
@@ -111,6 +118,7 @@ public class DeploymentService {
 
     /** Unmasked env values from the encrypted store; the caller must restrict this to ADMIN and OPERATOR. */
     public DeploymentEnvResponse env(UUID hostId, UUID id) {
+        requireView(hostId, id);
         requireHost(hostId);
         Deployment deployment = requireDeployment(hostId, id);
         byte[] ciphertext = currentVersion(deployment).getEnvCiphertext();
@@ -129,6 +137,7 @@ public class DeploymentService {
 
     @Auditable(action = "DEPLOYMENT_CREATE", targetType = "DEPLOYMENT", targetId = "#result?.id")
     public DeploymentDetailResponse create(UUID hostId, DeploymentCreateRequest request, String username) {
+        requireHostOperate(hostId);
         DockerHost host = requireHost(hostId);
         if (request.source() == DeploymentSource.GIT) {
             return createGit(hostId, host, request, username);
@@ -226,6 +235,7 @@ public class DeploymentService {
     /** Turns Git polling on or off for a Git deployment. 400 NOT_A_GIT_DEPLOYMENT / VALIDATION_ERROR (no interval). */
     @Auditable(action = "DEPLOYMENT_AUTO_UPDATE_CONFIG", targetType = "DEPLOYMENT", targetId = "#id")
     public DeploymentDetailResponse configureAutoUpdate(UUID hostId, UUID id, AutoUpdateRequest request) {
+        requireOperate(hostId, id);
         requireHost(hostId);
         Deployment deployment = requireDeployment(hostId, id);
         if (deployment.getSourceType() != DeploymentSource.GIT) {
@@ -241,6 +251,7 @@ public class DeploymentService {
 
     @Auditable(action = "DEPLOYMENT_UPDATE", targetType = "DEPLOYMENT", targetId = "#id")
     public DeploymentDetailResponse update(UUID hostId, UUID id, DeploymentUpdateRequest request, String username) {
+        requireOperate(hostId, id);
         DockerHost host = requireHost(hostId);
         Deployment found = requireDeployment(hostId, id);
         locks.acquire(found.getId());
@@ -301,6 +312,7 @@ public class DeploymentService {
     /** Runs {@code docker compose down}, then removes the files and the deployment record. */
     @Auditable(action = "DEPLOYMENT_DELETE", targetType = "DEPLOYMENT", targetId = "#id")
     public void delete(UUID hostId, UUID id) {
+        requireOperate(hostId, id);
         DockerHost host = requireHost(hostId);
         Deployment deployment = requireDeployment(hostId, id);
         DockerEndpoint endpoint = endpointOf(host);
@@ -407,6 +419,41 @@ public class DeploymentService {
             throw new DeploymentException(HttpStatus.BAD_GATEWAY, "DECRYPTION_FAILED",
                     "Stored connection secrets could not be decrypted");
         }
+    }
+
+    /** 404 HOST_NOT_FOUND unless the signed-in user may see the host (system callers always may). */
+    public void requireHostView(UUID hostId) {
+        if (!access.canView(hostId)) {
+            throw new DeploymentException(HttpStatus.NOT_FOUND, "HOST_NOT_FOUND", "Environment not found");
+        }
+    }
+
+    /** Host-level write (create deployment, remove unmanaged project): 404 if invisible, 403 without host OPERATE. */
+    public void requireHostOperate(UUID hostId) {
+        requireHostView(hostId);
+        if (!access.canOperate(hostId)) {
+            throw forbidden();
+        }
+    }
+
+    /** 404 HOST_NOT_FOUND / DEPLOYMENT_NOT_FOUND unless the signed-in user may see the deployment. */
+    public void requireView(UUID hostId, UUID id) {
+        requireHostView(hostId);
+        if (!access.canView(hostId, id)) {
+            throw new DeploymentException(HttpStatus.NOT_FOUND, "DEPLOYMENT_NOT_FOUND", "Deployment not found");
+        }
+    }
+
+    /** Like {@link #requireView}, plus 403 FORBIDDEN when the user may see but not operate the deployment. */
+    public void requireOperate(UUID hostId, UUID id) {
+        requireView(hostId, id);
+        if (!access.canOperate(hostId, id)) {
+            throw forbidden();
+        }
+    }
+
+    private static DeploymentException forbidden() {
+        return new DeploymentException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied");
     }
 
     DockerHost requireHost(UUID hostId) {

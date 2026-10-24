@@ -50,7 +50,8 @@ class HostResourceDeleteRealDockerTest extends HostApiTestBase {
 
     @Test
     void unknownContainerIs404() throws Exception {
-        mvc.perform(login("operator").write(delete("/api/hosts/{h}/containers/{c}", localHostId(), "doesnotexist1")))
+        String host = localHostId();
+        mvc.perform(login("operator").write(delete("/api/hosts/{h}/containers/{c}", host, "doesnotexist1")))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
     }
 }

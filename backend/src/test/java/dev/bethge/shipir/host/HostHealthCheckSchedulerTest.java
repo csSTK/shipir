@@ -59,7 +59,8 @@ class HostHealthCheckSchedulerTest {
             return new DockerSystemInfoDto("27.0.1", 4, 1L, 1, 0, 0, 0, 0, 0);
         });
         overview = new HostOverviewService(repository, resolver, docker, connections,
-                new HostOverviewProperties(Duration.ofSeconds(1), Duration.ofSeconds(60), true));
+                new HostOverviewProperties(Duration.ofSeconds(1), Duration.ofSeconds(60), true),
+                mock(dev.bethge.shipir.permission.CurrentAccess.class)); // unstubbed = system caller, no filtering
         scheduler = new HostHealthCheckScheduler(overview, publisher, clock);
     }
 

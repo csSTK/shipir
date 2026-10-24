@@ -28,7 +28,7 @@ class NotificationApiTest extends NotificationTestBase {
                 .andExpect(jsonPath("$.content[0].id").value(newest.toString()))
                 .andExpect(jsonPath("$.content[0].type").value("HOST_DOWN"))
                 .andExpect(jsonPath("$.content[0].hostName").value("h"))
-                .andExpect(jsonPath("$.content[0].hostId").doesNotExist())
+                .andExpect(jsonPath("$.content[0].hostId").value(visibleHost.toString()))
                 .andExpect(jsonPath("$.content[0].message").value("msg"))
                 .andExpect(jsonPath("$.content[0].read").value(true))
                 .andExpect(jsonPath("$.content[0].createdAt").exists())

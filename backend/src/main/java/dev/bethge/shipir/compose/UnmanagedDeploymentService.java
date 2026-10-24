@@ -36,6 +36,7 @@ public class UnmanagedDeploymentService {
 
     @Auditable(action = "DEPLOYMENT_REMOVE_UNMANAGED", targetType = "DEPLOYMENT", targetId = "#projectName")
     public void remove(UUID hostId, String projectName, boolean removeVolumes) {
+        deploymentService.requireHostOperate(hostId);
         var host = deploymentService.requireHost(hostId);
         try {
             PathValidationUtil.validateDeploymentName(projectName);

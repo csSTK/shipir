@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.UUID;
 
 public interface NotificationRepository extends JpaRepository<Notification, UUID> {
@@ -16,6 +17,12 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
     Page<Notification> findByUserIdAndReadAtIsNull(UUID userId, Pageable pageable);
 
     long countByUserIdAndReadAtIsNull(UUID userId);
+
+    Page<Notification> findByUserIdAndHostIdIn(UUID userId, Collection<UUID> hostIds, Pageable pageable);
+
+    Page<Notification> findByUserIdAndHostIdInAndReadAtIsNull(UUID userId, Collection<UUID> hostIds, Pageable pageable);
+
+    long countByUserIdAndHostIdInAndReadAtIsNull(UUID userId, Collection<UUID> hostIds);
 
     /** Idempotent: an already read notification keeps its original read time. Returns 1 if owned by the user. */
     @Modifying

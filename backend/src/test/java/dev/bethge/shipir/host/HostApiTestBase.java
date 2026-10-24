@@ -65,6 +65,19 @@ abstract class HostApiTestBase {
         }
     }
 
+    /** Gives the seeded operator an OPERATE and the seeded viewer a VIEW grant on every host that exists now. */
+    protected void grantAllHosts() {
+        jdbc.update("INSERT INTO permissions (user_id, host_id, level) SELECT u.id, h.id, "
+                + "CASE u.username WHEN 'operator' THEN 'OPERATE' ELSE 'VIEW' END "
+                + "FROM users u CROSS JOIN docker_hosts h WHERE u.username IN ('operator', 'viewer') "
+                + "ON CONFLICT DO NOTHING");
+    }
+
+    protected void grantHost(String username, java.util.UUID hostId, String level) {
+        jdbc.update("INSERT INTO permissions (user_id, host_id, level) SELECT id, ?, ? FROM users WHERE username = ? "
+                + "ON CONFLICT (user_id, host_id) DO UPDATE SET level = EXCLUDED.level", hostId, level, username);
+    }
+
     /** Logged-in session plus the CSRF cookie that belongs to it. */
     record Login(MockHttpSession session, Cookie csrf) {
 
@@ -73,7 +86,15 @@ abstract class HostApiTestBase {
         }
     }
 
+    /** When true (default), {@link #login} first grants operator/viewer access to every host that exists. */
+    protected boolean autoGrantHosts() {
+        return true;
+    }
+
     Login login(String username) throws Exception {
+        if (autoGrantHosts()) {
+            grantAllHosts();
+        }
         Cookie anon = mvc.perform(get("/api/auth/me")).andReturn().getResponse().getCookie("XSRF-TOKEN");
         MvcResult r = mvc.perform(post("/api/auth/login")
                 .cookie(anon).header("X-XSRF-TOKEN", anon.getValue())

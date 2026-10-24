@@ -14,6 +14,7 @@ import dev.bethge.shipir.docker.tls.TlsMaterialValidator;
 import dev.bethge.shipir.host.dto.ConnectionTestRequest;
 import dev.bethge.shipir.host.dto.CreateHostRequest;
 import dev.bethge.shipir.host.dto.HostResponse;
+import dev.bethge.shipir.permission.CurrentAccess;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -34,19 +35,24 @@ public class HostService {
     private final SecretCipher cipher;
     private final DockerSystemService docker;
     private final DockerHostConnectionManager connections;
+    private final CurrentAccess access;
 
     HostService(DockerHostRepository hosts, UserRepository users, SecretCipher cipher,
-                DockerSystemService docker, DockerHostConnectionManager connections) {
+                DockerSystemService docker, DockerHostConnectionManager connections, CurrentAccess access) {
         this.hosts = hosts;
         this.users = users;
         this.cipher = cipher;
         this.docker = docker;
         this.connections = connections;
+        this.access = access;
     }
 
+    /** Hosts the signed-in user may see (all for ADMIN and system callers). */
     @Transactional(readOnly = true)
     public List<HostResponse> list() {
+        var visible = access.visibleHostIds();
         return hosts.findAll().stream()
+                .filter(h -> visible.isEmpty() || visible.get().contains(h.getId()))
                 .sorted(Comparator.comparing(DockerHost::getName, String.CASE_INSENSITIVE_ORDER))
                 .map(HostService::toResponse)
                 .toList();

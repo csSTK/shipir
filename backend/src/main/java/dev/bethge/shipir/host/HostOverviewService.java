@@ -10,6 +10,7 @@ import dev.bethge.shipir.docker.dto.DockerSystemInfoDto;
 import dev.bethge.shipir.host.dto.HostOverviewResponse;
 import dev.bethge.shipir.host.dto.HostOverviewResponse.Containers;
 import dev.bethge.shipir.host.dto.HostOverviewResponse.Status;
+import dev.bethge.shipir.permission.CurrentAccess;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,15 +42,18 @@ public class HostOverviewService {
     private final DockerSystemService docker;
     private final DockerHostConnectionManager connections;
     private final HostOverviewProperties properties;
+    private final CurrentAccess access;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     HostOverviewService(DockerHostRepository hosts, HostEndpointResolver endpoints, DockerSystemService docker,
-                        DockerHostConnectionManager connections, HostOverviewProperties properties) {
+                        DockerHostConnectionManager connections, HostOverviewProperties properties,
+                        CurrentAccess access) {
         this.hosts = hosts;
         this.endpoints = endpoints;
         this.docker = docker;
         this.connections = connections;
         this.properties = properties;
+        this.access = access;
     }
 
     @PreDestroy
@@ -57,8 +61,14 @@ public class HostOverviewService {
         executor.shutdownNow();
     }
 
+    /**
+     * Live state of the hosts the signed-in user may see. Without authentication on the thread (health check scheduler)
+     * every host is queried.
+     */
     public List<HostOverviewResponse> overview() {
+        var visible = access.visibleHostIds();
         List<DockerHost> all = hosts.findAll().stream()
+                .filter(h -> visible.isEmpty() || visible.get().contains(h.getId()))
                 .sorted(Comparator.comparing(DockerHost::getName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
         List<Future<HostOverviewResponse>> futures = all.stream()

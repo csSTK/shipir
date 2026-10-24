@@ -43,9 +43,13 @@ abstract class NotificationTestBase {
     @Autowired
     PasswordEncoder encoder;
 
+    /** Host the seeded operator and viewer may see; notifications of other hosts are hidden from them. */
+    protected UUID visibleHost;
+
     @BeforeEach
     void resetState() {
         jdbc.update("DELETE FROM notifications");
+        jdbc.update("DELETE FROM docker_hosts");
         jdbc.update("DELETE FROM notification_preferences");
         for (Role role : Role.values()) {
             String name = role.name().toLowerCase();
@@ -53,6 +57,16 @@ abstract class NotificationTestBase {
             u.changePasswordHash(encoder.encode(PASSWORD), Instant.now());
             users.save(u);
         }
+        visibleHost = insertHost("notif-host");
+        for (String name : new String[]{"operator", "viewer"}) {
+            jdbc.update("INSERT INTO permissions (user_id, host_id, level) VALUES (?, ?, 'VIEW')",
+                    userId(name), visibleHost);
+        }
+    }
+
+    UUID insertHost(String name) {
+        return jdbc.queryForObject("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
+                + "SELECT ?, 'LOCAL', id FROM users WHERE username = 'admin' RETURNING id", UUID.class, name);
     }
 
     record Login(MockHttpSession session, Cookie csrf) {
@@ -77,10 +91,14 @@ abstract class NotificationTestBase {
     }
 
     UUID insertNotification(String username, String type, boolean read, Instant createdAt) {
+        return insertNotification(username, type, read, createdAt, visibleHost);
+    }
+
+    UUID insertNotification(String username, String type, boolean read, Instant createdAt, UUID hostId) {
         UUID id = UUID.randomUUID();
-        jdbc.update("INSERT INTO notifications (id, user_id, type, host_name, message, created_at, read_at) "
-                        + "VALUES (?, ?, ?, 'h', 'msg', ?, ?)",
-                id, userId(username), type, java.sql.Timestamp.from(createdAt),
+        jdbc.update("INSERT INTO notifications (id, user_id, type, host_id, host_name, message, created_at, read_at) "
+                        + "VALUES (?, ?, ?, ?, 'h', 'msg', ?, ?)",
+                id, userId(username), type, hostId, java.sql.Timestamp.from(createdAt),
                 read ? java.sql.Timestamp.from(createdAt) : null);
         return id;
     }

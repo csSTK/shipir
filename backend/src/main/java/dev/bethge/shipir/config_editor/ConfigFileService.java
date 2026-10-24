@@ -83,6 +83,7 @@ public class ConfigFileService {
     }
 
     public List<ConfigFileEntry> tree(UUID hostId, UUID id) {
+        deployments.requireView(hostId, id);
         Path dir = deployments.directoryOf(hostId, id);
         if (!Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) {
             return List.of();
@@ -193,6 +194,11 @@ public class ConfigFileService {
     }
 
     private Target target(UUID hostId, UUID id, String path, boolean forWrite) {
+        if (forWrite) {
+            deployments.requireOperate(hostId, id);
+        } else {
+            deployments.requireView(hostId, id);
+        }
         Path root = deployments.directoryOf(hostId, id);
         if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
             if (!forWrite) {

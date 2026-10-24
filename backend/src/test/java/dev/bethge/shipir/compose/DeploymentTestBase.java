@@ -104,6 +104,8 @@ abstract class DeploymentTestBase {
         jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
                 + "SELECT 'Deployment host', 'LOCAL', id FROM users WHERE username = 'admin'");
         hostId = jdbc.queryForObject("SELECT id FROM docker_hosts", UUID.class);
+        grantHost("operator", "OPERATE");
+        grantHost("viewer", "VIEW");
         commands.clear();
         downFails = false;
         upFails = false;
@@ -134,6 +136,17 @@ abstract class DeploymentTestBase {
         };
         org.mockito.Mockito.doAnswer(fake).when(execution).execute(any(), any(), any(), any(), any());
         org.mockito.Mockito.doAnswer(fake).when(execution).execute(any(), any(), any(), any(), any(), any());
+    }
+
+    /** Host-level grant for a seeded user; cascades away with the host. */
+    protected void grantHost(String username, String level) {
+        jdbc.update("INSERT INTO permissions (user_id, host_id, level) SELECT id, ?, ? FROM users WHERE username = ?",
+                hostId, level, username);
+    }
+
+    protected void grantDeployment(String username, UUID deploymentId, String level) {
+        jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) SELECT id, ?, ? FROM users WHERE username = ?",
+                deploymentId, level, username);
     }
 
     record Login(MockHttpSession session, Cookie csrf) {

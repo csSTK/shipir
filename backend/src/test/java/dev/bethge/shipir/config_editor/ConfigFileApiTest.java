@@ -96,6 +96,8 @@ class ConfigFileApiTest {
         jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
                 + "SELECT 'Config host', 'LOCAL', id FROM users WHERE username = 'admin'");
         hostId = jdbc.queryForObject("SELECT id FROM docker_hosts", UUID.class);
+        grantHost("operator", "OPERATE");
+        grantHost("viewer", "VIEW");
         doReturn(new ComposeProcessResult(0, false, List.of())).when(execution).execute(any(), any(), any(), any(), any());
         doReturn(new ComposeProcessResult(0, false, List.of())).when(execution).execute(any(), any(), any(), any(), any(), any());
         Login admin = login("admin");
@@ -105,6 +107,28 @@ class ConfigFileApiTest {
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         deploymentId = JsonPath.read(body, "$.id");
         dir = files.deploymentDir(hostId, "web");
+    }
+
+    void grantHost(String username, String level) {
+        jdbc.update("INSERT INTO permissions (user_id, host_id, level) SELECT id, ?, ? FROM users WHERE username = ? "
+                + "ON CONFLICT (user_id, host_id) DO UPDATE SET level = EXCLUDED.level", hostId, level, username);
+    }
+
+    @Test
+    void permissionsHiddenDeploymentIs404AndViewGrantCannotWrite() throws Exception {
+        String base = "/api/hosts/" + hostId + "/managed-deployments/" + deploymentId + "/files";
+        jdbc.update("DELETE FROM permissions");
+        Login op = login("operator");
+        mvc.perform(get(base).session(op.session())).andExpect(status().isNotFound());
+        mvc.perform(op.write(put(base).param("path", "a.txt").contentType(APPLICATION_JSON).content("{\"content\":\"x\"}")))
+                .andExpect(status().isNotFound());
+
+        grantHost("operator", "VIEW");
+        mvc.perform(get(base).session(op.session())).andExpect(status().isOk());
+        mvc.perform(op.write(put(base).param("path", "a.txt").contentType(APPLICATION_JSON).content("{\"content\":\"x\"}")))
+                .andExpect(status().isForbidden());
+        mvc.perform(op.write(delete(base).param("path", "a.txt"))).andExpect(status().isForbidden());
+        assertThat(Files.exists(dir.resolve("a.txt"))).isFalse();
     }
 
     record Login(MockHttpSession session, Cookie csrf) {

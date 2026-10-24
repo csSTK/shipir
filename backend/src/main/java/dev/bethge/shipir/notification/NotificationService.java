@@ -7,6 +7,9 @@ import dev.bethge.shipir.host.dto.HostOverviewResponse.Status;
 import dev.bethge.shipir.notification.dto.NotificationPageResponse;
 import dev.bethge.shipir.notification.dto.NotificationPreferenceDto;
 import dev.bethge.shipir.notification.dto.NotificationResponse;
+import dev.bethge.shipir.permission.PermissionService;
+import dev.bethge.shipir.permission.PermissionSubject;
+import dev.bethge.shipir.auth.Role;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -19,6 +22,7 @@ import java.time.Instant;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -32,13 +36,15 @@ public class NotificationService {
     private final NotificationPreferenceRepository preferences;
     private final UserRepository users;
     private final Clock clock;
+    private final PermissionService permissions;
 
     NotificationService(NotificationRepository notifications, NotificationPreferenceRepository preferences,
-                        UserRepository users, Clock clock) {
+                        UserRepository users, Clock clock, PermissionService permissions) {
         this.notifications = notifications;
         this.preferences = preferences;
         this.users = users;
         this.clock = clock;
+        this.permissions = permissions;
     }
 
     /** One notification per user who has not disabled the type (no preference row = enabled). */
@@ -64,21 +70,55 @@ public class NotificationService {
     public NotificationPageResponse list(UUID userId, boolean unreadOnly, int page, int size) {
         PageRequest pr = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE),
                 Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Notification> p = unreadOnly
-                ? notifications.findByUserIdAndReadAtIsNull(userId, pr)
-                : notifications.findByUserId(userId, pr);
+        Optional<Set<UUID>> visible = visibleHosts(userId);
+        if (visible.isPresent() && visible.get().isEmpty()) {
+            return new NotificationPageResponse(List.of(), 0);
+        }
+        Page<Notification> p;
+        if (visible.isEmpty()) {
+            p = unreadOnly ? notifications.findByUserIdAndReadAtIsNull(userId, pr) : notifications.findByUserId(userId, pr);
+        } else {
+            p = unreadOnly
+                    ? notifications.findByUserIdAndHostIdInAndReadAtIsNull(userId, visible.get(), pr)
+                    : notifications.findByUserIdAndHostIdIn(userId, visible.get(), pr);
+        }
         return new NotificationPageResponse(p.getContent().stream().map(NotificationService::toDto).toList(),
                 p.getTotalElements());
     }
 
     @Transactional(readOnly = true)
     long unreadCount(UUID userId) {
-        return notifications.countByUserIdAndReadAtIsNull(userId);
+        Optional<Set<UUID>> visible = visibleHosts(userId);
+        if (visible.isEmpty()) {
+            return notifications.countByUserIdAndReadAtIsNull(userId);
+        }
+        return visible.get().isEmpty() ? 0
+                : notifications.countByUserIdAndHostIdInAndReadAtIsNull(userId, visible.get());
+    }
+
+    /**
+     * Hosts whose notifications the user may see; empty = no restriction (ADMIN). Notifications of deleted hosts
+     * (no host id) and of hosts without a grant are hidden from everyone else.
+     */
+    private Optional<Set<UUID>> visibleHosts(UUID userId) {
+        User user = users.findById(userId).orElseThrow();
+        if (user.getRole() == Role.ADMIN) {
+            return Optional.empty();
+        }
+        return Optional.of(permissions.visibleHostIds(PermissionSubject.of(user)));
     }
 
     /** @return false if the notification does not exist or belongs to someone else */
     @Transactional
     public boolean markRead(UUID id, UUID userId) {
+        Optional<Set<UUID>> visible = visibleHosts(userId);
+        if (visible.isPresent()) {
+            boolean hidden = notifications.findById(id)
+                    .map(n -> n.getHostId() == null || !visible.get().contains(n.getHostId())).orElse(false);
+            if (hidden) {
+                return false;
+            }
+        }
         return notifications.markRead(id, userId, clock.instant()) > 0;
     }
 
