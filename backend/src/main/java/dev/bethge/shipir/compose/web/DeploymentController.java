@@ -85,6 +85,12 @@ class DeploymentController {
         return runs.deploy(hostId, id, authentication.getName());
     }
 
+    @PostMapping("/{id}/pull-update")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    DeploymentRunResponse pullUpdate(@PathVariable UUID hostId, @PathVariable UUID id, Authentication authentication) {
+        return runs.pullUpdate(hostId, id, authentication.getName());
+    }
+
     @PostMapping("/{id}/git/redeploy")
     @ResponseStatus(HttpStatus.ACCEPTED)
     DeploymentRunResponse gitRedeploy(@PathVariable UUID hostId, @PathVariable UUID id, Authentication authentication) {

@@ -114,6 +114,43 @@ public class DeploymentRunService {
         return start(hostId, id, userIdOf(username), username, null, "DEPLOYMENT_GIT_REDEPLOY_RESULT", true);
     }
 
+    /**
+     * "Pull &amp; update": {@code docker compose pull} then {@code up -d} on the latest deployed version, so tags like
+     * {@code latest} pick up new images. Creates no new version. 400 NOT_DEPLOYED if the deployment was never deployed.
+     */
+    @Auditable(action = "DEPLOYMENT_PULL_UPDATE", targetType = "DEPLOYMENT", targetId = "#id")
+    public DeploymentRunResponse pullUpdate(UUID hostId, UUID id, String username) {
+        deploymentService.requireOperate(hostId, id);
+        var host = deploymentService.requireHost(hostId);
+        Deployment deployment = deploymentService.requireDeployment(hostId, id);
+        DockerEndpoint endpoint = deploymentService.endpointOf(host);
+        UUID userId = userIdOf(username);
+        locks.acquire(deployment.getId());
+        boolean started = false;
+        try {
+            DeploymentVersion version = versions.findByDeploymentIdOrderByCreatedAtDesc(deployment.getId()).stream()
+                    .filter(DeploymentVersion::isDeployed).findFirst().orElseThrow(
+                            () -> new DeploymentException(HttpStatus.BAD_REQUEST, "NOT_DEPLOYED",
+                                    "The deployment has not been deployed yet"));
+            String envText = decryptEnv(version);
+            alignCheckout(deployment, version);
+            files.write(hostId, deployment.getName(), version.getYamlContent(), envText);
+            String runId = UUID.randomUUID().toString();
+            Map<String, Object> aiMarker = AiInvocationContext.active() ? aiMarker() : Map.of();
+            streams.registerRun(runId, hostId, deployment.getId());
+            Consumer<String> sink = streams.start(runId);
+            Thread.ofVirtual().name("deploy-" + runId).start(
+                    () -> run(deployment, version, endpoint, runId, sink, userId, username,
+                            "DEPLOYMENT_PULL_UPDATE_RESULT", aiMarker, List.of(ComposeCommand.PULL, ComposeCommand.UP)));
+            started = true;
+            return new DeploymentRunResponse(runId, version.getId());
+        } finally {
+            if (!started) {
+                locks.release(deployment.getId());
+            }
+        }
+    }
+
     /** Runs {@code docker compose down} and waits for it; the files and the deployment record stay. */
     @Auditable(action = "DEPLOYMENT_STOP", targetType = "DEPLOYMENT", targetId = "#id")
     public DeploymentSummaryResponse stop(UUID hostId, UUID id) {
@@ -293,16 +330,28 @@ public class DeploymentRunService {
     private void run(Deployment deployment, DeploymentVersion version, DockerEndpoint endpoint, String runId,
                      Consumer<String> sink, UUID userId, String username, String resultAction,
                      Map<String, Object> aiMarker) {
+        run(deployment, version, endpoint, runId, sink, userId, username, resultAction, aiMarker, List.of(ComposeCommand.UP));
+    }
+
+    private void run(Deployment deployment, DeploymentVersion version, DockerEndpoint endpoint, String runId,
+                     Consumer<String> sink, UUID userId, String username, String resultAction,
+                     Map<String, Object> aiMarker, List<ComposeCommand> steps) {
         boolean success = false;
         Map<String, Object> details = new java.util.LinkedHashMap<>(aiMarker);
         details.put("runId", runId);
         details.put("versionId", version.getId().toString());
         try {
-            ComposeProcessResult result = execution.execute(deployment.getHostId(), deployment.getName(), ComposeCommand.UP,
-                    endpoint, sink, deploymentService.composeFileOf(deployment));
-            success = result.success();
-            details.put("exitCode", result.exitCode());
-            details.put("timedOut", result.timedOut());
+            for (ComposeCommand step : steps) {
+                ComposeProcessResult result = execution.execute(deployment.getHostId(), deployment.getName(), step,
+                        endpoint, sink, deploymentService.composeFileOf(deployment));
+                success = result.success();
+                details.put("exitCode", result.exitCode());
+                details.put("timedOut", result.timedOut());
+                if (!success) {
+                    details.put("failedStep", step.name());
+                    break;
+                }
+            }
         } catch (RuntimeException e) {
             log.warn("Deployment {} could not run: {}", runId, e.toString());
             details.put("error", "COMPOSE_UNAVAILABLE");

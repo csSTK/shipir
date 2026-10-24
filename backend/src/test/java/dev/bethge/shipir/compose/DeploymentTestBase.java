@@ -87,6 +87,7 @@ abstract class DeploymentTestBase {
     protected final List<Path> composeFiles = new CopyOnWriteArrayList<>();
     protected boolean downFails;
     protected volatile boolean upFails;
+    protected volatile boolean pullFails;
     /** Blocks every {@code up} until counted down; replaced per test. */
     protected volatile java.util.concurrent.CountDownLatch upGate = new java.util.concurrent.CountDownLatch(0);
 
@@ -109,6 +110,7 @@ abstract class DeploymentTestBase {
         commands.clear();
         downFails = false;
         upFails = false;
+        pullFails = false;
         upGate = new java.util.concurrent.CountDownLatch(0);
         composeFiles.clear();
         org.mockito.stubbing.Answer<ComposeProcessResult> fake = inv -> {
@@ -119,6 +121,12 @@ abstract class DeploymentTestBase {
             composeFiles.add(inv.getArguments().length > 5 ? inv.getArgument(5) : null);
             if (command == ComposeCommand.DOWN) {
                 return downFails ? new ComposeProcessResult(1, false, List.of("cannot reach daemon"))
+                        : new ComposeProcessResult(0, false, List.of());
+            }
+            if (command == ComposeCommand.PULL) {
+                java.util.function.Consumer<String> onLine = inv.getArgument(4);
+                onLine.accept("web Pulling");
+                return pullFails ? new ComposeProcessResult(1, false, List.of("Error: pull denied"))
                         : new ComposeProcessResult(0, false, List.of());
             }
             if (command == ComposeCommand.UP) {
