@@ -1,5 +1,7 @@
 shipir:
   security:
+    # true when users reach Shipir over HTTPS (TLS at a reverse proxy): Secure session + XSRF cookies, HSTS header.
+    https: ${SHIPIR_SECURITY_HTTPS:false}
     login:
       max-attempts: 5
       window: 15m
@@ -52,6 +54,7 @@ server:
       cookie:
         http-only: true
         same-site: lax
+        secure: ${shipir.security.https}
 spring:
   application:
     name: shipir

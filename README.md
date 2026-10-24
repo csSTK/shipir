@@ -132,7 +132,7 @@ The images on ghcr.io are private, so `docker login ghcr.io` is required before 
 
 Without a pull (or when the images don't exist on ghcr.io yet), `docker compose -f docker-compose.yml build` builds both images locally, and `up` uses them.
 
-Required in `.env`: `DB_PASSWORD`, `DB_HOST` and `DOCKER_GID`. Compose stops with a message if one is missing. On the first start (empty database) also `SHIPIR_INITIAL_ADMIN_PASSWORD`; without it the backend refuses to start. Optional: `DB_PORT`, `DB_NAME`, `DB_USER`, `SHIPIR_TAG` (image tag), `SHIPIR_PORT` (host port, default `8080`) and `SHIPIR_ENCRYPTION_KEY` (see below).
+Required in `.env`: `DB_PASSWORD`, `DB_HOST` and `DOCKER_GID`. Compose stops with a message if one is missing. On the first start (empty database) also `SHIPIR_INITIAL_ADMIN_PASSWORD`; without it the backend refuses to start. Optional: `DB_PORT`, `DB_NAME`, `DB_USER`, `SHIPIR_TAG` (image tag), `SHIPIR_PORT` (host port, default `8080`), `SHIPIR_ENCRYPTION_KEY`, `SHIPIR_HTTPS` and `SHIPIR_SECURITY_TRUSTED_PROXIES` (see below).
 
 **First login:** sign in as `admin` with `SHIPIR_INITIAL_ADMIN_PASSWORD`. Shipir then asks for a new password (15–128 characters with upper- and lowercase letters, a digit and a symbol) before anything else is usable. Next, the admin adds the first Docker environment: the local Docker socket, or a remote Docker engine over TCP with TLS client certificates (needs `SHIPIR_ENCRYPTION_KEY`). Shipir tests the connection before saving it. Later logins skip both steps. After setup, every user lands on the environments overview (status and live stats per environment); only admins can add, rename or delete environments. Clicking an environment opens its dashboard; the sidebar then lists its deployments (Compose projects), containers, images, networks and volumes for every role. Clicking a container name opens its live logs (last 100–1000 lines or all, optional timestamps, stderr highlighted) for every role. Admins and operators can delete containers (running ones only with Force), unused images, volumes and networks, and remove unmanaged deployments (`compose down`, volumes kept unless chosen). They can also pull images with live progress; Shipir checks every 6 hours (`shipir.images.update-check-interval`) whether a newer image exists in the registry and marks images, deployments and containers with 'Update available'. Viewers only read.
 
@@ -145,6 +145,27 @@ stat -c %g /var/run/docker.sock                        # prints e.g. 999; put it
 ```
 
 **Encryption key:** `SHIPIR_ENCRYPTION_KEY` encrypts stored TLS material (AES-256-GCM) at rest. It is optional while only the local Docker host exists. Connections to remote Docker hosts over TCP+TLS require it, and the backend refuses to start if such hosts exist without a valid key. Generate one with `openssl rand -base64 32` (it must decode to exactly 32 bytes). Store it outside git and back it up: losing it makes the stored TLS material unreadable, and changing it breaks decryption of existing data.
+
+**HTTPS and reverse proxy:** Shipir itself speaks plain HTTP on `SHIPIR_PORT`. Put a TLS-terminating reverse proxy in front for anything beyond localhost, and set `SHIPIR_HTTPS=true` in `.env`. That turns on `Secure` for the session and `XSRF-TOKEN` cookies and sends `Strict-Transport-Security` (one year, `includeSubDomains`; browsers then refuse plain HTTP for the domain, so enable it only once HTTPS works). With `SHIPIR_HTTPS=true` the app is unusable over plain HTTP, because browsers do not store Secure cookies there (except on `localhost`). The proxy must forward WebSocket upgrades on `/ws` and send `X-Forwarded-For`. Shipir sets `Content-Security-Policy` (`default-src 'self'`, WebSocket to the same origin, `frame-ancestors 'none'`), `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` and `Permissions-Policy` on every answer, static files and API alike. Caddy (certificates are fetched and renewed automatically):
+
+```
+shipir.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+Traefik (labels on the `frontend` service; entrypoint and resolver names are yours):
+
+```yaml
+labels:
+  - traefik.enable=true
+  - traefik.http.routers.shipir.rule=Host(`shipir.example.com`)
+  - traefik.http.routers.shipir.entrypoints=websecure
+  - traefik.http.routers.shipir.tls.certresolver=letsencrypt
+  - traefik.http.services.shipir.loadbalancer.server.port=8080
+```
+
+**Login throttling and trusted proxies:** failed logins are throttled per client address and per username. The backend only sees the address of the container in front of it, so set `shipir.security.trusted-proxies` (env `SHIPIR_SECURITY_TRUSTED_PROXIES`, comma-separated exact addresses) to the **frontend (nginx) container's address** on the compose network; then the `X-Forwarded-For` it appends is used. Without it, all clients share one address and the limit of 20 failures per 15 minutes applies to everyone together. If you put your own proxy in front of nginx, list its address too, and make sure it overwrites a client-supplied `X-Forwarded-For` or appends to it. Note that a lockout of a known username (5 failures per 15 minutes) also blocks that user's correct password until it expires. This is an accepted trade-off: it stops password guessing, at the price that someone can lock out a known username.
 
 Only the frontend port is published. The backend is reachable only from the frontend on the compose network. The frontend starts even if the backend is not up yet; it reconnects on the next request.
 

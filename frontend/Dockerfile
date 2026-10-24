@@ -14,6 +14,9 @@ FROM nginxinc/nginx-unprivileged:stable-alpine
 ENV BACKEND_URL=http://backend:8080
 # Docker's embedded DNS; override outside Docker
 ENV NGINX_RESOLVER=127.0.0.11
+# "true" when users reach Shipir over HTTPS (reverse proxy): sends Strict-Transport-Security
+ENV SHIPIR_HTTPS=false
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
+COPY nginx/security-headers.inc.template /etc/nginx/templates/security-headers.inc.template
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 8080

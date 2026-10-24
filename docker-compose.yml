@@ -18,6 +18,10 @@ services:
       SHIPIR_INITIAL_ADMIN_PASSWORD: ${SHIPIR_INITIAL_ADMIN_PASSWORD:-}
       # Optional while only LOCAL Docker hosts exist; required for TCP+TLS hosts (startup fails without a valid key).
       SHIPIR_ENCRYPTION_KEY: ${SHIPIR_ENCRYPTION_KEY:-}
+      # true behind an HTTPS reverse proxy: Secure cookies + HSTS (see README, "HTTPS and reverse proxy").
+      SHIPIR_SECURITY_HTTPS: ${SHIPIR_HTTPS:-false}
+      # Peer addresses (comma-separated) of the frontend/nginx container; needed for per-client login throttling.
+      SHIPIR_SECURITY_TRUSTED_PROXIES: ${SHIPIR_SECURITY_TRUSTED_PROXIES:-}
     # Access to the local Docker daemon. Grants root-equivalent control of the host; keep the stack private.
     group_add:
       - "${DOCKER_GID:?Set DOCKER_GID in .env to the owner group of /var/run/docker.sock (see .env.example)}"
@@ -33,6 +37,7 @@ services:
     build: ./frontend
     environment:
       BACKEND_URL: http://backend:8080
+      SHIPIR_HTTPS: ${SHIPIR_HTTPS:-false}
     ports:
       - "${SHIPIR_PORT:-8080}:8080"
     depends_on:

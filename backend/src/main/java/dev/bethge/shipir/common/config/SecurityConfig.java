@@ -7,6 +7,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -21,7 +22,9 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.core.session.SessionRegistry;
 import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
+import org.springframework.security.web.util.matcher.AnyRequestMatcher;
 import org.springframework.security.web.authentication.session.RegisterSessionAuthenticationStrategy;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
@@ -47,10 +50,21 @@ import java.util.List;
 
 /**
  * Server-side session auth for the SPA: JSON login via {@code AuthController}, HttpOnly session cookie,
- * CSRF through the double-submit {@code XSRF-TOKEN} cookie, JSON 401/403 instead of redirects.
+ * CSRF through the double-submit {@code XSRF-TOKEN} cookie, JSON 401/403 instead of redirects, security headers.
  */
 @Configuration(proxyBeanMethods = false)
 class SecurityConfig {
+
+    /**
+     * Same policy as frontend/nginx/default.conf.template (keep both in sync; the CSP e2e reads the nginx one).
+     * Inline styles are needed by the UI libraries (style attributes, Monaco); scripts stay 'self' only.
+     */
+    static final String CONTENT_SECURITY_POLICY = "default-src 'self'; script-src 'self'; "
+            + "style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; "
+            + "connect-src 'self' ws: wss:; worker-src 'self' blob:; object-src 'none'; "
+            + "base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+
+    static final String PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(), payment=(), usb=()";
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http,
@@ -60,8 +74,22 @@ class SecurityConfig {
                                             AccessDeniedHandler accessDeniedHandler,
                                             SetupStatus setupStatus,
                                             SessionRegistry sessionRegistry,
-                                            JsonMapper mapper) throws Exception {
+                                            JsonMapper mapper,
+                                            @Value("${shipir.security.https:false}") boolean https) throws Exception {
         http
+                .headers(h -> {
+                    h.contentSecurityPolicy(csp -> csp.policyDirectives(CONTENT_SECURITY_POLICY));
+                    h.frameOptions(f -> f.deny());
+                    h.referrerPolicy(r -> r.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER));
+                    h.permissionsPolicyHeader(p -> p.policy(PERMISSIONS_POLICY));
+                    if (https) {
+                        // TLS ends at the reverse proxy, so the request itself never looks secure: always send it
+                        h.httpStrictTransportSecurity(hsts -> hsts.requestMatcher(AnyRequestMatcher.INSTANCE)
+                                .maxAgeInSeconds(31_536_000).includeSubDomains(true));
+                    } else {
+                        h.httpStrictTransportSecurity(hsts -> hsts.disable());
+                    }
+                })
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
@@ -145,9 +173,12 @@ class SecurityConfig {
         return new HttpSessionEventPublisher();
     }
 
+    /** {@code Secure} on the XSRF cookie when {@code shipir.security.https=true} (the session cookie: application.yml). */
     @Bean
-    CsrfTokenRepository csrfTokenRepository() {
-        return CookieCsrfTokenRepository.withHttpOnlyFalse();
+    CsrfTokenRepository csrfTokenRepository(@Value("${shipir.security.https:false}") boolean https) {
+        CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        repository.setCookieCustomizer(cookie -> cookie.secure(https));
+        return repository;
     }
 
     /** Applied by the login endpoint: new session id and new CSRF token once the user is authenticated. */
