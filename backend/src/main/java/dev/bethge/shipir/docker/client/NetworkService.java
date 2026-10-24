@@ -1,6 +1,8 @@
 package dev.bethge.shipir.docker.client;
 
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.dto.CreatedResourceDto;
+import dev.bethge.shipir.docker.dto.NetworkCreateSpec;
 import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import dev.bethge.shipir.docker.dto.NetworkDto;
 
@@ -17,6 +19,9 @@ public interface NetworkService {
      * or BUILTIN_NETWORK (bridge, host, none; refused without removing).
      */
     void removeNetwork(UUID hostId, DockerEndpoint endpoint, String id);
+
+    /** Creates a network; NAME_TAKEN if one with that name exists. Throws {@code DockerConnectionException}. */
+    CreatedResourceDto createNetwork(UUID hostId, DockerEndpoint endpoint, NetworkCreateSpec spec);
 
     /** Networks a prune removes: user-defined (not bridge, host, none) with no attached container. */
     List<PruneCandidateDto> listPrunable(UUID hostId, DockerEndpoint endpoint);

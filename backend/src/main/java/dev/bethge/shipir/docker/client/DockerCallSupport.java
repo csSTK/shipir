@@ -100,6 +100,8 @@ class DockerCallSupport {
             case BUILTIN_NETWORK -> "Built-in networks cannot be removed.";
             case INVALID_STATE -> "The container is not in a state that allows this action.";
             case PULL_FAILED -> "The image could not be pulled.";
+            case NAME_TAKEN -> "A resource with this name already exists.";
+            case START_FAILED -> "The container could not be started.";
         };
         return new DockerConnectionException(code, message, e);
     }

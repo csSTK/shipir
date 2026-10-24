@@ -1,6 +1,8 @@
 package dev.bethge.shipir.docker.client;
 
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.dto.ContainerCreateSpec;
+import dev.bethge.shipir.docker.dto.CreatedResourceDto;
 import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import dev.bethge.shipir.docker.dto.ContainerDetailsDto;
 import dev.bethge.shipir.docker.dto.ContainerDto;
@@ -45,6 +47,13 @@ public interface ContainerService {
 
     /** Sends SIGKILL to a running container. */
     void killContainer(UUID hostId, DockerEndpoint endpoint, String id);
+
+    /**
+     * Creates a container from an already validated spec and starts it when {@code spec.start()}. Throws
+     * {@code DockerConnectionException}: NAME_TAKEN, NOT_FOUND (image or network missing), START_FAILED (created, did
+     * not start; the container is removed again).
+     */
+    CreatedResourceDto createContainer(UUID hostId, DockerEndpoint endpoint, ContainerCreateSpec spec);
 
     /** Containers a prune removes: every container that is not running, paused or restarting (size = writable layer). */
     List<PruneCandidateDto> listPrunable(UUID hostId, DockerEndpoint endpoint);

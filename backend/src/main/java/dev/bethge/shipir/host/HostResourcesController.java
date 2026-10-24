@@ -4,6 +4,10 @@ import dev.bethge.shipir.docker.dto.ContainerDetailsDto;
 import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.ImageDto;
 import dev.bethge.shipir.docker.dto.NetworkDto;
+import dev.bethge.shipir.docker.dto.CreatedResourceDto;
+import dev.bethge.shipir.host.dto.CreateContainerRequest;
+import dev.bethge.shipir.host.dto.CreateNetworkRequest;
+import dev.bethge.shipir.host.dto.CreateVolumeRequest;
 import dev.bethge.shipir.host.dto.HostDeploymentResponse;
 import dev.bethge.shipir.host.dto.PrunePreviewResponse;
 import dev.bethge.shipir.host.dto.PruneRequest;
@@ -134,6 +138,24 @@ class HostResourcesController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void killContainer(@PathVariable UUID id, @PathVariable String containerId) {
         service.killContainer(id, containerId);
+    }
+
+    @PostMapping("/containers")
+    @ResponseStatus(HttpStatus.CREATED)
+    CreatedResourceDto createContainer(@PathVariable UUID id, @RequestBody CreateContainerRequest request) {
+        return service.createContainer(id, request);
+    }
+
+    @PostMapping("/networks")
+    @ResponseStatus(HttpStatus.CREATED)
+    CreatedResourceDto createNetwork(@PathVariable UUID id, @RequestBody CreateNetworkRequest request) {
+        return service.createNetwork(id, request);
+    }
+
+    @PostMapping("/volumes")
+    @ResponseStatus(HttpStatus.CREATED)
+    CreatedResourceDto createVolume(@PathVariable UUID id, @RequestBody CreateVolumeRequest request) {
+        return service.createVolume(id, request);
     }
 
     @GetMapping("/prune/preview")

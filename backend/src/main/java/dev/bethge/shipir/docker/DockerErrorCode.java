@@ -17,5 +17,9 @@ public enum DockerErrorCode {
     /** Container lifecycle action does not fit the current state (daemon 304 or 409): already started/stopped, not running, (not) paused. */
     INVALID_STATE,
     /** The registry rejected a pull (denied, unauthorized, no such tag) or could not be reached; the daemon's text is never passed on. */
-    PULL_FAILED
+    PULL_FAILED,
+    /** Create: a resource with that name already exists. */
+    NAME_TAKEN,
+    /** Create + start: the container was created but could not start (e.g. port taken); it has been removed again. */
+    START_FAILED
 }

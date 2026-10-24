@@ -48,6 +48,11 @@ public class CurrentAccess {
                 .map(PermissionSubject::of).orElse(NOBODY));
     }
 
+    /** True for ADMIN and for the system caller. */
+    public boolean isAdmin() {
+        return subject().map(s -> s.role() == Role.ADMIN).orElse(true);
+    }
+
     public boolean canView(UUID hostId) {
         return subject().map(s -> permissions.canView(s, hostId)).orElse(true);
     }

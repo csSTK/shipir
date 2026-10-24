@@ -17,6 +17,13 @@ import dev.bethge.shipir.docker.dto.ImageDto;
 import dev.bethge.shipir.docker.dto.NetworkDto;
 import dev.bethge.shipir.docker.dto.DeploymentSummaryDto;
 import dev.bethge.shipir.docker.dto.PruneCandidateDto;
+import dev.bethge.shipir.docker.dto.ContainerCreateSpec;
+import dev.bethge.shipir.docker.dto.CreatedResourceDto;
+import dev.bethge.shipir.docker.dto.NetworkCreateSpec;
+import dev.bethge.shipir.docker.dto.VolumeCreateSpec;
+import dev.bethge.shipir.host.dto.CreateContainerRequest;
+import dev.bethge.shipir.host.dto.CreateNetworkRequest;
+import dev.bethge.shipir.host.dto.CreateVolumeRequest;
 import dev.bethge.shipir.host.dto.HostDeploymentResponse;
 import dev.bethge.shipir.host.dto.PrunePreviewResponse;
 import dev.bethge.shipir.host.dto.PruneRequest;
@@ -471,6 +478,203 @@ public class HostResourcesService {
         }
     }
 
+    // ---- create -------------------------------------------------------------------------------------------
+
+    private static final Pattern RESOURCE_NAME = Pattern.compile("[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}");
+    private static final Pattern ENV_KEY = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+    private static final Pattern IPV4_CIDR = Pattern.compile(
+            "((?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(?:\\.(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3})/(\\d{1,2})");
+    private static final Pattern IPV6_CIDR = Pattern.compile("[0-9a-fA-F:]{2,39}/(\\d{1,3})");
+    private static final Set<String> RESTART_POLICIES = Set.of("no", "always", "unless-stopped", "on-failure");
+    private static final Set<String> NETWORK_DRIVERS = Set.of("bridge", "overlay", "macvlan", "ipvlan");
+    private static final int MAX_LIST = 100;
+
+    /**
+     * Creates (and optionally starts) a container. Host-level OPERATE; privileged mode, host networking and bind mounts
+     * additionally need ADMIN (403 ADMIN_REQUIRED). 400 INVALID_CONTAINER_SPEC lists every violation, 409 NAME_TAKEN,
+     * 404 RESOURCE_NOT_FOUND (image/network missing), 409 CONTAINER_START_FAILED (created, not started: removed again).
+     */
+    @Auditable(action = "CONTAINER_CREATE", targetType = "CONTAINER",
+            targetId = "#request?.name() != null ? #request.name() : #request?.image()")
+    CreatedResourceDto createContainer(UUID hostId, CreateContainerRequest request) {
+        requireOperate(hostId);
+        ContainerCreateSpec spec = validateContainer(request);
+        boolean bind = spec.mounts().stream().anyMatch(m -> "BIND".equals(m.type()));
+        if ((spec.privileged() || spec.hostNetwork() || bind) && !access.isAdmin()) {
+            throw new HostException(HttpStatus.FORBIDDEN, "ADMIN_REQUIRED",
+                    "Privileged mode, host networking and bind mounts need the ADMIN role");
+        }
+        return call(hostId, (id, endpoint) -> containers.createContainer(id, endpoint, spec));
+    }
+
+    @Auditable(action = "NETWORK_CREATE", targetType = "NETWORK", targetId = "#request?.name()")
+    CreatedResourceDto createNetwork(UUID hostId, CreateNetworkRequest request) {
+        requireOperate(hostId);
+        List<String> violations = new java.util.ArrayList<>();
+        String name = request == null ? null : request.name();
+        if (name == null || !RESOURCE_NAME.matcher(name).matches()) {
+            violations.add("name: required, letters, digits, _ . - (max 128), must start with a letter or digit");
+        }
+        String driver = request == null || request.driver() == null || request.driver().isBlank() ? null : request.driver();
+        if (driver != null && !NETWORK_DRIVERS.contains(driver)) {
+            violations.add("driver: one of " + new java.util.TreeSet<>(NETWORK_DRIVERS));
+        }
+        String subnet = request == null || request.subnet() == null || request.subnet().isBlank() ? null : request.subnet();
+        if (subnet != null && !validCidr(subnet)) {
+            violations.add("subnet: not a valid CIDR (e.g. 172.30.0.0/16)");
+        }
+        failIfAny("INVALID_NETWORK_SPEC", "Invalid network", violations);
+        if (driver != null && !"bridge".equals(driver) && !access.isAdmin()) {
+            throw new HostException(HttpStatus.FORBIDDEN, "ADMIN_REQUIRED", "Only ADMIN may use the " + driver + " driver");
+        }
+        NetworkCreateSpec spec = new NetworkCreateSpec(name, driver, Boolean.TRUE.equals(request.internal()), subnet);
+        return call(hostId, (id, endpoint) -> networks.createNetwork(id, endpoint, spec));
+    }
+
+    @Auditable(action = "VOLUME_CREATE", targetType = "VOLUME", targetId = "#request?.name()")
+    CreatedResourceDto createVolume(UUID hostId, CreateVolumeRequest request) {
+        requireOperate(hostId);
+        List<String> violations = new java.util.ArrayList<>();
+        String name = request == null ? null : request.name();
+        if (name == null || !RESOURCE_NAME.matcher(name).matches()) {
+            violations.add("name: required, letters, digits, _ . - (max 128), must start with a letter or digit");
+        }
+        String driver = request == null || request.driver() == null || request.driver().isBlank() ? null : request.driver();
+        if (driver != null && !"local".equals(driver)) {
+            violations.add("driver: only local is supported");
+        }
+        failIfAny("INVALID_VOLUME_SPEC", "Invalid volume", violations);
+        VolumeCreateSpec spec = new VolumeCreateSpec(name, driver);
+        return call(hostId, (id, endpoint) -> volumes.createVolume(id, endpoint, spec));
+    }
+
+    private ContainerCreateSpec validateContainer(CreateContainerRequest r) {
+        List<String> v = new java.util.ArrayList<>();
+        if (r == null) {
+            throw new HostException(HttpStatus.BAD_REQUEST, "INVALID_CONTAINER_SPEC", "Invalid container",
+                    List.of("body: required"));
+        }
+        String name = r.name() == null || r.name().isBlank() ? null : r.name();
+        if (name != null && !RESOURCE_NAME.matcher(name).matches()) {
+            v.add("name: letters, digits, _ . - (max 128), must start with a letter or digit");
+        }
+        String image = r.image() == null ? "" : r.image().trim();
+        if (image.length() > 255 || !IMAGE_REFERENCE.matcher(image).matches()) {
+            v.add("image: not a valid image reference");
+        }
+        List<String> command = r.command() == null ? List.of() : r.command();
+        if (command.size() > MAX_LIST || command.stream().anyMatch(a -> a == null || a.length() > 4096 || a.indexOf('\0') >= 0)) {
+            v.add("command: at most " + MAX_LIST + " arguments, no NUL characters");
+        }
+        Map<String, String> env = r.env() == null ? Map.of() : r.env();
+        if (env.size() > MAX_LIST) {
+            v.add("env: at most " + MAX_LIST + " variables");
+        }
+        for (Map.Entry<String, String> e : env.entrySet()) {
+            if (e.getKey() == null || !ENV_KEY.matcher(e.getKey()).matches()) {
+                v.add("env: invalid variable name");
+            } else if (e.getValue() == null || e.getValue().length() > 8192 || e.getValue().indexOf('\0') >= 0) {
+                v.add("env." + e.getKey() + ": value too long or contains NUL");
+            }
+        }
+        List<ContainerCreateSpec.Port> ports = new java.util.ArrayList<>();
+        List<ContainerCreateSpec.Port> inPorts = r.ports() == null ? List.of() : r.ports();
+        if (inPorts.size() > MAX_LIST) {
+            v.add("ports: at most " + MAX_LIST);
+        }
+        for (ContainerCreateSpec.Port p : inPorts) {
+            if (p == null) {
+                v.add("ports: entry must not be null");
+                continue;
+            }
+            String protocol = p.protocol() == null || p.protocol().isBlank() ? "tcp" : p.protocol().toLowerCase(java.util.Locale.ROOT);
+            if (p.containerPort() == null || p.containerPort() < 1 || p.containerPort() > 65535) {
+                v.add("ports: containerPort must be 1-65535");
+            } else if (p.hostPort() != null && (p.hostPort() < 1 || p.hostPort() > 65535)) {
+                v.add("ports: hostPort must be 1-65535");
+            } else if (!protocol.equals("tcp") && !protocol.equals("udp")) {
+                v.add("ports: protocol must be tcp or udp");
+            } else {
+                ports.add(new ContainerCreateSpec.Port(p.hostPort(), p.containerPort(), protocol));
+            }
+        }
+        List<ContainerCreateSpec.Mount> mounts = new java.util.ArrayList<>();
+        List<ContainerCreateSpec.Mount> inMounts = r.mounts() == null ? List.of() : r.mounts();
+        if (inMounts.size() > MAX_LIST) {
+            v.add("mounts: at most " + MAX_LIST);
+        }
+        for (ContainerCreateSpec.Mount m : inMounts) {
+            if (m == null || m.type() == null || !(m.type().equals("BIND") || m.type().equals("VOLUME"))) {
+                v.add("mounts: type must be BIND or VOLUME");
+            } else if (!validAbsolutePath(m.target())) {
+                v.add("mounts: target must be a clean absolute path");
+            } else if (m.type().equals("BIND") && !validAbsolutePath(m.source())) {
+                v.add("mounts: bind source must be a clean absolute path");
+            } else if (m.type().equals("VOLUME") && (m.source() == null || !RESOURCE_NAME.matcher(m.source()).matches())) {
+                v.add("mounts: volume source must be a volume name");
+            } else {
+                mounts.add(new ContainerCreateSpec.Mount(m.type(), m.source(), m.target(), Boolean.TRUE.equals(m.readOnly())));
+            }
+        }
+        String network = r.network() == null || r.network().isBlank() ? null : r.network();
+        if (network != null && !RESOURCE_NAME.matcher(network).matches()) {
+            v.add("network: invalid network name");
+        }
+        String restart = r.restartPolicy() == null || r.restartPolicy().isBlank() ? null : r.restartPolicy();
+        if (restart != null && !RESTART_POLICIES.contains(restart)) {
+            v.add("restartPolicy: one of " + new java.util.TreeSet<>(RESTART_POLICIES));
+        }
+        boolean hostNetwork = Boolean.TRUE.equals(r.hostNetwork());
+        if (network != null && network.equalsIgnoreCase("host")) {
+            // "host" is the daemon's host-networking mode, not a user network: same ADMIN gate as hostNetwork
+            hostNetwork = true;
+            network = null;
+        }
+        if (hostNetwork && (network != null || !ports.isEmpty())) {
+            v.add("hostNetwork: cannot be combined with a network or published ports");
+        }
+        failIfAny("INVALID_CONTAINER_SPEC", "Invalid container", v);
+        return new ContainerCreateSpec(name, image, List.copyOf(command), Map.copyOf(env), List.copyOf(ports),
+                List.copyOf(mounts), network, restart, Boolean.TRUE.equals(r.privileged()), hostNetwork,
+                Boolean.TRUE.equals(r.start()));
+    }
+
+    private static void failIfAny(String code, String message, List<String> violations) {
+        if (!violations.isEmpty()) {
+            throw new HostException(HttpStatus.BAD_REQUEST, code, message, List.copyOf(violations));
+        }
+    }
+
+    /**
+     * Same rules as {@code PathValidationUtil} (no NUL, backslash, percent-encoding or {@code ..}), but for paths on the
+     * Docker host, which this process cannot resolve: absolute and already normalized (no empty, {@code .} segments).
+     */
+    private static boolean validAbsolutePath(String path) {
+        if (path == null || path.length() > 4096 || !path.startsWith("/")
+                || path.indexOf('\0') >= 0 || path.indexOf('\\') >= 0 || path.matches(".*%[0-9a-fA-F]{2}.*")) {
+            return false;
+        }
+        if (path.equals("/")) {
+            return true;
+        }
+        String trimmed = path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
+        for (String segment : trimmed.substring(1).split("/", -1)) {
+            if (segment.isEmpty() || segment.equals(".") || segment.equals("..")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean validCidr(String cidr) {
+        var v4 = IPV4_CIDR.matcher(cidr);
+        if (v4.matches()) {
+            return Integer.parseInt(v4.group(2)) <= 32;
+        }
+        var v6 = IPV6_CIDR.matcher(cidr);
+        return cidr.indexOf(':') >= 0 && v6.matches() && Integer.parseInt(v6.group(1)) <= 128;
+    }
+
     private <T> T call(UUID hostId, BiFunction<UUID, DockerEndpoint, T> query) {
         DockerHost host = hosts.findById(hostId).orElseThrow(
                 () -> new HostException(HttpStatus.NOT_FOUND, "HOST_NOT_FOUND", "Environment not found"));
@@ -482,6 +686,13 @@ public class HostResourcesService {
             }
             if (e.getCode() == DockerErrorCode.IN_USE) {
                 throw new HostException(HttpStatus.CONFLICT, "RESOURCE_IN_USE", "Resource is in use");
+            }
+            if (e.getCode() == DockerErrorCode.NAME_TAKEN) {
+                throw new HostException(HttpStatus.CONFLICT, "NAME_TAKEN", "A resource with this name already exists");
+            }
+            if (e.getCode() == DockerErrorCode.START_FAILED) {
+                throw new HostException(HttpStatus.CONFLICT, "CONTAINER_START_FAILED",
+                        "The container was created but could not be started (e.g. port in use); it has been removed");
             }
             if (e.getCode() == DockerErrorCode.INVALID_STATE) {
                 throw new HostException(HttpStatus.CONFLICT, "INVALID_CONTAINER_STATE",

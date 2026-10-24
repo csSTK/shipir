@@ -1,10 +1,13 @@
 package dev.bethge.shipir.docker.client;
 
+import com.github.dockerjava.api.exception.ConflictException;
 import com.github.dockerjava.api.exception.DockerException;
 import com.github.dockerjava.api.model.Container;
 import com.github.dockerjava.api.model.Network;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.dto.CreatedResourceDto;
+import dev.bethge.shipir.docker.dto.NetworkCreateSpec;
 import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
@@ -73,6 +76,29 @@ public class NetworkServiceImpl implements NetworkService {
                 throw e;
             }
             return null;
+        });
+    }
+
+    @Override
+    public CreatedResourceDto createNetwork(UUID hostId, DockerEndpoint endpoint, NetworkCreateSpec spec) {
+        return calls.call(hostId, endpoint, client -> {
+            boolean exists = client.listNetworksCmd().withNameFilter(spec.name()).exec().stream()
+                    .anyMatch(n -> spec.name().equals(n.getName()));
+            if (exists) {
+                throw new DockerConnectionException(DockerErrorCode.NAME_TAKEN, "The network name is taken.", null);
+            }
+            var cmd = client.createNetworkCmd().withName(spec.name()).withInternal(spec.internal());
+            if (spec.driver() != null) {
+                cmd.withDriver(spec.driver());
+            }
+            if (spec.subnet() != null) {
+                cmd.withIpam(new Network.Ipam().withConfig(new Network.Ipam.Config().withSubnet(spec.subnet())));
+            }
+            try {
+                return new CreatedResourceDto(cmd.exec().getId(), spec.name());
+            } catch (ConflictException e) {
+                throw new DockerConnectionException(DockerErrorCode.NAME_TAKEN, "The network name is taken.", e);
+            }
         });
     }
 

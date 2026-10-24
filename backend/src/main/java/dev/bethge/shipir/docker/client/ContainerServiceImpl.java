@@ -1,7 +1,16 @@
 package dev.bethge.shipir.docker.client;
 
 import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.exception.ConflictException;
+import com.github.dockerjava.api.exception.DockerException;
 import com.github.dockerjava.api.exception.InternalServerErrorException;
+import com.github.dockerjava.api.model.AccessMode;
+import com.github.dockerjava.api.model.Bind;
+import com.github.dockerjava.api.model.HostConfig;
+import com.github.dockerjava.api.model.InternetProtocol;
+import com.github.dockerjava.api.model.Volume;
+import dev.bethge.shipir.docker.dto.ContainerCreateSpec;
+import dev.bethge.shipir.docker.dto.CreatedResourceDto;
 import com.github.dockerjava.api.model.Container;
 import com.github.dockerjava.api.command.HealthState;
 import com.github.dockerjava.api.command.HealthStateLog;
@@ -232,6 +241,63 @@ public class ContainerServiceImpl implements ContainerService {
         calls.call(hostId, endpoint, client -> {
             client.removeContainerCmd(id).withForce(force).withRemoveVolumes(false).exec();
             return null;
+        });
+    }
+
+    @Override
+    public CreatedResourceDto createContainer(UUID hostId, DockerEndpoint endpoint, ContainerCreateSpec spec) {
+        return calls.call(hostId, endpoint, client -> {
+            HostConfig host = HostConfig.newHostConfig().withPrivileged(spec.privileged());
+            Ports bindings = new Ports();
+            List<ExposedPort> exposed = new ArrayList<>();
+            for (ContainerCreateSpec.Port p : spec.ports()) {
+                ExposedPort port = new ExposedPort(p.containerPort(),
+                        "udp".equals(p.protocol()) ? InternetProtocol.UDP : InternetProtocol.TCP);
+                exposed.add(port);
+                bindings.bind(port, p.hostPort() == null ? Ports.Binding.empty() : Ports.Binding.bindPort(p.hostPort()));
+            }
+            if (!spec.ports().isEmpty()) {
+                host.withPortBindings(bindings);
+            }
+            host.withBinds(spec.mounts().stream()
+                    .map(m -> new Bind(m.source(), new Volume(m.target()), Boolean.TRUE.equals(m.readOnly()) ? AccessMode.ro : AccessMode.rw))
+                    .toList());
+            if (spec.restartPolicy() != null) {
+                host.withRestartPolicy(RestartPolicy.parse(spec.restartPolicy()));
+            }
+            if (spec.hostNetwork()) {
+                host.withNetworkMode("host");
+            } else if (spec.network() != null) {
+                host.withNetworkMode(spec.network());
+            }
+            var cmd = client.createContainerCmd(spec.image()).withHostConfig(host).withExposedPorts(exposed)
+                    .withEnv(spec.env().entrySet().stream().map(e -> e.getKey() + "=" + e.getValue()).toList());
+            if (spec.name() != null) {
+                cmd.withName(spec.name());
+            }
+            if (!spec.command().isEmpty()) {
+                cmd.withCmd(spec.command());
+            }
+            String id;
+            try {
+                id = cmd.exec().getId();
+            } catch (ConflictException e) {
+                throw new DockerConnectionException(DockerErrorCode.NAME_TAKEN, "The container name is taken.", e);
+            }
+            if (spec.start()) {
+                try {
+                    client.startContainerCmd(id).exec();
+                } catch (DockerException e) {
+                    try {
+                        client.removeContainerCmd(id).withForce(true).exec();
+                    } catch (RuntimeException ignored) {
+                        // best effort: the start failure is what the caller needs to hear about
+                    }
+                    throw new DockerConnectionException(DockerErrorCode.START_FAILED,
+                            "The container could not be started.", e);
+                }
+            }
+            return new CreatedResourceDto(id, spec.name());
         });
     }
 

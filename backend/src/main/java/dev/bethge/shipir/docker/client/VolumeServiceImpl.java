@@ -4,7 +4,13 @@ import com.github.dockerjava.api.command.InspectVolumeResponse;
 import com.github.dockerjava.api.command.ListVolumesResponse;
 import com.github.dockerjava.api.model.Container;
 import com.github.dockerjava.api.model.ContainerMount;
+import com.github.dockerjava.api.exception.ConflictException;
+import com.github.dockerjava.api.exception.NotFoundException;
+import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.DockerErrorCode;
+import dev.bethge.shipir.docker.dto.CreatedResourceDto;
+import dev.bethge.shipir.docker.dto.VolumeCreateSpec;
 import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
 import dev.bethge.shipir.docker.dto.VolumeDto;
@@ -65,6 +71,27 @@ public class VolumeServiceImpl implements VolumeService {
         calls.call(hostId, endpoint, client -> {
             client.removeVolumeCmd(name).exec();
             return null;
+        });
+    }
+
+    @Override
+    public CreatedResourceDto createVolume(UUID hostId, DockerEndpoint endpoint, VolumeCreateSpec spec) {
+        return calls.call(hostId, endpoint, client -> {
+            try {
+                client.inspectVolumeCmd(spec.name()).exec();
+                throw new DockerConnectionException(DockerErrorCode.NAME_TAKEN, "The volume name is taken.", null);
+            } catch (NotFoundException free) {
+                // name is free, create below
+            }
+            var cmd = client.createVolumeCmd().withName(spec.name());
+            if (spec.driver() != null) {
+                cmd.withDriver(spec.driver());
+            }
+            try {
+                return new CreatedResourceDto(cmd.exec().getName(), spec.name());
+            } catch (ConflictException e) {
+                throw new DockerConnectionException(DockerErrorCode.NAME_TAKEN, "The volume name is taken.", e);
+            }
         });
     }
 
