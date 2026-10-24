@@ -401,3 +401,69 @@ export function useDeleteUser() {
     onSuccess: () => void invalidate(),
   })
 }
+
+/** The secret is never returned by the API, only a hint. */
+export interface RegistryCredential {
+  id: string
+  name: string
+  registryHost: string
+  username: string
+  secretHint: string
+  createdAt: string
+  updatedAt: string
+}
+
+/** `secret` is required on create and omitted on update to keep the stored one. */
+export interface RegistryCredentialInput {
+  name: string
+  registryHost: string
+  username: string
+  secret?: string
+}
+
+export type RegistryTestStatus = 'OK' | 'AUTH_FAILED' | 'UNREACHABLE'
+
+export const REGISTRIES_KEY = ['registries'] as const
+const REGISTRIES_BASE = '/registries'
+
+export function useRegistries() {
+  return useQuery({ queryKey: REGISTRIES_KEY, queryFn: () => apiFetch<RegistryCredential[]>(REGISTRIES_BASE) })
+}
+
+function useInvalidateRegistries() {
+  const queryClient = useQueryClient()
+  return () => queryClient.invalidateQueries({ queryKey: REGISTRIES_KEY })
+}
+
+export function useCreateRegistry() {
+  const invalidate = useInvalidateRegistries()
+  return useMutation({
+    mutationFn: (input: RegistryCredentialInput) =>
+      apiFetch<RegistryCredential>(REGISTRIES_BASE, { method: 'POST', body: input }),
+    onSuccess: () => void invalidate(),
+  })
+}
+
+export function useUpdateRegistry() {
+  const invalidate = useInvalidateRegistries()
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: RegistryCredentialInput }) =>
+      apiFetch<RegistryCredential>(`${REGISTRIES_BASE}/${id}`, { method: 'PUT', body: input }),
+    onSuccess: () => void invalidate(),
+  })
+}
+
+export function useDeleteRegistry() {
+  const invalidate = useInvalidateRegistries()
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<void>(`${REGISTRIES_BASE}/${id}`, { method: 'DELETE' }),
+    onSuccess: () => void invalidate(),
+  })
+}
+
+export function useTestRegistry() {
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<{ status: RegistryTestStatus }>(`${REGISTRIES_BASE}/${id}/test`, { method: 'POST' }),
+  })
+}

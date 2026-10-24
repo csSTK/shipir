@@ -76,6 +76,9 @@ export function Sidebar({ role, open, onNavigate }: Props) {
           <NavLink to="/settings/git" className={link} onClick={onNavigate}>
             Git credentials
           </NavLink>
+          <NavLink to="/settings/registries" className={link} onClick={onNavigate}>
+            Registries
+          </NavLink>
           <NavLink to="/settings/ai" end className={link} onClick={onNavigate}>
             AI assistant
           </NavLink>
