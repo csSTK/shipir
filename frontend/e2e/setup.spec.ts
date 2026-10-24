@@ -44,7 +44,7 @@ test('environment step: add Local -> app shown', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: ready })
   api.mock('GET', '/api/hosts/overview', { body: [] })
   await page.getByRole('button', { name: 'Continue' }).click()
-  await expect(page.getByRole('heading', { name: 'Shipir' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Shipir' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Add your first environment' })).toHaveCount(0)
 })
 
@@ -91,6 +91,6 @@ test('reload with setupRequired=false shows no setup screen', async ({ page, api
   api.mock('GET', '/api/auth/me', { body: ready })
   api.mock('GET', '/api/hosts/overview', { body: [] })
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Shipir' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Shipir' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Set your password' })).toHaveCount(0)
 })

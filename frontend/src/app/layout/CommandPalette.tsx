@@ -1,7 +1,10 @@
+import { ArrowRight, Box, Layers, Search, Server, type LucideIcon } from 'lucide-react'
+import { motion } from 'motion/react'
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { CurrentUser } from '../../features/auth/index.ts'
 import { MIN_QUERY_LENGTH, routeFor, useSearch, type SearchResult } from './useSearch.ts'
+import { springSmooth, usePopMotion } from '../../shared/ui/motion.ts'
 import './CommandPalette.css'
 
 interface Props {
@@ -11,6 +14,7 @@ interface Props {
 }
 
 interface Item {
+  icon: LucideIcon
   key: string
   label: string
   meta?: string
@@ -37,17 +41,17 @@ const NAV: { label: string; to: string; admin?: boolean }[] = [
   { label: 'Audit log', to: '/settings/audit-log', admin: true },
 ]
 
-const TYPE_GROUPS: { type: SearchResult['type']; label: string }[] = [
-  { type: 'HOST', label: 'Environments' },
-  { type: 'DEPLOYMENT', label: 'Deployments' },
-  { type: 'CONTAINER', label: 'Containers' },
+const TYPE_GROUPS: { type: SearchResult['type']; label: string; icon: LucideIcon }[] = [
+  { type: 'HOST', label: 'Environments', icon: Server },
+  { type: 'DEPLOYMENT', label: 'Deployments', icon: Layers },
+  { type: 'CONTAINER', label: 'Containers', icon: Box },
 ]
 
-function toItem(r: SearchResult, index: number): Item {
+function toItem(r: SearchResult, index: number, icon: LucideIcon): Item {
   const meta = [r.type === 'HOST' ? null : r.detail, r.type === 'HOST' ? null : r.hostName]
     .filter(Boolean)
     .join(' · ')
-  return { key: `${r.type}-${r.id ?? r.name}-${r.hostId}-${index}`, label: r.name, meta: meta || undefined, to: routeFor(r) }
+  return { icon, key: `${r.type}-${r.id ?? r.name}-${r.hostId}-${index}`, label: r.name, meta: meta || undefined, to: routeFor(r) }
 }
 
 /** Cmd/Ctrl+K palette: navigation commands plus live search over environments, deployments and containers. */
@@ -58,6 +62,7 @@ export function CommandPalette({ role, open, onClose }: Props) {
 
 function PaletteDialog({ role, onClose }: { role: Props['role']; onClose: () => void }) {
   const navigate = useNavigate()
+  const pop = usePopMotion(springSmooth, 0.97)
   const id = useId()
   const listId = `${id}-list`
   const [query, setQuery] = useState('')
@@ -76,11 +81,11 @@ function PaletteDialog({ role, onClose }: { role: Props['role']; onClose: () => 
     const commands = NAV.filter((c) => (!c.admin || role === 'ADMIN') && c.label.toLowerCase().includes(needle))
     const out: Group[] = []
     if (commands.length) {
-      out.push({ label: 'Go to', items: commands.map((c) => ({ key: `nav-${c.to}`, label: c.label, to: c.to })) })
+      out.push({ label: 'Go to', items: commands.map((c) => ({ icon: ArrowRight, key: `nav-${c.to}`, label: c.label, to: c.to })) })
     }
     const results = search.data?.results ?? []
-    for (const { type, label } of TYPE_GROUPS) {
-      const items = results.map(toItem).filter((_, i) => results[i].type === type)
+    for (const { type, label, icon } of TYPE_GROUPS) {
+      const items = results.map((r, i) => toItem(r, i, icon)).filter((_, i) => results[i].type === type)
       if (items.length) out.push({ label, items })
     }
     return out
@@ -125,8 +130,10 @@ function PaletteDialog({ role, onClose }: { role: Props['role']; onClose: () => 
   }, [activeItem?.key])
 
   return (
-    <div className="palette__scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="palette" role="dialog" aria-modal="true" aria-label="Command palette" onKeyDown={onKeyDown}>
+    <motion.div className="palette__scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.12 }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <motion.div className="palette" role="dialog" aria-modal="true" aria-label="Command palette" onKeyDown={onKeyDown} initial={pop.initial} animate={pop.animate} transition={pop.transition}>
+        <div className="palette__field">
+          <Search size={20} strokeWidth={1.75} aria-hidden="true" />
         <input
           ref={inputRef}
           className="palette__input"
@@ -145,6 +152,7 @@ function PaletteDialog({ role, onClose }: { role: Props['role']; onClose: () => 
             setActive(0)
           }}
         />
+        </div>
         <div id={listId} role="listbox" aria-label="Results" className="palette__list">
           {groups.map((group) => (
             <div key={group.label} role="group" aria-label={group.label} className="palette__group">
@@ -161,6 +169,7 @@ function PaletteDialog({ role, onClose }: { role: Props['role']; onClose: () => 
                   onMouseMove={() => setActive(flat.indexOf(item))}
                   onClick={() => choose(item)}
                 >
+                  <item.icon size={16} strokeWidth={1.75} aria-hidden="true" className="palette__icon" />
                   <span className="palette__label">{item.label}</span>
                   {item.meta && (
                     <>
@@ -186,7 +195,7 @@ function PaletteDialog({ role, onClose }: { role: Props['role']; onClose: () => 
             'Showing the first results. Refine your search.'
           ) : null}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

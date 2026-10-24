@@ -1,3 +1,23 @@
+import {
+  Bell,
+  Bot,
+  Box,
+  Clock,
+  Disc3,
+  GitBranch,
+  HardDrive,
+  KeyRound,
+  Layers,
+  LayoutDashboard,
+  MessagesSquare,
+  Network,
+  ScrollText,
+  Server,
+  Sparkles,
+  Users,
+  Webhook,
+  type LucideIcon,
+} from 'lucide-react'
 import { NavLink, useMatch } from 'react-router-dom'
 import type { CurrentUser } from '../../features/auth/index.ts'
 import { ENV_RESOURCES, useHostsOverview } from '../../features/hosts/index.ts'
@@ -6,12 +26,42 @@ import './Sidebar.css'
 
 interface Props {
   role: CurrentUser['role']
-  open: boolean
   onNavigate: () => void
+  /** Rendered inside the narrow-screen drawer instead of the fixed column. */
+  drawer?: boolean
+}
+
+const RESOURCE_ICONS: Record<string, LucideIcon> = {
+  deployments: Layers,
+  containers: Box,
+  images: Disc3,
+  networks: Network,
+  volumes: HardDrive,
 }
 
 const link = ({ isActive }: { isActive: boolean }) =>
   isActive ? 'sidebar__link sidebar__link--active' : 'sidebar__link'
+
+function Item({
+  to,
+  icon: Icon,
+  end,
+  onNavigate,
+  children,
+}: {
+  to: string
+  icon: LucideIcon
+  end?: boolean
+  onNavigate: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <NavLink to={to} end={end} className={link} onClick={onNavigate}>
+      <Icon size={20} strokeWidth={1.75} aria-hidden="true" className="sidebar__icon" />
+      <span className="sidebar__label">{children}</span>
+    </NavLink>
+  )
+}
 
 /** Resource links of the environment in the URL. Mounted only on environment routes. */
 function EnvironmentSection({ envId, onNavigate }: { envId: string; onNavigate: () => void }) {
@@ -22,36 +72,33 @@ function EnvironmentSection({ envId, onNavigate }: { envId: string; onNavigate: 
       <span id="sidebar-env" className="sidebar__heading sidebar__heading--env">
         {envName ?? 'Environment'}
       </span>
-      <NavLink to={`/environments/${envId}`} end className={link} onClick={onNavigate}>
+      <Item to={`/environments/${envId}`} icon={LayoutDashboard} end onNavigate={onNavigate}>
         Dashboard
-      </NavLink>
+      </Item>
       {ENV_RESOURCES.map(({ slug, label }) => (
-        <NavLink key={slug} to={`/environments/${envId}/${slug}`} className={link} onClick={onNavigate}>
+        <Item key={slug} to={`/environments/${envId}/${slug}`} icon={RESOURCE_ICONS[slug] ?? Box} onNavigate={onNavigate}>
           {label}
-        </NavLink>
+        </Item>
       ))}
     </div>
   )
 }
 
-/** Primary navigation. The Settings group is ADMIN-only; collapses on narrow screens. */
-export function Sidebar({ role, open, onNavigate }: Props) {
+/** Primary navigation. The Settings group is ADMIN-only. */
+export function Sidebar({ role, onNavigate, drawer = false }: Props) {
   const unread = useUnreadCount().data?.count ?? 0
   const envId = useMatch('/environments/:id/*')?.params.id
   return (
-    <nav
-      id="app-sidebar"
-      aria-label="Main"
-      className={open ? 'sidebar sidebar--open' : 'sidebar'}
-    >
-      <NavLink to="/" end className={link} onClick={onNavigate}>
+    <nav id="app-sidebar" aria-label="Main" className={drawer ? 'sidebar sidebar--drawer' : 'sidebar'}>
+      <Item to="/" icon={Server} end onNavigate={onNavigate}>
         Environments
-      </NavLink>
-      <NavLink to="/assistant" className={link} onClick={onNavigate}>
+      </Item>
+      <Item to="/assistant" icon={Sparkles} onNavigate={onNavigate}>
         Assistant
-      </NavLink>
+      </Item>
       <NavLink to="/notifications" className={link} onClick={onNavigate}>
-        Notifications
+        <Bell size={20} strokeWidth={1.75} aria-hidden="true" className="sidebar__icon" />
+        <span className="sidebar__label">Notifications</span>
         {unread > 0 && (
           <span className="sidebar__badge" aria-label={`${unread} unread`}>
             {unread > 99 ? '99+' : unread}
@@ -64,30 +111,30 @@ export function Sidebar({ role, open, onNavigate }: Props) {
           <span id="sidebar-settings" className="sidebar__heading">
             Settings
           </span>
-          <NavLink to="/settings/users" className={link} onClick={onNavigate}>
+          <Item to="/settings/users" icon={Users} onNavigate={onNavigate}>
             Users
-          </NavLink>
-          <NavLink to="/settings/notifications" className={link} onClick={onNavigate}>
+          </Item>
+          <Item to="/settings/notifications" icon={Webhook} onNavigate={onNavigate}>
             Notifications
-          </NavLink>
-          <NavLink to="/settings/retention" className={link} onClick={onNavigate}>
+          </Item>
+          <Item to="/settings/retention" icon={Clock} onNavigate={onNavigate}>
             Retention
-          </NavLink>
-          <NavLink to="/settings/git" className={link} onClick={onNavigate}>
+          </Item>
+          <Item to="/settings/git" icon={GitBranch} onNavigate={onNavigate}>
             Git credentials
-          </NavLink>
-          <NavLink to="/settings/registries" className={link} onClick={onNavigate}>
+          </Item>
+          <Item to="/settings/registries" icon={KeyRound} onNavigate={onNavigate}>
             Registries
-          </NavLink>
-          <NavLink to="/settings/ai" end className={link} onClick={onNavigate}>
+          </Item>
+          <Item to="/settings/ai" icon={Bot} end onNavigate={onNavigate}>
             AI assistant
-          </NavLink>
-          <NavLink to="/settings/ai/shared" className={link} onClick={onNavigate}>
+          </Item>
+          <Item to="/settings/ai/shared" icon={MessagesSquare} onNavigate={onNavigate}>
             Shared chats
-          </NavLink>
-          <NavLink to="/settings/audit-log" className={link} onClick={onNavigate}>
+          </Item>
+          <Item to="/settings/audit-log" icon={ScrollText} onNavigate={onNavigate}>
             Audit log
-          </NavLink>
+          </Item>
         </div>
       )}
     </nav>

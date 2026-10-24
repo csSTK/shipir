@@ -1,83 +1,121 @@
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  width: 220px;
-  padding: 16px 12px;
-  box-sizing: border-box;
-  border-right: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  gap: var(--space-1);
+  width: var(--sidebar-width);
+  flex: none;
+  padding: var(--space-4) var(--space-3);
+  border-right: 1px solid var(--color-border);
+  background: var(--color-material);
+  -webkit-backdrop-filter: var(--blur-material);
+  backdrop-filter: var(--blur-material);
+  position: sticky;
+  top: var(--shell-bar-height);
+  align-self: flex-start;
+  height: calc(100dvh - var(--shell-bar-height));
+  overflow-y: auto;
+}
+.sidebar--drawer {
+  position: static;
+  width: 100%;
+  height: 100%;
+  border-right: 0;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .sidebar__group {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin-top: 16px;
+  gap: var(--space-1);
+  margin-top: var(--space-5);
 }
 .sidebar__heading {
-  padding: 4px 12px;
-  font-size: 0.7rem;
-  font-weight: 600;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-caption-size);
+  font-weight: var(--weight-semibold);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  opacity: 0.55;
+  color: var(--color-text-subtle);
+}
+/* The environment name is data, not a label: keep its case. */
+.sidebar__heading--env {
+  text-transform: none;
+  letter-spacing: var(--text-small-tracking);
+  font-size: var(--text-small-size);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sidebar__link {
-  padding: 8px 12px;
-  border-radius: 8px;
-  color: inherit;
-  font-size: 0.95rem;
-  letter-spacing: -0.01em;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: var(--text-body-size);
+  font-weight: var(--weight-medium);
   text-decoration: none;
-  transition: transform 120ms ease-out, background-color 120ms ease-out;
+  transition:
+    transform var(--duration-press) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
 }
 .sidebar__link:hover {
-  background: color-mix(in srgb, currentColor 7%, transparent);
+  background: var(--color-surface-hover);
+  color: var(--color-text);
 }
 .sidebar__link:active {
-  transform: scale(0.98);
+  transform: scale(var(--press-scale));
 }
 .sidebar__link:focus-visible {
-  outline: 2px solid color-mix(in srgb, currentColor 60%, transparent);
-  outline-offset: -2px;
+  outline: none;
+  box-shadow: var(--shadow-focus);
 }
+.sidebar__icon {
+  flex: none;
+}
+.sidebar__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Active: tint + accent text + a bar, so the state is not color-only. */
 .sidebar__link--active {
-  background: color-mix(in srgb, currentColor 12%, transparent);
-  font-weight: 600;
+  background: var(--color-accent-soft);
+  color: var(--color-accent-text);
+  font-weight: var(--weight-semibold);
+}
+.sidebar__link--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  width: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+}
+.sidebar__badge {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-bad-solid);
+  color: var(--color-on-accent);
+  font-size: var(--text-caption-size);
+  font-weight: var(--weight-semibold);
+  line-height: 1.25rem;
+  font-variant-numeric: tabular-nums;
 }
 @media (max-width: 720px) {
   .sidebar {
     display: none;
-    width: auto;
-    border-right: 0;
-    border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
   }
-  .sidebar--open {
+  .sidebar--drawer {
     display: flex;
   }
-}
-@media (prefers-reduced-motion: reduce) {
-  .sidebar__link {
-    transition: none;
-  }
-}
-
-.sidebar__badge {
-  margin-left: 8px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: #d92d20;
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-/* The environment name is data, not a label: keep its case. */
-.sidebar__heading--env {
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 0.8rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }

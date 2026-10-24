@@ -28,7 +28,7 @@ test('resets the password with a code and signs in again', async ({ page, api })
   await page.getByLabel('Username').fill('admin')
   await page.getByLabel('Password').fill(NEW_PASSWORD)
   await page.getByRole('button', { name: 'Sign in' }).click()
-  await expect(page.getByRole('heading', { name: 'Shipir' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Shipir' })).toBeVisible()
 })
 
 test('shows an error for an invalid code and offers a new one', async ({ page, api }) => {

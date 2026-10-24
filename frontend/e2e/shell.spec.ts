@@ -28,3 +28,35 @@ test('viewer has no settings group and is not allowed on /settings/*', async ({ 
   await expect(page.getByText('You are not allowed to view this page.')).toBeVisible()
   await expect(page.getByRole('group', { name: 'Settings' })).toHaveCount(0)
 })
+
+test('narrow screen: navigation opens as a drawer and closes after navigating', async ({ page, api }) => {
+  await page.setViewportSize({ width: 375, height: 700 })
+  api.mock('GET', '/api/auth/me', me('VIEWER'))
+  api.mock('GET', '/api/hosts/overview', { body: [] })
+  api.mock('GET', '/api/notifications', { body: { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 } })
+  await page.goto('/')
+
+  await expect(page.getByRole('navigation', { name: 'Main' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Navigation' }).click()
+  const nav = page.getByRole('navigation', { name: 'Main' })
+  await expect(nav).toBeVisible()
+  await nav.getByRole('link', { name: /^Notifications/ }).click()
+  await expect(page).toHaveURL(/\/notifications$/)
+  await expect(page.getByRole('navigation', { name: 'Main' })).toHaveCount(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('environment switcher lists environments with status and navigates', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', me('VIEWER'))
+  api.mock('GET', '/api/hosts/overview', {
+    body: [
+      { id: 'h1', name: 'Prod', status: 'UP', connectionType: 'LOCAL', endpoint: 'local', error: null },
+      { id: 'h2', name: 'Staging', status: 'DOWN', connectionType: 'TCP', endpoint: 'x', error: 'TIMEOUT' },
+    ],
+  })
+  api.mock('GET', '/api/hosts/h2/images', { body: [] })
+  await page.goto('/environments/h2/images')
+  await page.getByRole('button', { name: /^Environment:/ }).click()
+  await page.getByRole('menuitem', { name: 'Prod' }).click()
+  await expect(page).toHaveURL(/\/environments\/h1\/images$/)
+})

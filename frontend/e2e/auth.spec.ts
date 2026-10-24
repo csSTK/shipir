@@ -11,7 +11,7 @@ test('signs in and out', async ({ page, api }) => {
   await page.getByLabel('Username').fill('admin')
   await page.getByLabel('Password').fill('correct horse')
   await page.getByRole('button', { name: 'Sign in' }).click()
-  await expect(page.getByRole('heading', { name: 'Shipir' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Shipir' })).toBeVisible()
 
   api.mock('POST', '/api/auth/logout', { status: 204 })
   await page.getByRole('button', { name: /admin/ }).click()

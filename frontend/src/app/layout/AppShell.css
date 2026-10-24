@@ -1,86 +1,135 @@
 .shell {
+  --shell-bar-height: 3.5rem;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 .shell__bar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-nav);
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
-  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  gap: var(--space-3);
+  height: var(--shell-bar-height);
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-material);
+  -webkit-backdrop-filter: var(--blur-material);
+  backdrop-filter: var(--blur-material);
 }
 .shell__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: var(--text-title-size);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--text-title-tracking);
+  text-decoration: none;
+  transition: transform var(--duration-press) var(--ease-out);
+}
+.shell__brand svg {
+  color: var(--color-accent);
+}
+.shell__brand:active {
+  transform: scale(var(--press-scale));
+}
+.shell__brand:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+.shell__spacer {
   flex: 1;
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
 }
-.shell__toggle {
-  display: none;
-  padding: 6px 10px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
-  font-size: 1.1rem;
+.shell__search {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--text-small-size);
   cursor: pointer;
-  transition: transform 120ms ease-out;
+  transition:
+    transform var(--duration-press) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
 }
-.shell__toggle:active {
-  transform: scale(0.94);
+.shell__search:hover {
+  background: var(--color-surface-hover);
+}
+.shell__search:active {
+  transform: scale(var(--press-scale));
+}
+.shell__search:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+.shell__search kbd {
+  font-size: var(--text-caption-size);
+  color: var(--color-text-subtle);
 }
 .shell__body {
   display: flex;
   flex: 1;
+  min-width: 0;
 }
 .shell__content {
   flex: 1;
   min-width: 0;
-  padding: 24px;
+  padding: var(--space-5) var(--space-6);
+}
+/* Fluid up to a wide cap; pages fill it. */
+.shell__page {
+  width: 100%;
+  max-width: 100rem;
+  margin: 0 auto;
+}
+.shell__drawer-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+}
+.shell__scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--color-overlay);
+}
+.shell__drawer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(var(--sidebar-width), 85vw);
+  padding-top: var(--space-3);
+  border-right: 1px solid var(--color-border);
+  background: var(--color-material);
+  -webkit-backdrop-filter: var(--blur-material);
+  backdrop-filter: var(--blur-material);
+  box-shadow: var(--shadow-lg);
+  overflow-y: auto;
 }
 @media (max-width: 720px) {
-  .shell__toggle {
-    display: block;
-  }
-  .shell__body {
-    flex-direction: column;
+  .shell__bar {
+    padding: 0 var(--space-3);
   }
   .shell__content {
-    padding: 16px;
+    padding: var(--space-4);
   }
-}
-@media (prefers-reduced-motion: reduce) {
-  .shell__toggle {
-    transition: none;
+  .shell__search-label,
+  .shell__search kbd {
+    display: none;
   }
-}
-
-.shell__search {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font: inherit;
-  font-size: 0.875rem;
-  padding: 6px 10px 6px 12px;
-  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
-  border-radius: 10px;
-  background: transparent;
-  color: inherit;
-  opacity: 0.8;
-  cursor: pointer;
-}
-.shell__search:active {
-  transform: scale(0.97);
-}
-.shell__search kbd {
-  font: inherit;
-  font-size: 0.75rem;
-  opacity: 0.6;
-}
-@media (prefers-reduced-motion: reduce) {
-  .shell__search:active {
-    transform: none;
+  .shell__search {
+    padding: 0 var(--space-3);
+    min-width: var(--control-height);
+    justify-content: center;
   }
 }

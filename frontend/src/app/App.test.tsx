@@ -49,7 +49,7 @@ describe('App auth gate', () => {
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret' } })
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
-    expect(await screen.findByRole('heading', { name: 'Shipir' })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Shipir' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /admin/ })).toBeInTheDocument()
     expect(apiFetchMock).toHaveBeenCalledWith('/auth/login', {
       method: 'POST',
@@ -106,8 +106,10 @@ describe('App auth gate', () => {
     })
     render(<App />)
 
-    fireEvent.click(await screen.findByRole('button', { name: /admin/ }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }))
+    const trigger = await screen.findByRole('button', { name: /admin/ })
+    trigger.focus()
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Sign out' }))
     expect(await screen.findByLabelText('Username')).toBeInTheDocument()
   })
 

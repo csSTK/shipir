@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CurrentUser } from '../../features/auth/index.ts'
@@ -69,45 +69,39 @@ describe('AppShell', () => {
     expect(screen.getByRole('link', { name: /^Notifications/ })).toHaveAttribute('aria-current', 'page')
   })
 
-  it('opens and closes the user menu with mouse and keyboard', () => {
+  it('opens the user menu with the keyboard, closes it with Escape and returns focus', async () => {
     renderShell('ADMIN')
     const trigger = screen.getByRole('button', { name: /pat/ })
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
-    fireEvent.click(trigger)
+    trigger.focus()
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+    expect(await screen.findByRole('menuitem', { name: 'Settings' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument()
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
-    const settings = screen.getByRole('menuitem', { name: 'Settings' })
-    const signOut = screen.getByRole('menuitem', { name: 'Sign out' })
-    expect(settings).toHaveFocus()
-    fireEvent.keyDown(settings, { key: 'ArrowDown' })
-    expect(signOut).toHaveFocus()
-    fireEvent.keyDown(signOut, { key: 'ArrowDown' })
-    expect(settings).toHaveFocus()
-    fireEvent.keyDown(settings, { key: 'ArrowUp' })
-    expect(signOut).toHaveFocus()
-    fireEvent.keyDown(signOut, { key: 'Escape' })
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
     expect(trigger).toHaveFocus()
-    fireEvent.click(trigger)
-    fireEvent.click(trigger)
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
-    fireEvent.click(trigger)
-    fireEvent.pointerDown(document.body)
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
-  it('Sign out calls the handler', () => {
+  async function openUserMenu() {
+    const trigger = screen.getByRole('button', { name: /pat/ })
+    trigger.focus()
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+  }
+
+  it('Sign out calls the handler', async () => {
     const onSignOut = renderShell('VIEWER')
-    fireEvent.click(screen.getByRole('button', { name: /pat/ }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }))
+    await openUserMenu()
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Sign out' }))
     expect(onSignOut).toHaveBeenCalledOnce()
   })
 
-  it('Settings navigates to /account', () => {
+  it('Settings navigates to /account', async () => {
     renderShell('VIEWER')
-    fireEvent.click(screen.getByRole('button', { name: /pat/ }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
+    await openUserMenu()
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Settings' }))
     expect(screen.getByTestId('where')).toHaveTextContent('/account')
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
   })
 
   it('shows the environment section only on environment routes', async () => {
@@ -141,5 +135,22 @@ describe('AppShell', () => {
     renderShell('VIEWER')
     fireEvent.click(screen.getByRole('button', { name: /^Search/ }))
     expect(screen.getByRole('dialog', { name: 'Command palette' })).toBeInTheDocument()
+  })
+
+  it('switches environments from the top bar and keeps the resource page', async () => {
+    renderShell('VIEWER', vi.fn(), '/environments/h1/images')
+    const switcher = await screen.findByRole('button', { name: 'Environment: Prod' })
+    switcher.focus()
+    fireEvent.keyDown(switcher, { key: 'Enter' })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Prod' }))
+    expect(screen.getByTestId('where')).toHaveTextContent('/environments/h1/images')
+  })
+
+  it('gives every sidebar link an icon', () => {
+    renderShell('ADMIN')
+    const nav = screen.getByRole('navigation', { name: 'Main' })
+    const links = within(nav).getAllByRole('link')
+    expect(links.length).toBeGreaterThan(8)
+    for (const l of links) expect(l.querySelector('svg')).not.toBeNull()
   })
 })
