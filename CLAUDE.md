@@ -23,6 +23,7 @@ Current state: project skeleton in place. Backend in `backend/` with Maven and S
 ## Frontend UI
 
 - **All new or changed frontend UI follows the `apple-design` skill** (`.claude/skills/apple-design/SKILL.md`). Read it before building or reviewing UI: instant press feedback, springs for anything the user can touch, restraint, typography, materials, and `prefers-reduced-motion`.
+- **Visual language:** use only the design tokens (`frontend/src/shared/styles/tokens.css`, rules in the "Shipir visual language" section of the skill); no hardcoded colors, sizes, radii or durations in feature CSS.
 - New UI libraries (e.g. `motion` for springs) are added only when a bead calls for them, not ad hoc.
 
 ## Code Map
@@ -215,6 +216,7 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 
 Frontend (`frontend/`):
 - `vite.config.ts`: dev proxy (`/api`, `/ws` → :8080), Vitest config
+- `src/index.css` + `src/shared/styles/{tokens,base}.css`: design tokens (color light/dark incl. `[data-theme]`, 6-step type scale, `--space-1..8`, radii, shadows, z, motion) and global element defaults/reduced-motion; feature CSS uses `var(--*)` only
 - `src/main.tsx`: entry, mounts `App`
 - `src/app/App.tsx`: root component, `Providers` + `BrowserRouter` + auth gate (loading, `LoginPage` on 401, `SetupPage` while `setupRequired`, routes `/` overview, `/account`, `/notifications`, `/settings/*`, `/environments/:id` dashboard and `/environments/:id/{deployments,containers,images,networks,volumes}` pages, legacy `/stacks` URLs redirect, sign out)
 - `src/app/providers.tsx`, `src/app/queryClient.ts`: React Query setup

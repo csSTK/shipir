@@ -1,8 +1,2 @@
-:root {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  color-scheme: light dark;
-}
-
-body {
-  margin: 0;
-}
+@import './shared/styles/tokens.css';
+@import './shared/styles/base.css';

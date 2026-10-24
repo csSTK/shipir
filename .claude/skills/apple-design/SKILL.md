@@ -302,3 +302,30 @@ Tactical rules that serve these:
 | Translucent chrome          | `backdrop-filter` layer              | content scrolls under                                |
 | Type tracking               | Size-specific, never fixed           | tighten large text (`-0.02em`), body near `0`        |
 | Reduced motion              | Cross-fade, not slide/spring         | `@media (prefers-reduced-motion)`                    |
+
+## Shipir visual language
+
+Applies to all Shipir UI. Tokens live in `frontend/src/shared/styles/tokens.css` (base element rules in `base.css`, both imported by `src/index.css`). **Feature CSS uses `var(--token)` only: no hex/rgb colors, no raw px/rem font sizes, radii, shadows or durations.** Tone: friendly and approachable, not techie; generous space, soft corners, color where it carries meaning.
+
+**Tokens**
+- Color: `--color-bg/surface/surface-raised/surface-sunken/surface-hover`, `--color-border(-strong)`, `--color-text/-muted/-subtle`, `--color-accent(-hover/-text/-soft)` + `--color-on-accent`, semantic `--color-{ok,warn,bad,info}` (text), `-soft` (background tint), `-solid` (dots, bars, icons, fills). Light default; dark via `prefers-color-scheme`, `[data-theme='light'|'dark']` on `<html>` overrides.
+- Type (6 steps, `--text-<step>-{size,tracking,leading}`): caption 12, small 13, body 15, title 18, heading 24, display 32 px. Weights 400/500/600/700. Large steps tighten tracking, body is near 0. Mono: `--font-mono` for IDs, logs, paths.
+- Space: `--space-1..8` = 4, 8, 12, 16, 24, 32, 48, 64 px (in rem). Default gap between related items `--space-3`, between groups `--space-5`, page padding `--space-5`/`--space-6`. Err on the airy side.
+- Radii: `--radius-sm` (controls, badges), `--radius-md` (cards, menus), `--radius-lg` (dialogs, large panels), `--radius-pill`.
+- Shadow: `--shadow-sm` cards at rest, `--shadow-md` menus/popovers, `--shadow-lg` dialogs, `--shadow-focus` ring. Overlay `--color-overlay`, translucent chrome `--color-material` + `--blur-material` (opaque under `prefers-reduced-transparency`).
+- Z: `--z-sticky/nav/dropdown/modal`.
+- Motion: press feedback via CSS `transform: scale(var(--press-scale))` over `--duration-press`; hover/color `--duration-fast`/`--duration-base` with `--ease-out`. Anything the user can touch or that enters/leaves (menus, dialogs, sheets, palette) uses springs via `motion`: **snappy** (`stiffness 520, damping 38`) menus, popovers, press; **smooth** (`stiffness 300, damping 30`) dialogs, sheets, layout; **gentle** (`stiffness 180, damping 24`) page and list transitions. No bounce on destructive or dense UI. Reduced motion: `base.css` collapses CSS durations; spring users must check `useReducedMotion` and cross-fade.
+
+**When to use color**
+- Neutral surfaces carry the layout; accent marks the one primary action per view, the current nav item, links and focus.
+- Semantic color only for state (running/ok, warning, error, info), shown as a soft tinted badge with `-solid` dot, never as the only signal (add text or icon).
+- Soft tints (`*-soft`) for backgrounds of status and empty states; avoid saturated large areas.
+- Text on a color uses the matching text token (`--color-ok` on `--color-ok-soft`), never `-solid` for text.
+
+**Density and layout**: control height `--control-height`, cards padded `--space-5`, table rows `--space-3` vertical padding; content max width `--content-max`. Prefer fewer, larger targets over compact grids; touch targets at least 40px.
+
+**Icons**: one line-icon set at one stroke weight, 16px inline with text / 20px in nav and buttons, colored with `currentColor`; icon-only buttons need `aria-label`. Use an icon next to a status color so state is not color-only.
+
+**Tables**: no heavy grid lines, only a `--color-border` row separator; header in caption size, `--color-text-muted`, medium weight; row hover `--color-surface-hover`; numbers right-aligned and tabular; IDs in mono; status as badge; row actions grouped on the right, secondary ones in a menu; empty, loading (skeleton) and error (with Retry) states are always designed.
+
+**Checks before done**: light and dark both looked at; text tokens keep contrast AA (4.5:1) on the surface they sit on; `prefers-reduced-motion` and `prefers-reduced-transparency` handled; visible `:focus-visible` ring.

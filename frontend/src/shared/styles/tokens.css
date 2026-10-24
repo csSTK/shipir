@@ -1,0 +1,218 @@
+/*
+ * Shipir design tokens. Single source of truth for color, type, space,
+ * radii, shadows and motion. Feature CSS uses these variables only.
+ * Light is the default; dark follows the OS unless [data-theme] forces one.
+ */
+
+/* ---- Theme-independent scales ---- */
+:root {
+  /* Typography */
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+
+  /* Type scale: 6 steps, size / tracking / leading travel together */
+  --text-caption-size: 0.75rem;
+  --text-caption-tracking: 0.01em;
+  --text-caption-leading: 1.4;
+  --text-small-size: 0.8125rem;
+  --text-small-tracking: 0;
+  --text-small-leading: 1.45;
+  --text-body-size: 0.9375rem;
+  --text-body-tracking: -0.006em;
+  --text-body-leading: 1.55;
+  --text-title-size: 1.125rem;
+  --text-title-tracking: -0.012em;
+  --text-title-leading: 1.35;
+  --text-heading-size: 1.5rem;
+  --text-heading-tracking: -0.02em;
+  --text-heading-leading: 1.2;
+  --text-display-size: 2rem;
+  --text-display-tracking: -0.03em;
+  --text-display-leading: 1.1;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Spacing (rem, 4px base, generous steps) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+
+  /* Radii */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
+  --radius-pill: 999px;
+
+  /* Layering */
+  --z-sticky: 10;
+  --z-nav: 20;
+  --z-dropdown: 50;
+  --z-modal: 100;
+
+  /* Layout */
+  --sidebar-width: 15rem;
+  --content-max: 72rem;
+  --control-height: 2.5rem;
+
+  /* Motion. Spring presets live in the apple-design skill (Shipir visual language);
+     CSS durations/easings are for hover, color and press feedback only. */
+  --duration-press: 100ms;
+  --duration-fast: 150ms;
+  --duration-base: 220ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring-css: cubic-bezier(0.3, 1.4, 0.5, 1);
+  --spring-snappy: 'stiffness 520, damping 38, mass 1';
+  --spring-smooth: 'stiffness 300, damping 30, mass 1';
+  --spring-gentle: 'stiffness 180, damping 24, mass 1';
+  --press-scale: 0.97;
+
+  /* Materials */
+  --blur-material: blur(24px) saturate(1.6);
+}
+
+/* ---- Light ---- */
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* Neutrals */
+  --color-bg: #f6f6fa;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: #eeeef4;
+  --color-surface-hover: #f0f0f6;
+  --color-border: #dcdce6;
+  --color-border-strong: #b9b9c9;
+  --color-text: #1a1a24;
+  --color-text-muted: #55556a;
+  --color-text-subtle: #6b6b80;
+  --color-focus: #4f46e5;
+
+  /* Brand accent (indigo) */
+  --color-accent: #4f46e5;
+  --color-accent-hover: #4338ca;
+  --color-accent-text: #4338ca;
+  --color-accent-soft: #eceafd;
+  --color-on-accent: #ffffff;
+
+  /* Semantic: text-grade foreground, soft background, solid fill */
+  --color-ok: #166534;
+  --color-ok-soft: #e1f6e8;
+  --color-ok-solid: #1f9d55;
+  --color-warn: #924000;
+  --color-warn-soft: #fdf0d9;
+  --color-warn-solid: #d97706;
+  --color-bad: #b42318;
+  --color-bad-soft: #fde9e7;
+  --color-bad-solid: #d92d20;
+  --color-info: #1d5fb8;
+  --color-info-soft: #e3effd;
+  --color-info-solid: #0a84ff;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgb(26 26 36 / 0.06), 0 1px 3px rgb(26 26 36 / 0.08);
+  --shadow-md: 0 4px 14px rgb(26 26 36 / 0.1);
+  --shadow-lg: 0 24px 60px rgb(26 26 36 / 0.22);
+  --shadow-focus: 0 0 0 3px color-mix(in srgb, var(--color-accent) 35%, transparent);
+  --color-overlay: rgb(20 20 30 / 0.4);
+  --color-material: rgb(255 255 255 / 0.72);
+}
+
+/* ---- Dark ---- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --color-bg: #0e0e14;
+    --color-surface: #17171f;
+    --color-surface-raised: #1f1f2a;
+    --color-surface-sunken: #121218;
+    --color-surface-hover: #22222e;
+    --color-border: #2c2c3a;
+    --color-border-strong: #484860;
+    --color-text: #f2f2f7;
+    --color-text-muted: #b4b4c6;
+    --color-text-subtle: #9494a8;
+    --color-focus: #8b8cf8;
+
+    --color-accent: #5b5ef0;
+    --color-accent-hover: #4d50e8;
+    --color-accent-text: #a5a6fb;
+    --color-accent-soft: #24244a;
+    --color-on-accent: #ffffff;
+
+    --color-ok: #6ee79a;
+    --color-ok-soft: #12301f;
+    --color-ok-solid: #30d158;
+    --color-warn: #fbbf5a;
+    --color-warn-soft: #3a2a0c;
+    --color-warn-solid: #f59e0b;
+    --color-bad: #ff8a80;
+    --color-bad-soft: #3d1816;
+    --color-bad-solid: #ff6961;
+    --color-info: #7db7ff;
+    --color-info-soft: #112a47;
+    --color-info-solid: #0a84ff;
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 4px 14px rgb(0 0 0 / 0.45);
+    --shadow-lg: 0 24px 60px rgb(0 0 0 / 0.6);
+    --color-overlay: rgb(0 0 0 / 0.6);
+    --color-material: rgb(30 30 42 / 0.72);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-bg: #0e0e14;
+  --color-surface: #17171f;
+  --color-surface-raised: #1f1f2a;
+  --color-surface-sunken: #121218;
+  --color-surface-hover: #22222e;
+  --color-border: #2c2c3a;
+  --color-border-strong: #484860;
+  --color-text: #f2f2f7;
+  --color-text-muted: #b4b4c6;
+  --color-text-subtle: #9494a8;
+  --color-focus: #8b8cf8;
+
+  --color-accent: #5b5ef0;
+  --color-accent-hover: #4d50e8;
+  --color-accent-text: #a5a6fb;
+  --color-accent-soft: #24244a;
+  --color-on-accent: #ffffff;
+
+  --color-ok: #6ee79a;
+  --color-ok-soft: #12301f;
+  --color-ok-solid: #30d158;
+  --color-warn: #fbbf5a;
+  --color-warn-soft: #3a2a0c;
+  --color-warn-solid: #f59e0b;
+  --color-bad: #ff8a80;
+  --color-bad-soft: #3d1816;
+  --color-bad-solid: #ff6961;
+  --color-info: #7db7ff;
+  --color-info-soft: #112a47;
+  --color-info-solid: #0a84ff;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 14px rgb(0 0 0 / 0.45);
+  --shadow-lg: 0 24px 60px rgb(0 0 0 / 0.6);
+  --color-overlay: rgb(0 0 0 / 0.6);
+  --color-material: rgb(30 30 42 / 0.72);
+}
+
+/* Reduced transparency: materials become opaque */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --blur-material: none;
+    --color-material: var(--color-surface-raised);
+  }
+}
