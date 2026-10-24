@@ -241,6 +241,7 @@ Frontend (`frontend/`):
 - `src/features/settings/AiSettingsPage.{tsx,css,test.tsx}`: ADMIN AI provider at `/settings/ai` (segmented control OpenAI-compatible / Google Gemini, selected one is edited and becomes active on save, per-provider drafts, base URL, model, enable switch, API key never prefilled: empty keeps, 'Remove stored key' sends `""`; Test connection sends the selected provider, saved settings); hooks `useAiSettings/useSaveAiSettings/useTestAiConnection` in `api.ts`; Retention page also edits `chatSessionDays`; `e2e/ai-settings.spec.ts`
 - `src/features/settings/AuditLogPage.{tsx,css,test.tsx}`: ADMIN audit log at `/settings/audit-log` (table, action/user/date filters + page in URL query, empty/error states); `useAuditLog`, `AUDIT_ACTION_LABELS` in `api.ts`
 - `src/features/settings/SharedChatSessionsPage.{tsx,css,test.tsx}`: ADMIN read-only shared chats at `/settings/ai/shared` (list with owner, `?session=` opens transcript via `ai-chat` `MessageList readOnly`, paged); `useSharedChatSessions`/`useSharedChatSession` in `api.ts`
+- `src/features/settings/BackupSettingsPage.{tsx,css,test.tsx}`: ADMIN encrypted backup download at `/settings/backup` (passphrase + confirm, client rules mirror 12-128); `requestBackup`/`saveBlob`/`useCreateBackup` in `api.ts` (POST `/api/backup`, blob download)
 - `frontend/src/features/settings/UsersSettingsPage.{tsx,css,test.tsx}`: ADMIN users at `/settings/users` (prop `currentUsername` hides self-actions; role select, disable/enable, reset password + delete behind confirm, create/reset show the one-time password once with Copy; "Password changed" date or pending badge per user; USERNAME_TAKEN/LAST_ADMIN/USER_HAS_HISTORY/SELF_* inline); hooks `useUsers` etc. in settings `api.ts`; Sidebar 'Users' link
 - `frontend/e2e/users.spec.ts`: create + one-time password, LAST_ADMIN/USER_HAS_HISTORY inline, operator blocked, admin grants access
 - `frontend/src/features/settings/{UserAccessDialog.tsx,.css}`: per-user 'Access' dialog on Users page (hidden for ADMIN users): level select None/View/Operate per host and per managed deployment (disabled when host grant covers it), Save = PUT `/users/{id}/permissions` full replace, VIEWER cap hint; hooks `useUserPermissions/useSaveUserPermissions` in settings `api.ts`; built on shared `Dialog`/`Select`
@@ -307,6 +308,7 @@ Frontend (`frontend/`):
 - `e2e/account.spec.ts`: user menu > Settings, password change, preference toggle
 - `e2e/retention.spec.ts`: admin changes retention and saves, server 400 inline
 - `e2e/audit-log.spec.ts`: admin filters by action and pages, operator not allowed
+- `e2e/backup.spec.ts`: admin downloads backup (passphrase cleared), mismatch and server 400 inline, operator not allowed
 - `e2e/shared-chat-sessions.spec.ts`: admin opens a shared chat read-only, error state, operator not allowed
 - `e2e/app.spec.ts`: smoke spec, Shipir heading (signed in)
 - `e2e/auth.spec.ts`: login happy path + sign out, wrong password

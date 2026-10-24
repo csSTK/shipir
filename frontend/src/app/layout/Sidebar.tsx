@@ -12,6 +12,7 @@ import {
   MessagesSquare,
   Network,
   ScrollText,
+  DatabaseBackup,
   Server,
   Sparkles,
   Users,
@@ -134,6 +135,9 @@ export function Sidebar({ role, onNavigate, drawer = false }: Props) {
           </Item>
           <Item to="/settings/audit-log" icon={ScrollText} onNavigate={onNavigate}>
             Audit log
+          </Item>
+          <Item to="/settings/backup" icon={DatabaseBackup} onNavigate={onNavigate}>
+            Backup
           </Item>
         </div>
       )}

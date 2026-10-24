@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '../../shared/api/client.ts'
+import { ApiError, apiFetch, readCookie } from '../../shared/api/client.ts'
 import type { ChatSession, ChatSessionDetail } from '../ai-chat/api.ts'
 import { NOTIFICATION_TYPE_LABELS, type NotificationType } from '../notifications/api.ts'
 
@@ -513,5 +513,79 @@ export function useTestRegistry() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch<{ status: RegistryTestStatus }>(`${REGISTRIES_BASE}/${id}/test`, { method: 'POST' }),
+  })
+}
+
+export interface BackupFile {
+  blob: Blob
+  filename: string
+}
+
+const BACKUP_PATH = '/api/backup'
+const BACKUP_FILENAME_FALLBACK = 'shipir-backup.tar.gz.enc'
+const CSRF_COOKIE = 'XSRF-TOKEN'
+const CSRF_HEADER = 'X-XSRF-TOKEN'
+
+function filenameOf(disposition: string | null): string {
+  const match = disposition?.match(/filename="?([^";]+)"?/i)
+  return match ? match[1] : BACKUP_FILENAME_FALLBACK
+}
+
+/**
+ * POST /api/backup. Not `apiFetch`: the answer is the encrypted file, not JSON.
+ * Errors keep only the code and the server's detail lines, never the raw body.
+ */
+export async function requestBackup(passphrase: string): Promise<BackupFile> {
+  const csrf = readCookie(CSRF_COOKIE)
+  const response = await fetch(BACKUP_PATH, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/octet-stream, application/json',
+      'Content-Type': 'application/json',
+      ...(csrf && { [CSRF_HEADER]: csrf }),
+    },
+    body: JSON.stringify({ passphrase }),
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    let parsed: { code?: unknown; details?: unknown } = {}
+    try {
+      parsed = JSON.parse(text) as typeof parsed
+    } catch {
+      // not JSON: keep the generic error below
+    }
+    const details = Array.isArray(parsed.details)
+      ? parsed.details.filter((d): d is string => typeof d === 'string')
+      : undefined
+    throw new ApiError(
+      response.status,
+      response.statusText,
+      typeof parsed.code === 'string' ? parsed.code : undefined,
+      undefined,
+      details,
+    )
+  }
+
+  return { blob: await response.blob(), filename: filenameOf(response.headers.get('Content-Disposition')) }
+}
+
+/** Hands the file to the browser as a download; the object URL is released after a while. */
+export function saveBlob({ blob, filename }: BackupFile): void {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 30_000)
+}
+
+export function useCreateBackup() {
+  return useMutation({
+    mutationFn: (passphrase: string) => requestBackup(passphrase),
+    onSuccess: (file) => saveBlob(file),
   })
 }
