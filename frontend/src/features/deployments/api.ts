@@ -277,3 +277,20 @@ export function useRemoveUnmanagedDeployment(hostId: string) {
     onSuccess: () => void invalidate(),
   })
 }
+
+export interface AdoptInput {
+  project: string
+  /** Omitted = read the files the project was started with. */
+  yaml?: string
+  env?: EnvEntry[]
+}
+
+/** Takes an unmanaged Compose project under Shipir's management (`POST /hosts/{id}/deployments/{project}/adopt`, 201). */
+export function useAdoptDeployment(hostId: string) {
+  const invalidate = useInvalidateDeployments(hostId)
+  return useMutation({
+    mutationFn: ({ project, ...body }: AdoptInput) =>
+      apiFetch<ManagedDeploymentDetail>(`/hosts/${hostId}/deployments/${encodeURIComponent(project)}/adopt`, { method: 'POST', body }),
+    onSuccess: () => void invalidate(),
+  })
+}

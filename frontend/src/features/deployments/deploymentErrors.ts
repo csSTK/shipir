@@ -46,6 +46,10 @@ export function describeDeploymentError(error: unknown, fallback: string): strin
         return 'Docker could not stop the deployment, so it was not deleted. Try again.'
       case 'MANAGED_DEPLOYMENT':
         return 'This deployment is managed by Shipir; delete it from its detail page.'
+      case 'PROJECT_NOT_FOUND':
+        return 'This project no longer exists on the environment.'
+      case 'PATH_NOT_ALLOWED':
+        return 'The compose file of this project is in a directory Shipir may not read. Paste the YAML instead.'
       case 'HOST_NOT_FOUND':
         return 'This environment no longer exists.'
       default:

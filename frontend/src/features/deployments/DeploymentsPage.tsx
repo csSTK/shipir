@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { FileText, GitBranch, Play, Square, Trash2 } from 'lucide-react'
+import { FileText, GitBranch, PackagePlus, Play, Square, Trash2 } from 'lucide-react'
 import { describeResourceError } from '../hosts/format.ts'
 import { useCurrentUser } from '../auth/index.ts'
 import { Badge, Button, PageHeader, ResourceTable, type MenuEntry, type ResourceColumn } from '../../shared/ui/index.ts'
@@ -14,6 +14,7 @@ import {
   type DeploymentStatus,
   type DeploymentSummary,
 } from './api.ts'
+import { AdoptDeploymentDialog } from './AdoptDeploymentDialog.tsx'
 import { AddDeploymentDialog } from './AddDeploymentDialog.tsx'
 import { ConfirmDialog } from './ConfirmDialog.tsx'
 import type { RowActions } from '../../shared/ui/ResourceTable.tsx'
@@ -59,6 +60,8 @@ export function DeploymentsPage() {
   const stop = useStopDeployment(id)
   const remove = useRemoveUnmanagedDeployment(id)
   const [adding, setAdding] = useState(false)
+  /** Unmanaged project being adopted. */
+  const [adopting, setAdopting] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
   /** Unmanaged project awaiting confirmation of its removal. */
   const [removing, setRemoving] = useState<string | null>(null)
@@ -194,6 +197,7 @@ export function DeploymentsPage() {
     return {
       primary: r.live
         ? [
+            { label: 'Adopt', icon: PackagePlus, onSelect: () => setAdopting(r.name) },
             {
               label: 'Remove',
               icon: Trash2,
@@ -243,6 +247,7 @@ export function DeploymentsPage() {
         onRetry={() => void live.refetch()}
       />
       {adding && <AddDeploymentDialog hostId={id} onClose={() => setAdding(false)} />}
+      {adopting && <AdoptDeploymentDialog hostId={id} project={adopting} onClose={() => setAdopting(null)} />}
       {removing && (
         <ConfirmDialog
           title="Remove deployment"
