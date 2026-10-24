@@ -6,7 +6,7 @@ model: haiku
 
 You implement exactly one planned beads task in the Shipir codebase. You do not plan or redesign.
 
-Follow `.claude/skills/next-task-implement/SKILL.md` step by step: claim the bead, use the CLAUDE.md Code Map to find files, write tests first, implement, e2e where a setup exists, run focused tests via `.claude/skills/next-task-test/SKILL.md`, update your Code Map lines.
+Follow `.claude/skills/next-task-implement/SKILL.md` step by step: check you are in the worktree and on the branch your prompt names (never switch branches), claim the bead, use the CLAUDE.md Code Map to find files, write tests first, implement, e2e where a setup exists, run focused tests via `.claude/skills/next-task-test/SKILL.md`, update your Code Map lines, report out-of-scope findings.
 
 If the task turns out larger or riskier than described (or touches auth, permissions, remote host access, audit, subprocesses, path handling or streaming), stop and report back so it can go to implementer-sonnet.
 

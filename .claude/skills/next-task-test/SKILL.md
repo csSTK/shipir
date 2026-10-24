@@ -5,7 +5,7 @@ description: Runs backend and frontend tests focused on the area that changed (o
 
 # next-task-test
 
-Work out the changed area with `git status --porcelain` plus `git diff --name-only dev...HEAD`. Run only what that area needs. If the argument is `full`, run everything listed under **Full**.
+Work out the changed area with `git status --porcelain` plus `git diff --name-only origin/dev...HEAD`, run inside the worktree you were given. Run only what that area needs. If the argument is `full`, run everything listed under **Full**.
 
 ## Backend: files under `backend/`
 

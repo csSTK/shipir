@@ -300,9 +300,12 @@ Repo tooling:
 - `.claude/hooks/db-write-guard.py`: PreToolUse hook, forces a permission prompt for database writes
 - `.claude/skills/apple-design/SKILL.md`: design and motion guidelines every frontend UI change follows
 - `.claude/skills/text-to-task/SKILL.md`: `/text-to-task`, turns a text request into a beads epic + child tasks after a scope check
-- `.claude/skills/next-task/SKILL.md`: `/next-task <epic-id> [--watch-ci]`, orchestrates an epic: branch → deps → plan → sub-agents → finish → optional CI watch
-- `.claude/skills/next-task-{branch,deps,plan,finish}/SKILL.md`: orchestrator steps of `/next-task` (finish doesn't watch CI)
-- `.claude/skills/next-task-implement/SKILL.md`: sub-agent sequence, calling `next-task-{write-tests,code,e2e,test}` (also usable on their own)
+- `.claude/skills/next-task/SKILL.md`: `/next-task <epic-id> [--watch-ci]`, orchestrates an epic in its own worktree: branch → deps → plan → sub-agents → findings → finish → optional CI watch
+- `.claude/skills/next-task-beads/SKILL.md`: `/next-task-beads <id>... [--watch-ci]`, same pipeline for individual non-epic beads (branch `task/...`)
+- `.claude/skills/next-task-batch/SKILL.md`: `/next-task-batch <epic-id>... [--watch-ci]`, runs several epics sequentially in dependency order, skips dependents of a stopped epic, CI watched once
+- `.claude/skills/next-task-{branch,deps,plan,finish}/SKILL.md`: orchestrator steps (branch = worktree `../shipir-<id>` from `origin/dev`, main checkout never switched; finish rebases, tests, pushes `HEAD:dev`, removes worktree; doesn't watch CI)
+- `.claude/skills/next-task-findings/SKILL.md`: out-of-scope bug/quality findings -> deduplicated beads labelled `finding` (`discovered-from` the source bead), the shared findings backlog
+- `.claude/skills/next-task-implement/SKILL.md`: sub-agent sequence (worktree/branch check first and last), calling `next-task-{write-tests,code,e2e,test}` (also usable on their own), reports findings
 - `.claude/skills/watch-ci/SKILL.md`: `/watch-ci [run-id|branch]`, read-only: watches GitHub Actions runs via `gh`, reports result, offers a bug bead on failure
 
 ## Git Commits & Attribution
@@ -313,7 +316,7 @@ Repo tooling:
 
 ## Branches
 
-- `dev`: default branch. All work (epic branches, `/next-task`) branches from and merges into `dev`.
+- `dev`: default branch. All work (`/next-task*` branches, each in its own worktree `../shipir-<id>`) branches from `origin/dev` and is pushed back to `dev` fast-forward. Never switch branches in a checkout another session or agent may be using.
 - `prd`: release branch, only ever a fast-forward of `dev`. Release: `git push origin dev:prd`, wait until `release.yml` is green, then tag `v*` on that commit (`tag.yml` re-tags the tested image). If `tag.yml` failed because the image was missing, re-run it (`gh run rerun <id>`). Never commit to `prd` directly; GitHub blocks force-push and deletion.
 - Agents never push `prd` or tags without the user asking.
 

@@ -1,22 +1,24 @@
 ---
 name: next-task-plan
-description: Steps 2 and 4 of /next-task. Validates an epic's beads tasks, then plans the implementation as parallel waves with a model and file set per child task, plus the hand-off prompt for implementer sub-agents. Normally invoked by the next-task skill, not directly.
+description: Steps 2 and 4 of /next-task and /next-task-beads. Validates the beads of a work set (an epic's children or a list of beads), then plans the implementation as parallel waves with a model and file set per child task, plus the hand-off prompt for implementer sub-agents. Normally invoked by the next-task skill, not directly.
 ---
 
 # next-task-plan
 
+The **work set** is either an epic's children (`/next-task`) or the beads passed to `/next-task-beads`. Below, "child" means a bead of the work set and "inside the set" replaces "inside the epic".
+
 ## Part 1: Check the beads tasks
 
-1. `bd show <epic>` must be an epic that's `open` or `in_progress`.
-2. `bd list --parent <epic>` lists the children. Ignore children that are already `closed`.
+1. Epic run: `bd show <epic>` must be an epic that's `open` or `in_progress`, and `bd list --parent <epic>` lists the children. Bead run: each given ID must exist and must not be an epic (point to `/next-task` for those).
+2. Ignore beads that are already `closed`.
 3. For each open child, `bd show <child>` must have:
    - a clear description and testable acceptance criteria
    - a `model:haiku` or `model:sonnet` label
    - no unresolved open decision from HANDOFF.md
 
    If any child fails this, **stop** and tell the user which child and what's missing. Suggest `/text-to-task` to fix it. Don't patch the beads yourself.
-4. Blockers outside the epic, from `bd dep list <child>`: if a child depends on an issue outside this epic that's still open, **stop** and report it.
-5. If no open children are left, skip straight to `next-task-finish`. Its job is then only to close the epic.
+4. Blockers outside the set, from `bd dep list <child>`: if a child depends on an issue outside the set that's still open, **stop** and report it.
+5. If no open children are left, skip straight to `next-task-finish`. Its job is then only to close the epic (bead run: report that nothing is left and remove the empty worktree).
 
 ## Part 2: Plan the implementation
 
@@ -27,14 +29,14 @@ Build **waves**:
 - Children in the same wave run in parallel only if their file sets don't overlap. Shared files count as overlapping: `pom.xml`, `package.json`, `application.yml`, `CLAUDE.md`, `README.md`. If two overlap, move one into the next wave.
   - Exception: Code Map lines in CLAUDE.md. Tell parallel agents to edit only their own lines; you resolve conflicts while committing.
 
-Show the plan to the user as a short table: wave, child, model, file set. Then continue without waiting, unless the plan surfaced a problem.
+Show the plan to the user as a short table: wave, child, model, file set, plus the worktree path. Then continue without waiting, unless the plan surfaced a problem.
 
 ## Hand-off prompt (one per child)
 
 Use the agent matching the label (`implementer-sonnet` or `implementer-haiku`) and send this prompt:
 
 ```
-Implement bead <child-id> on branch <branch>. Follow .claude/skills/next-task-implement/SKILL.md exactly.
+Implement bead <child-id> in worktree <absolute worktree path> on branch <branch>. Work only there: start every Bash command with `cd <worktree> &&`, use absolute paths under it, never switch branches. Follow .claude/skills/next-task-implement/SKILL.md exactly.
 Your file set: <paths>. Other agents are working in parallel on: <other children's paths>. Don't touch those.
-Do not commit, push or close the bead. Report back as that skill describes.
+Do not commit, push or close the bead. Report back as that skill describes, including out-of-scope findings.
 ```

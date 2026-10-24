@@ -1,12 +1,15 @@
 ---
 name: next-task-implement
-description: The sequence an implementer sub-agent follows for one beads child task during /next-task. Understand, write tests, code, e2e, run focused tests, report. Each step is its own skill. Read by implementer-sonnet and implementer-haiku.
+description: The sequence an implementer sub-agent follows for one beads child task during /next-task. Check worktree, understand, write tests, code, e2e, run focused tests, report. Each step is its own skill. Read by implementer-sonnet and implementer-haiku.
 ---
 
 # next-task-implement
 
 You implement exactly one child bead. You don't plan, redesign or widen the scope. Read each step's skill (`.claude/skills/<name>/SKILL.md`) and follow it in order.
 
+0. **Check the worktree.** Your prompt names a worktree path and a branch. Work only there: start every Bash command with `cd <worktree> &&`, use absolute paths under it for Read/Edit/Write, and never run `git switch`/`checkout`.
+   - Run `cd <worktree> && git rev-parse --show-toplevel && git branch --show-current`. If either doesn't match the prompt, **stop** and report it. Don't write anything.
+   - Repeat this check right before reporting back.
 1. **Understand.**
    - `bd show <id>`, then `bd update <id> --claim`.
    - Read the Code Map in CLAUDE.md to find the files. Only read code where the map isn't enough.
@@ -16,9 +19,10 @@ You implement exactly one child bead. You don't plan, redesign or widen the scop
 4. **E2E:** `next-task-e2e`. Adds or extends specs for the user-visible flow, or reports n/a.
 5. **Run focused tests:** `next-task-test`. Backend and frontend for your area, plus lint, type checks and e2e if present. Everything must pass.
 6. **Report back. You're finished.** Don't commit, push or close the bead. Report:
+   - the worktree check result (path and branch)
    - the files changed
    - the criterion → test mapping
    - the exact test commands and results
    - the e2e status
    - each acceptance criterion: met or not
-   - any new beads filed
+   - **Findings:** bugs or code-quality problems you noticed outside your bead's scope (file:line, what, why). Don't fix them and don't file beads; the orchestrator records them via `next-task-findings`. "None" if none.
