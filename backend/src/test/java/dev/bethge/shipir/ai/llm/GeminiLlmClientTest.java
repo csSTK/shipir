@@ -92,6 +92,11 @@ class GeminiLlmClientTest {
     }
 
     @Test
+    void usesHttp11Only() {
+        assertThat(client.httpVersion()).isEqualTo(java.net.http.HttpClient.Version.HTTP_1_1);
+    }
+
+    @Test
     void streamsTextTokensAndSendsKeyOnlyInHeader() {
         sse(textChunk("Hel"), textChunk("lo"));
         List<String> tokens = new ArrayList<>();

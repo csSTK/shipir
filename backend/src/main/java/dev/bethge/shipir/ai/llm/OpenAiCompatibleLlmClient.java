@@ -49,9 +49,15 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         this.properties = properties;
         this.mapper = mapper;
         this.http = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(properties.connectTimeout())
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .build();
+    }
+
+    /** HTTP version of the underlying client (pinned to 1.1, HTTP/2 streams hung with some providers). */
+    HttpClient.Version httpVersion() {
+        return http.version();
     }
 
     @Override

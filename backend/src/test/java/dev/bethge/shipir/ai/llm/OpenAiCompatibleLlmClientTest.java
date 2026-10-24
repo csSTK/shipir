@@ -88,6 +88,11 @@ class OpenAiCompatibleLlmClientTest {
     }
 
     @Test
+    void usesHttp11Only() {
+        assertThat(client.httpVersion()).isEqualTo(java.net.http.HttpClient.Version.HTTP_1_1);
+    }
+
+    @Test
     void streamsTextTokensAndSendsAuthAndBody() {
         sse(delta("{\"role\":\"assistant\",\"content\":\"Hel\"}"), delta("{\"content\":\"lo\"}"),
                 delta("{}"), "[DONE]");
