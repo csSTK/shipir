@@ -1,4 +1,6 @@
+import { Sparkles } from 'lucide-react'
 import { useParams } from 'react-router-dom'
+import { EmptyState } from '../../shared/ui/index.ts'
 import { ChatPane } from './ChatPane.tsx'
 import { SessionList } from './SessionList.tsx'
 import './ChatPage.css'
@@ -13,11 +15,11 @@ export function ChatPage({ role }: { role: string }) {
         {sessionId ? (
           <ChatPane key={sessionId} sessionId={sessionId} isAdmin={role === 'ADMIN'} />
         ) : (
-          <div className="chat-empty">
-            <p className="chat-empty__title">Assistant</p>
-            <p>Ask questions about your environments or let the assistant propose changes. You confirm every change before it runs.</p>
-            <p>Start a new chat or open an earlier one.</p>
-          </div>
+          <EmptyState
+            icon={Sparkles}
+            title="Assistant"
+            description="Ask questions about your environments or let the assistant propose changes. You confirm every change before it runs. Start a new chat or open an earlier one."
+          />
         )}
       </main>
     </div>

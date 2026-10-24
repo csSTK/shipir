@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Button, Card } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { useQueryClient } from '@tanstack/react-query'
 import { EnvironmentForm } from '../hosts/index.ts'
+import { AuthBrand } from './AuthBrand.tsx'
 import { CURRENT_USER_KEY, useChangePassword, type SetupStep } from './api.ts'
 import { checkPassword, isPasswordValid, violationMessage } from './passwordPolicy.ts'
+import './LoginPage.css'
 import './SetupPage.css'
 
 function errorMessages(error: unknown): string[] {
@@ -52,7 +55,7 @@ function EnvironmentStep() {
   const queryClient = useQueryClient()
   const [finishing, setFinishing] = useState(false)
   return (
-    <div className="setup__card setup__panel">
+    <Card className="setup__card setup__panel auth-card">
       <h1 className="setup__title">Add your first environment</h1>
       <p className="setup__intro">
         An environment is a Docker engine Shipir manages: this machine or a remote host. You can add more
@@ -69,7 +72,7 @@ function EnvironmentStep() {
       <div className="setup__success" role="status">
         {finishing && 'Environment added. Opening Shipir…'}
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -77,7 +80,8 @@ function EnvironmentStep() {
 export function SetupPage({ username, step = 'PASSWORD' }: { username: string; step?: SetupStep }) {
   return (
     <main className="setup">
-      <div className="setup__wrap">
+      <div className="auth-stack">
+        <AuthBrand />
         <StepIndicator step={step} />
         {step === 'ENVIRONMENT' ? <EnvironmentStep key="environment" /> : <PasswordStep key="password" username={username} />}
       </div>
@@ -118,7 +122,8 @@ function PasswordStep({ username }: { username: string }) {
 
   return (
     <>
-      <form className="setup__card setup__panel" onSubmit={onSubmit}>
+      <Card className="setup__panel auth-card">
+      <form className="setup__card" onSubmit={onSubmit}>
         <h1 className="setup__title">Set your password</h1>
         <p className="setup__intro">
           This is the first start of Shipir. The initial password is known to whoever installed it, so
@@ -172,10 +177,11 @@ function PasswordStep({ username }: { username: string }) {
         <div className="setup__success" role="status">
           {changePassword.isSuccess && 'Password set. Opening Shipir…'}
         </div>
-        <button className="setup__submit" type="submit" disabled={!canSubmit}>
+        <Button className="setup__submit" variant="primary" type="submit" disabled={!canSubmit} loading={changePassword.isPending}>
           {changePassword.isPending ? 'Saving…' : 'Set password'}
-        </button>
+        </Button>
       </form>
+      </Card>
     </>
   )
 }

@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { Bell, CircleArrowDown, CircleArrowUp, CircleX, GitBranch, HeartPulse, type LucideIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { Button, EmptyState, PageHeader, Skeleton } from '../../shared/ui/index.ts'
 import {
   NOTIFICATION_TYPE_LABELS,
   useMarkAllRead,
@@ -25,15 +27,15 @@ function relativeTime(iso: string): string {
   return 'just now'
 }
 
-type Tone = 'up' | 'down' | 'warn'
+type Tone = 'ok' | 'bad' | 'warn'
 
-const TYPE_STYLE: Record<NotificationType, { glyph: string; tone: Tone }> = {
-  HOST_DOWN: { glyph: '▼', tone: 'down' },
-  HOST_UP: { glyph: '▲', tone: 'up' },
-  DEPLOYMENT_FAILED: { glyph: '✕', tone: 'down' },
-  CONTAINER_CRASHED: { glyph: '✕', tone: 'down' },
-  CONTAINER_UNHEALTHY: { glyph: '!', tone: 'warn' },
-  GIT_AUTO_UPDATE_FAILED: { glyph: '!', tone: 'warn' },
+const TYPE_STYLE: Record<NotificationType, { icon: LucideIcon; tone: Tone }> = {
+  HOST_DOWN: { icon: CircleArrowDown, tone: 'bad' },
+  HOST_UP: { icon: CircleArrowUp, tone: 'ok' },
+  DEPLOYMENT_FAILED: { icon: CircleX, tone: 'bad' },
+  CONTAINER_CRASHED: { icon: CircleX, tone: 'bad' },
+  CONTAINER_UNHEALTHY: { icon: HeartPulse, tone: 'warn' },
+  GIT_AUTO_UPDATE_FAILED: { icon: GitBranch, tone: 'warn' },
 }
 
 /** The deployment or container the notification is about; `to` is null when it was removed. */
@@ -60,9 +62,10 @@ function Row({ item, onRead }: { item: AppNotification; onRead: (id: string) => 
   const target = targetOf(item)
   return (
     <li className={item.read ? 'notif' : 'notif notif--unread'}>
-      <span className={`notif__type notif__type--${style.tone}`}>
-        <span aria-hidden="true">{style.glyph}</span> {NOTIFICATION_TYPE_LABELS[item.type]}
+      <span className={`notif__icon notif__icon--${style.tone}`}>
+        <style.icon size={20} strokeWidth={1.75} aria-hidden="true" />
       </span>
+      <span className={`notif__type notif__type--${style.tone}`}>{NOTIFICATION_TYPE_LABELS[item.type]}</span>
       <div className="notif__body">
         <p className="notif__message">{item.message}</p>
         <p className="notif__meta">
@@ -81,9 +84,9 @@ function Row({ item, onRead }: { item: AppNotification; onRead: (id: string) => 
         </p>
       </div>
       {!item.read && (
-        <button type="button" className="notif__read" onClick={() => onRead(item.id)}>
+        <Button size="sm" onClick={() => onRead(item.id)}>
           Mark as read
-        </button>
+        </Button>
       )}
     </li>
   )
@@ -96,38 +99,35 @@ export function NotificationsPage() {
   const markAll = useMarkAllRead()
 
   return (
-    <section className="notifs" aria-labelledby="notifs-title">
-      <div className="notifs__bar">
-        <h2 id="notifs-title" className="notifs__title">
-          Notifications
-        </h2>
-        <label className="notifs__filter">
-          <input
-            type="checkbox"
-            checked={unreadOnly}
-            onChange={(event) => setUnreadOnly(event.target.checked)}
-          />
-          Unread only
-        </label>
-        <button
-          type="button"
-          className="notifs__all"
-          disabled={markAll.isPending}
-          onClick={() => markAll.mutate()}
-        >
-          Mark all as read
-        </button>
-      </div>
-      {isPending && <div className="notifs__skeleton" aria-busy="true" />}
+    <section className="notifs" aria-label="Notifications">
+      <PageHeader
+        title="Notifications"
+        actions={
+          <>
+            <label className="notifs__filter">
+              <input type="checkbox" checked={unreadOnly} onChange={(event) => setUnreadOnly(event.target.checked)} />
+              Unread only
+            </label>
+            <Button disabled={markAll.isPending} onClick={() => markAll.mutate()}>
+              Mark all as read
+            </Button>
+          </>
+        }
+      />
+      {isPending && (
+        <div className="notifs__skeleton" aria-busy="true">
+          <Skeleton height="4.5rem" />
+          <Skeleton height="4.5rem" />
+          <Skeleton height="4.5rem" />
+        </div>
+      )}
       {isError && (
-        <p role="alert" className="notifs__message">
+        <p role="alert" className="notifs__error">
           Could not load notifications.
         </p>
       )}
       {data && data.content.length === 0 && (
-        <p className="notifs__message">
-          {unreadOnly ? 'No unread notifications.' : 'No notifications yet.'}
-        </p>
+        <EmptyState icon={Bell} title={unreadOnly ? 'No unread notifications.' : 'No notifications yet.'} description="Host and deployment problems show up here." />
       )}
       {data && data.content.length > 0 && (
         <ul className="notifs__list">

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Button, Card } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { useLogin } from './api.ts'
+import { AuthBrand } from './AuthBrand.tsx'
 import { PasswordResetPage } from './PasswordResetPage.tsx'
 import './LoginPage.css'
 
@@ -63,7 +65,10 @@ function SignInForm({ notice, onForgot }: { notice: string | null; onForgot: () 
 
   return (
     <main className="login">
-      <form className="login__card" onSubmit={onSubmit}>
+      <div className="auth-stack">
+        <AuthBrand />
+        <Card className="auth-card">
+        <form className="login__card" onSubmit={onSubmit}>
         <h1 className="login__title">Sign in to Shipir</h1>
         {notice && (
           <p className="login__notice" role="status">
@@ -98,13 +103,15 @@ function SignInForm({ notice, onForgot }: { notice: string | null; onForgot: () 
         <p className="login__error" role="alert">
           {errorMessage}
         </p>
-        <button className="login__submit" type="submit" disabled={login.isPending}>
+        <Button className="login__submit" variant="primary" type="submit" disabled={login.isPending} loading={login.isPending}>
           {login.isPending ? 'Signing in…' : 'Sign in'}
-        </button>
-        <button className="login__link" type="button" onClick={onForgot}>
+        </Button>
+        <Button className="login__link" variant="ghost" size="sm" onClick={onForgot}>
           Forgot password?
-        </button>
-      </form>
+        </Button>
+        </form>
+        </Card>
+      </div>
     </main>
   )
 }

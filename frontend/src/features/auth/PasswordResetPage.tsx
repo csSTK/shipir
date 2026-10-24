@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Button, Card } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
+import { AuthBrand } from './AuthBrand.tsx'
 import { useConfirmPasswordReset, useRequestPasswordReset } from './api.ts'
 import { checkPassword, isPasswordValid, violationMessage } from './passwordPolicy.ts'
 import './LoginPage.css'
@@ -64,7 +66,10 @@ function RequestStep({
 
   return (
     <main className="login">
-      <form className="login__card" onSubmit={onSubmit}>
+      <div className="auth-stack">
+        <AuthBrand />
+        <Card className="auth-card">
+        <form className="login__card" onSubmit={onSubmit}>
         <h1 className="login__title">Reset your password</h1>
         <p className="reset__intro">Enter your username. If the account exists, a one-time code is issued.</p>
         <label className="login__field">
@@ -83,13 +88,15 @@ function RequestStep({
         <p className="login__error" role="alert">
           {request.isError && 'Could not request a code. Please try again.'}
         </p>
-        <button className="login__submit" type="submit" disabled={request.isPending || username.trim() === ''}>
+        <Button className="login__submit" variant="primary" type="submit" disabled={request.isPending || username.trim() === ''} loading={request.isPending}>
           {request.isPending ? 'Requesting…' : 'Request code'}
-        </button>
-        <button className="login__link" type="button" onClick={onBack}>
+        </Button>
+        <Button className="login__link" variant="ghost" size="sm" onClick={onBack}>
           Back to sign in
-        </button>
+        </Button>
       </form>
+        </Card>
+      </div>
     </main>
   )
 }
@@ -124,7 +131,10 @@ function ConfirmStep({
 
   return (
     <main className="login">
-      <form className="login__card" onSubmit={onSubmit}>
+      <div className="auth-stack">
+        <AuthBrand />
+        <Card className="auth-card">
+        <form className="login__card" onSubmit={onSubmit}>
         <h1 className="login__title">Enter your code</h1>
         <p className="reset__intro" role="status">
           {NEUTRAL_MESSAGE}
@@ -176,17 +186,19 @@ function ConfirmStep({
           {errors?.messages.map((message) => <p key={message}>{message}</p>)}
         </div>
         {errors?.invalidCode && (
-          <button className="login__link" type="button" onClick={onNewCode}>
+          <Button className="login__link" variant="ghost" size="sm" onClick={onNewCode}>
             Request a new code
-          </button>
+          </Button>
         )}
-        <button className="login__submit" type="submit" disabled={!canSubmit}>
+        <Button className="login__submit" variant="primary" type="submit" disabled={!canSubmit} loading={confirm.isPending}>
           {confirm.isPending ? 'Resetting…' : 'Reset password'}
-        </button>
-        <button className="login__link" type="button" onClick={onBack}>
+        </Button>
+        <Button className="login__link" variant="ghost" size="sm" onClick={onBack}>
           Back to sign in
-        </button>
+        </Button>
       </form>
+        </Card>
+      </div>
     </main>
   )
 }

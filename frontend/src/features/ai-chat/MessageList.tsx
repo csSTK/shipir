@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
+import { Check } from 'lucide-react'
 import { ActionConfirmCard } from './ActionConfirmCard.tsx'
 import type { ChatMessage } from './api.ts'
 import { toolLabel } from './toolLabel.ts'
@@ -63,6 +64,7 @@ export function MessageList({ messages, readOnly = false, busyMessageId = null, 
         const tool = m.toolCallId ? names.get(m.toolCallId) : undefined
         return tool ? (
           <p key={m.id} className="chat-activity">
+            <Check size={16} strokeWidth={1.75} aria-hidden="true" />
             Looked up {toolLabel(tool)}
           </p>
         ) : null

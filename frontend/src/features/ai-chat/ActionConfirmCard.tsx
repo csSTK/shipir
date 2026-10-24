@@ -1,3 +1,4 @@
+import { Button, Badge, type BadgeTone } from '../../shared/ui/index.ts'
 import type { ActionStatus, ToolCall } from './api.ts'
 import { toolLabel } from './toolLabel.ts'
 
@@ -11,6 +12,8 @@ interface Props {
   onConfirm?: () => void
   onReject?: () => void
 }
+
+const STATUS_TONE: Record<ActionStatus, BadgeTone> = { PENDING: 'warn', CONFIRMED: 'ok', REJECTED: 'muted' }
 
 const STATUS_LABEL: Record<ActionStatus, string> = {
   PENDING: 'Waiting for confirmation',
@@ -38,7 +41,7 @@ export function ActionConfirmCard({ call, status, readOnly = false, busy = false
     <section className={`chat-card chat-card--${status.toLowerCase()}`} aria-label={`Action: ${toolLabel(call.name)}`}>
       <div className="chat-card__head">
         <span className="chat-card__tool">{toolLabel(call.name)}</span>
-        <span className="chat-card__status">{STATUS_LABEL[status]}</span>
+        <Badge tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Badge>
       </div>
       <p className="chat-card__desc">{call.description ?? `Run ${toolLabel(call.name)}`}</p>
       {args.length > 0 && (
@@ -58,12 +61,12 @@ export function ActionConfirmCard({ call, status, readOnly = false, busy = false
       )}
       {status === 'PENDING' && !readOnly && (
         <div className="chat-card__actions">
-          <button type="button" className="chat-btn" onClick={onReject} disabled={busy}>
+          <Button onClick={onReject} disabled={busy}>
             Reject
-          </button>
-          <button type="button" className="chat-btn chat-btn--primary" onClick={onConfirm} disabled={busy}>
+          </Button>
+          <Button variant="primary" onClick={onConfirm} disabled={busy} loading={busy}>
             Confirm
-          </button>
+          </Button>
         </div>
       )}
     </section>

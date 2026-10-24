@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Check, Pencil, Send, Trash2, Wrench, X } from 'lucide-react'
+import { Button, ConfirmDialog, EmptyState, Skeleton } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import {
   useChatSession,
@@ -40,40 +42,30 @@ function Header({ session }: { session: ChatSession }) {
         {renaming ? (
           <form onSubmit={rename} className="chat-rename">
             <input aria-label="Chat title" value={title} maxLength={255} onChange={(e) => setTitle(e.target.value)} autoFocus />
-            <button type="submit" className="chat-btn chat-btn--primary" disabled={update.isPending}>
+            <Button type="submit" variant="primary" size="sm" disabled={update.isPending}>
               Save
-            </button>
-            <button type="button" className="chat-btn" onClick={() => setRenaming(false)}>
+            </Button>
+            <Button size="sm" onClick={() => setRenaming(false)}>
               Cancel
-            </button>
+            </Button>
           </form>
         ) : (
           <>
             <h2 className="chat-header__title">{session.title}</h2>
-            <button
-              type="button"
-              className="chat-btn"
+            <Button
+              size="sm"
               onClick={() => {
                 setTitle(session.title)
                 setRenaming(true)
               }}
             >
+              <Pencil size={16} strokeWidth={1.75} aria-hidden="true" />
               Rename
-            </button>
-            {confirmingDelete ? (
-              <span className="chat-header__confirm" role="group" aria-label="Confirm delete">
-                <button type="button" className="chat-btn chat-btn--danger" disabled={remove.isPending} onClick={() => remove.mutate(undefined, { onSuccess: () => navigate('/assistant') })}>
-                  Delete
-                </button>
-                <button type="button" className="chat-btn" onClick={() => setConfirmingDelete(false)}>
-                  Cancel
-                </button>
-              </span>
-            ) : (
-              <button type="button" className="chat-btn" onClick={() => setConfirmingDelete(true)}>
-                Delete chat
-              </button>
-            )}
+            </Button>
+            <Button size="sm" onClick={() => setConfirmingDelete(true)}>
+              <Trash2 size={16} strokeWidth={1.75} aria-hidden="true" />
+              Delete chat
+            </Button>
           </>
         )}
       </div>
@@ -94,6 +86,16 @@ function Header({ session }: { session: ChatSession }) {
           Could not save the change. Try again.
         </p>
       )}
+      <ConfirmDialog
+        open={confirmingDelete}
+        onOpenChange={setConfirmingDelete}
+        title="Delete this chat?"
+        description="The conversation and its history are removed for good."
+        confirmLabel="Delete"
+        danger
+        loading={remove.isPending}
+        onConfirm={() => remove.mutate(undefined, { onSuccess: () => navigate('/assistant') })}
+      />
     </header>
   )
 }
@@ -112,7 +114,14 @@ export function ChatPane({ sessionId, isAdmin }: { sessionId: string; isAdmin: b
   const [busyId, setBusyId] = useState<string | null>(null)
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({})
 
-  if (detail.isPending) return <p aria-busy="true" className="chat-muted">Loading…</p>
+  if (detail.isPending)
+    return (
+      <div aria-busy="true" className="chat-loading">
+        <Skeleton height="1.75rem" width="50%" />
+        <Skeleton height="4rem" />
+        <Skeleton height="4rem" width="70%" />
+      </div>
+    )
   if (detail.isError) {
     const gone = detail.error instanceof ApiError && detail.error.status === 404
     return (
@@ -171,6 +180,7 @@ export function ChatPane({ sessionId, isAdmin }: { sessionId: string; isAdmin: b
       {optimistic && optimistic.baseCount === messages.length && <p className="chat-bubble chat-bubble--user">{optimistic.text}</p>}
       {stream.activity.map((a, i) => (
         <p key={i} className={`chat-activity chat-activity--${a.state}`}>
+          {a.state === 'error' ? <X size={16} strokeWidth={1.75} aria-hidden="true" /> : a.state === 'ok' ? <Check size={16} strokeWidth={1.75} aria-hidden="true" /> : <Wrench size={16} strokeWidth={1.75} aria-hidden="true" />}
           {a.state === 'running' ? 'Using' : a.state === 'ok' ? 'Used' : 'Failed to use'} {toolLabel(a.tool)}
         </p>
       ))}
@@ -184,15 +194,12 @@ export function ChatPane({ sessionId, isAdmin }: { sessionId: string; isAdmin: b
       <Header key={`${session.id}:${session.title}`} session={session} />
       <MessageList messages={messages} busyMessageId={busyId} actionErrors={actionErrors} onResolve={onResolve} live={live} />
       {notConfigured && (
-        <div className="chat-empty" role="status">
-          <p className="chat-empty__title">The assistant is not set up yet.</p>
-          {isAdmin ? (
-            <p>
-              Add an AI provider first. <Link to="/settings/ai">Open AI settings</Link>
-            </p>
-          ) : (
-            <p>Ask an administrator to configure the AI provider.</p>
-          )}
+        <div role="status">
+          <EmptyState
+            title="The assistant is not set up yet."
+            description={isAdmin ? 'Add an AI provider first.' : 'Ask an administrator to configure the AI provider.'}
+            action={isAdmin ? <Link to="/settings/ai">Open AI settings</Link> : undefined}
+          />
         </div>
       )}
       <form className="chat-composer" onSubmit={submit}>
@@ -213,9 +220,10 @@ export function ChatPane({ sessionId, isAdmin }: { sessionId: string; isAdmin: b
             }
           }}
         />
-        <button type="submit" className="chat-btn chat-btn--primary" disabled={blocked || draft.trim() === ''}>
+        <Button type="submit" variant="primary" disabled={blocked || draft.trim() === ''}>
+          <Send size={16} strokeWidth={1.75} aria-hidden="true" />
           Send
-        </button>
+        </Button>
       </form>
       {problem && (
         <p role="alert" className="chat-error">

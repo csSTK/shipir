@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Button, Card, PageHeader, Skeleton } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { useChangePassword, type CurrentUser } from '../auth/index.ts'
 import { checkPassword, isPasswordValid, violationMessage } from '../auth/passwordPolicy.ts'
@@ -50,7 +51,8 @@ function PasswordSection({ username }: { username: string }) {
   }
 
   return (
-    <form className="account__card" onSubmit={onSubmit}>
+    <Card className="account__card">
+    <form className="account__form" onSubmit={onSubmit}>
       <h2 className="account__heading">Change password</h2>
       {(
         [
@@ -85,10 +87,11 @@ function PasswordSection({ username }: { username: string }) {
       <div className="account__success" role="status">
         {changePassword.isSuccess && 'Password changed.'}
       </div>
-      <button className="account__button" type="submit" disabled={!canSubmit}>
+      <Button className="account__button" variant="primary" type="submit" disabled={!canSubmit} loading={changePassword.isPending}>
         {changePassword.isPending ? 'Saving…' : 'Change password'}
-      </button>
+      </Button>
     </form>
+    </Card>
   )
 }
 
@@ -106,12 +109,17 @@ function PreferencesSection() {
   }
 
   return (
-    <section className="account__card" aria-labelledby="account-notifications">
+    <Card className="account__card" role="region" aria-labelledby="account-notifications">
       <h2 className="account__heading" id="account-notifications">
         Notifications
       </h2>
-      {preferences.isPending && <p aria-busy="true">Loading…</p>}
-      {preferences.isError && <p role="alert">Could not load notification preferences.</p>}
+      {preferences.isPending && (
+        <div aria-busy="true" className="account__loading">
+          <Skeleton height="1.5rem" />
+          <Skeleton height="1.5rem" />
+        </div>
+      )}
+      {preferences.isError && <p role="alert" className="account__error">Could not load notification preferences.</p>}
       {preferences.data?.map((p) => (
         <label key={p.type} className="account__toggle">
           <span>{NOTIFICATION_TYPE_LABELS[p.type]}</span>
@@ -127,7 +135,7 @@ function PreferencesSection() {
       <div className="account__error" role="alert">
         {save.isError && 'Could not save your preference. Please try again.'}
       </div>
-    </section>
+    </Card>
   )
 }
 
@@ -135,8 +143,8 @@ function PreferencesSection() {
 export function AccountPage({ user }: { user: Pick<CurrentUser, 'username' | 'role'> }) {
   return (
     <div className="account">
-      <h1 className="account__title">Account</h1>
-      <section className="account__card" aria-labelledby="account-info">
+      <PageHeader title="Account" subtitle="Your sign-in, password and notification preferences." />
+      <Card className="account__card" role="region" aria-labelledby="account-info">
         <h2 className="account__heading" id="account-info">
           Account
         </h2>
@@ -146,7 +154,7 @@ export function AccountPage({ user }: { user: Pick<CurrentUser, 'username' | 'ro
           <dt>Role</dt>
           <dd>{user.role}</dd>
         </dl>
-      </section>
+      </Card>
       <PasswordSection username={user.username} />
       <PreferencesSection />
     </div>

@@ -1,4 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
+import { Plus } from 'lucide-react'
+import { Button, Skeleton } from '../../shared/ui/index.ts'
 import { useChatSessions, useCreateChatSession } from './api.ts'
 
 function when(iso: string): string {
@@ -16,16 +18,22 @@ export function SessionList() {
 
   return (
     <aside className="chat-sessions">
-      <button type="button" className="chat-btn chat-btn--primary chat-sessions__new" onClick={newChat} disabled={create.isPending}>
+      <Button variant="primary" className="chat-sessions__new" onClick={newChat} disabled={create.isPending} loading={create.isPending}>
+        <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
         New chat
-      </button>
+      </Button>
       {create.isError && (
         <p role="alert" className="chat-error">
           Could not start a chat. Try again.
         </p>
       )}
       <nav aria-label="Chats">
-        {sessions.isPending && <p aria-busy="true" className="chat-muted">Loading…</p>}
+        {sessions.isPending && (
+          <div aria-busy="true" className="chat-loading">
+            <Skeleton height="2.25rem" />
+            <Skeleton height="2.25rem" />
+          </div>
+        )}
         {sessions.isError && (
           <p role="alert" className="chat-error">
             Could not load your chats.

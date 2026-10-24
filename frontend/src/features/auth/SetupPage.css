@@ -1,147 +1,56 @@
-.setup {
-  min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  box-sizing: border-box;
-}
-
 .setup__card {
-  width: 100%;
-  max-width: 360px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .setup__title {
-  margin: 0 0 8px;
-  font-size: 1.75rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
+  margin: 0;
+  font-size: var(--text-heading-size);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--text-heading-tracking);
+  line-height: var(--text-heading-leading);
+}
+
+.setup__intro {
+  margin: 0;
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-leading);
+  color: var(--color-text-muted);
 }
 
 .setup__field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  font-size: 0.875rem;
-  font-weight: 500;
+  gap: var(--space-1);
+  font-size: var(--text-small-size);
+  font-weight: var(--weight-medium);
 }
 
 .setup__field input {
-  font: inherit;
-  font-weight: 400;
-  font-size: 1rem;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-  background: color-mix(in srgb, currentColor 5%, transparent);
-  color: inherit;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  font-size: var(--text-body-size);
+  font-weight: var(--weight-regular);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
 }
 
 .setup__field input:focus-visible {
   outline: none;
-  border-color: #0a84ff;
-  box-shadow: 0 0 0 3px color-mix(in srgb, #0a84ff 30%, transparent);
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-focus);
 }
 
 .setup__error {
   margin: 0;
   min-height: 1.25em;
-  font-size: 0.875rem;
-  color: #d70015;
-}
-
-@media (prefers-color-scheme: dark) {
-  .setup__error {
-    color: #ff6961;
-  }
-}
-
-.setup__submit {
-  font: inherit;
-  font-weight: 600;
-  padding: 11px 16px;
-  border: 0;
-  border-radius: 10px;
-  background: #0a84ff;
-  color: #fff;
-  cursor: pointer;
-  transition: transform 0.12s ease-out, filter 0.12s ease-out, opacity 0.15s ease;
-}
-
-/* Feedback on press, not on release */
-.setup__submit:active:not(:disabled) {
-  transform: scale(0.97);
-  filter: brightness(0.9);
-  transition-duration: 0s;
-}
-
-.setup__submit:focus-visible {
-  outline: 3px solid color-mix(in srgb, #0a84ff 40%, transparent);
-  outline-offset: 2px;
-}
-
-.setup__submit:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .setup__submit,
-  .setup__field input {
-    transition: none;
-  }
-  .setup__submit:active:not(:disabled) {
-    transform: none;
-  }
-}
-
-.setup__card {
-  max-width: 400px;
-}
-
-.setup__intro {
-  margin: 0;
-  font-size: 0.9375rem;
-  line-height: 1.45;
-  opacity: 0.75;
-}
-
-.setup__rules {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.875rem;
-}
-
-.setup__rule {
-  display: flex;
-  gap: 8px;
-  opacity: 0.65;
-  transition: opacity 0.15s ease, color 0.15s ease;
-}
-
-.setup__rule[data-met='true'] {
-  opacity: 1;
-  color: #1a7f37;
-}
-
-@media (prefers-color-scheme: dark) {
-  .setup__rule[data-met='true'] {
-    color: #4ade80;
-  }
-}
-
-.setup__mark {
-  width: 1em;
-  text-align: center;
+  font-size: var(--text-small-size);
+  color: var(--color-bad);
 }
 
 .setup__error p {
@@ -151,32 +60,38 @@
 .setup__success {
   margin: 0;
   min-height: 1.25em;
-  font-size: 0.875rem;
-  color: #1a7f37;
+  font-size: var(--text-small-size);
+  color: var(--color-ok);
 }
 
-@media (prefers-color-scheme: dark) {
-  .setup__success {
-    color: #4ade80;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .setup__rule {
-    transition: none;
-  }
-}
-
-.setup__wrap {
+.setup__submit {
   width: 100%;
-  max-width: 400px;
+}
+
+.setup__rules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--space-1);
+  font-size: var(--text-small-size);
 }
 
-.setup__wrap .setup__card {
-  max-width: none;
+.setup__rule {
+  display: flex;
+  gap: var(--space-2);
+  color: var(--color-text-subtle);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.setup__rule[data-met='true'] {
+  color: var(--color-ok);
+}
+
+.setup__mark {
+  width: 1em;
+  text-align: center;
 }
 
 .setup__steps {
@@ -184,60 +99,55 @@
   margin: 0;
   padding: 0;
   display: flex;
-  gap: 20px;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  letter-spacing: 0.01em;
+  justify-content: center;
+  gap: var(--space-5);
+  font-size: var(--text-small-size);
+  font-weight: var(--weight-medium);
 }
 
 .setup__step {
   display: flex;
   align-items: center;
-  gap: 8px;
-  opacity: 0.55;
+  gap: var(--space-2);
+  color: var(--color-text-subtle);
 }
 
 .setup__step[data-state='current'],
 .setup__step[data-state='done'] {
-  opacity: 1;
+  color: var(--color-text);
 }
 
 .setup__step-number {
   width: 1.5rem;
   height: 1.5rem;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   display: grid;
   place-items: center;
-  font-size: 0.75rem;
-  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  font-size: var(--text-caption-size);
+  border: 1px solid var(--color-border-strong);
 }
 
 .setup__step[data-state='current'] .setup__step-number {
-  background: #0a84ff;
-  border-color: #0a84ff;
-  color: #fff;
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
 }
 
 .setup__step[data-state='done'] .setup__step-number {
-  color: #1a7f37;
-  border-color: currentColor;
-}
-
-@media (prefers-color-scheme: dark) {
-  .setup__step[data-state='done'] .setup__step-number {
-    color: #4ade80;
-  }
+  color: var(--color-ok);
+  background: var(--color-ok-soft);
+  border-color: var(--color-ok-solid);
 }
 
 /* Step transition: a short settle-in; reduced motion gets a plain cross-fade. */
 .setup__panel {
-  animation: setup-panel-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: setup-panel-in var(--duration-base) var(--ease-out);
 }
 
 @keyframes setup-panel-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(var(--space-2));
   }
   to {
     opacity: 1;
@@ -247,7 +157,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .setup__panel {
-    animation: setup-panel-fade 0.2s ease;
+    animation-name: setup-panel-fade;
   }
   @keyframes setup-panel-fade {
     from {
