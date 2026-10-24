@@ -4,6 +4,7 @@ import { useContainerStats, type StatSample } from '../../../shared/realtime/use
 import { Badge, Sparkline } from '../../../shared/ui/index.ts'
 import { formatSize } from '../../hosts/format.ts'
 import { useCurrentUser } from '../../auth/index.ts'
+import { ContainerFilesPanel } from '../files/ContainerFilesPanel.tsx'
 import { describeDetailsError, isNotFound, useContainerDetails, type ContainerDetails, type ContainerPort } from './api.ts'
 import './ContainerDetailsPage.css'
 
@@ -308,6 +309,7 @@ export function ContainerDetailsPage() {
           <Networks networks={c.networks} />
           <Labels labels={c.labels} />
           {c.health && <Health health={c.health} />}
+          {user?.role === 'ADMIN' && <ContainerFilesPanel hostId={hostId} containerId={c.id} />}
         </>
       )}
     </div>
