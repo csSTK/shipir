@@ -345,7 +345,7 @@ Repo tooling:
 - `.claude/skills/next-task-{branch,deps,plan,finish}/SKILL.md`: orchestrator steps (branch = worktree `../shipir-<id>` from `origin/dev`, main checkout never switched; finish rebases, tests, pushes `HEAD:dev`, removes worktree; doesn't watch CI)
 - `.claude/skills/next-task-findings/SKILL.md`: out-of-scope bug/quality findings -> deduplicated beads labelled `finding` (`discovered-from` the source bead), the shared findings backlog
 - `.claude/skills/next-task-review/SKILL.md`: per-child review step: fresh read-only implementer-sonnet reviews the diff vs acceptance criteria/CLAUDE.md, returns must-fix vs out-of-scope; orchestrators loop fixes, max 3 rounds, then hand off
-- `.claude/skills/next-task-implement/SKILL.md`: sub-agent sequence (worktree/branch check first and last), calling `next-task-{write-tests,code,e2e,test}` (also usable on their own), reports findings
+- `.claude/skills/next-task-implement/SKILL.md`: sub-agent sequence (worktree/branch check first and last, retry cap 3 then BLOCKED report), calling `next-task-{write-tests,code,e2e,test}` (also usable on their own), reports findings
 - `.claude/skills/watch-ci/SKILL.md`: `/watch-ci [run-id|branch]`, read-only: watches GitHub Actions runs via `gh`, reports result, offers a bug bead on failure
 
 ## Git Commits & Attribution

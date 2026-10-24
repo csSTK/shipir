@@ -5,6 +5,8 @@ description: Final step of /next-task and /next-task-beads once all sub-agents a
 
 # next-task-finish
 
+Only run this when no child is blocked (see `next-task` step 6). Worktree and branch are removed only after a successful push (step 7); any earlier stop keeps both for resuming.
+
 Everything runs **inside the worktree** (`cd <WT> && ...`). The main checkout is never switched: the branch is pushed to `dev` directly, so other sessions keep their checkout.
 
 Docs and bead closing happen **before** the push, so they're included in it.

@@ -23,4 +23,4 @@ Write the production code that makes the tests from `next-task-write-tests` pass
 - **Out-of-scope work** you discover goes into a new bead (`bd create`, then `bd dep add`). Don't do it.
 - **Update the Code Map** in CLAUDE.md, only your own files' lines, one short line each: `path: what it is`.
 
-**Done when** the new tests and the existing tests in the area pass (`next-task-test`, focused).
+**Done when** the new tests and the existing tests in the area pass (`next-task-test`, focused). If they still fail after 3 failed focused runs, stop and report BLOCKED (see `next-task-implement`).

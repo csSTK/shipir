@@ -54,4 +54,4 @@ See `next-task-e2e` for the conventions.
 
 ## Report
 
-For each command: the command, pass or fail, and the test counts. On failure, give the first relevant error lines, not the whole log.
+For each command: the command, pass or fail, and the test counts. On failure, give the first relevant error lines, not the whole log, and keep the last ~40 lines of the failing output so a BLOCKED report can quote it. Implementers count failed runs for the retry cap in `next-task-implement`.

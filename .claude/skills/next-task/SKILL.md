@@ -33,8 +33,10 @@ Each step lives in its own skill under `.claude/skills/`. Read that skill's `SKI
    - after a review PASS, commit only that child's files: `git commit -m "<child title> (<child-id>)"`
    - **Findings:** run `next-task-findings` for the agent's reported findings and whatever your own review of the diff turned up outside the child's scope
 
-   If it fails or is incomplete, send the agent the concrete findings once (SendMessage). If it still isn't right, stop and report. Don't start the next wave until every child in the current wave is committed.
-7. **When all sub-agents are finished:** `next-task-finish`. Rebase onto `origin/dev`, final full test run, remaining findings, close the beads, write the documentation, push to `dev`, then remove the worktree and branch.
+   If **verification** fails or is incomplete (not review findings, which follow the review loop above), send the agent the concrete findings once (SendMessage). If it still isn't right, stop and report.
+
+   **If the agent reports BLOCKED** (retry cap in `next-task-implement`): `bd update <child> --status blocked --append-notes "<reason + failing output tail>"`. Leave its changes uncommitted, keep worktree and branch, and don't start any child that depends on it, directly or transitively. Continue the independent children. Don't start the next wave until every child in the current wave is committed or blocked.
+7. **When all sub-agents are finished:** if any child is blocked, don't run `next-task-finish`: stop and report the blocked children, skipped dependents and the worktree path. Rerunning `/next-task <epic-id>` resumes in that worktree (`next-task-branch`), picks up blocked and open children, and finishes then. Otherwise `next-task-finish`. Rebase onto `origin/dev`, final full test run, remaining findings, close the beads, write the documentation, push to `dev`, then remove the worktree and branch.
 8. **Watch CI (optional):** only after step 7 has pushed `dev` successfully.
    - With `--watch-ci`: run the `watch-ci` skill for `dev` (branch argument `dev`) right away.
    - Without it: ask once with AskUserQuestion, "Skip" as the first and default option, and "Watch CI" second. On "Skip", don't watch.
