@@ -36,7 +36,7 @@ class ComposeValidationServiceTest {
         Assumptions.assumeTrue(p.waitFor() == 0, "docker compose CLI not available");
         files = new ComposeFileRepository(new DeploymentProperties(tmp.resolve("deployments")));
         validation = new ComposeValidationService(
-                new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(30)), List::of));
+                new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(30), java.util.List.of()), List::of));
     }
 
     private ValidationResult validate() {
@@ -71,7 +71,7 @@ class ComposeValidationServiceTest {
     void timeoutResultIsInvalid() {
         files.write(hostId, "web", "services: {}\n", null);
         var v = new ComposeValidationService(
-                new ComposeExecutionService(files, new ComposeProperties(Duration.ofMillis(1)), List::of));
+                new ComposeExecutionService(files, new ComposeProperties(Duration.ofMillis(1), java.util.List.of()), List::of));
         ValidationResult r = v.validate(hostId, "web", new DockerEndpoint.Local("unix:///var/run/docker.sock"));
         assertThat(r.valid()).isFalse();
         assertThat(r.errors()).isNotEmpty();

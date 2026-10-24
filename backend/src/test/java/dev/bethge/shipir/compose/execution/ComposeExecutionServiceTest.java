@@ -57,7 +57,7 @@ class ComposeExecutionServiceTest {
     }
 
     private ComposeExecutionService service(Duration timeout) {
-        return new ComposeExecutionService(files, new ComposeProperties(timeout), auths, List.of(script.toString()),
+        return new ComposeExecutionService(files, new ComposeProperties(timeout, java.util.List.of()), auths, List.of(script.toString()),
                 tempRoot);
     }
 
@@ -104,7 +104,7 @@ class ComposeExecutionServiceTest {
 
     @Test
     void shellMetacharactersInDeploymentNameAreRejectedBeforeProcessStart() {
-        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(5)), List::of,
+        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(5), java.util.List.of()), List::of,
                 List.of(tmp.resolve("does-not-exist").toString()));
         for (String bad : List.of("web; rm -rf /", "../x", "a b", "$(id)", "Web", "", "a/b")) {
             assertThatThrownBy(() -> service.execute(hostId, bad, ComposeCommand.UP, local(), l -> { }))
@@ -153,7 +153,7 @@ class ComposeExecutionServiceTest {
 
     @Test
     void certDirRemovedWhenProcessCannotStart() {
-        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(5)), List::of,
+        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(5), java.util.List.of()), List::of,
                 List.of(tmp.resolve("missing").toString()));
         assertThatThrownBy(() -> service.execute(hostId, "web", ComposeCommand.UP, tls(), l -> { }))
                 .isInstanceOf(ComposeExecutionException.class);
@@ -283,7 +283,7 @@ class ComposeExecutionServiceTest {
     @Test
     void registryConfigKeepsComposePluginFindable() throws IOException {
         withAuths(new RegistryAuthSource.Auth("ghcr.io", "robot", "s3cret"));
-        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(20)), auths,
+        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(20), java.util.List.of()), auths,
                 List.of(script.toString()), () -> List.of("/opt/plugins", "/usr/lib/docker/cli-plugins"));
         List<String> lines = new ArrayList<>();
         service.execute(hostId, "web", ComposeCommand.UP, local(), lines::add);
@@ -299,7 +299,7 @@ class ComposeExecutionServiceTest {
         assertThat(run(ComposeCommand.UP, local(), lines).exitCode()).isEqualTo(3);
         assertThat(Path.of(line(lines, "CONF:").substring(5))).doesNotExist();
 
-        var missing = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(5)), auths,
+        var missing = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(5), java.util.List.of()), auths,
                 List.of(tmp.resolve("missing").toString()), tempRoot);
         assertThatThrownBy(() -> missing.execute(hostId, "web", ComposeCommand.UP, local(), l -> { }))
                 .isInstanceOf(ComposeExecutionException.class);

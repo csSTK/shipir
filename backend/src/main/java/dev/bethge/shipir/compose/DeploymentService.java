@@ -145,8 +145,14 @@ public class DeploymentService {
         if (request.yaml() == null || request.yaml().isBlank()) {
             throw missing("yaml");
         }
-        String name = validName(request.name());
-        String envText = renderEnv(request.env());
+        return createFile(hostId, host, validName(request.name()), request.yaml(), request.env(), username,
+                VersionSource.MANUAL);
+    }
+
+    /** FILE deployment from pasted or adopted YAML; the caller has already checked permissions. */
+    DeploymentDetailResponse createFile(UUID hostId, DockerHost host, String name, String yaml, List<EnvEntry> env,
+                                        String username, VersionSource source) {
+        String envText = renderEnv(env);
         UUID userId = users.findByUsername(username).orElseThrow().getId();
         DockerEndpoint endpoint = endpointOf(host);
 
@@ -155,7 +161,7 @@ public class DeploymentService {
             deployment = tx.execute(status -> {
                 Deployment s = deployments.saveAndFlush(new Deployment(name, hostId,
                         hostId + "/" + name + "/" + ComposeFileRepository.COMPOSE_FILE, userId, clock.instant()));
-                DeploymentVersion v = versions.save(new DeploymentVersion(s.getId(), request.yaml(), encrypt(envText), userId,
+                DeploymentVersion v = versions.save(new DeploymentVersion(s.getId(), yaml, encrypt(envText), source, userId,
                         clock.instant()));
                 s.setCurrentVersionId(v.getId());
                 return deployments.save(s);
@@ -165,13 +171,13 @@ public class DeploymentService {
                     "A deployment with this name already exists on this environment");
         }
         try {
-            writeAndValidate(hostId, name, request.yaml(), envText, endpoint, null);
+            writeAndValidate(hostId, name, yaml, envText, endpoint, null);
         } catch (RuntimeException e) {
             deployments.deleteById(deployment.getId());
             files.delete(hostId, name);
             throw e;
         }
-        return toDetail(deployment, request.yaml(), envKeys(envText));
+        return toDetail(deployment, yaml, envKeys(envText));
     }
 
     /**

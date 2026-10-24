@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V23 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V24 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To23Successfully() {
+    void flywayAppliedVersions1To24Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24");
     }
 
     @Test
@@ -1383,7 +1383,7 @@ class SchemaMigrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"MANUAL", "GIT", "ROLLBACK"})
+    @ValueSource(strings = {"MANUAL", "GIT", "ROLLBACK", "ADOPTED"})
     void deploymentVersionAcceptsKnownSourcesWithEncryptedEnv(String source) {
         UUID user = insertUser("alice");
         UUID deployment = insertDeployment(insertHost(user), user, "web");

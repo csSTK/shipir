@@ -10,6 +10,8 @@ shipir:
     update-check-interval: 6h
   compose:
     timeout: 10m
+    # Absolute directories (LOCAL host only) adoption may read compose files from; empty = YAML must be pasted.
+    adopt-allowed-dirs: []
   ai:
     connect-timeout: 5s
     read-timeout: 180s
