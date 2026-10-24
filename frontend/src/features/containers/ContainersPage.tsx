@@ -29,7 +29,7 @@ const baseColumns: ResourceColumn<Container>[] = [
     header: 'Name',
     sortValue: (c) => c.name,
     render: (c) => (
-      <Link className="containers__name" to={`${c.id}/logs`} aria-label={`Logs of ${c.name}`}>
+      <Link className="containers__name" to={c.id} aria-label={`Details of ${c.name}`}>
         <strong>{c.name}</strong>
       </Link>
     ),
@@ -69,6 +69,17 @@ const baseColumns: ResourceColumn<Container>[] = [
     render: (c) => dateFormat.format(new Date(c.created)),
   },
 ]
+
+/** Quick link to the live log, also reachable from the details page. */
+const logsColumn: ResourceColumn<Container> = {
+  id: 'logs',
+  header: 'Logs',
+  render: (c) => (
+    <Link className="sk-btn sk-btn--plain containers__btn" to={`${c.id}/logs`} aria-label={`Logs of ${c.name}`}>
+      Logs
+    </Link>
+  ),
+}
 
 /** ADMIN-only link to the interactive console; only running containers can have one. */
 const consoleColumn: ResourceColumn<Container> = {
@@ -163,8 +174,8 @@ export function ContainersPage() {
   }
   const isAdmin = user?.role === 'ADMIN'
   const tableColumns = canWrite
-    ? [...baseColumns, ...(isAdmin ? [consoleColumn] : []), actionColumn(pending, (c, a) => (a === 'kill' ? setKillTarget(c) : run(c, a))), deleteColumn<Container>('container', (c) => c.name, setTarget)]
-    : baseColumns
+    ? [...baseColumns, logsColumn, ...(isAdmin ? [consoleColumn] : []), actionColumn(pending, (c, a) => (a === 'kill' ? setKillTarget(c) : run(c, a))), deleteColumn<Container>('container', (c) => c.name, setTarget)]
+    : [...baseColumns, logsColumn]
 
   const rows = deployment ? data?.filter((c) => c.composeProject === deployment) : data
 

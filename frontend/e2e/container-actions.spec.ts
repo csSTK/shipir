@@ -66,6 +66,6 @@ test('state conflict shows an inline error', async ({ page, api }) => {
 test('viewer has no action buttons', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', as('VIEWER'))
   await page.goto('/environments/a/containers')
-  await expect(page.getByRole('cell', { name: 'web' })).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'Details of web' })).toBeVisible()
   await expect(page.getByRole('button', { name: /container web/ })).toHaveCount(0)
 })
