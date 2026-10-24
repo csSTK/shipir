@@ -1,5 +1,6 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.common.security.SystemScope;
 import dev.bethge.shipir.host.dto.HostOverviewResponse;
 import dev.bethge.shipir.host.dto.HostOverviewResponse.Status;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -37,7 +38,7 @@ class HostHealthCheckScheduler {
     @Scheduled(fixedDelayString = "${shipir.host.health-check-interval:60s}",
             initialDelayString = "${shipir.host.health-check-interval:60s}")
     synchronized void check() {
-        List<HostOverviewResponse> current = overview.overview();
+        List<HostOverviewResponse> current = SystemScope.call(overview::overview);
         Map<UUID, Status> seen = new HashMap<>();
         for (HostOverviewResponse h : current) {
             seen.put(h.id(), h.status());

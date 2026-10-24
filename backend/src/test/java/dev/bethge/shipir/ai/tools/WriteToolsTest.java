@@ -110,8 +110,8 @@ class WriteToolsTest {
         when(execution.execute(any(), any(), any(), any(), any())).thenReturn(ok);
         when(execution.execute(any(), any(), any(), any(), any(), any())).thenReturn(ok);
         when(docker.ping(any())).thenReturn(new ConnectionTestResult(true, "27.0", null, null));
-        deploymentId = deployments.create(hostId, new DeploymentCreateRequest("web", YAML, List.of(new EnvEntry("API_TOKEN", ENV_SECRET))),
-                "admin").id();
+        deploymentId = dev.bethge.shipir.common.security.SystemScope.call(() -> deployments.create(hostId,
+                new DeploymentCreateRequest("web", YAML, List.of(new EnvEntry("API_TOKEN", ENV_SECRET))), "admin").id());
         jdbc.update("DELETE FROM audit_log");
     }
 

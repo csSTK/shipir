@@ -65,10 +65,10 @@ class DeploymentRealDeployTest {
                 + "SELECT 'Real host', 'LOCAL', id FROM users WHERE username = 'admin'");
         UUID hostId = jdbc.queryForObject("SELECT id FROM docker_hosts", UUID.class);
         String name = "shipir-it-" + UUID.randomUUID().toString().substring(0, 8);
-        DeploymentDetailResponse deployment = deployments.create(hostId, new DeploymentCreateRequest(name,
-                "services:\n  sleeper:\n    image: busybox:1.36\n    command: sleep 300\n", null), "admin");
+        DeploymentDetailResponse deployment = dev.bethge.shipir.common.security.SystemScope.call(() -> deployments.create(hostId, new DeploymentCreateRequest(name,
+                "services:\n  sleeper:\n    image: busybox:1.36\n    command: sleep 300\n", null), "admin"));
         try {
-            DeploymentRunResponse run = runs.deploy(hostId, deployment.id(), "admin");
+            DeploymentRunResponse run = dev.bethge.shipir.common.security.SystemScope.call(() -> runs.deploy(hostId, deployment.id(), "admin"));
             assertThat(run.runId()).matches("[A-Za-z0-9-]{1,64}");
             await().atMost(3, TimeUnit.MINUTES).pollInterval(500, TimeUnit.MILLISECONDS).until(() ->
                     !"STOPPED".equals(jdbc.queryForObject("SELECT status FROM deployments WHERE id = ?", String.class, deployment.id())));
@@ -79,7 +79,8 @@ class DeploymentRealDeployTest {
             assertThat(jdbc.queryForList("SELECT outcome FROM audit_log WHERE action = 'DEPLOYMENT_DEPLOY_RESULT'",
                     String.class)).containsExactly("SUCCESS");
         } finally {
-            await().atMost(1, TimeUnit.MINUTES).ignoreExceptions().untilAsserted(() -> runs.stop(hostId, deployment.id()));
+            await().atMost(1, TimeUnit.MINUTES).ignoreExceptions().untilAsserted(() ->
+                    dev.bethge.shipir.common.security.SystemScope.run(() -> runs.stop(hostId, deployment.id())));
         }
     }
 }
