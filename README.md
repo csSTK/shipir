@@ -202,6 +202,30 @@ The backup is not encrypted and holds the stack `.env` files in plain text, so t
 
 ADMINs can also download an encrypted export from Settings > Backup. That feature is separate from these scripts, and restoring still follows the procedure above.
 
+What the export contains:
+- `manifest.json`
+- one `db/<table>.jsonl` per table. Secrets stay encrypted, and password hashes are included.
+- the `stacks/` directory
+
+The file is an `openssl enc` stream: AES-256-CBC, with the key derived from the passphrase by PBKDF2-SHA256 at 600000 iterations. A 40-byte integrity trailer follows it. This is an 8-byte salt and then an HMAC-SHA256 over everything before the trailer.
+
+To open an export, check the trailer first, then decrypt. This needs OpenSSL 3 or newer. The `openssl` that ships with macOS (LibreSSL) can't do it, so install Homebrew OpenSSL there:
+
+```bash
+export SHIPIR_BACKUP_PASSPHRASE='...'
+F=shipir-backup-<ts>.tar.gz.enc
+N=$(( $(wc -c < "$F") - 40 ))
+MACSALT=$(tail -c 40 "$F" | head -c 8 | od -An -tx1 | tr -d ' \n')
+WANT=$(tail -c 32 "$F" | od -An -tx1 | tr -d ' \n')
+MACKEY=$(openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -md sha256 -S "$MACSALT" -P -pass env:SHIPIR_BACKUP_PASSPHRASE | sed -n 's/^key=//p')
+GOT=$(head -c "$N" "$F" | openssl dgst -sha256 -mac HMAC -macopt hexkey:"$MACKEY" -r | cut -d' ' -f1)
+[ "$GOT" = "$WANT" ] || { echo "MAC mismatch: wrong passphrase or corrupted file" >&2; exit 1; }
+mkdir -p restore-dir
+head -c "$N" "$F" | openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -md sha256 -pass env:SHIPIR_BACKUP_PASSPHRASE | tar -xzf - -C restore-dir
+```
+
+There is no import script for the JSONL tables yet. For a full restore, use `scripts/backup.sh` / `scripts/restore.sh`.
+
 ### Backend (Java 25, Spring Boot 4.1.1)
 
 ```bash
