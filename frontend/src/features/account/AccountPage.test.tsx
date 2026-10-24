@@ -15,6 +15,10 @@ const GOOD = 'Abcdefghijklm1!'
 const PREFS = [
   { type: 'HOST_DOWN', inAppEnabled: true },
   { type: 'HOST_UP', inAppEnabled: false },
+  { type: 'DEPLOYMENT_FAILED', inAppEnabled: true },
+  { type: 'CONTAINER_CRASHED', inAppEnabled: true },
+  { type: 'CONTAINER_UNHEALTHY', inAppEnabled: true },
+  { type: 'GIT_AUTO_UPDATE_FAILED', inAppEnabled: true },
 ]
 
 function route(overrides: Record<string, () => unknown> = {}) {
@@ -105,10 +109,29 @@ describe('AccountPage', () => {
     await waitFor(() =>
       expect(apiFetchMock).toHaveBeenCalledWith('/notifications/preferences', {
         method: 'PUT',
-        body: [
-          { type: 'HOST_DOWN', inAppEnabled: true },
-          { type: 'HOST_UP', inAppEnabled: true },
-        ],
+        body: PREFS.map((p) => (p.type === 'HOST_UP' ? { ...p, inAppEnabled: true } : p)),
+      }),
+    )
+  })
+
+  it('offers a switch for every notification type', async () => {
+    route()
+    renderPage()
+    expect(await screen.findByRole('switch', { name: 'Deployment failed in-app notifications' })).toBeChecked()
+    expect(screen.getByRole('switch', { name: 'Container crashed in-app notifications' })).toBeChecked()
+    expect(screen.getByRole('switch', { name: 'Container unhealthy in-app notifications' })).toBeChecked()
+    expect(screen.getByRole('switch', { name: 'Git auto-update failed in-app notifications' })).toBeChecked()
+    expect(screen.getAllByRole('switch')).toHaveLength(6)
+  })
+
+  it('saves a switch for a newly added type', async () => {
+    route()
+    renderPage()
+    fireEvent.click(await screen.findByRole('switch', { name: 'Container unhealthy in-app notifications' }))
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith('/notifications/preferences', {
+        method: 'PUT',
+        body: PREFS.map((p) => (p.type === 'CONTAINER_UNHEALTHY' ? { ...p, inAppEnabled: false } : p)),
       }),
     )
   })

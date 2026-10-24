@@ -51,3 +51,24 @@ test('mark as read lowers the badge, mark all read clears it', async ({ page, ap
   await page.getByRole('button', { name: 'Mark all as read' }).click()
   await expect(page.getByLabel(/unread$/)).toHaveCount(0)
 })
+
+test('a deployment failure is labelled and links to the deployment', async ({ page, api }) => {
+  api.mock('GET', '/api/notifications/unread-count', { body: { count: 1 } })
+  api.mock('GET', '/api/notifications', {
+    body: {
+      content: [
+        {
+          ...item('d', false),
+          type: 'DEPLOYMENT_FAILED',
+          message: 'web failed to deploy',
+          deploymentId: 'd1',
+          deploymentName: 'web',
+        },
+      ],
+      totalElements: 1,
+    },
+  })
+  await page.goto('/notifications')
+  await expect(page.getByText(/Deployment failed/)).toBeVisible()
+  await expect(page.getByRole('link', { name: 'web' })).toHaveAttribute('href', '/environments/h1/deployments/d1')
+})

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { queryClient } from '../../app/queryClient.ts'
 import { apiFetch } from '../../shared/api/client.ts'
 import { NotificationsPage } from './NotificationsPage.tsx'
-import { useUnreadCount } from './api.ts'
+import { useUnreadCount, type NotificationType } from './api.ts'
 
 vi.mock('../../shared/api/client.ts', async (importActual) => ({
   ...(await importActual<typeof import('../../shared/api/client.ts')>()),
@@ -15,20 +15,45 @@ const apiFetchMock = vi.mocked(apiFetch)
 
 type N = {
   id: string
-  type: 'HOST_DOWN' | 'HOST_UP'
+  type: NotificationType
   hostId: string | null
   hostName: string
+  deploymentId: string | null
+  deploymentName: string | null
+  containerId: string | null
+  containerName: string | null
   message: string
   read: boolean
   createdAt: string
 }
+const base = { deploymentId: null, deploymentName: null, containerId: null, containerName: null }
 const down: N = {
-  id: 'n1', type: 'HOST_DOWN', hostId: 'h1', hostName: 'Staging',
+  ...base, id: 'n1', type: 'HOST_DOWN', hostId: 'h1', hostName: 'Staging',
   message: 'Staging is unreachable', read: false, createdAt: new Date().toISOString(),
 }
 const up: N = {
-  id: 'n2', type: 'HOST_UP', hostId: null, hostName: 'Old box',
+  ...base, id: 'n2', type: 'HOST_UP', hostId: null, hostName: 'Old box',
   message: 'Old box is back', read: true, createdAt: new Date(Date.now() - 3_600_000).toISOString(),
+}
+const deployFailed: N = {
+  ...base, id: 'n3', type: 'DEPLOYMENT_FAILED', hostId: 'h1', hostName: 'Staging',
+  deploymentId: 'd1', deploymentName: 'web', message: 'web failed to deploy', read: false,
+  createdAt: new Date().toISOString(),
+}
+const crashed: N = {
+  ...base, id: 'n4', type: 'CONTAINER_CRASHED', hostId: 'h1', hostName: 'Staging',
+  containerId: 'c1', containerName: 'nginx', message: 'nginx crashed', read: false,
+  createdAt: new Date().toISOString(),
+}
+const deletedDeployment: N = {
+  ...base, id: 'n5', type: 'DEPLOYMENT_FAILED', hostId: 'h1', hostName: 'Staging',
+  deploymentName: 'old-api', message: 'old-api failed to deploy', read: true,
+  createdAt: new Date().toISOString(),
+}
+const gitFailed: N = {
+  ...base, id: 'n6', type: 'GIT_AUTO_UPDATE_FAILED', hostId: 'h1', hostName: 'Staging',
+  deploymentId: 'd1', deploymentName: 'web', message: 'web auto-update failed', read: true,
+  createdAt: new Date().toISOString(),
 }
 
 let items: N[]
@@ -89,8 +114,37 @@ describe('NotificationsPage', () => {
     expect(screen.getByText('Old box is back')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Staging' })).toHaveAttribute('href', '/environments/h1')
     expect(screen.queryByRole('link', { name: 'Old box' })).toBeNull()
-    expect(screen.getByText('Down')).toBeInTheDocument()
-    expect(screen.getByText('Up')).toBeInTheDocument()
+    expect(screen.getByText('Host down')).toBeInTheDocument()
+    expect(screen.getByText('Host up')).toBeInTheDocument()
+  })
+
+  it('labels every notification type', async () => {
+    items = [down, up, deployFailed, crashed, gitFailed]
+    renderPage()
+    expect(await screen.findByText('Deployment failed')).toBeInTheDocument()
+    expect(screen.getByText('Container crashed')).toBeInTheDocument()
+    expect(screen.getByText('Git auto-update failed')).toBeInTheDocument()
+  })
+
+  it('links deployment and container notifications to their target', async () => {
+    items = [deployFailed, crashed]
+    renderPage()
+    expect(await screen.findByRole('link', { name: 'web' })).toHaveAttribute(
+      'href',
+      '/environments/h1/deployments/d1',
+    )
+    expect(screen.getByRole('link', { name: 'nginx' })).toHaveAttribute(
+      'href',
+      '/environments/h1/containers/c1',
+    )
+  })
+
+  it('shows a deleted deployment by its name without a link', async () => {
+    items = [deletedDeployment]
+    renderPage()
+    expect(await screen.findByText('old-api')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'old-api' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Staging' })).toHaveAttribute('href', '/environments/h1')
   })
 
   it('filters to unread', async () => {

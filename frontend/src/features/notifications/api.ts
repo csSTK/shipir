@@ -1,7 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../shared/api/client.ts'
 
-export type NotificationType = 'HOST_DOWN' | 'HOST_UP'
+export const NOTIFICATION_TYPES = [
+  'HOST_DOWN',
+  'HOST_UP',
+  'DEPLOYMENT_FAILED',
+  'CONTAINER_CRASHED',
+  'CONTAINER_UNHEALTHY',
+  'GIT_AUTO_UPDATE_FAILED',
+] as const
+
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number]
+
+export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
+  HOST_DOWN: 'Host down',
+  HOST_UP: 'Host up',
+  DEPLOYMENT_FAILED: 'Deployment failed',
+  CONTAINER_CRASHED: 'Container crashed',
+  CONTAINER_UNHEALTHY: 'Container unhealthy',
+  GIT_AUTO_UPDATE_FAILED: 'Git auto-update failed',
+}
 
 export interface AppNotification {
   id: string
@@ -9,6 +27,11 @@ export interface AppNotification {
   /** Null once the host was deleted. */
   hostId: string | null
   hostName: string
+  /** Null for host notifications and once the deployment or container was removed. */
+  deploymentId: string | null
+  deploymentName: string | null
+  containerId: string | null
+  containerName: string | null
   message: string
   read: boolean
   createdAt: string

@@ -1,6 +1,13 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useMarkAllRead, useMarkRead, useNotifications, type AppNotification } from './api.ts'
+import {
+  NOTIFICATION_TYPE_LABELS,
+  useMarkAllRead,
+  useMarkRead,
+  useNotifications,
+  type AppNotification,
+  type NotificationType,
+} from './api.ts'
 import './NotificationsPage.css'
 
 const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
@@ -18,14 +25,43 @@ function relativeTime(iso: string): string {
   return 'just now'
 }
 
+type Tone = 'up' | 'down' | 'warn'
+
+const TYPE_STYLE: Record<NotificationType, { glyph: string; tone: Tone }> = {
+  HOST_DOWN: { glyph: '▼', tone: 'down' },
+  HOST_UP: { glyph: '▲', tone: 'up' },
+  DEPLOYMENT_FAILED: { glyph: '✕', tone: 'down' },
+  CONTAINER_CRASHED: { glyph: '✕', tone: 'down' },
+  CONTAINER_UNHEALTHY: { glyph: '!', tone: 'warn' },
+  GIT_AUTO_UPDATE_FAILED: { glyph: '!', tone: 'warn' },
+}
+
+/** The deployment or container the notification is about; `to` is null when it was removed. */
+function targetOf(item: AppNotification): { label: string; to: string | null } | null {
+  if (item.deploymentName) {
+    const to =
+      item.hostId && item.deploymentId
+        ? `/environments/${item.hostId}/deployments/${item.deploymentId}`
+        : null
+    return { label: item.deploymentName, to }
+  }
+  if (item.containerName) {
+    const to =
+      item.hostId && item.containerId
+        ? `/environments/${item.hostId}/containers/${item.containerId}`
+        : null
+    return { label: item.containerName, to }
+  }
+  return null
+}
+
 function Row({ item, onRead }: { item: AppNotification; onRead: (id: string) => void }) {
-  const down = item.type === 'HOST_DOWN'
+  const style = TYPE_STYLE[item.type]
+  const target = targetOf(item)
   return (
     <li className={item.read ? 'notif' : 'notif notif--unread'}>
-      <span
-        className={down ? 'notif__type notif__type--down' : 'notif__type notif__type--up'}
-      >
-        <span aria-hidden="true">{down ? '▼' : '▲'}</span> {down ? 'Down' : 'Up'}
+      <span className={`notif__type notif__type--${style.tone}`}>
+        <span aria-hidden="true">{style.glyph}</span> {NOTIFICATION_TYPE_LABELS[item.type]}
       </span>
       <div className="notif__body">
         <p className="notif__message">{item.message}</p>
@@ -34,6 +70,12 @@ function Row({ item, onRead }: { item: AppNotification; onRead: (id: string) => 
             <Link to={`/environments/${item.hostId}`}>{item.hostName}</Link>
           ) : (
             <span>{item.hostName}</span>
+          )}
+          {target && (
+            <>
+              {' · '}
+              {target.to ? <Link to={target.to}>{target.label}</Link> : <span>{target.label}</span>}
+            </>
           )}{' '}
           · <time dateTime={item.createdAt}>{relativeTime(item.createdAt)}</time>
         </p>

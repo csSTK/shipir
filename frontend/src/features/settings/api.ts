@@ -1,13 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../shared/api/client.ts'
 import type { ChatSession, ChatSessionDetail } from '../ai-chat/api.ts'
+import { NOTIFICATION_TYPE_LABELS, type NotificationType } from '../notifications/api.ts'
 
-export type WebhookEventType = 'HOST_DOWN' | 'HOST_UP'
+export type WebhookEventType = NotificationType
 
-export const WEBHOOK_EVENT_LABELS: Record<WebhookEventType, string> = {
-  HOST_DOWN: 'Host down',
-  HOST_UP: 'Host up',
-}
+export const WEBHOOK_EVENT_LABELS = NOTIFICATION_TYPE_LABELS
 
 /** The full URL is never returned by the API, only a hint. */
 export interface Webhook {

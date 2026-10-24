@@ -63,6 +63,36 @@ describe('WebhooksSettingsPage', () => {
     expect(screen.getByText(/Host down/)).toBeInTheDocument()
   })
 
+  it('offers every notification type as a webhook event', async () => {
+    renderPage()
+    await screen.findByText('Ops chat')
+    fireEvent.click(screen.getByRole('button', { name: 'Add webhook' }))
+    const events = within(screen.getByRole('group', { name: 'Events' }))
+    for (const label of [
+      'Host down',
+      'Host up',
+      'Deployment failed',
+      'Container crashed',
+      'Container unhealthy',
+      'Git auto-update failed',
+    ]) {
+      expect(events.getByRole('checkbox', { name: label })).not.toBeChecked()
+    }
+    expect(events.getAllByRole('checkbox')).toHaveLength(6)
+  })
+
+  it('sends a newly added event type when creating', async () => {
+    renderPage(() => ({ ...hook, id: 'w2' }))
+    await screen.findByText('Ops chat')
+    fireEvent.click(screen.getByRole('button', { name: 'Add webhook' }))
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pager' } })
+    fireEvent.change(screen.getByLabelText('Webhook URL'), { target: { value: 'https://p.example/x' } })
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Git auto-update failed' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(calls('POST')).toHaveLength(1))
+    expect(calls('POST')[0][1]).toMatchObject({ body: { eventTypes: ['GIT_AUTO_UPDATE_FAILED'] } })
+  })
+
   it('creates a webhook', async () => {
     renderPage(() => ({ ...hook, id: 'w2' }))
     await screen.findByText('Ops chat')

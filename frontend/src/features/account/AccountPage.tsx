@@ -3,17 +3,13 @@ import { ApiError } from '../../shared/api/client.ts'
 import { useChangePassword, type CurrentUser } from '../auth/index.ts'
 import { checkPassword, isPasswordValid, violationMessage } from '../auth/passwordPolicy.ts'
 import {
+  NOTIFICATION_TYPE_LABELS,
   useNotificationPreferences,
   useSavePreferences,
   type NotificationPreference,
   type NotificationType,
 } from '../notifications/api.ts'
 import './AccountPage.css'
-
-const LABELS: Record<NotificationType, string> = {
-  HOST_DOWN: 'Host down',
-  HOST_UP: 'Host up',
-}
 
 function passwordErrors(error: unknown): string[] {
   if (error instanceof ApiError && error.status === 400) {
@@ -118,13 +114,13 @@ function PreferencesSection() {
       {preferences.isError && <p role="alert">Could not load notification preferences.</p>}
       {preferences.data?.map((p) => (
         <label key={p.type} className="account__toggle">
-          <span>{LABELS[p.type]}</span>
+          <span>{NOTIFICATION_TYPE_LABELS[p.type]}</span>
           <input
             type="checkbox"
             role="switch"
             checked={p.inAppEnabled}
             onChange={() => toggle(p.type)}
-            aria-label={`${LABELS[p.type]} in-app notifications`}
+            aria-label={`${NOTIFICATION_TYPE_LABELS[p.type]} in-app notifications`}
           />
         </label>
       ))}
