@@ -96,6 +96,7 @@ class SecurityConfig {
                                 "/api/hosts/*/containers/*/restart", "/api/hosts/*/containers/*/pause",
                                 "/api/hosts/*/containers/*/unpause", "/api/hosts/*/containers/*/kill")
                         .hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.POST, "/api/hosts/*/images/pull").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/hosts/*/containers/*/exec").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/hosts/*/prune/preview").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/hosts/*/prune").hasAnyRole("ADMIN", "OPERATOR")

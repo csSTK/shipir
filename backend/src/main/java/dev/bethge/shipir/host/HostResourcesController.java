@@ -8,6 +8,8 @@ import dev.bethge.shipir.host.dto.HostDeploymentResponse;
 import dev.bethge.shipir.host.dto.PrunePreviewResponse;
 import dev.bethge.shipir.host.dto.PruneRequest;
 import dev.bethge.shipir.host.dto.PruneResponse;
+import dev.bethge.shipir.host.dto.PullImageRequest;
+import dev.bethge.shipir.host.dto.PullImageResponse;
 import dev.bethge.shipir.docker.dto.VolumeDto;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -69,6 +71,13 @@ class HostResourcesController {
     void removeContainer(@PathVariable UUID id, @PathVariable String containerId,
                          @RequestParam(defaultValue = "false") boolean force) {
         service.removeContainer(id, containerId, force);
+    }
+
+    /** Starts an image pull; progress is streamed on {@code /topic/deployments/{runId}}. */
+    @PostMapping("/images/pull")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    PullImageResponse pullImage(@PathVariable UUID id, @RequestBody PullImageRequest request) {
+        return service.pullImage(id, request);
     }
 
     @DeleteMapping("/images/{imageId}")

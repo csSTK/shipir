@@ -22,7 +22,15 @@ import dev.bethge.shipir.host.dto.PrunePreviewResponse;
 import dev.bethge.shipir.host.dto.PruneRequest;
 import dev.bethge.shipir.host.dto.PruneResponse;
 import dev.bethge.shipir.docker.dto.VolumeDto;
+import dev.bethge.shipir.compose.execution.RegistryAuthSource;
+import dev.bethge.shipir.docker.dto.RegistryLogin;
+import dev.bethge.shipir.host.dto.PullImageRequest;
+import dev.bethge.shipir.host.dto.PullImageResponse;
 import dev.bethge.shipir.permission.CurrentAccess;
+import dev.bethge.shipir.streaming.ComposeOutputStreamService;
+import dev.bethge.shipir.streaming.RunStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -43,6 +51,16 @@ public class HostResourcesService {
 
     private static final Pattern RESOURCE_ID = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}");
 
+    private static final Logger log = LoggerFactory.getLogger(HostResourcesService.class);
+
+    private static final String PATH_PART = "[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*";
+    private static final String DOMAIN = "[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?(?::[0-9]{1,5})?";
+    /** {@code [registry[:port]/]path[/path][:tag][@sha256:digest]} - nothing that could be read as a CLI flag or URL. */
+    private static final Pattern IMAGE_REFERENCE = Pattern.compile("(?:" + DOMAIN + "/)?" + PATH_PART + "(?:/" + PATH_PART
+            + ")*(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?(?:@sha256:[a-f0-9]{64})?");
+    private static final java.util.Set<String> DOCKER_HUB_ALIASES =
+            java.util.Set.of("docker.io", "index.docker.io", "registry-1.docker.io", "registry.hub.docker.com");
+
     private static final int DEFAULT_TIMEOUT_SECONDS = 10;
     private static final int MAX_TIMEOUT_SECONDS = 300;
 
@@ -54,10 +72,13 @@ public class HostResourcesService {
     private final VolumeService volumes;
     private final ManagedDeploymentLookup managedDeployments;
     private final CurrentAccess access;
+    private final ComposeOutputStreamService streams;
+    private final RegistryAuthSource registryAuths;
 
     HostResourcesService(DockerHostRepository hosts, HostEndpointResolver endpoints, ContainerService containers,
                          ImageService images, NetworkService networks, VolumeService volumes,
-                         ManagedDeploymentLookup managedDeployments, CurrentAccess access) {
+                         ManagedDeploymentLookup managedDeployments, CurrentAccess access,
+                         ComposeOutputStreamService streams, RegistryAuthSource registryAuths) {
         this.hosts = hosts;
         this.endpoints = endpoints;
         this.containers = containers;
@@ -66,6 +87,8 @@ public class HostResourcesService {
         this.volumes = volumes;
         this.managedDeployments = managedDeployments;
         this.access = access;
+        this.streams = streams;
+        this.registryAuths = registryAuths;
     }
 
     /**
@@ -246,6 +269,71 @@ public class HostResourcesService {
             images.removeImage(id, endpoint, imageId);
             return null;
         });
+    }
+
+    /**
+     * Pulls an image on the host. Returns at once with a run id; progress lines are streamed to
+     * {@code /topic/deployments/{runId}} (host-level run, visible to users who fully see the host). The stored
+     * registry login whose host matches the reference is used for this pull only.
+     */
+    @Auditable(action = "IMAGE_PULL", targetType = "IMAGE", targetId = "#request.reference()")
+    PullImageResponse pullImage(UUID hostId, PullImageRequest request) {
+        requireOperate(hostId);
+        String reference = request == null || request.reference() == null ? "" : request.reference().trim();
+        if (reference.length() > 255 || !IMAGE_REFERENCE.matcher(reference).matches()) {
+            throw new HostException(HttpStatus.BAD_REQUEST, "INVALID_IMAGE_REFERENCE", "Invalid image reference");
+        }
+        DockerEndpoint endpoint = call(hostId, (id, ep) -> ep);
+        RegistryLogin login = loginFor(reference);
+        String runId = UUID.randomUUID().toString();
+        streams.registerRun(runId, hostId, null);
+        Consumer<String> sink = streams.start(runId);
+        Thread.ofVirtual().name("image-pull-" + runId).start(() -> runPull(hostId, endpoint, reference, login, runId, sink));
+        return new PullImageResponse(runId);
+    }
+
+    private void runPull(UUID hostId, DockerEndpoint endpoint, String reference, RegistryLogin login, String runId,
+                         Consumer<String> sink) {
+        RunStatus status = RunStatus.FAILED;
+        try {
+            sink.accept("Pulling " + reference);
+            images.pull(hostId, endpoint, reference, login, sink);
+            sink.accept("Pulled " + reference);
+            status = RunStatus.DONE;
+        } catch (DockerConnectionException e) {
+            sink.accept("Pull failed (" + e.getCode() + ")");
+        } catch (RuntimeException e) {
+            log.warn("Image pull {} failed unexpectedly: {}", runId, e.toString());
+            sink.accept("Pull failed (UNKNOWN)");
+        } finally {
+            streams.complete(runId, status);
+        }
+    }
+
+    /** The stored login for the registry named by the reference (Docker Hub when it names none), or null. */
+    private RegistryLogin loginFor(String reference) {
+        String registry = registryOf(reference);
+        return registryAuths.auths().stream()
+                .filter(a -> registry.equals(canonicalRegistry(a.registryHost())))
+                .findFirst()
+                .map(a -> new RegistryLogin(a.registryHost(), a.username(), a.secret()))
+                .orElse(null);
+    }
+
+    private static String registryOf(String reference) {
+        int slash = reference.indexOf('/');
+        if (slash > 0) {
+            String first = reference.substring(0, slash);
+            if (first.contains(".") || first.contains(":") || first.equals("localhost")) {
+                return canonicalRegistry(first);
+            }
+        }
+        return "docker.io";
+    }
+
+    private static String canonicalRegistry(String host) {
+        String lower = host.toLowerCase(java.util.Locale.ROOT);
+        return DOCKER_HUB_ALIASES.contains(lower) ? "docker.io" : lower;
     }
 
     @Auditable(action = "VOLUME_DELETE", targetType = "VOLUME", targetId = "#name")

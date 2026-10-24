@@ -130,6 +130,30 @@ class StreamPermissionTest {
         assertAllowed("/topic/deployments/" + registerRun());
     }
 
+    private String registerHostRun() {
+        String runId = UUID.randomUUID().toString();
+        streams.registerRun(runId, hostId, null);
+        streams.start(runId);
+        return runId;
+    }
+
+    @Test
+    void imagePullOutputNeedsTheWholeHost() throws Exception {
+        assertRefused("/topic/deployments/" + registerHostRun());
+    }
+
+    @Test
+    void imagePullOutputIsRefusedWithDeploymentGrantOnly() throws Exception {
+        jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) VALUES (?, ?, 'VIEW')", userId, deploymentId);
+        assertRefused("/topic/deployments/" + registerHostRun());
+    }
+
+    @Test
+    void hostGrantAllowsImagePullOutput() throws Exception {
+        jdbc.update("INSERT INTO permissions (user_id, host_id, level) VALUES (?, ?, 'VIEW')", userId, hostId);
+        assertAllowed("/topic/deployments/" + registerHostRun());
+    }
+
     private void assertRefused(String destination) throws Exception {
         StompSession s = connect();
         subscribe(s, destination);

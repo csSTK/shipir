@@ -61,7 +61,7 @@ class StreamAccess {
                 .collect(Collectors.toSet()));
     }
 
-    /** Output of a deploy run: the user may view the run's deployment (ADMIN: any run, even unknown ones). */
+    /** Output of a deploy or image-pull run: the user may view the run's deployment (ADMIN: any run, even unknown ones). */
     boolean mayFollowRun(String username, Optional<ComposeOutputStreamService.RunTarget> target) {
         Optional<PermissionSubject> s = subject(username);
         if (s.isEmpty()) {
@@ -70,6 +70,9 @@ class StreamAccess {
         if (s.get().role() == Role.ADMIN) {
             return true;
         }
-        return target.map(t -> permissions.canView(s.get(), t.hostId(), t.deploymentId())).orElse(false);
+        // a run without deployment (image pull) is host-level: the whole host must be visible
+        return target.map(t -> t.deploymentId() == null
+                ? permissions.hostFullyVisible(s.get(), t.hostId())
+                : permissions.canView(s.get(), t.hostId(), t.deploymentId())).orElse(false);
     }
 }

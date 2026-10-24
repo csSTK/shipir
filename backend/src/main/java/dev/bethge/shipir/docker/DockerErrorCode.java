@@ -15,5 +15,7 @@ public enum DockerErrorCode {
     /** Refused before calling Docker: bridge, host and none cannot be removed. */
     BUILTIN_NETWORK,
     /** Container lifecycle action does not fit the current state (daemon 304 or 409): already started/stopped, not running, (not) paused. */
-    INVALID_STATE
+    INVALID_STATE,
+    /** The registry rejected a pull (denied, unauthorized, no such tag) or could not be reached; the daemon's text is never passed on. */
+    PULL_FAILED
 }

@@ -99,6 +99,7 @@ class DockerCallSupport {
             case IN_USE -> "The resource is in use.";
             case BUILTIN_NETWORK -> "Built-in networks cannot be removed.";
             case INVALID_STATE -> "The container is not in a state that allows this action.";
+            case PULL_FAILED -> "The image could not be pulled.";
         };
         return new DockerConnectionException(code, message, e);
     }

@@ -57,7 +57,7 @@ public class ComposeOutputStreamService {
     record RunTarget(java.util.UUID hostId, java.util.UUID deploymentId) {
     }
 
-    /** Records which deployment a run belongs to; call before {@link #start}. */
+    /** Records which deployment (null for a host-level run such as an image pull) a run belongs to; call before {@link #start}. */
     public void registerRun(String runId, java.util.UUID hostId, java.util.UUID deploymentId) {
         runTargets.put(runId, new RunTarget(hostId, deploymentId));
     }
