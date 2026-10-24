@@ -56,3 +56,31 @@
     transition: none;
   }
 }
+
+.shell__search {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 6px 10px 6px 12px;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.8;
+  cursor: pointer;
+}
+.shell__search:active {
+  transform: scale(0.97);
+}
+.shell__search kbd {
+  font: inherit;
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shell__search:active {
+    transform: none;
+  }
+}

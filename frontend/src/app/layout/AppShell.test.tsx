@@ -124,4 +124,22 @@ describe('AppShell', () => {
     fireEvent.click(within(group).getByRole('link', { name: 'Volumes' }))
     expect(screen.getByTestId('where')).toHaveTextContent('/environments/h1/volumes')
   })
+
+  it('opens the command palette with Ctrl+K and Cmd+K and closes it with Escape', () => {
+    renderShell('VIEWER')
+    expect(screen.queryByRole('dialog', { name: 'Command palette' })).not.toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'k', ctrlKey: true })
+    expect(screen.getByRole('dialog', { name: 'Command palette' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox')).toHaveFocus()
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Command palette' })).not.toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'k', metaKey: true })
+    expect(screen.getByRole('dialog', { name: 'Command palette' })).toBeInTheDocument()
+  })
+
+  it('opens the palette from the Search button', () => {
+    renderShell('VIEWER')
+    fireEvent.click(screen.getByRole('button', { name: /^Search/ }))
+    expect(screen.getByRole('dialog', { name: 'Command palette' })).toBeInTheDocument()
+  })
 })
