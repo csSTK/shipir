@@ -64,6 +64,7 @@ class DeploymentAutoUpdates implements AutoUpdateDeployments {
             if (changed) {
                 runs.recordSystemAudit("DEPLOYMENT_AUTO_UPDATE", AuditLogEntry.Outcome.FAILURE, deploymentId,
                         Map.of("error", error));
+                runs.publishAutoUpdateFailed(s, error);
             }
         });
     }

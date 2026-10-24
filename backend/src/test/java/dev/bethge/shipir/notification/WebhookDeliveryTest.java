@@ -39,6 +39,11 @@ class WebhookDeliveryTest extends WebhookTestBase {
                 "UNREACHABLE", Instant.parse("2026-10-23T10:00:00Z")));
     }
 
+    private UUID insertDeployment(UUID host) {
+        return jdbc.queryForObject("INSERT INTO deployments (name, host_id, compose_file_path, created_by) "
+                + "SELECT 'web', ?, 'x', id FROM users WHERE username = 'admin' RETURNING id", UUID.class, host);
+    }
+
     private String lastStatus(String id) {
         return jdbc.queryForObject("SELECT last_delivery_status FROM notification_webhooks WHERE id = ?::uuid",
                 String.class, id);
@@ -66,6 +71,51 @@ class WebhookDeliveryTest extends WebhookTestBase {
         await().atMost(5, SECONDS).until(() -> "SUCCESS".equals(lastStatus(id)));
         assertThat(jdbc.queryForObject("SELECT last_delivery_at FROM notification_webhooks", java.sql.Timestamp.class))
                 .isNotNull();
+    }
+
+    @Test
+    void containerCrashPayloadCarriesTypeAndTarget() throws Exception {
+        Stub s = stub(200, 0);
+        Stub other = stub(200, 0);
+        Login l = login("admin");
+        add(l, "C", s.url("/"), "[\"CONTAINER_CRASHED\",\"DEPLOYMENT_FAILED\"]", true);
+        add(l, "H", other.url("/"), "[\"HOST_DOWN\"]", true);
+        UUID host = jdbc.queryForObject("SELECT id FROM docker_hosts", UUID.class);
+        UUID deployment = insertDeployment(host);
+        publisher.publishEvent(new dev.bethge.shipir.host.ContainerProblemEvent(
+                dev.bethge.shipir.host.ContainerProblemEvent.Kind.CRASHED, host, "prod", "abc123", "web-1",
+                deployment, "web", 137, Instant.parse("2026-10-23T10:00:00Z")));
+        await().atMost(5, SECONDS).until(() -> s.bodies.size() == 1);
+        JsonNode j = mapper.readTree(s.bodies.get(0));
+        assertThat(j.get("type").asText()).isEqualTo("CONTAINER_CRASHED");
+        assertThat(j.get("event").asText()).isEqualTo("CONTAINER_CRASHED");
+        assertThat(j.get("exitCode").asInt()).isEqualTo(137);
+        JsonNode target = j.get("target");
+        assertThat(target.get("hostId").asText()).isEqualTo(host.toString());
+        assertThat(target.get("hostName").asText()).isEqualTo("prod");
+        assertThat(target.get("deploymentId").asText()).isEqualTo(deployment.toString());
+        assertThat(target.get("deploymentName").asText()).isEqualTo("web");
+        assertThat(target.get("containerId").asText()).isEqualTo("abc123");
+        assertThat(target.get("containerName").asText()).isEqualTo("web-1");
+        Thread.sleep(200);
+        assertThat(other.bodies).isEmpty();
+    }
+
+    @Test
+    void deploymentFailedAndAutoUpdateFailedAreDeliveredToSubscribers() throws Exception {
+        Stub s = stub(200, 0);
+        Login l = login("admin");
+        add(l, "D", s.url("/"), "[\"DEPLOYMENT_FAILED\",\"GIT_AUTO_UPDATE_FAILED\"]", true);
+        UUID host = jdbc.queryForObject("SELECT id FROM docker_hosts", UUID.class);
+        UUID deployment = insertDeployment(host);
+        Instant at = Instant.parse("2026-10-23T10:00:00Z");
+        publisher.publishEvent(new dev.bethge.shipir.compose.DeploymentRunFailedEvent(host, "prod", deployment, "web",
+                "UP", 1, false, null, at));
+        publisher.publishEvent(new dev.bethge.shipir.compose.GitAutoUpdateFailedEvent(host, "prod", deployment, "web",
+                "GIT_AUTH_FAILED", at));
+        await().atMost(5, SECONDS).until(() -> s.bodies.size() == 2);
+        assertThat(s.bodies).anyMatch(b -> b.contains("\"DEPLOYMENT_FAILED\"") && b.contains("\"deploymentName\":\"web\""))
+                .anyMatch(b -> b.contains("\"GIT_AUTO_UPDATE_FAILED\"") && b.contains("GIT_AUTH_FAILED"));
     }
 
     @Test

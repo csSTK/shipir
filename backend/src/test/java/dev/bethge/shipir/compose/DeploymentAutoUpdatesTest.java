@@ -64,4 +64,26 @@ class DeploymentAutoUpdatesTest extends DeploymentTestBase {
             locks.release(deployment);
         }
     }
+
+    @Test
+    void failedCheckNotifiesOncePerDistinctError() {
+        jdbc.update("DELETE FROM notifications");
+        Instant t = Instant.parse("2026-01-01T10:00:00Z");
+        port.recordPoll(deployment, t, "GIT_UNREACHABLE");
+        port.recordPoll(deployment, t.plusSeconds(120), "GIT_UNREACHABLE");
+        assertThat(count("admin")).isEqualTo(1);
+
+        port.recordPoll(deployment, t.plusSeconds(240), "GIT_AUTH_FAILED");
+        assertThat(count("admin")).isEqualTo(2);
+
+        port.recordPoll(deployment, t.plusSeconds(360), null);
+        port.recordPoll(deployment, t.plusSeconds(480), "GIT_AUTH_FAILED");
+        assertThat(count("admin")).isEqualTo(3);
+        assertThat(jdbc.queryForObject("SELECT deployment_name FROM notifications LIMIT 1", String.class)).isEqualTo("g");
+    }
+
+    private long count(String username) {
+        return jdbc.queryForObject("SELECT count(*) FROM notifications n JOIN users u ON u.id = n.user_id "
+                + "WHERE u.username = ? AND n.type = 'GIT_AUTO_UPDATE_FAILED'", Long.class, username);
+    }
 }

@@ -28,6 +28,7 @@ import dev.bethge.shipir.streaming.ComposeOutputStreamService;
 import dev.bethge.shipir.streaming.RunStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -71,12 +72,14 @@ public class DeploymentRunService {
     private final TransactionTemplate tx;
     private final GitRepositoryService git;
     private final ComposeValidationService validation;
+    private final ApplicationEventPublisher events;
 
     DeploymentRunService(DeploymentService deploymentService, DeploymentRepository deployments, DeploymentVersionRepository versions,
                            UserRepository users, ComposeFileRepository files, ComposeExecutionService execution,
                            ComposeOutputStreamService streams, AuditService audit, SecretCipher cipher, Clock clock,
                            DeploymentLocks locks, PlatformTransactionManager txManager,
-                           GitRepositoryService git, ComposeValidationService validation) {
+                           GitRepositoryService git, ComposeValidationService validation,
+                           ApplicationEventPublisher events) {
         this.deploymentService = deploymentService;
         this.deployments = deployments;
         this.versions = versions;
@@ -91,6 +94,7 @@ public class DeploymentRunService {
         this.tx = new TransactionTemplate(txManager);
         this.git = git;
         this.validation = validation;
+        this.events = events;
     }
 
     @Auditable(action = "DEPLOYMENT_DEPLOY", targetType = "DEPLOYMENT", targetId = "#id")
@@ -370,6 +374,10 @@ public class DeploymentRunService {
                      Consumer<String> sink, UUID userId, String username, String resultAction,
                      Map<String, Object> aiMarker, List<ComposeCommand> steps) {
         boolean success = false;
+        String failedStep = null;
+        Integer failedExit = null;
+        boolean timedOut = false;
+        String runError = null;
         Map<String, Object> details = new java.util.LinkedHashMap<>(aiMarker);
         details.put("runId", runId);
         details.put("versionId", version.getId().toString());
@@ -382,12 +390,16 @@ public class DeploymentRunService {
                 details.put("timedOut", result.timedOut());
                 if (!success) {
                     details.put("failedStep", step.name());
+                    failedStep = step.name();
+                    failedExit = result.exitCode();
+                    timedOut = result.timedOut();
                     break;
                 }
             }
         } catch (RuntimeException e) {
             log.warn("Deployment {} could not run: {}", runId, e.toString());
             details.put("error", "COMPOSE_UNAVAILABLE");
+            runError = "COMPOSE_UNAVAILABLE";
             sink.accept("docker compose could not be run");
         }
         try {
@@ -409,9 +421,40 @@ public class DeploymentRunService {
         } catch (RuntimeException e) {
             log.warn("Could not write audit entry for deployment {}: {}", runId, e.toString());
         }
+        if (!success) {
+            publishRunFailed(deployment, failedStep, failedExit, timedOut, runError);
+        }
         // Release before announcing the end so a client reacting to DONE/FAILED can start the next deployment.
         locks.release(deployment.getId());
         streams.complete(runId, success ? RunStatus.DONE : RunStatus.FAILED);
+    }
+
+    private void publishRunFailed(Deployment deployment, String failedStep, Integer exitCode, boolean timedOut,
+                                  String error) {
+        try {
+            events.publishEvent(new DeploymentRunFailedEvent(deployment.getHostId(), hostNameOf(deployment.getHostId()),
+                    deployment.getId(), deployment.getName(), failedStep, exitCode, timedOut, error, clock.instant()));
+        } catch (RuntimeException e) {
+            log.warn("Could not publish failure event of deployment {}: {}", deployment.getId(), e.toString());
+        }
+    }
+
+    /** Publishes a failed auto-update check; called by {@link DeploymentAutoUpdates} when the error code changed. */
+    void publishAutoUpdateFailed(Deployment deployment, String errorCode) {
+        try {
+            events.publishEvent(new GitAutoUpdateFailedEvent(deployment.getHostId(), hostNameOf(deployment.getHostId()),
+                    deployment.getId(), deployment.getName(), errorCode, clock.instant()));
+        } catch (RuntimeException e) {
+            log.warn("Could not publish auto-update failure of deployment {}: {}", deployment.getId(), e.toString());
+        }
+    }
+
+    private String hostNameOf(UUID hostId) {
+        try {
+            return deploymentService.requireHost(hostId).getName();
+        } catch (RuntimeException e) {
+            return hostId.toString();
+        }
     }
 
     private static Map<String, Object> aiMarker() {

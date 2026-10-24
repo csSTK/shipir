@@ -113,6 +113,34 @@ class DeploymentDeployApiTest extends DeploymentTestBase {
     }
 
     @Test
+    void failedRunNotifiesOnlyUsersWhoCanViewTheDeployment() throws Exception {
+        jdbc.update("DELETE FROM notifications");
+        jdbc.update("DELETE FROM permissions WHERE user_id = (SELECT id FROM users WHERE username = 'viewer')");
+        Login admin = login("admin");
+        String id = create(admin);
+        upFails = true;
+        deploy(admin, id);
+        awaitIdle(id);
+
+        assertThat(jdbc.queryForList("SELECT u.username FROM notifications n JOIN users u ON u.id = n.user_id "
+                + "WHERE n.type = 'DEPLOYMENT_FAILED' AND n.deployment_id = ?::uuid", String.class, id))
+                .containsExactlyInAnyOrder("admin", "operator");
+        assertThat(jdbc.queryForMap("SELECT deployment_name, host_name, message FROM notifications "
+                + "WHERE type = 'DEPLOYMENT_FAILED' LIMIT 1")).containsEntry("deployment_name", "web")
+                .containsEntry("host_name", "Deployment host");
+    }
+
+    @Test
+    void successfulRunCreatesNoNotification() throws Exception {
+        jdbc.update("DELETE FROM notifications");
+        Login admin = login("admin");
+        String id = create(admin);
+        deploy(admin, id);
+        awaitIdle(id);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notifications", Long.class)).isZero();
+    }
+
+    @Test
     void secondDeployWhileRunningIsRejectedWith409() throws Exception {
         Login admin = login("admin");
         String id = create(admin);

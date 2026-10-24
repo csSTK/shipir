@@ -2,6 +2,9 @@ package dev.bethge.shipir.notification;
 
 import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
+import dev.bethge.shipir.compose.DeploymentRunFailedEvent;
+import dev.bethge.shipir.compose.GitAutoUpdateFailedEvent;
+import dev.bethge.shipir.host.ContainerProblemEvent;
 import dev.bethge.shipir.host.HostStatusChangedEvent;
 import dev.bethge.shipir.host.dto.HostOverviewResponse.Status;
 import dev.bethge.shipir.notification.dto.NotificationPageResponse;
@@ -15,6 +18,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
@@ -64,6 +68,47 @@ public class NotificationService {
                 .map(id -> new Notification(id, type, event.hostId(), event.hostName(), message, now))
                 .toList();
         notifications.saveAll(created);
+    }
+
+    @EventListener
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    void onDeploymentRunFailed(DeploymentRunFailedEvent event) {
+        notifyAllowed(NotificationDraft.of(event));
+    }
+
+    @EventListener
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    void onGitAutoUpdateFailed(GitAutoUpdateFailedEvent event) {
+        notifyAllowed(NotificationDraft.of(event));
+    }
+
+    @EventListener
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    void onContainerProblem(ContainerProblemEvent event) {
+        notifyAllowed(NotificationDraft.of(event));
+    }
+
+    /**
+     * One notification per enabled, opted-in user who may see the target: ADMIN always; others need a grant on the
+     * deployment (host grant covers it), or for a container outside any managed deployment a grant on the whole host.
+     * Own transaction, so a failure here never rolls back the publisher's transaction.
+     */
+    private void notifyAllowed(NotificationDraft draft) {
+        Set<UUID> disabled = Set.copyOf(preferences.findUserIdsWithDisabled(draft.type()));
+        Instant now = draft.occurredAt() != null ? draft.occurredAt() : clock.instant();
+        List<Notification> created = users.findAll().stream()
+                .filter(u -> !u.isDisabled() && !disabled.contains(u.getId()))
+                .filter(u -> mayView(PermissionSubject.of(u), draft))
+                .map(u -> new Notification(u.getId(), draft, now))
+                .toList();
+        notifications.saveAll(created);
+    }
+
+    private boolean mayView(PermissionSubject subject, NotificationDraft draft) {
+        if (draft.deploymentId() != null) {
+            return permissions.canView(subject, draft.hostId(), draft.deploymentId());
+        }
+        return permissions.hostFullyVisible(subject, draft.hostId());
     }
 
     @Transactional(readOnly = true)
@@ -154,7 +199,8 @@ public class NotificationService {
     }
 
     private static NotificationResponse toDto(Notification n) {
-        return new NotificationResponse(n.getId(), n.getType(), n.getHostId(), n.getHostName(), n.getMessage(),
+        return new NotificationResponse(n.getId(), n.getType(), n.getHostId(), n.getHostName(),
+                n.getDeploymentId(), n.getDeploymentName(), n.getContainerId(), n.getContainerName(), n.getMessage(),
                 n.isRead(), n.getCreatedAt());
     }
 }

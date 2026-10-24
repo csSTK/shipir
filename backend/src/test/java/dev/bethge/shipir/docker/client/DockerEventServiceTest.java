@@ -32,6 +32,15 @@ class DockerEventServiceTest {
     }
 
     @Test
+    void mapsExitCodeOfDieEvent() {
+        assertThat(DockerEventServiceImpl.map(event(EventType.CONTAINER, "die", "abc",
+                Map.of("name", "web", "exitCode", "137"))).exitCode()).isEqualTo(137);
+        assertThat(DockerEventServiceImpl.map(event(EventType.CONTAINER, "die", "abc",
+                Map.of("exitCode", "oops"))).exitCode()).isNull();
+        assertThat(DockerEventServiceImpl.map(event(EventType.CONTAINER, "start", "abc", Map.of())).exitCode()).isNull();
+    }
+
+    @Test
     void mapsContainerEventWithNameAndComposeProject() {
         DockerEventDto dto = DockerEventServiceImpl.map(event(EventType.CONTAINER, "start", "abc",
                 Map.of("name", "web-1", "com.docker.compose.project", "shop")));

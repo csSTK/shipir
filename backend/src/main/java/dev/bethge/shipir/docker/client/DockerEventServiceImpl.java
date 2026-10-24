@@ -66,7 +66,16 @@ public class DockerEventServiceImpl implements DockerEventService {
                 ? Instant.ofEpochSecond(0, event.getTimeNano())
                 : event.getTime() != null ? Instant.ofEpochSecond(event.getTime()) : Instant.now();
         return new DockerEventDto(type, action, id, attributes == null ? null : attributes.get("name"),
-                attributes == null ? null : attributes.get(COMPOSE_PROJECT_LABEL), time);
+                attributes == null ? null : attributes.get(COMPOSE_PROJECT_LABEL), time,
+                attributes == null ? null : parseInt(attributes.get("exitCode")));
+    }
+
+    private static Integer parseInt(String value) {
+        try {
+            return value == null ? null : Integer.valueOf(value);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     static final class EventCallback extends ResultCallback.Adapter<Event> {
