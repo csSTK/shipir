@@ -78,7 +78,7 @@ describe('resource deletion', () => {
   it('deletes a stopped container after confirmation, without force option', async () => {
     serve('OPERATOR')
     renderPage('containers', <ContainersPage />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete container old' }))
+    await openDelete('old')
     const dialog = screen.getByRole('dialog', { name: 'Delete container' })
     expect(within(dialog).queryByLabelText(/Force/)).not.toBeInTheDocument()
     expect(deleteCalls()).toEqual([])
@@ -90,7 +90,7 @@ describe('resource deletion', () => {
   it('offers force for a running container and warns about a managed deployment', async () => {
     serve('ADMIN')
     renderPage('containers', <ContainersPage />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete container web' }))
+    await openDelete('web')
     const dialog = await screen.findByRole('dialog')
     await waitFor(() => expect(within(dialog).getByRole('note')).toHaveTextContent('Belongs to deployment shop and may come back on the next deploy.'))
     fireEvent.click(within(dialog).getByLabelText('Force (stop and remove)'))
@@ -101,7 +101,7 @@ describe('resource deletion', () => {
   it('shows no managed warning for an unmanaged container', async () => {
     serve('ADMIN')
     renderPage('containers', <ContainersPage />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete container old' }))
+    await openDelete('old')
     expect(screen.queryByRole('note')).not.toBeInTheDocument()
   })
 

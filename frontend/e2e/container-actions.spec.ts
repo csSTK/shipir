@@ -29,15 +29,15 @@ test.beforeEach(({ api }) => {
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
 })
 
-test('operator sees state-aware buttons and starts a container', async ({ page, api }) => {
+test('operator sees state-aware icon buttons and starts a container', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', as('OPERATOR'))
   api.mock('POST', '/api/hosts/a/containers/c2/start', { status: 204 })
   await page.goto('/environments/a/containers')
-  await expect(page.getByRole('button', { name: 'Stop container web' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Start container web', exact: true })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Unpause container frozen' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Stop web' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Start web', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Unpause frozen' })).toBeVisible()
   const request = page.waitForRequest((r) => r.method() === 'POST' && r.url().endsWith('/containers/c2/start'))
-  await page.getByRole('button', { name: 'Start container old' }).click()
+  await page.getByRole('button', { name: 'Start old' }).click()
   await request
 })
 
@@ -45,7 +45,8 @@ test('kill asks for confirmation', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', as('ADMIN'))
   api.mock('POST', '/api/hosts/a/containers/c1/kill', { status: 204 })
   await page.goto('/environments/a/containers')
-  await page.getByRole('button', { name: 'Kill container web' }).click()
+  await page.getByRole('button', { name: 'More actions for web' }).click()
+  await page.getByRole('menuitem', { name: 'Kill' }).click()
   const dialog = page.getByRole('dialog', { name: 'Kill container' })
   const request = page.waitForRequest((r) => r.method() === 'POST' && r.url().endsWith('/containers/c1/kill'))
   await dialog.getByRole('button', { name: 'Kill' }).click()
@@ -60,13 +61,15 @@ test('state conflict shows an inline error', async ({ page, api }) => {
     body: { code: 'INVALID_CONTAINER_STATE', message: 'x' },
   })
   await page.goto('/environments/a/containers')
-  await page.getByRole('button', { name: 'Pause container web' }).click()
+  await page.getByRole('button', { name: 'More actions for web' }).click()
+  await page.getByRole('menuitem', { name: 'Pause' }).click()
   await expect(page.getByRole('alert')).toContainText('not in a state that allows this action')
 })
 
 test('viewer has no action buttons', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', as('VIEWER'))
   await page.goto('/environments/a/containers')
-  await expect(page.getByRole('cell', { name: 'Details of web' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /container web/ })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Details of web' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Stop web' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Logs web' })).toBeVisible()
 })

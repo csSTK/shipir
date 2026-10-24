@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { ArrowLeft } from 'lucide-react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { openTopicChannel, type ConnectionState, type TopicChannel } from '../../../shared/realtime/stomp.ts'
-import { Badge } from '../../../shared/ui/index.ts'
+import { Badge, Button, PageHeader, Toolbar } from '../../../shared/ui/index.ts'
 import { useContainers } from '../api.ts'
 import { describeExecError, useStartExec, type ExecSession, type Shell } from './api.ts'
 import './ContainerConsolePage.css'
-import { Button } from '../../../shared/ui/index.ts'
 
 type Phase = 'idle' | 'starting' | 'connecting' | 'live' | 'ended'
 
@@ -62,11 +62,14 @@ export function ContainerConsolePage() {
   useEffect(() => {
     const host = hostRef.current
     if (!host) return
+    const css = getComputedStyle(host)
+    const token = (name: string) => css.getPropertyValue(name).trim() || undefined
     const term = new Terminal({
       cursorBlink: true,
-      fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
+      fontFamily: token('--font-mono') ?? 'monospace',
       fontSize: 13,
       scrollback: 5000,
+      theme: { background: token('--color-surface-sunken'), foreground: token('--color-text'), cursor: token('--color-accent') },
     })
     const fit = new FitAddon()
     term.loadAddon(fit)
@@ -182,10 +185,10 @@ export function ContainerConsolePage() {
   return (
     <section className="cconsole">
       <Link to={`/environments/${hostId}/containers`} className="cconsole__back">
-        ← Containers
+        <ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" /> Containers
       </Link>
-      <h2 className="cconsole__title">Console: {name}</h2>
-      <div className="cconsole__bar">
+      <PageHeader title={`Console: ${name}`} />
+      <Toolbar label="Console options">
         <label className="cconsole__field">
           <span>Shell</span>
           <select value={shell} onChange={(e) => setShell(e.target.value as Shell)} disabled={open} className="cconsole__select">
@@ -197,18 +200,18 @@ export function ContainerConsolePage() {
           </select>
         </label>
         {open ? (
-          <Button variant="ghost" className="cconsole__btn" onClick={() => finish('Disconnected.')}>
+          <Button variant="ghost" onClick={() => finish('Disconnected.')}>
             Disconnect
           </Button>
         ) : (
-          <Button variant="secondary" className="cconsole__btn" onClick={connect}>
+          <Button variant="primary" onClick={connect}>
             Connect
           </Button>
         )}
         <div role="status" className="cconsole__state">
           {badge}
         </div>
-      </div>
+      </Toolbar>
       {note && (
         <p role={note.tone === 'error' ? 'alert' : undefined} className={note.tone === 'error' ? 'sk-error' : 'cconsole__note'}>
           {note.text}

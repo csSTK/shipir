@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Badge } from '../../../shared/ui/index.ts'
+import { ArrowDown, ArrowLeft } from 'lucide-react'
+import { Badge, Button, PageHeader, Toolbar } from '../../../shared/ui/index.ts'
 import { useContainers } from '../api.ts'
 import { useContainerLogs, type LogEnd, type TailOption } from './useContainerLogs.ts'
 import './ContainerLogsPage.css'
@@ -66,10 +67,10 @@ export function ContainerLogsPage() {
   return (
     <section className="clogs">
       <Link to={`/environments/${hostId}/containers`} className="clogs__back">
-        ← Containers
+        <ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" /> Containers
       </Link>
-      <h2 className="clogs__title">Logs: {name}</h2>
-      <div className="clogs__bar">
+      <PageHeader title={`Logs: ${name}`} />
+      <Toolbar label="Log options">
         <label className="clogs__field">
           <span>Show last</span>
           <select value={tail} onChange={(e) => setTail(e.target.value as TailOption)} className="clogs__select">
@@ -89,7 +90,7 @@ export function ContainerLogsPage() {
           {end?.status === 'ENDED' && <Badge tone="muted">Ended</Badge>}
           {end?.status === 'ERROR' && <Badge tone="bad">Error</Badge>}
         </div>
-      </div>
+      </Toolbar>
       {end && (
         <p role={end.status === 'ERROR' ? 'alert' : undefined} className={end.status === 'ERROR' ? 'sk-error' : 'clogs__note'}>
           {endText(end)}
@@ -109,9 +110,9 @@ export function ContainerLogsPage() {
           )}
         </div>
         {!following && (
-          <button type="button" className="clogs__jump" onClick={jumpToLatest}>
-            Jump to latest
-          </button>
+          <Button variant="primary" size="sm" className="clogs__jump" onClick={jumpToLatest}>
+            <ArrowDown size={16} strokeWidth={1.75} aria-hidden="true" /> Jump to latest
+          </Button>
         )}
       </div>
     </section>

@@ -1,67 +1,64 @@
-/* Container log viewer. Motion is opacity/transform only and off for reduced motion. */
+/* Container log viewer. Motion is opacity/transform only; base.css collapses it for reduced motion. */
 .clogs {
-  max-width: 1200px;
+  max-width: var(--content-max);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .clogs__back {
   align-self: flex-start;
-  color: inherit;
-  opacity: 0.7;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
   text-decoration: none;
-  font-size: 0.875rem;
+  font-size: var(--text-small-size);
+  transition: color var(--duration-fast) var(--ease-out);
 }
 .clogs__back:hover {
-  opacity: 1;
+  color: var(--color-text);
 }
 .clogs__back:focus-visible {
-  outline: 2px solid AccentColor;
-  outline-offset: 2px;
-  border-radius: 4px;
+  outline: none;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-focus);
 }
-.clogs__title {
-  margin: 0;
-  font-size: 1.75rem;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-.clogs__bar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
+.clogs .ui-pageheader,
+.clogs .ui-toolbar {
+  margin-bottom: 0;
 }
 .clogs__field,
 .clogs__check {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.875rem;
+  gap: var(--space-2);
+  font-size: var(--text-small-size);
 }
 .clogs__select {
   font: inherit;
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-  background: transparent;
-  color: inherit;
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 .clogs__select:focus-visible,
 .clogs__check input:focus-visible {
-  outline: 2px solid AccentColor;
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+.clogs__check input {
+  accent-color: var(--color-accent);
 }
 .clogs__state {
   margin-left: auto;
 }
 .clogs__note {
   margin: 0;
-  opacity: 0.75;
-  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  font-size: var(--text-small-size);
 }
 .clogs__body {
   position: relative;
@@ -70,72 +67,40 @@
   height: min(65vh, 40rem);
   min-height: 8rem;
   overflow-y: auto;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: color-mix(in srgb, currentColor 8%, transparent);
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 0.8125rem;
-  line-height: 1.5;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  font-family: var(--font-mono);
+  font-size: var(--text-small-size);
+  line-height: var(--text-body-leading);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .clogs__log:focus-visible {
-  outline: 2px solid AccentColor;
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--shadow-focus);
 }
 .clogs__line--err {
-  color: #c0392b;
-}
-@media (prefers-color-scheme: dark) {
-  .clogs__line--err {
-    color: #ff8a80;
-  }
+  color: var(--color-bad);
 }
 .clogs__time {
-  opacity: 0.55;
-  margin-right: 8px;
+  color: var(--color-text-subtle);
+  margin-right: var(--space-2);
 }
 .clogs__empty {
-  opacity: 0.6;
+  color: var(--color-text-muted);
 }
 .clogs__jump {
   position: absolute;
-  right: 14px;
-  bottom: 14px;
-  font: inherit;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  padding: 6px 12px;
-  border: 0;
-  border-radius: 999px;
-  background: AccentColor;
-  color: AccentColorText;
-  cursor: pointer;
-  box-shadow: 0 2px 8px color-mix(in srgb, black 25%, transparent);
-  animation: clogs-in 0.2s ease-out;
-  transition: transform 0.12s ease-out;
-}
-.clogs__jump:active {
-  transform: scale(0.96);
-}
-.clogs__jump:focus-visible {
-  outline: 2px solid AccentColor;
-  outline-offset: 2px;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  box-shadow: var(--shadow-md);
+  animation: clogs-in var(--duration-base) var(--ease-out);
 }
 @keyframes clogs-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .clogs__jump {
-    animation: none;
-    transition: none;
-  }
-}
-@media (prefers-contrast: more) {
-  .clogs__log {
-    outline: 1px solid currentColor;
+    transform: translateY(var(--space-1));
   }
 }

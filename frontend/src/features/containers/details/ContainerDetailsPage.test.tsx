@@ -67,20 +67,25 @@ function renderPage(respond: () => unknown) {
   )
 }
 
+const openTab = (name: string) => fireEvent.mouseDown(screen.getByRole('tab', { name }))
+
 describe('ContainerDetailsPage', () => {
-  it('shows overview, mounts, network, labels and health', async () => {
+  it('shows overview, mounts, network, labels and health on their tabs', async () => {
     role = 'ADMIN'
     renderPage(() => details)
-    expect(await screen.findByRole('heading', { name: 'web' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'web', level: 1 })).toBeInTheDocument()
     expect(screen.getByText('nginx:1')).toBeInTheDocument()
     expect(screen.getByText('nginx -g daemon off;')).toBeInTheDocument()
     expect(screen.getByText('on-failure (max 3)')).toBeInTheDocument()
+    expect(screen.getByText('8080 → 80/tcp')).toBeInTheDocument()
+    openTab('Storage & network')
     expect(screen.getByText('/srv/data')).toBeInTheDocument()
     expect(screen.getByText('read-only')).toBeInTheDocument()
     expect(screen.getByText('172.18.0.2')).toBeInTheDocument()
-    expect(screen.getByText('8080 → 80/tcp')).toBeInTheDocument()
+    openTab('Labels')
     expect(screen.getByText('com.docker.compose.project')).toBeInTheDocument()
-    expect(screen.getByText('unhealthy')).toBeInTheDocument()
+    openTab('Health')
+    expect(screen.getAllByText('unhealthy').length).toBeGreaterThan(0)
     expect(screen.getByText('curl: refused')).toBeInTheDocument()
   })
 
@@ -88,6 +93,7 @@ describe('ContainerDetailsPage', () => {
     role = 'ADMIN'
     renderPage(() => details)
     await screen.findByRole('heading', { name: 'web' })
+    openTab('Environment')
     expect(screen.getByText('DB_PASSWORD')).toBeInTheDocument()
     expect(screen.queryByText('s3cret')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Reveal values' }))
@@ -100,6 +106,7 @@ describe('ContainerDetailsPage', () => {
     role = 'VIEWER'
     renderPage(() => ({ ...details, env: [{ key: 'DB_PASSWORD', value: null }] }))
     await screen.findByRole('heading', { name: 'web' })
+    openTab('Environment')
     expect(screen.queryByRole('button', { name: 'Reveal values' })).not.toBeInTheDocument()
     expect(screen.getByText('Hidden for your role')).toBeInTheDocument()
   })
@@ -119,6 +126,7 @@ describe('ContainerDetailsPage', () => {
   it('omits health when the container has no healthcheck', async () => {
     renderPage(() => ({ ...details, health: null }))
     await screen.findByRole('heading', { name: 'web' })
+    expect(screen.queryByRole('tab', { name: 'Health' })).not.toBeInTheDocument()
     expect(within(document.body).queryByRole('heading', { name: 'Health' })).not.toBeInTheDocument()
   })
 

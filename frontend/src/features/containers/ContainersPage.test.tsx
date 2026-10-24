@@ -62,14 +62,16 @@ function renderAt(url: string, role = 'OPERATOR') {
 }
 
 function names() {
-  return screen
-    .getAllByRole('row')
-    .slice(1)
-    .map((r) => within(r).getAllByRole('cell')[0].textContent)
+  return screen.getAllByRole('link', { name: /^Details of / }).map((l) => l.textContent)
+}
+
+async function openMenu(name: string) {
+  fireEvent.pointerDown(await screen.findByRole('button', { name: `More actions for ${name}` }), { button: 0, ctrlKey: false })
+  return screen.findByRole('menu')
 }
 
 describe('ContainersPage', () => {
-  it('loads the containers of the environment and lists name, state, health, image, deployment, ports', async () => {
+  it('loads the containers of the environment and lists name with image, state with health, deployment, ports', async () => {
     mockContainers()
     renderAt('/environments/h1/containers')
     expect(screen.getByRole('status', { name: 'Loading containers' })).toBeInTheDocument()
@@ -81,6 +83,16 @@ describe('ContainersPage', () => {
     expect(within(row).getByText('healthy')).toBeInTheDocument()
     expect(within(row).getByText('shop')).toBeInTheDocument()
     expect(within(row).getByText('8080:80/tcp')).toBeInTheDocument()
+    expect(within(row).getByText('nginx:1')).toBeInTheDocument()
+  })
+
+  it('hides Created by default and offers it in the column menu', async () => {
+    mockContainers()
+    renderAt('/environments/h1/containers')
+    await screen.findByText('nginx:1')
+    expect(screen.queryByRole('columnheader', { name: /Created/ })).toBeNull()
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Columns' }), { button: 0, ctrlKey: false })
+    expect(await screen.findByRole('menuitem', { name: 'Created' })).toBeInTheDocument()
   })
 
   it('searches by name, image and deployment', async () => {
@@ -132,36 +144,48 @@ describe('ContainersPage', () => {
       })
     }
     const paused = { ...containers[0], id: '4', name: 'frozen', state: 'paused' }
-    const buttons = (row: string) =>
+    const rowButtons = (row: string) =>
       within(screen.getByRole('row', { name: new RegExp(row) }))
         .getAllByRole('button')
-        .map((b) => b.textContent)
+        .map((b) => b.getAttribute('aria-label'))
+    const menuItems = () => within(screen.getByRole('menu')).getAllByRole('menuitem').map((i) => i.textContent)
 
-    it('offers buttons matching the container state', async () => {
+    it('offers icon buttons and menu entries matching the container state', async () => {
       apiFetch.mockImplementation((path: string) =>
-        path === '/auth/me' ? Promise.resolve({ username: 'u', role: 'OPERATOR', setupRequired: false }) : Promise.resolve([...containers, paused]),
+        path === '/auth/me' ? Promise.resolve({ username: 'u', role: 'ADMIN', setupRequired: false }) : Promise.resolve([...containers, paused]),
       )
       renderAt('/environments/h1/containers')
-      await screen.findByRole('button', { name: 'Start container api' })
-      expect(buttons('web')).toEqual(['Stop', 'Restart', 'Pause', 'Kill', 'Delete'])
-      expect(buttons('api')).toEqual(['Start', 'Delete'])
-      expect(buttons('frozen')).toEqual(['Unpause', 'Delete'])
+      await screen.findByRole('button', { name: 'Start api' })
+      expect(rowButtons('web')).toEqual(['Stop web', 'Logs web', 'Console web', 'More actions for web'])
+      expect(rowButtons('api')).toEqual(['Start api', 'Logs api', 'More actions for api'])
+      expect(rowButtons('frozen')).toEqual(['Unpause frozen', 'Logs frozen', 'More actions for frozen'])
+      await openMenu('web')
+      expect(menuItems()).toEqual(['Restart', 'Pause', 'Details', 'Kill', 'Delete'])
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+      await vi.waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+      await openMenu('api')
+      expect(menuItems()).toEqual(['Details', 'Delete'])
     })
 
-    it('hides actions for viewers', async () => {
+    it('hides lifecycle actions for viewers but keeps logs and details', async () => {
       mockApi()
       renderAt('/environments/h1/containers', 'VIEWER')
       await screen.findByText('nginx:1')
-      expect(screen.queryByRole('button', { name: /container web/ })).toBeNull()
+      expect(rowButtons('web')).toEqual(['Logs web', 'More actions for web'])
+      await openMenu('web')
+      expect(menuItems()).toEqual(['Details'])
     })
 
     it('shows the pending label at once, posts and refetches', async () => {
       let resolve!: () => void
       mockApi(() => new Promise<void>((r) => (resolve = r)))
       renderAt('/environments/h1/containers')
-      fireEvent.click(await screen.findByRole('button', { name: 'Restart container web' }))
-      expect(await screen.findByRole('button', { name: 'Restart container web' })).toHaveTextContent('Restarting…')
-      expect(screen.getByRole('button', { name: 'Stop container web' })).toBeDisabled()
+      await screen.findByRole('button', { name: 'Stop web' })
+      await openMenu('web')
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Restart' }))
+      const row = await screen.findByRole('row', { name: /web/ })
+      expect(await within(row).findByText('Restarting…')).toBeInTheDocument()
+      expect(await screen.findByRole('button', { name: 'Stop web' })).toBeDisabled()
       expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/containers/1/restart', { method: 'POST' })
       const before = apiFetch.mock.calls.filter((c) => c[0] === '/hosts/h1/containers').length
       resolve()
@@ -171,23 +195,35 @@ describe('ContainersPage', () => {
     it('asks before killing', async () => {
       mockApi()
       renderAt('/environments/h1/containers')
-      fireEvent.click(await screen.findByRole('button', { name: 'Kill container web' }))
+      await screen.findByRole('button', { name: 'Stop web' })
+      await openMenu('web')
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Kill' }))
       expect(apiFetch).not.toHaveBeenCalledWith(expect.stringContaining('/kill'), expect.anything())
-      const dialog = screen.getByRole('dialog')
+      const dialog = await screen.findByRole('dialog')
       fireEvent.click(within(dialog).getByRole('button', { name: 'Kill' }))
       await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/containers/1/kill', { method: 'POST' }))
       await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     })
 
+    it('asks before deleting', async () => {
+      mockApi()
+      renderAt('/environments/h1/containers')
+      await screen.findByRole('button', { name: 'Stop web' })
+      await openMenu('web')
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }))
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getByText(/This cannot be undone/)).toBeInTheDocument()
+    })
+
     it('shows INVALID_CONTAINER_STATE and 502 errors inline', async () => {
       mockApi(() => Promise.reject(new ApiError(409, '{}', 'INVALID_CONTAINER_STATE')))
       renderAt('/environments/h1/containers')
-      fireEvent.click(await screen.findByRole('button', { name: 'Stop container web' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'Stop web' }))
       expect(await screen.findByRole('alert')).toHaveTextContent('not in a state that allows this action')
       cleanup()
       mockApi(() => Promise.reject(new ApiError(502, '{}', 'UNREACHABLE')))
       renderAt('/environments/h1/containers')
-      fireEvent.click(await screen.findByRole('button', { name: 'Stop container web' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'Stop web' }))
       expect(await screen.findByRole('alert')).toHaveTextContent('Could not reach the Docker host.')
     })
   })

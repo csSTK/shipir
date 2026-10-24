@@ -68,7 +68,7 @@ test('opens the logs from the container row and streams lines, stderr marked', a
     send({ seq: 2, type: 'LINE', stream: 'STDERR', line: 'warn: slow' })
   })
   await page.goto('/environments/a/containers')
-  await page.getByRole('link', { name: 'Logs of web' }).click()
+  await page.getByRole('button', { name: 'Logs web' }).click()
   await expect(page).toHaveURL(/\/environments\/a\/containers\/c1\/logs$/)
   const log = page.getByRole('log', { name: 'Container log' })
   await expect(log).toContainText('listening on 80')

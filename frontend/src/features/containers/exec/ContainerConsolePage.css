@@ -1,87 +1,76 @@
 /* Container console. Press feedback on the buttons is instant; no decorative motion. */
 .cconsole {
-  max-width: 1200px;
+  max-width: var(--content-max);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .cconsole__back {
   align-self: flex-start;
-  color: inherit;
-  opacity: 0.7;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
   text-decoration: none;
-  font-size: 0.875rem;
+  font-size: var(--text-small-size);
+  transition: color var(--duration-fast) var(--ease-out);
 }
 .cconsole__back:hover {
-  opacity: 1;
+  color: var(--color-text);
 }
 .cconsole__back:focus-visible {
-  outline: 2px solid AccentColor;
-  outline-offset: 2px;
-  border-radius: 4px;
+  outline: none;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-focus);
 }
-.cconsole__title {
-  margin: 0;
-  font-size: 1.75rem;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-.cconsole__bar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
+.cconsole .ui-pageheader,
+.cconsole .ui-toolbar {
+  margin-bottom: 0;
 }
 .cconsole__field {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.875rem;
+  gap: var(--space-2);
+  font-size: var(--text-small-size);
 }
 .cconsole__select {
   font: inherit;
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-  background: transparent;
-  color: inherit;
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 .cconsole__select:disabled {
   opacity: 0.6;
 }
 .cconsole__select:focus-visible {
-  outline: 2px solid AccentColor;
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--shadow-focus);
 }
 .cconsole__state {
   margin-left: auto;
 }
 .cconsole__note {
   margin: 0;
-  opacity: 0.75;
-  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  font-size: var(--text-small-size);
 }
 .cconsole__frame {
   height: min(65vh, 40rem);
   min-height: 10rem;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: #111;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
   overflow: hidden;
 }
 .cconsole__frame:focus-within {
-  outline: 2px solid AccentColor;
-  outline-offset: 2px;
+  box-shadow: var(--shadow-focus);
 }
 .cconsole__term {
   height: 100%;
   width: 100%;
-}
-@media (prefers-contrast: more) {
-  .cconsole__frame {
-    outline: 1px solid currentColor;
-  }
 }

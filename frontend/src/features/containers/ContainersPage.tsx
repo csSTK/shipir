@@ -1,18 +1,18 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { Link, useSearchParams, useParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams, useParams } from 'react-router-dom'
+import { Info, Pause, Play, RotateCw, ScrollText, Square, SquareTerminal, Trash2, X, Zap } from 'lucide-react'
 import { useCurrentUser } from '../auth/index.ts'
 import { useDeployments, type DeploymentSummary } from '../deployments/api.ts'
 import { useImages, withTag, type Image } from '../images/api.ts'
-import { deleteColumn } from '../hosts/deleteColumn.tsx'
 import { DeleteResourceDialog } from '../hosts/DeleteResourceDialog.tsx'
 import { describeResourceError, formatSize } from '../hosts/format.ts'
 import { useContainerStats, type StatSample } from '../../shared/realtime/useContainerStats.ts'
-import { Badge, ResourceTable, Sparkline, type ResourceColumn } from '../../shared/ui/index.ts'
+import { Badge, Button, PageHeader, ResourceTable, Sparkline, StatusDot, type MenuEntry, type ResourceColumn } from '../../shared/ui/index.ts'
+import type { RowActions } from '../../shared/ui/ResourceTable.tsx'
 import { ConfirmDialog } from '../deployments/ConfirmDialog.tsx'
 import { actionsFor, describeActionError, useContainerAction, useContainers, useDeleteContainer, type Container, type ContainerAction } from './api.ts'
 import { CreateContainerDialog } from './CreateContainerDialog.tsx'
 import './ContainersPage.css'
-import { Button } from '../../shared/ui/index.ts'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -37,67 +37,79 @@ function updateTarget(hostId: string, c: Container, deployments: DeploymentSumma
   return images.some((i) => i.updateAvailable && i.repoTags.includes(ref)) ? `/environments/${hostId}/images` : null
 }
 
-/** `updates` maps container id to the page where its update is applied. */
-function baseColumnsFor(updates: Map<string, string>): ResourceColumn<Container>[] {
+const MAX_PORT_CHIPS = 2
+
+/** `updates` maps container id to the page where its update is applied; `pending` is the row whose action is running. */
+function baseColumnsFor(updates: Map<string, string>, pending: { id: string; action: ContainerAction } | null): ResourceColumn<Container>[] {
   return [
-  {
-    id: 'name',
-    header: 'Name',
-    sortValue: (c) => c.name,
-    render: (c) => (
-      <Link className="containers__name" to={c.id} aria-label={`Details of ${c.name}`}>
-        <strong>{c.name}</strong>
-      </Link>
-    ),
-  },
-  {
-    id: 'state',
-    header: 'State',
-    sortValue: (c) => c.state,
-    render: (c) => <Badge tone={stateTone(c.state)}>{c.state}</Badge>,
-  },
-  {
-    id: 'health',
-    header: 'Health',
-    sortValue: (c) => c.health,
-    render: (c) => (c.health ? <Badge tone={healthTone(c.health)}>{c.health}</Badge> : '–'),
-  },
-  {
-    id: 'image',
-    header: 'Image',
-    sortValue: (c) => c.image,
-    render: (c) => (
-      <span className="containers__image">
-        {c.image}
-        {updates.has(c.id) && (
-          <Link className="containers__update" to={updates.get(c.id)!} aria-label={`Update available for ${c.name}`}>
-            <Badge tone="warn">Update available</Badge>
+    {
+      id: 'name',
+      header: 'Name',
+      defaultWidth: 210,
+      sortValue: (c) => c.name,
+      render: (c) => (
+        <span className="containers__namecell">
+          <Link className="containers__name" to={c.id} aria-label={`Details of ${c.name}`}>
+            {c.name}
           </Link>
-        )}
-      </span>
-    ),
-  },
-  { id: 'deployment', header: 'Deployment', sortValue: (c) => c.composeProject, render: (c) => c.composeProject ?? '–' },
-  {
-    id: 'ports',
-    header: 'Ports',
-    render: (c) =>
-      c.ports.length ? (
-        <ul className="containers__ports">
-          {c.ports.map((p) => (
-            <li key={p}>{p}</li>
-          ))}
-        </ul>
-      ) : (
-        '–'
+          <span className="containers__image">
+            <span className="containers__image-text">{c.image}</span>
+            {updates.has(c.id) && (
+              <Link className="containers__update" to={updates.get(c.id)!} aria-label={`Update available for ${c.name}`}>
+                <Badge tone="warn">Update available</Badge>
+              </Link>
+            )}
+          </span>
+        </span>
       ),
-  },
-  {
-    id: 'created',
-    header: 'Created',
-    sortValue: (c) => Date.parse(c.created),
-    render: (c) => dateFormat.format(new Date(c.created)),
-  },
+    },
+    {
+      id: 'state',
+      header: 'State',
+      defaultWidth: 130,
+      sortValue: (c) => c.state,
+      render: (c) => (
+        <span className="containers__state">
+          {pending?.id === c.id ? (
+            <Badge tone="info" dot={false}>
+              {LABELS[pending.action][1]}
+            </Badge>
+          ) : (
+            <Badge tone={stateTone(c.state)}>{c.state}</Badge>
+          )}
+          {c.health && (
+            <span className="containers__health">
+              <StatusDot tone={healthTone(c.health)} />
+              {c.health}
+            </span>
+          )}
+        </span>
+      ),
+    },
+    { id: 'deployment', header: 'Deployment', defaultWidth: 120, sortValue: (c) => c.composeProject, render: (c) => c.composeProject ?? '–' },
+    {
+      id: 'ports',
+      header: 'Ports',
+      defaultWidth: 130,
+      render: (c) =>
+        c.ports.length ? (
+          <ul className="containers__ports" title={c.ports.join(', ')}>
+            {c.ports.slice(0, MAX_PORT_CHIPS).map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+            {c.ports.length > MAX_PORT_CHIPS && <li className="containers__more">+{c.ports.length - MAX_PORT_CHIPS}</li>}
+          </ul>
+        ) : (
+          '–'
+        ),
+    },
+    {
+      id: 'created',
+      header: 'Created',
+      defaultHidden: true,
+      sortValue: (c) => Date.parse(c.created),
+      render: (c) => dateFormat.format(new Date(c.created)),
+    },
   ]
 }
 
@@ -109,6 +121,7 @@ function statsColumns(series: Record<string, StatSample[]>): ResourceColumn<Cont
     {
       id: 'cpu',
       header: 'CPU',
+      defaultWidth: 130,
       sortValue: (c) => last(series[c.id])?.cpu ?? -1,
       render: (c) => {
         const samples = series[c.id]
@@ -116,7 +129,7 @@ function statsColumns(series: Record<string, StatSample[]>): ResourceColumn<Cont
         return (
           <span className="containers__stat">
             <span className="containers__stat-value">{last(samples)!.cpu.toFixed(1)}%</span>
-            <Sparkline values={samples.map((s) => s.cpu)} max={100} label={`CPU history of ${c.name}`} />
+            <Sparkline values={samples.map((s) => s.cpu)} max={100} width={48} label={`CPU history of ${c.name}`} />
           </span>
         )
       },
@@ -124,6 +137,7 @@ function statsColumns(series: Record<string, StatSample[]>): ResourceColumn<Cont
     {
       id: 'memory',
       header: 'Memory',
+      defaultWidth: 150,
       sortValue: (c) => last(series[c.id])?.memUsed ?? -1,
       render: (c) => {
         const samples = series[c.id]
@@ -132,37 +146,12 @@ function statsColumns(series: Record<string, StatSample[]>): ResourceColumn<Cont
         return (
           <span className="containers__stat" title={now.memLimit > 0 ? `of ${formatSize(now.memLimit)}` : undefined}>
             <span className="containers__stat-value">{formatSize(now.memUsed)}</span>
-            <Sparkline values={samples.map((s) => s.memUsed)} max={now.memLimit} label={`Memory history of ${c.name}`} />
+            <Sparkline values={samples.map((s) => s.memUsed)} max={now.memLimit} width={48} label={`Memory history of ${c.name}`} />
           </span>
         )
       },
     },
   ]
-}
-
-/** Quick link to the live log, also reachable from the details page. */
-const logsColumn: ResourceColumn<Container> = {
-  id: 'logs',
-  header: 'Logs',
-  render: (c) => (
-    <Link className="ui-btn ui-btn--ghost ui-btn--sm containers__btn" to={`${c.id}/logs`} aria-label={`Logs of ${c.name}`}>
-      Logs
-    </Link>
-  ),
-}
-
-/** ADMIN-only link to the interactive console; only running containers can have one. */
-const consoleColumn: ResourceColumn<Container> = {
-  id: 'console',
-  header: 'Console',
-  render: (c) =>
-    c.state === 'running' ? (
-      <Link className="ui-btn ui-btn--ghost ui-btn--sm containers__btn" to={`${c.id}/console`} aria-label={`Console of ${c.name}`}>
-        Console
-      </Link>
-    ) : (
-      '–'
-    ),
 }
 
 const LABELS: Record<ContainerAction, [label: string, pending: string]> = {
@@ -174,32 +163,17 @@ const LABELS: Record<ContainerAction, [label: string, pending: string]> = {
   kill: ['Kill', 'Killing…'],
 }
 
-/** State-aware lifecycle buttons for one row; the pressed one shows its pending label at once and the row is locked meanwhile. */
-function actionColumn(pending: { id: string; action: ContainerAction } | null, onAction: (c: Container, a: ContainerAction) => void): ResourceColumn<Container> {
-  return {
-    id: 'lifecycle',
-    header: 'Control',
-    render: (c): ReactNode => {
-      const busy = pending?.id === c.id
-      return (
-        <span className="containers__actions">
-          {actionsFor(c.state).map((a) => (
-            <Button
-              key={a}
-              size="sm"
-              variant={a === 'kill' ? 'danger' : 'ghost'}
-              aria-label={`${LABELS[a][0]} container ${c.name}`}
-              disabled={busy}
-              onClick={() => onAction(c, a)}
-            >
-              {busy && pending.action === a ? LABELS[a][1] : LABELS[a][0]}
-            </Button>
-          ))}
-        </span>
-      )
-    },
-  }
+const ICON_PROPS = { size: 16, strokeWidth: 1.75 } as const
+const MENU_ICONS: Record<ContainerAction, ReactNode> = {
+  start: <Play {...ICON_PROPS} />,
+  stop: <Square {...ICON_PROPS} />,
+  restart: <RotateCw {...ICON_PROPS} />,
+  pause: <Pause {...ICON_PROPS} />,
+  unpause: <Play {...ICON_PROPS} />,
+  kill: <Zap {...ICON_PROPS} />,
 }
+const TOGGLE_ICONS = { start: Play, stop: Square, unpause: Play } as const
+const isToggle = (a: ContainerAction): a is keyof typeof TOGGLE_ICONS => a in TOGGLE_ICONS
 
 /** Looks up the managed deployment only once a delete is requested, so plain browsing costs no extra request. */
 function DeleteContainerDialog({ hostId, container, onClose }: { hostId: string; container: Container; onClose: () => void }) {
@@ -244,6 +218,7 @@ export function ContainersPage() {
     )
   }
   const isAdmin = user?.role === 'ADMIN'
+  const navigate = useNavigate()
   const { series } = useContainerStats(id)
   const deployments = useDeployments(id)
   const images = useImages(id)
@@ -257,24 +232,56 @@ export function ContainersPage() {
     }
     return map
   }, [id, data, deployments.data, images.data])
-  const baseColumns = useMemo(() => baseColumnsFor(updates), [updates])
-  const withStats = [...baseColumns.slice(0, 4), ...statsColumns(series), ...baseColumns.slice(4)]
-  const tableColumns = canWrite
-    ? [...withStats, logsColumn, ...(isAdmin ? [consoleColumn] : []), actionColumn(pending, (c, a) => (a === 'kill' ? setKillTarget(c) : run(c, a))), deleteColumn<Container>('container', (c) => c.name, setTarget)]
-    : [...withStats, logsColumn]
+  const baseColumns = useMemo(() => baseColumnsFor(updates, pending), [updates, pending])
+  const columns = useMemo(
+    () => [...baseColumns.slice(0, 3), ...statsColumns(series), ...baseColumns.slice(3)],
+    [baseColumns, series],
+  )
+
+  function rowActions(c: Container): RowActions {
+    const available = actionsFor(c.state)
+    const toggle = available.find(isToggle)
+    const busy = act.isPending
+    const primary: NonNullable<RowActions['primary']> = []
+    if (canWrite && toggle) {
+      primary.push({ label: LABELS[toggle][0], icon: TOGGLE_ICONS[toggle], onSelect: () => run(c, toggle), disabled: busy })
+    }
+    primary.push({ label: 'Logs', icon: ScrollText, onSelect: () => navigate(`${c.id}/logs`) })
+    if (isAdmin && c.state === 'running') {
+      primary.push({ label: 'Console', icon: SquareTerminal, onSelect: () => navigate(`${c.id}/console`) })
+    }
+    const menu: MenuEntry[] = []
+    if (canWrite) {
+      for (const a of available) {
+        if (a === toggle || a === 'kill') continue
+        menu.push({ label: LABELS[a][0], icon: MENU_ICONS[a], onSelect: () => run(c, a), disabled: busy })
+      }
+    }
+    menu.push({ label: 'Details', icon: <Info {...ICON_PROPS} />, onSelect: () => navigate(c.id) })
+    if (canWrite) {
+      menu.push({ type: 'separator' })
+      if (available.includes('kill')) {
+        menu.push({ label: 'Kill', icon: MENU_ICONS.kill, danger: true, disabled: busy, onSelect: () => setKillTarget(c) })
+      }
+      menu.push({ label: 'Delete', icon: <Trash2 {...ICON_PROPS} />, danger: true, onSelect: () => setTarget(c) })
+    }
+    return { primary, menu }
+  }
 
   const rows = deployment ? data?.filter((c) => c.composeProject === deployment) : data
 
   return (
     <section className="containers">
-      <div className="containers__bar">
-        <h2 className="containers__title">Containers</h2>
-        {canWrite && (
-          <Button variant="primary" onClick={() => setCreating(true)}>
-            Create container
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title="Containers"
+        actions={
+          canWrite ? (
+            <Button variant="primary" onClick={() => setCreating(true)}>
+              Create container
+            </Button>
+          ) : undefined
+        }
+      />
       {actionError && (
         <p role="alert" className="sk-error">
           {actionError}
@@ -282,11 +289,13 @@ export function ContainersPage() {
       )}
       <ResourceTable
         label="containers"
-        columns={tableColumns}
+        columns={columns}
         rows={rows}
         rowKey={(c) => c.id}
         searchText={(c) => `${c.name} ${c.image} ${c.composeProject ?? ''}`}
         defaultSort="name"
+        rowActions={rowActions}
+        rowLabel={(c) => c.name}
         emptyMessage={deployment ? `No containers in deployment ${deployment}.` : 'No containers in this environment.'}
         isPending={isPending}
         error={error ? describeResourceError(error) : null}
@@ -294,7 +303,7 @@ export function ContainersPage() {
         toolbar={
           deployment && (
             <button type="button" className="containers__chip" onClick={() => setParams({})}>
-              Deployment: {deployment} <span aria-hidden="true">×</span>
+              Deployment: {deployment} <X size={14} strokeWidth={2} aria-hidden="true" />
             </button>
           )
         }

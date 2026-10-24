@@ -1,13 +1,13 @@
 import { useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { ArrowLeft } from 'lucide-react'
 import { useContainerStats, type StatSample } from '../../../shared/realtime/useContainerStats.ts'
-import { Badge, Sparkline } from '../../../shared/ui/index.ts'
+import { Badge, Button, Card, PageHeader, Sparkline, StatusDot, Tabs } from '../../../shared/ui/index.ts'
 import { formatSize } from '../../hosts/format.ts'
 import { useCurrentUser } from '../../auth/index.ts'
 import { ContainerFilesPanel } from '../files/ContainerFilesPanel.tsx'
 import { describeDetailsError, isNotFound, useContainerDetails, type ContainerDetails, type ContainerPort } from './api.ts'
 import './ContainerDetailsPage.css'
-import { Button } from '../../../shared/ui/index.ts'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' })
 const formatDate = (iso: string | null) => (iso ? dateFormat.format(new Date(iso)) : '–')
@@ -29,12 +29,12 @@ function formatPort(p: ContainerPort): string {
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="cdetails__section" aria-labelledby={`cd-${title}`}>
+    <Card className="cdetails__section" role="region" aria-labelledby={`cd-${title}`}>
       <h3 id={`cd-${title}`} className="cdetails__heading">
         {title}
       </h3>
       {children}
-    </section>
+    </Card>
   )
 }
 
@@ -271,17 +271,48 @@ export function ContainerDetailsPage() {
   const { data: c, isPending, error, refetch } = useContainerDetails(hostId, cid)
   const base = `/environments/${hostId}/containers`
 
+  const tabs = c
+    ? [
+        {
+          value: 'overview',
+          label: 'Overview',
+          content: (
+            <div className="cdetails__stack">
+              <Overview c={c} />
+              {c.state === 'running' && <Stats hostId={hostId} containerId={c.id} />}
+            </div>
+          ),
+        },
+        { value: 'environment', label: 'Environment', content: <Env env={c.env} /> },
+        {
+          value: 'storage',
+          label: 'Storage & network',
+          content: (
+            <div className="cdetails__stack">
+              <Mounts mounts={c.mounts} />
+              <Networks networks={c.networks} />
+            </div>
+          ),
+        },
+        { value: 'labels', label: 'Labels', content: <Labels labels={c.labels} /> },
+        ...(c.health ? [{ value: 'health', label: 'Health', content: <Health health={c.health} /> }] : []),
+        ...(user?.role === 'ADMIN'
+          ? [{ value: 'files', label: 'Files', content: <ContainerFilesPanel hostId={hostId} containerId={c.id} /> }]
+          : []),
+      ]
+    : []
+
   return (
     <div className="cdetails">
       <Link to={base} className="cdetails__back">
-        ← Containers
+        <ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" /> Containers
       </Link>
       {isPending && <p role="status">Loading…</p>}
       {error && (
         <div role="alert" className="sk-error">
           <p>{isNotFound(error) ? 'This container no longer exists.' : describeDetailsError(error)}</p>
           {!isNotFound(error) && (
-            <Button variant="ghost" size="sm" className="cdetails__btn" onClick={() => void refetch()}>
+            <Button variant="ghost" size="sm" onClick={() => void refetch()}>
               Retry
             </Button>
           )}
@@ -289,28 +320,32 @@ export function ContainerDetailsPage() {
       )}
       {c && (
         <>
-          <header className="cdetails__header">
-            <h2 className="cdetails__title">{c.name}</h2>
-            <Badge tone={stateTone(c.state)}>{c.state}</Badge>
-            <nav className="cdetails__nav" aria-label="Container views">
-              <Link className="ui-btn ui-btn--ghost ui-btn--sm cdetails__btn" to={`${base}/${cid}/logs`}>
-                Logs
-              </Link>
-              {user?.role === 'ADMIN' && c.state === 'running' && (
-                <Link className="ui-btn ui-btn--ghost ui-btn--sm cdetails__btn" to={`${base}/${cid}/console`}>
-                  Console
+          <PageHeader
+            title={c.name}
+            subtitle={
+              <span className="cdetails__sub">
+                <Badge tone={stateTone(c.state)}>{c.state}</Badge>
+                {c.health && (
+                  <span className="cdetails__muted">
+                    <StatusDot tone={healthTone(c.health.status)} /> {c.health.status}
+                  </span>
+                )}
+              </span>
+            }
+            actions={
+              <nav className="cdetails__nav" aria-label="Container views">
+                <Link className="ui-btn ui-btn--secondary ui-btn--md" to={`${base}/${cid}/logs`}>
+                  Logs
                 </Link>
-              )}
-            </nav>
-          </header>
-          <Overview c={c} />
-          {c.state === 'running' && <Stats hostId={hostId} containerId={c.id} />}
-          <Env env={c.env} />
-          <Mounts mounts={c.mounts} />
-          <Networks networks={c.networks} />
-          <Labels labels={c.labels} />
-          {c.health && <Health health={c.health} />}
-          {user?.role === 'ADMIN' && <ContainerFilesPanel hostId={hostId} containerId={c.id} />}
+                {user?.role === 'ADMIN' && c.state === 'running' && (
+                  <Link className="ui-btn ui-btn--secondary ui-btn--md" to={`${base}/${cid}/console`}>
+                    Console
+                  </Link>
+                )}
+              </nav>
+            }
+          />
+          <Tabs label="Container sections" items={tabs} />
         </>
       )}
     </div>
