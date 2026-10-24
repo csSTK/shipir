@@ -13,6 +13,10 @@ A web platform for managing Docker containers and Compose stacks. Think of it as
   <img src="docs/images/ai-chat.png" alt="AI assistant chat that proposes deploying demo-web and waits for the user to confirm or reject the action" width="48%">
 </p>
 
+<p align="center">
+  <img src="docs/images/deploy-flow.gif" alt="Animated deploy flow: a new deployment named shop is created from a Compose file, Deploy is clicked, the live output lists the pulled image, network and containers being started, and the badge changes to Succeeded" width="80%">
+</p>
+
 ## Why this project
 
 This is a learning and portfolio project focused on Java backend development. The priorities are clean architecture, meaningful tests and well-reasoned decisions over feature count.
