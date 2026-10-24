@@ -213,6 +213,94 @@ class DockerEventStreamServiceTest {
         assertThat(frames("s1").stream().filter(f -> f.type() == DockerEventMessage.Type.EVENT)).isEmpty();
     }
 
+    /** Records the worker thread at the host lookup and whether the lookup was interrupted. */
+    private final class LookupProbe {
+        final java.util.concurrent.CountDownLatch entered = new java.util.concurrent.CountDownLatch(1);
+        final java.util.concurrent.CountDownLatch proceed = new java.util.concurrent.CountDownLatch(1);
+        volatile Thread worker;
+        volatile boolean interruptedInLookup;
+
+        void install(boolean block) {
+            when(hosts.findById(hostId)).thenAnswer(inv -> {
+                worker = Thread.currentThread();
+                entered.countDown();
+                if (block) {
+                    proceed.await();
+                }
+                interruptedInLookup = Thread.currentThread().isInterrupted();
+                return Optional.of(DockerHost.local("h", UUID.randomUUID()));
+            });
+        }
+    }
+
+    /**
+     * Unsubscribes while holding the stream's monitor, so a worker woken by the stop cannot proceed and
+     * stays alive; returns whether it was interrupted at that point (a dead thread always reports false).
+     */
+    private boolean unsubscribeAndReadInterruptWhileAlive(Thread worker, String session, String subscription)
+            throws Exception {
+        var field = DockerEventStreamService.class.getDeclaredField("streams");
+        field.setAccessible(true);
+        Object stream;
+        synchronized (field.get(service)) {
+            stream = ((java.util.Map<?, ?>) field.get(service)).get(hostId);
+        }
+        synchronized (stream) {
+            service.unsubscribe(session, subscription);
+            assertThat(worker.isAlive()).isTrue();
+            return worker.isInterrupted();
+        }
+    }
+
+    @Test
+    void stopWhileWaitingOnStreamEndsWorkerWithoutInterrupt() throws Exception {
+        var probe = new LookupProbe();
+        probe.install(false);
+        service.subscribe(hostId, "s1", "a");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !stub.sinks.isEmpty());
+
+        boolean interrupted = unsubscribeAndReadInterruptWhileAlive(probe.worker, "s1", "a");
+
+        assertThat(interrupted).isFalse();
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !probe.worker.isAlive());
+    }
+
+    @Test
+    void stopDuringHostLookupLetsLookupFinishAndOpensNoStream() {
+        var probe = new LookupProbe();
+        probe.install(true);
+        service.subscribe(hostId, "s1", "a");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> probe.entered.getCount() == 0);
+
+        service.unsubscribe("s1", "a");
+        // the worker is still blocked inside the lookup here, so its flag is meaningful
+        assertThat(probe.worker.isAlive()).isTrue();
+        assertThat(probe.worker.isInterrupted()).isFalse();
+        probe.proceed.countDown();
+
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !probe.worker.isAlive());
+        assertThat(probe.interruptedInLookup).isFalse();
+        assertThat(stub.connectTimes).isEmpty();
+    }
+
+    @Test
+    void stopDuringBackoffEndsWorkerPromptlyWithoutInterrupt() throws Exception {
+        service.shutdown();
+        service = new DockerEventStreamService(stub, hosts, resolver, sender, new DockerEventProperties(
+                Duration.ofMillis(100), 3, Duration.ofSeconds(30), Duration.ofSeconds(30)));
+        var probe = new LookupProbe();
+        probe.install(false);
+        stub.failures.add(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "down", null));
+        service.subscribe(hostId, "s1", "a");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> stub.connectTimes.size() == 1);
+        await().atMost(5, TimeUnit.SECONDS).until(() -> frames("s1").size() == 1); // DISCONNECTED, now sleeping
+
+        boolean interrupted = unsubscribeAndReadInterruptWhileAlive(probe.worker, "s1", "a");
+
+        assertThat(interrupted).isFalse();
+        await().atMost(2, TimeUnit.SECONDS).until(() -> !probe.worker.isAlive());
+    }
+
     @Test
     void parsesOnlyEventTopics() {
         assertThat(DockerEventStreamService.parse("/topic/hosts/" + hostId + "/events")).isEqualTo(hostId);

@@ -61,7 +61,6 @@ public class DockerEventStreamService {
         long nextSeq = 1;
         boolean closed;
         Closeable current;
-        Thread worker;
         ScheduledFuture<?> flush;
         DockerEventMessage lastStatus;
 
@@ -147,8 +146,7 @@ public class DockerEventStreamService {
                 }
                 if (first) {
                     HostStream started = stream;
-                    stream.worker = Thread.ofVirtual().name("docker-events-" + hostId).unstarted(() -> run(started));
-                    stream.worker.start();
+                    Thread.ofVirtual().name("docker-events-" + hostId).start(() -> run(started));
                 }
                 break;
             }
@@ -206,21 +204,17 @@ public class DockerEventStreamService {
 
     private void stop(HostStream stream) {
         Closeable current;
-        Thread worker;
         synchronized (stream) {
             stream.closed = true;
             current = stream.current;
             stream.current = null;
-            worker = stream.worker;
+            stream.notifyAll(); // wakes a worker waiting for the stream end or in backoff; never interrupted
             if (stream.flush != null) {
                 stream.flush.cancel(false);
             }
             stream.pending.clear();
         }
         closeQuietly(current);
-        if (worker != null) {
-            worker.interrupt();
-        }
     }
 
     /** Worker: connect, wait for the stream to end, report, back off, repeat until closed. */
@@ -237,6 +231,9 @@ public class DockerEventStreamService {
                         drop(stream);
                         return; // host is gone, retrying is pointless
                     }
+                    if (isClosed(stream)) {
+                        return; // released during the lookup: the lookup finished, no stream is opened
+                    }
                     Closeable handle = events.stream(stream.hostId, endpoints.endpointOf(host),
                             event -> onEvent(stream, event), ended::complete);
                     synchronized (stream) {
@@ -248,13 +245,23 @@ public class DockerEventStreamService {
                     }
                     status(stream, DockerEventMessage.Status.CONNECTED, null);
                     delay = properties.reconnectInitial();
-                    Throwable end = ended.get();
-                    failure = codeOf(end);
+                    ended.whenComplete((end, error) -> {
+                        synchronized (stream) {
+                            stream.notifyAll();
+                        }
+                    });
+                    synchronized (stream) {
+                        while (!stream.closed && !ended.isDone()) {
+                            stream.wait();
+                        }
+                    }
+                    if (isClosed(stream)) {
+                        return;
+                    }
+                    failure = codeOf(ended.getNow(null));
                 } catch (DockerConnectionException e) {
                     failure = e.getCode().name();
-                } catch (InterruptedException e) {
-                    return;
-                } catch (RuntimeException | java.util.concurrent.ExecutionException e) {
+                } catch (RuntimeException e) {
                     // e.g. undecryptable TLS material or missing encryption key: no detail to the client
                     log.warn("Docker event stream of host {} failed: {}", stream.hostId, e.getClass().getSimpleName());
                     failure = "UNAVAILABLE";
@@ -267,12 +274,26 @@ public class DockerEventStreamService {
                     return;
                 }
                 statusDisconnected(stream, failure);
-                Thread.sleep(delay);
+                awaitBackoff(stream, delay);
+                if (isClosed(stream)) {
+                    return;
+                }
                 delay = delay.multipliedBy(2).compareTo(properties.reconnectMax()) > 0
                         ? properties.reconnectMax() : delay.multipliedBy(2);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    /** Sleeps for the backoff delay on the stream monitor; {@link #stop} wakes it early. */
+    private void awaitBackoff(HostStream stream, Duration delay) throws InterruptedException {
+        long deadline = System.nanoTime() + delay.toNanos();
+        synchronized (stream) {
+            long remaining;
+            while (!stream.closed && (remaining = deadline - System.nanoTime()) > 0) {
+                TimeUnit.NANOSECONDS.timedWait(stream, remaining);
+            }
         }
     }
 
