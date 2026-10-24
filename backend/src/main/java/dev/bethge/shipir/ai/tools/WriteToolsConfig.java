@@ -3,6 +3,7 @@ package dev.bethge.shipir.ai.tools;
 import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.compose.EnvFile;
 import dev.bethge.shipir.compose.DeploymentRunService;
+import dev.bethge.shipir.compose.DeploymentSource;
 import dev.bethge.shipir.compose.DeploymentService;
 import dev.bethge.shipir.compose.dto.AutoUpdateRequest;
 import dev.bethge.shipir.compose.dto.EnvEntry;
@@ -78,11 +79,23 @@ class WriteToolsConfig {
         Map<String, Object> props = new LinkedHashMap<>();
         props.put("hostId", UUID_PROP);
         props.put("name", Map.of("type", "string", "description", "Lowercase letters, digits, '-' and '_' (max 63)."));
-        props.put("yaml", Map.of("type", "string", "description", "Compose file content."));
+        props.put("source", Map.of("type", "string", "enum", List.of("FILE", "GIT"),
+                "description", "FILE (default): Compose YAML given in 'yaml'. GIT: use this whenever the user names a repository; "
+                        + "needs repoUrl, ref and composePath, 'yaml' is ignored."));
+        props.put("yaml", Map.of("type", "string", "description", "Compose file content. Required for source FILE."));
+        props.put("repoUrl", Map.of("type", "string", "description", "https URL of the Git repository (source GIT)."));
+        props.put("ref", Map.of("type", "string", "description", "Branch, tag or commit SHA (source GIT), e.g. main."));
+        props.put("composePath", Map.of("type", "string", "description", "Path of the Compose file inside the repository (source GIT), e.g. compose.yaml."));
+        props.put("credentialId", Map.of("type", "string", "format", "uuid",
+                "description", "Git credential for private repositories (source GIT); id from list_git_credentials. Omit for public repositories."));
         props.put("env", Map.of("type", "string", "description", ENV_DESCRIPTION));
-        return write("create_deployment", "Create a managed deployment from Compose YAML (not deployed yet; use run_deployment afterwards).",
-                schema(props, "hostId", "name", "yaml"), Role.OPERATOR, (a, c) -> deployments.create(uuid(a, "hostId"),
-                        new DeploymentCreateRequest((String) a.get("name"), (String) a.get("yaml"), env(a)), c.username()));
+        return write("create_deployment", "Create a managed deployment, either from Compose YAML (source FILE) or from a Git repository "
+                        + "(source GIT; use this for repositories, never put a repository URL into the YAML). Not deployed yet; use run_deployment afterwards.",
+                schema(props, "hostId", "name"), Role.OPERATOR, (a, c) -> deployments.create(uuid(a, "hostId"),
+                        new DeploymentCreateRequest((String) a.get("name"), (String) a.get("yaml"), env(a),
+                                "GIT".equals(a.get("source")) ? DeploymentSource.GIT : DeploymentSource.FILE,
+                                (String) a.get("repoUrl"), (String) a.get("ref"), (String) a.get("composePath"),
+                                a.get("credentialId") == null ? null : uuid(a, "credentialId")), c.username()));
     }
 
     @Bean

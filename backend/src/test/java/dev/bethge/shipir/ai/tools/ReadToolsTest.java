@@ -105,6 +105,7 @@ class ReadToolsTest {
         jdbc.update("DELETE FROM notifications");
         jdbc.update("DELETE FROM notification_webhooks");
         jdbc.update("DELETE FROM deployments");
+        jdbc.update("DELETE FROM git_credentials");
         jdbc.update("DELETE FROM docker_hosts");
         for (Role role : Role.values()) {
             String name = role.name().toLowerCase();
@@ -318,11 +319,32 @@ class ReadToolsTest {
         assertThat(readTools(Role.ADMIN)).extracting(AiTool::name).containsExactlyInAnyOrder(
                 "list_hosts", "host_overview", "list_deployments", "get_managed_deployment", "list_deployment_versions",
                 "list_containers", "list_images", "list_networks", "list_volumes", "list_notifications",
-                "list_audit_log");
-        for (Role role : List.of(Role.OPERATOR, Role.VIEWER)) {
-            assertThat(readTools(role)).extracting(AiTool::name)
-                    .hasSize(10).doesNotContain("list_audit_log");
+                "list_git_credentials", "list_audit_log");
+        assertThat(readTools(Role.OPERATOR)).extracting(AiTool::name)
+                .hasSize(11).contains("list_git_credentials").doesNotContain("list_audit_log");
+        assertThat(readTools(Role.VIEWER)).extracting(AiTool::name)
+                .hasSize(10).doesNotContain("list_audit_log", "list_git_credentials");
+    }
+
+    @Test
+    void listGitCredentialsReturnsOnlyIdAndNameToOperatorsAndAdmins() {
+        jdbc.update("INSERT INTO git_credentials (name, username, token_ciphertext, token_hint, created_by) "
+                + "SELECT 'github', 'bob-the-user', ?, '...HINT9', id FROM users WHERE username = 'admin'", new byte[]{1, 2, 3});
+        UUID id = jdbc.queryForObject("SELECT id FROM git_credentials", UUID.class);
+
+        for (Role role : List.of(Role.OPERATOR, Role.ADMIN)) {
+            ToolResult result = run("list_git_credentials", "{}", role);
+            assertThat(result.error()).as(result.content()).isFalse();
+            JsonNode list = mapper.readTree(result.content());
+            assertThat(list).hasSize(1);
+            assertThat(list.get(0).get("id").asString()).isEqualTo(id.toString());
+            assertThat(list.get(0).get("name").asString()).isEqualTo("github");
+            assertThat(list.get(0).propertyNames()).containsExactlyInAnyOrder("id", "name");
+            assertThat(result.content()).doesNotContain("HINT9").doesNotContain("bob-the-user").doesNotContain("tokenHint");
         }
+        ToolResult denied = run("list_git_credentials", "{}", Role.VIEWER);
+        assertThat(denied.error()).isTrue();
+        assertThat(denied.content()).doesNotContain("github");
     }
 
     private List<AiTool> readTools(Role role) {

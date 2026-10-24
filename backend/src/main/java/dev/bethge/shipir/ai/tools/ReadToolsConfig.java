@@ -2,6 +2,7 @@ package dev.bethge.shipir.ai.tools;
 
 import dev.bethge.shipir.audit.AuditLogQueryService;
 import dev.bethge.shipir.auth.Role;
+import dev.bethge.shipir.git.GitCredentialService;
 import dev.bethge.shipir.compose.DeploymentRunService;
 import dev.bethge.shipir.compose.DeploymentService;
 import dev.bethge.shipir.host.HostOverviewService;
@@ -98,6 +99,14 @@ class ReadToolsConfig {
         return read("list_notifications", "The current user's notifications, newest first.",
                 schema(props), Role.VIEWER, (a, c) -> notifications.list(c.userId(),
                         Boolean.TRUE.equals(a.get("unreadOnly")), intArg(a, "page", 0), intArg(a, "size", 20)));
+    }
+
+    /** Only id and name: an OPERATOR may reference a credential on create but never sees anything secret about it. */
+    @Bean
+    AiTool listGitCredentialsTool(GitCredentialService credentials) {
+        return read("list_git_credentials", "Names and ids of the stored Git credentials, for create_deployment with source GIT on private repositories.",
+                schema(Map.of()), Role.OPERATOR, (a, c) -> credentials.list().stream()
+                        .map(g -> Map.of("id", g.id(), "name", g.name())).toList());
     }
 
     @Bean

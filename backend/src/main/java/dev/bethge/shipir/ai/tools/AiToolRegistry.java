@@ -221,7 +221,9 @@ public class AiToolRegistry {
         } catch (HostException e) {
             return ToolResult.error(e.code(), e.getMessage());
         } catch (DeploymentException e) {
-            return ToolResult.error(e.code(), e.getMessage());
+            // details name the offending fields (e.g. "ref: must not be blank") so the model can correct the call
+            String message = e.details().isEmpty() ? e.getMessage() : e.getMessage() + ": " + String.join("; ", e.details());
+            return ToolResult.error(e.code(), message);
         } catch (WebhookException e) {
             return ToolResult.error(e.code(), e.getMessage());
         } catch (GitException e) {

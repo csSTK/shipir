@@ -10,6 +10,8 @@ import dev.bethge.shipir.compose.dto.DeploymentCreateRequest;
 import dev.bethge.shipir.compose.execution.ComposeExecutionService;
 import dev.bethge.shipir.compose.execution.ComposeProcessResult;
 import dev.bethge.shipir.docker.client.DockerSystemService;
+import dev.bethge.shipir.git.GitCheckout;
+import dev.bethge.shipir.git.GitRepositoryService;
 import dev.bethge.shipir.docker.dto.ConnectionTestResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -83,6 +85,8 @@ class WriteToolsTest {
     ComposeExecutionService execution;
     @MockitoBean
     DockerSystemService docker;
+    @MockitoBean
+    GitRepositoryService git;
 
     UUID hostId;
     UUID deploymentId;
@@ -92,8 +96,8 @@ class WriteToolsTest {
         jdbc.update("DELETE FROM audit_log");
         jdbc.update("DELETE FROM notifications");
         jdbc.update("DELETE FROM notification_webhooks");
-        jdbc.update("DELETE FROM git_credentials");
         jdbc.update("DELETE FROM deployments");
+        jdbc.update("DELETE FROM git_credentials");
         jdbc.update("DELETE FROM docker_hosts");
         for (Role role : Role.values()) {
             String name = role.name().toLowerCase();
@@ -109,6 +113,13 @@ class WriteToolsTest {
         ComposeProcessResult ok = new ComposeProcessResult(0, false, List.of());
         when(execution.execute(any(), any(), any(), any(), any())).thenReturn(ok);
         when(execution.execute(any(), any(), any(), any(), any(), any())).thenReturn(ok);
+        when(git.sync(any(), any(), any(), any(), any())).thenAnswer(inv -> {
+            Path file = ((Path) inv.getArgument(0)).resolve((String) inv.getArgument(3));
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, YAML);
+            return new GitCheckout("abc123", YAML);
+        });
+        when(git.credentialExists(any())).thenReturn(false);
         when(docker.ping(any())).thenReturn(new ConnectionTestResult(true, "27.0", null, null));
         deploymentId = dev.bethge.shipir.common.security.SystemScope.call(() -> deployments.create(hostId,
                 new DeploymentCreateRequest("web", YAML, List.of(new EnvEntry("API_TOKEN", ENV_SECRET))), "admin").id());
@@ -209,6 +220,58 @@ class WriteToolsTest {
         assertThat(result.content()).doesNotContain(ENV_SECRET);
         assertAuditedViaAi("DEPLOYMENT_CREATE", Role.OPERATOR);
         assertThat(auditEntry("DEPLOYMENT_CREATE").get("details").toString()).doesNotContain(ENV_SECRET);
+    }
+
+    @Test
+    void createDeploymentFromGitStoresTheSourceAndIsAuditedViaAi() {
+        jdbc.update("INSERT INTO git_credentials (name, username, token_ciphertext, token_hint, created_by) "
+                + "SELECT 'cred', 'bob', ?, '...1234', id FROM users WHERE username = 'admin'", new byte[]{1, 2, 3});
+        UUID credentialId = jdbc.queryForObject("SELECT id FROM git_credentials", UUID.class);
+        when(git.credentialExists(credentialId)).thenReturn(true);
+        String args = mapper.writeValueAsString(Map.of("hostId", hostId.toString(), "name", "app", "source", "GIT",
+                "repoUrl", "https://example.com/r.git", "ref", "main", "composePath", "docker-compose.yml",
+                "credentialId", credentialId.toString()));
+
+        ToolResult result = confirmed("create_deployment", args, Role.OPERATOR);
+
+        assertThat(result.error()).as(result.content()).isFalse();
+        Map<String, Object> row = jdbc.queryForMap("SELECT source_type, git_repo_url, git_ref, git_compose_path, "
+                + "git_credential_id FROM deployments WHERE name = 'app'");
+        assertThat(row.get("source_type")).isEqualTo("GIT");
+        assertThat(row.get("git_repo_url")).isEqualTo("https://example.com/r.git");
+        assertThat(row.get("git_ref")).isEqualTo("main");
+        assertThat(row.get("git_compose_path")).isEqualTo("docker-compose.yml");
+        assertThat(row.get("git_credential_id")).isEqualTo(credentialId);
+        assertAuditedViaAi("DEPLOYMENT_CREATE", Role.OPERATOR);
+    }
+
+    @Test
+    void createDeploymentFromGitWithoutRequiredFieldsIsAnErrorResult() {
+        String noRef = mapper.writeValueAsString(Map.of("hostId", hostId.toString(), "name", "app", "source", "GIT",
+                "repoUrl", "https://example.com/r.git", "composePath", "compose.yaml"));
+        ToolResult result = confirmed("create_deployment", noRef, Role.OPERATOR);
+        assertThat(result.error()).isTrue();
+        assertThat(result.content()).contains("ref");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM deployments WHERE name = 'app'", Integer.class)).isZero();
+    }
+
+    @Test
+    void createDeploymentWithFileSourceStillNeedsYaml() {
+        String args = mapper.writeValueAsString(Map.of("hostId", hostId.toString(), "name", "app"));
+        ToolResult result = confirmed("create_deployment", args, Role.OPERATOR);
+        assertThat(result.error()).isTrue();
+        assertThat(result.content()).contains("VALIDATION_ERROR").contains("yaml");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM deployments WHERE name = 'app'", Integer.class)).isZero();
+    }
+
+    @Test
+    void createDeploymentFromGitWithUnknownCredentialIsAnErrorResult() {
+        String args = mapper.writeValueAsString(Map.of("hostId", hostId.toString(), "name", "app", "source", "GIT",
+                "repoUrl", "https://example.com/r.git", "ref", "main", "composePath", "compose.yaml",
+                "credentialId", UUID.randomUUID().toString()));
+        ToolResult result = confirmed("create_deployment", args, Role.OPERATOR);
+        assertThat(result.error()).isTrue();
+        assertThat(result.content()).contains("CREDENTIAL_NOT_FOUND");
     }
 
     @Test
