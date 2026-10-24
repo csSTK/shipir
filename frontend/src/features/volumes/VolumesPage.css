@@ -1,21 +1,4 @@
 .volumes {
-  max-width: 1200px;
+  max-width: var(--content-max);
   margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.volumes__title {
-  margin: 0;
-  font-size: 1.75rem;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  font-weight: 700;
-}
-
-.volumes__bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
 }

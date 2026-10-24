@@ -9,6 +9,12 @@ import { ImagesPage } from '../images/ImagesPage.tsx'
 import { NetworksPage } from '../networks/NetworksPage.tsx'
 import { VolumesPage } from '../volumes/VolumesPage.tsx'
 
+/** Opens the row's overflow menu and picks Delete. */
+async function openDelete(rowName: string) {
+  fireEvent.pointerDown(await screen.findByRole('button', { name: `More actions for ${rowName}` }), { button: 0, ctrlKey: false })
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }))
+}
+
 const apiFetch = vi.fn()
 vi.mock('../../shared/api/client.ts', async (importActual) => ({
   ...(await importActual<typeof import('../../shared/api/client.ts')>()),
@@ -102,20 +108,20 @@ describe('resource deletion', () => {
   it('keeps the dialog open and shows the server message on RESOURCE_IN_USE', async () => {
     serve('ADMIN', () => Promise.reject(new ApiError(409, JSON.stringify({ code: 'RESOURCE_IN_USE', message: 'Network is used by 2 containers.' }), 'RESOURCE_IN_USE')))
     renderPage('networks', <NetworksPage />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete network backend' }))
+    await openDelete('backend')
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Network is used by 2 containers.')
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
   it.each([
-    ['images', <ImagesPage key="i" />, 'Delete image nginx:1', '/hosts/h1/images/sha256%3Aaaaaaaaaaaaaaaaa'],
-    ['volumes', <VolumesPage key="v" />, 'Delete volume pgdata', '/hosts/h1/volumes/pgdata'],
-    ['networks', <NetworksPage key="n" />, 'Delete network backend', '/hosts/h1/networks/n1'],
+    ['images', <ImagesPage key="i" />, 'nginx:1', '/hosts/h1/images/sha256%3Aaaaaaaaaaaaaaaaa'],
+    ['volumes', <VolumesPage key="v" />, 'pgdata', '/hosts/h1/volumes/pgdata'],
+    ['networks', <NetworksPage key="n" />, 'backend', '/hosts/h1/networks/n1'],
   ])('deletes from the %s page', async (segment, page, label, expected) => {
     serve('OPERATOR')
     renderPage(segment, page)
-    fireEvent.click(await screen.findByRole('button', { name: label }))
+    await openDelete(label)
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
     await waitFor(() => expect(deleteCalls()).toEqual([expected]))
   })

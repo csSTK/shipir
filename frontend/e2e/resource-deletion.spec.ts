@@ -69,12 +69,13 @@ test('deletes an image, a volume and a network', async ({ page, api }) => {
   api.mock('DELETE', '/api/hosts/a/volumes/pgdata', { status: 204 })
   api.mock('DELETE', '/api/hosts/a/networks/n1', { status: 204 })
   for (const [path, label] of [
-    ['images', 'Delete image nginx:1'],
-    ['volumes', 'Delete volume pgdata'],
-    ['networks', 'Delete network backend'],
+    ['images', 'nginx:1'],
+    ['volumes', 'pgdata'],
+    ['networks', 'backend'],
   ]) {
     await page.goto(`/environments/a/${path}`)
-    await page.getByRole('button', { name: label }).click()
+    await page.getByRole('button', { name: `More actions for ${label}` }).click()
+    await page.getByRole('menuitem', { name: 'Delete' }).click()
     const request = page.waitForRequest((r) => r.method() === 'DELETE')
     await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click()
     await request
@@ -87,7 +88,8 @@ test('in-use refusal stays inline', async ({ page, api }) => {
   api.mock('GET', '/api/hosts/a/volumes', { body: volumes })
   api.mock('DELETE', '/api/hosts/a/volumes/pgdata', { status: 409, body: { code: 'RESOURCE_IN_USE', message: 'Volume is used by container db.' } })
   await page.goto('/environments/a/volumes')
-  await page.getByRole('button', { name: 'Delete volume pgdata' }).click()
+  await page.getByRole('button', { name: 'More actions for pgdata' }).click()
+  await page.getByRole('menuitem', { name: 'Delete' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click()
   await expect(page.getByRole('dialog').getByRole('alert')).toHaveText('Volume is used by container db.')
 })
@@ -97,5 +99,5 @@ test('viewer sees no delete action', async ({ page, api }) => {
   api.mock('GET', '/api/hosts/a/images', { body: images })
   await page.goto('/environments/a/images')
   await expect(page.getByRole('table', { name: 'images' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /Delete/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /More actions|Delete/ })).toHaveCount(0)
 })

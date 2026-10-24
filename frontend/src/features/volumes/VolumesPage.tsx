@@ -1,14 +1,13 @@
 import { useState } from 'react'
 import { useCurrentUser } from '../auth/index.ts'
-import { deleteColumn } from '../hosts/deleteColumn.tsx'
+import { deleteMenu } from '../hosts/deleteRowActions.tsx'
 import { DeleteResourceDialog } from '../hosts/DeleteResourceDialog.tsx'
 import { useParams } from 'react-router-dom'
 import { describeResourceError } from '../hosts/format.ts'
-import { Badge, ResourceTable, type ResourceColumn } from '../../shared/ui/index.ts'
+import { Badge, Button, PageHeader, ResourceTable, type ResourceColumn } from '../../shared/ui/index.ts'
 import { useDeleteVolume, useVolumes, type Volume } from './api.ts'
 import { CreateVolumeDialog } from './CreateVolumeDialog.tsx'
 import './VolumesPage.css'
-import { Button } from '../../shared/ui/index.ts'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -38,21 +37,22 @@ export function VolumesPage() {
   const del = useDeleteVolume(id)
   const [target, setTarget] = useState<Volume | null>(null)
   const [creating, setCreating] = useState(false)
-  const tableColumns = canWrite ? [...columns, deleteColumn<Volume>('volume', (v) => v.name, setTarget)] : columns
 
   return (
     <section className="volumes">
-      <div className="volumes__bar">
-        <h2 className="volumes__title">Volumes</h2>
-        {canWrite && (
-          <Button variant="primary" onClick={() => setCreating(true)}>
-            Create volume
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title="Volumes"
+        actions={
+          canWrite && (
+            <Button variant="primary" onClick={() => setCreating(true)}>
+              Create volume
+            </Button>
+          )
+        }
+      />
       <ResourceTable
         label="volumes"
-        columns={tableColumns}
+        columns={columns}
         rows={data}
         rowKey={(v) => v.name}
         searchText={(v) => `${v.name} ${v.driver}`}
@@ -61,6 +61,8 @@ export function VolumesPage() {
         isPending={isPending}
         error={error ? describeResourceError(error) : null}
         onRetry={() => void refetch()}
+        rowLabel={(v) => v.name}
+        rowActions={canWrite ? (v) => ({ menu: deleteMenu(() => setTarget(v)) }) : undefined}
       />
       {creating && <CreateVolumeDialog hostId={id} onClose={() => setCreating(false)} />}
       {target && (

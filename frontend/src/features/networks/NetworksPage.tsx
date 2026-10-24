@@ -1,14 +1,13 @@
 import { useState } from 'react'
 import { useCurrentUser } from '../auth/index.ts'
-import { deleteColumn } from '../hosts/deleteColumn.tsx'
+import { deleteMenu } from '../hosts/deleteRowActions.tsx'
 import { DeleteResourceDialog } from '../hosts/DeleteResourceDialog.tsx'
 import { useParams } from 'react-router-dom'
 import { describeResourceError } from '../hosts/format.ts'
-import { Badge, ResourceTable, type ResourceColumn } from '../../shared/ui/index.ts'
+import { Badge, Button, PageHeader, ResourceTable, type ResourceColumn } from '../../shared/ui/index.ts'
 import { useDeleteNetwork, useNetworks, type Network } from './api.ts'
 import { CreateNetworkDialog } from './CreateNetworkDialog.tsx'
 import './NetworksPage.css'
-import { Button } from '../../shared/ui/index.ts'
 
 const columns: ResourceColumn<Network>[] = [
   {
@@ -42,21 +41,22 @@ export function NetworksPage() {
   const del = useDeleteNetwork(id)
   const [target, setTarget] = useState<Network | null>(null)
   const [creating, setCreating] = useState(false)
-  const tableColumns = canWrite ? [...columns, deleteColumn<Network>('network', (n) => n.name, setTarget)] : columns
 
   return (
     <section className="networks">
-      <div className="networks__bar">
-        <h2 className="networks__title">Networks</h2>
-        {canWrite && (
-          <Button variant="primary" onClick={() => setCreating(true)}>
-            Create network
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title="Networks"
+        actions={
+          canWrite && (
+            <Button variant="primary" onClick={() => setCreating(true)}>
+              Create network
+            </Button>
+          )
+        }
+      />
       <ResourceTable
         label="networks"
-        columns={tableColumns}
+        columns={columns}
         rows={data}
         rowKey={(n) => n.id}
         searchText={(n) => `${n.name} ${n.driver} ${n.scope} ${n.subnet ?? ''}`}
@@ -65,6 +65,8 @@ export function NetworksPage() {
         isPending={isPending}
         error={error ? describeResourceError(error) : null}
         onRetry={() => void refetch()}
+        rowLabel={(n) => n.name}
+        rowActions={canWrite ? (n) => ({ menu: deleteMenu(() => setTarget(n)) }) : undefined}
       />
       {creating && <CreateNetworkDialog hostId={id} isAdmin={user?.role === 'ADMIN'} onClose={() => setCreating(false)} />}
       {target && (

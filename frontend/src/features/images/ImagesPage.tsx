@@ -1,14 +1,13 @@
 import { useState } from 'react'
 import { useCurrentUser } from '../auth/index.ts'
-import { deleteColumn } from '../hosts/deleteColumn.tsx'
+import { deleteMenu } from '../hosts/deleteRowActions.tsx'
 import { DeleteResourceDialog } from '../hosts/DeleteResourceDialog.tsx'
 import { useParams } from 'react-router-dom'
 import { describeResourceError, formatSize } from '../hosts/format.ts'
-import { Badge, ResourceTable, type ResourceColumn } from '../../shared/ui/index.ts'
+import { Badge, Button, PageHeader, ResourceTable, type ResourceColumn } from '../../shared/ui/index.ts'
 import { useDeleteImage, useImages, type Image } from './api.ts'
 import { PullImageDialog } from './PullImageDialog.tsx'
 import './ImagesPage.css'
-import { Button } from '../../shared/ui/index.ts'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -73,21 +72,22 @@ export function ImagesPage() {
   const [target, setTarget] = useState<Image | null>(null)
   const [pulling, setPulling] = useState<{ reference: string } | null>(null)
   const withUpdate = [...columns, updateColumn(canWrite ? (i) => setPulling({ reference: i.repoTags[0] }) : null)]
-  const tableColumns = canWrite ? [...withUpdate, deleteColumn<Image>('image', (i) => i.repoTags[0] ?? shortId(i.id), setTarget)] : withUpdate
 
   return (
     <section className="images">
-      <div className="images__bar">
-        <h2 className="images__title">Images</h2>
-        {canWrite && (
-          <Button variant="primary" onClick={() => setPulling({ reference: '' })}>
-            Pull image
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title="Images"
+        actions={
+          canWrite && (
+            <Button variant="primary" onClick={() => setPulling({ reference: '' })}>
+              Pull image
+            </Button>
+          )
+        }
+      />
       <ResourceTable
         label="images"
-        columns={tableColumns}
+        columns={withUpdate}
         rows={data}
         rowKey={(i) => i.id}
         searchText={(i) => `${i.repoTags.join(' ')} ${shortId(i.id)}`}
@@ -96,6 +96,8 @@ export function ImagesPage() {
         isPending={isPending}
         error={error ? describeResourceError(error) : null}
         onRetry={() => void refetch()}
+        rowLabel={(i) => i.repoTags[0] ?? shortId(i.id)}
+        rowActions={canWrite ? (i) => ({ menu: deleteMenu(() => setTarget(i)) }) : undefined}
       />
       {pulling && <PullImageDialog hostId={id} initialReference={pulling.reference} onClose={() => setPulling(null)} />}
       {target && (
