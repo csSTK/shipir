@@ -1,4 +1,9 @@
 shipir:
+  security:
+    login:
+      max-attempts: 5
+      window: 15m
+      lockout: 15m
   docker:
     local-socket: unix:///var/run/docker.sock
     connect-timeout: 3s

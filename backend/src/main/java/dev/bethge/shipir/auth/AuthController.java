@@ -1,5 +1,8 @@
 package dev.bethge.shipir.auth;
 
+import dev.bethge.shipir.audit.AuditLogEntry;
+import dev.bethge.shipir.audit.AuditRecord;
+import dev.bethge.shipir.audit.AuditService;
 import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.auth.dto.CurrentUserResponse;
 import dev.bethge.shipir.auth.dto.LoginRequest;
@@ -12,6 +15,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -30,9 +34,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Duration;
+import java.util.Map;
+import java.util.Optional;
+
 @RestController
 @RequestMapping("/api/auth")
 class AuthController {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AuthController.class);
 
     /** One body for every failed login so the response never reveals whether the user exists. */
     private static final ErrorResponse INVALID_CREDENTIALS =
@@ -46,6 +56,9 @@ class AuthController {
     private final UserService userService;
     private final UserSetupStatus setupStatus;
     private final PasswordResetService passwordResetService;
+    private final LoginThrottle throttle;
+    private final ClientAddressResolver clientAddress;
+    private final AuditService auditService;
 
     AuthController(AuthenticationManager authenticationManager,
                    SecurityContextRepository securityContextRepository,
@@ -54,7 +67,10 @@ class AuthController {
                    UserRepository users,
                    UserService userService,
                    UserSetupStatus setupStatus,
-                   PasswordResetService passwordResetService) {
+                   PasswordResetService passwordResetService,
+                   LoginThrottle throttle,
+                   ClientAddressResolver clientAddress,
+                   AuditService auditService) {
         this.authenticationManager = authenticationManager;
         this.securityContextRepository = securityContextRepository;
         this.sessionAuthenticationStrategy = sessionAuthenticationStrategy;
@@ -63,19 +79,29 @@ class AuthController {
         this.userService = userService;
         this.setupStatus = setupStatus;
         this.passwordResetService = passwordResetService;
+        this.throttle = throttle;
+        this.clientAddress = clientAddress;
+        this.auditService = auditService;
     }
 
     @PostMapping("/login")
     @Auditable(action = "LOGIN", targetType = "USER", username = "#body.username()")
     ResponseEntity<?> login(@Valid @RequestBody LoginRequest body,
                             HttpServletRequest request, HttpServletResponse response) {
+        String address = clientAddress.resolve(request);
+        Optional<Duration> locked = throttle.lockedFor(LoginThrottle.Scope.LOGIN, body.username(), address);
+        if (locked.isPresent()) {
+            return tooManyAttempts(locked.get());
+        }
         Authentication authentication;
         try {
             authentication = authenticationManager.authenticate(
                     UsernamePasswordAuthenticationToken.unauthenticated(body.username(), body.password()));
         } catch (AuthenticationException ex) {
+            recordFailure(LoginThrottle.Scope.LOGIN, body.username(), address);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(INVALID_CREDENTIALS);
         }
+        throttle.recordSuccess(LoginThrottle.Scope.LOGIN, body.username());
         // Rotate the session id (fixation protection) and the CSRF token before the context is stored.
         sessionAuthenticationStrategy.onAuthentication(authentication, request, response);
         SecurityContext context = SecurityContextHolder.createEmptyContext();
@@ -107,7 +133,14 @@ class AuthController {
 
     /** Always 202, whether or not the user exists, so the response never reveals accounts. */
     @PostMapping("/password-reset/request")
-    ResponseEntity<Void> requestPasswordReset(@Valid @RequestBody PasswordResetRequest body) {
+    ResponseEntity<?> requestPasswordReset(@Valid @RequestBody PasswordResetRequest body, HttpServletRequest request) {
+        String address = clientAddress.resolve(request);
+        Optional<Duration> locked = throttle.lockedFor(LoginThrottle.Scope.RESET, body.username(), address);
+        if (locked.isPresent()) {
+            return tooManyAttempts(locked.get());
+        }
+        // Every request counts, known user or not, so the limit cannot be used to find accounts.
+        recordFailure(LoginThrottle.Scope.RESET, body.username(), address);
         passwordResetService.requestReset(body.username());
         return ResponseEntity.accepted().build();
     }
@@ -115,9 +148,40 @@ class AuthController {
     /** Does not log the user in. */
     @PostMapping("/password-reset/confirm")
     @Auditable(action = "PASSWORD_RESET_CONFIRM", targetType = "USER", username = "#body.username()")
-    ResponseEntity<Void> confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest body) {
-        passwordResetService.confirmReset(body.username(), body.code(), body.newPassword());
+    ResponseEntity<?> confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest body,
+                                           HttpServletRequest request) {
+        String address = clientAddress.resolve(request);
+        Optional<Duration> locked = throttle.lockedFor(LoginThrottle.Scope.RESET, body.username(), address);
+        if (locked.isPresent()) {
+            return tooManyAttempts(locked.get());
+        }
+        try {
+            passwordResetService.confirmReset(body.username(), body.code(), body.newPassword());
+        } catch (InvalidResetCodeException ex) {
+            recordFailure(LoginThrottle.Scope.RESET, body.username(), address);
+            throw ex;
+        }
+        throttle.recordSuccess(LoginThrottle.Scope.RESET, body.username());
         return ResponseEntity.noContent().build();
+    }
+
+    private void recordFailure(LoginThrottle.Scope scope, String username, String address) {
+        if (throttle.recordFailure(scope, username, address)) {
+            try {
+                auditService.record(new AuditRecord(null, username, "LOGIN_THROTTLED", AuditLogEntry.Outcome.FAILURE,
+                        "USER", username, Map.of("scope", scope.name(), "clientAddress", address)));
+            } catch (RuntimeException e) {
+                // Same rule as AuditAspect: a failing audit write must not change the response.
+                log.warn("Could not write audit entry for LOGIN_THROTTLED: {}", e.toString());
+            }
+        }
+    }
+
+    private static ResponseEntity<ErrorResponse> tooManyAttempts(Duration retryAfter) {
+        long seconds = Math.max(1, (retryAfter.toMillis() + 999) / 1000);
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(seconds))
+                .body(new ErrorResponse("TOO_MANY_ATTEMPTS", "Too many attempts, try again later"));
     }
 
     @ExceptionHandler(InvalidResetCodeException.class)
