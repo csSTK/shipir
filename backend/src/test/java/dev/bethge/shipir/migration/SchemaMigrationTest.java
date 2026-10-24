@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V20 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V22 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -35,7 +35,7 @@ class SchemaMigrationTest {
     void flywayAppliedVersions1To21Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22");
     }
 
     @Test
@@ -1341,6 +1341,104 @@ class SchemaMigrationTest {
                 .hasMessageContaining("deployment_versions_source_check");
     }
 
+    @Test
+    void permissionOnHostIsAccepted() {
+        UUID user = insertUser("alice");
+        insertPermission(user, insertHost(user), null, "VIEW");
+        assertThat(count("permissions")).isEqualTo(1);
+    }
+
+    @Test
+    void permissionOnDeploymentIsAccepted() {
+        UUID user = insertUser("alice");
+        UUID host = insertHost(user);
+        insertPermission(user, null, insertDeployment(host, user, "web"), "OPERATE");
+        assertThat(count("permissions")).isEqualTo(1);
+    }
+
+    @Test
+    void sameUserMayHoldHostAndDeploymentPermissions() {
+        UUID user = insertUser("alice");
+        UUID host = insertHost(user);
+        insertPermission(user, host, null, "VIEW");
+        insertPermission(user, null, insertDeployment(host, user, "web"), "OPERATE");
+        assertThat(count("permissions")).isEqualTo(2);
+    }
+
+    @Test
+    void permissionLevelOutsideViewAndOperateIsRejected() {
+        UUID user = insertUser("alice");
+        UUID host = insertHost(user);
+        assertThatThrownBy(() -> insertPermission(user, host, null, "ADMIN"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void permissionWithoutHostOrDeploymentIsRejected() {
+        UUID user = insertUser("alice");
+        assertThatThrownBy(() -> insertPermission(user, null, null, "VIEW"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void permissionWithHostAndDeploymentIsRejected() {
+        UUID user = insertUser("alice");
+        UUID host = insertHost(user);
+        assertThatThrownBy(() -> insertPermission(user, host, insertDeployment(host, user, "web"), "VIEW"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void duplicateHostPermissionForSameUserIsRejected() {
+        UUID user = insertUser("alice");
+        UUID host = insertHost(user);
+        insertPermission(user, host, null, "VIEW");
+        assertThatThrownBy(() -> insertPermission(user, host, null, "OPERATE"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void duplicateDeploymentPermissionForSameUserIsRejected() {
+        UUID owner = insertUser("owner");
+        UUID host = insertHost(owner);
+        UUID deployment = insertDeployment(host, owner, "web");
+        UUID user = insertUser("alice");
+        insertPermission(user, null, deployment, "VIEW");
+        assertThatThrownBy(() -> insertPermission(user, null, deployment, "OPERATE"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void deletingUserCascadesTheirPermissions() {
+        UUID owner = insertUser("owner");
+        UUID host = insertHost(owner);
+        UUID user = insertUser("alice");
+        insertPermission(user, host, null, "VIEW");
+        jdbc.update("DELETE FROM users WHERE id = ?", user);
+        assertThat(count("permissions")).isZero();
+    }
+
+    @Test
+    void deletingHostCascadesHostPermissions() {
+        UUID owner = insertUser("owner");
+        UUID host = insertHost(owner);
+        UUID user = insertUser("alice");
+        insertPermission(user, host, null, "VIEW");
+        jdbc.update("DELETE FROM docker_hosts WHERE id = ?", host);
+        assertThat(count("permissions")).isZero();
+    }
+
+    @Test
+    void deletingDeploymentCascadesDeploymentPermissions() {
+        UUID owner = insertUser("owner");
+        UUID host = insertHost(owner);
+        UUID deployment = insertDeployment(host, owner, "web");
+        UUID user = insertUser("alice");
+        insertPermission(user, null, deployment, "OPERATE");
+        jdbc.update("DELETE FROM deployments WHERE id = ?", deployment);
+        assertThat(count("permissions")).isZero();
+    }
+
     private UUID insertChatSession(UUID user) {
         return jdbc.queryForObject(
                 "INSERT INTO chat_sessions (user_id, title) VALUES (?, 'chat') RETURNING id", UUID.class, user);
@@ -1423,5 +1521,10 @@ class SchemaMigrationTest {
     private void insertVersion(UUID deployment, UUID creator) {
         jdbc.update("INSERT INTO deployment_versions (deployment_id, yaml_content, created_by) VALUES (?, 'services: {}', ?)",
                 deployment, creator);
+    }
+
+    private void insertPermission(UUID user, UUID host, UUID deployment, String level) {
+        jdbc.update("INSERT INTO permissions (user_id, host_id, deployment_id, level) VALUES (?, ?, ?, ?)",
+                user, host, deployment, level);
     }
 }
