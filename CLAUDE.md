@@ -429,7 +429,7 @@ dev.bethge.shipir
 │   ├── execution/     ComposeExecutionService, ComposeProcessResult   (ProcessBuilder)
 │   ├── validation/    ComposeValidationService       (`docker compose config`)
 │   ├── dto/, web/
-├── config_editor/     ConfigFile, repository, service (must use PathValidationUtil), DTOs, controller
+├── config_editor/     ConfigFileService (must use PathValidationUtil, backup before write), DTOs, controller
 ├── streaming/         LogStreamHandler, DockerEventStreamService, ComposeOutputStreamService, ExecSessionHandler
 ├── git/               Git credentials (encrypted PAT), remote checks via JGit
 ├── notification/      in-app notifications (HostStatusChangedEvent listener), per-user preferences, webhooks
@@ -464,7 +464,7 @@ Decided in epic shipr-9sm. An in-app chat that can do what the signed-in user ca
 - **Audit:** actions are audited as the user, with details marking AI origin.
 - **API key:** set by ADMIN at `/settings/ai`, encrypted via `SecretCipher`, only a hint is returned, never logged.
 - **Sessions are owner-only.** The owner may share a session read-only with ADMINs (for debugging) and revoke it. Old sessions are purged by the retention job.
-- **Out of scope:** config_editor and permission tools (features not built yet), exec terminal, RAG/embeddings.
+- **Out of scope:** config_editor tools, permission tools (feature not built yet), exec terminal, RAG/embeddings.
 
 ## Security (non-negotiable)
 
