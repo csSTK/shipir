@@ -2,11 +2,13 @@ package dev.bethge.shipir.ai.chat;
 
 import dev.bethge.shipir.PostgresTestConfiguration;
 import dev.bethge.shipir.ai.llm.LlmClient;
+import dev.bethge.shipir.ai.llm.LlmClients;
 import dev.bethge.shipir.ai.llm.LlmMessage;
 import dev.bethge.shipir.ai.llm.LlmResponse;
 import dev.bethge.shipir.ai.llm.LlmToolCall;
 import dev.bethge.shipir.ai.llm.LlmToolDefinition;
 import dev.bethge.shipir.ai.settings.AiConfig;
+import dev.bethge.shipir.ai.settings.AiProvider;
 import dev.bethge.shipir.ai.settings.AiSettingsService;
 import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.auth.User;
@@ -96,9 +98,14 @@ class ChatOrchestratorNoEncryptionKeyTest {
     @TestConfiguration
     static class StubConfig {
         @Bean
-        @Primary
         StubLlm stubLlm() {
             return new StubLlm();
+        }
+
+        @Bean
+        @Primary
+        LlmClients stubLlmClients(StubLlm openAi) {
+            return new LlmClients(openAi, new StubLlm());
         }
     }
 
@@ -113,7 +120,7 @@ class ChatOrchestratorNoEncryptionKeyTest {
 
     @BeforeEach
     void reset() {
-        Mockito.when(settings.activeConfig()).thenReturn(Optional.of(new AiConfig("https://llm.test/v1", "m", "k")));
+        Mockito.when(settings.activeConfig()).thenReturn(Optional.of(new AiConfig(AiProvider.OPENAI_COMPATIBLE, "https://llm.test/v1", "m", "k")));
         llm.script.clear();
         llm.conversations.clear();
         jdbc.update("DELETE FROM chat_sessions");
