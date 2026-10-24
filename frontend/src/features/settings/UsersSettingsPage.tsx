@@ -1,13 +1,16 @@
-import { Ban, CircleCheck, KeyRound, RotateCcw, Trash2 } from 'lucide-react'
+import { Ban, CircleCheck, KeyRound, RotateCcw, ShieldOff, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { ApiError } from '../../shared/api/client.ts'
-import { Badge, Button, ConfirmDialog, Dialog, ResourceTable, Select, TextField, type ResourceColumn } from '../../shared/ui/index.ts'
+import { Badge, Button, Card, ConfirmDialog, Dialog, ResourceTable, Select, Switch, TextField, type ResourceColumn } from '../../shared/ui/index.ts'
 import type { RowActions } from '../../shared/ui/ResourceTable.tsx'
 import {
   useChangeUserRole,
   useCreateUser,
   useDeleteUser,
   useResetUserPassword,
+  useResetUserTwoFactor,
+  useSaveSecuritySettings,
+  useSecuritySettings,
   useSetUserDisabled,
   useUsers,
   type ManagedUser,
@@ -39,6 +42,8 @@ function errorMessage(error: unknown, fallback: string): string {
         return 'You cannot change your own role.'
       case 'SELF_DELETE':
         return 'You cannot delete your own account.'
+      case 'SELF_RESET_2FA':
+        return 'Manage your own two-factor authentication under Account instead.'
       case 'SELF_RESET_PASSWORD':
         return 'Change your own password under Account instead.'
     }
@@ -143,12 +148,39 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
 
 type DialogState =
   | { kind: 'create' }
-  | { kind: 'reset' | 'delete' | 'access'; user: ManagedUser }
+  | { kind: 'reset' | 'reset2fa' | 'delete' | 'access'; user: ManagedUser }
   | { kind: 'password'; result: OneTimePassword }
   | null
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+/** ADMIN switch: when on, ADMIN accounts must enrol a second factor. */
+function RequireTwoFactorCard() {
+  const settings = useSecuritySettings()
+  const save = useSaveSecuritySettings()
+  return (
+    <Card>
+      <Switch
+        label="Require 2FA for ADMINs"
+        help="Admins without two-factor authentication must set it up at their next sign-in."
+        checked={settings.data?.require2faForAdmins ?? false}
+        disabled={!settings.data || save.isPending}
+        onChange={(e) => save.mutate({ require2faForAdmins: e.target.checked })}
+      />
+      {settings.isError && (
+        <p role="alert" className="settings__error">
+          Could not load the security settings.
+        </p>
+      )}
+      {save.isError && (
+        <p role="alert" className="settings__error">
+          Could not save the security settings. Try again.
+        </p>
+      )}
+    </Card>
+  )
 }
 
 /** Settings > Users: ADMIN user management. The caller restricts access to ADMIN; `currentUsername` hides self-actions. */
@@ -160,6 +192,7 @@ export function UsersSettingsPage({ currentUsername }: { currentUsername: string
   const changeRole = useChangeUserRole()
   const setDisabled = useSetUserDisabled()
   const reset = useResetUserPassword()
+  const reset2fa = useResetUserTwoFactor()
   const remove = useDeleteUser()
 
   const open = (d: DialogState) => {
@@ -234,6 +267,13 @@ export function UsersSettingsPage({ currentUsername }: { currentUsername: string
           <Badge tone="warn">Password change pending</Badge>
         ),
     },
+    {
+      id: 'twoFactor',
+      header: '2FA',
+      sortValue: (u) => (u.twoFactorEnabled ? 1 : 0),
+      defaultWidth: 100,
+      render: (u) => <Badge tone={u.twoFactorEnabled ? 'ok' : 'muted'}>{u.twoFactorEnabled ? 'On' : 'Off'}</Badge>,
+    },
   ]
 
   function rowActions(u: ManagedUser): RowActions {
@@ -249,6 +289,9 @@ export function UsersSettingsPage({ currentUsername }: { currentUsername: string
                 disabled: setDisabled.isPending,
                 onSelect: () => onToggle(u),
               },
+              ...(u.twoFactorEnabled
+                ? [{ label: 'Reset 2FA for', icon: ShieldOff, onSelect: () => open({ kind: 'reset2fa', user: u }) }]
+                : []),
               { label: 'Reset password for', icon: RotateCcw, onSelect: () => open({ kind: 'reset', user: u }) },
               { label: 'Delete', icon: Trash2, danger: true, onSelect: () => open({ kind: 'delete', user: u }) },
             ]
@@ -268,6 +311,7 @@ export function UsersSettingsPage({ currentUsername }: { currentUsername: string
         </Button>
       }
     >
+      <RequireTwoFactorCard />
       {rowProblem && (
         <p role="alert" className="settings__error">
           {rowProblem}
@@ -307,6 +351,32 @@ export function UsersSettingsPage({ currentUsername }: { currentUsername: string
           <p className="settings__text">
             Generate a new one-time password for <strong>{dialog.user.username}</strong>? The current password stops working and
             active sessions are ended.
+          </p>
+          {dialogProblem && (
+            <p role="alert" className="settings__error">
+              {dialogProblem}
+            </p>
+          )}
+        </ConfirmDialog>
+      )}
+      {dialog?.kind === 'reset2fa' && (
+        <ConfirmDialog
+          open
+          onOpenChange={(o) => !o && close()}
+          title="Reset two-factor authentication"
+          confirmLabel="Reset 2FA"
+          danger
+          loading={reset2fa.isPending}
+          onConfirm={() =>
+            reset2fa.mutate(dialog.user.id, {
+              onSuccess: close,
+              onError: (err) => setDialogProblem(errorMessage(err, 'Could not reset two-factor authentication. Try again.')),
+            })
+          }
+        >
+          <p className="settings__text">
+            Remove two-factor authentication for <strong>{dialog.user.username}</strong>? They can sign in with their password
+            alone until they set it up again.
           </p>
           {dialogProblem && (
             <p role="alert" className="settings__error">

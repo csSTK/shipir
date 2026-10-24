@@ -4,6 +4,7 @@ import { ApiError } from '../../shared/api/client.ts'
 import { useQueryClient } from '@tanstack/react-query'
 import { EnvironmentForm } from '../hosts/index.ts'
 import { AuthBrand } from './AuthBrand.tsx'
+import { TwoFactorEnrollment } from './TwoFactorEnrollment.tsx'
 import { CURRENT_USER_KEY, useChangePassword, type SetupStep } from './api.ts'
 import { checkPassword, isPasswordValid, violationMessage } from './passwordPolicy.ts'
 import './LoginPage.css'
@@ -24,14 +25,17 @@ function errorMessages(error: unknown): string[] {
 
 const STEPS: { id: SetupStep; label: string }[] = [
   { id: 'PASSWORD', label: 'Password' },
+  { id: 'TWO_FACTOR', label: 'Two-factor' },
   { id: 'ENVIRONMENT', label: 'Environment' },
 ]
 
 function StepIndicator({ step }: { step: SetupStep }) {
+  // Two-factor only appears once the server asks for it (an admin requirement).
+  const steps = step === 'TWO_FACTOR' ? STEPS : STEPS.filter((s) => s.id !== 'TWO_FACTOR')
   return (
     <ol className="setup__steps" aria-label="Setup steps">
-      {STEPS.map(({ id, label }, index) => {
-        const current = STEPS.findIndex((s) => s.id === step)
+      {steps.map(({ id, label }, index) => {
+        const current = steps.findIndex((s) => s.id === step)
         return (
           <li
             key={id}
@@ -47,6 +51,22 @@ function StepIndicator({ step }: { step: SetupStep }) {
         )
       })}
     </ol>
+  )
+}
+
+/** Admins must enrol a second factor before the app opens when the server requires it. */
+function TwoFactorStep() {
+  const queryClient = useQueryClient()
+  return (
+    <Card className="setup__card setup__panel auth-card">
+      <h1 className="setup__title">Set up two-factor authentication</h1>
+      <p className="setup__intro">An administrator requires two-factor authentication for admin accounts. Set it up to continue.</p>
+      <TwoFactorEnrollment
+        autoStart
+        finishLabel="Continue"
+        onFinished={() => void queryClient.refetchQueries({ queryKey: CURRENT_USER_KEY })}
+      />
+    </Card>
   )
 }
 
@@ -83,7 +103,13 @@ export function SetupPage({ username, step = 'PASSWORD' }: { username: string; s
       <div className="auth-stack">
         <AuthBrand />
         <StepIndicator step={step} />
-        {step === 'ENVIRONMENT' ? <EnvironmentStep key="environment" /> : <PasswordStep key="password" username={username} />}
+        {step === 'ENVIRONMENT' ? (
+          <EnvironmentStep key="environment" />
+        ) : step === 'TWO_FACTOR' ? (
+          <TwoFactorStep key="two-factor" />
+        ) : (
+          <PasswordStep key="password" username={username} />
+        )}
       </div>
     </main>
   )

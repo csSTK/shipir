@@ -203,6 +203,11 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   GIT_CREDENTIAL_DELETE: 'Git credential deleted',
   RETENTION_UPDATE: 'Retention updated',
   RETENTION_PURGE: 'Retention purge',
+  MFA_ENABLE: 'Two-factor enabled',
+  MFA_DISABLE: 'Two-factor disabled',
+  MFA_VERIFY: 'Two-factor sign-in',
+  MFA_RESET: 'Two-factor reset',
+  SECURITY_SETTINGS_UPDATE: 'Security settings updated',
 }
 
 export interface AuditLogEntry {
@@ -349,6 +354,7 @@ export interface ManagedUser {
   /** Null while the user has not chosen their own password yet. */
   passwordChangedAt: string | null
   disabledAt: string | null
+  twoFactorEnabled?: boolean
 }
 
 export type PermissionLevel = 'VIEW' | 'OPERATE'
@@ -439,6 +445,35 @@ export function useResetUserPassword() {
   return useMutation({
     mutationFn: (id: string) => apiFetch<OneTimePassword>(`${USERS_BASE}/${id}/reset-password`, { method: 'POST' }),
     onSuccess: () => void invalidate(),
+  })
+}
+
+export function useResetUserTwoFactor() {
+  const invalidate = useInvalidateUsers()
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<void>(`${USERS_BASE}/${id}/reset-2fa`, { method: 'POST' }),
+    onSuccess: () => void invalidate(),
+  })
+}
+
+export interface SecuritySettings {
+  require2faForAdmins: boolean
+  updatedAt: string | null
+}
+
+const SECURITY_KEY = ['settings-security'] as const
+const SECURITY_PATH = '/settings/security'
+
+export function useSecuritySettings() {
+  return useQuery({ queryKey: SECURITY_KEY, queryFn: () => apiFetch<SecuritySettings>(SECURITY_PATH) })
+}
+
+export function useSaveSecuritySettings() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { require2faForAdmins: boolean }) =>
+      apiFetch<SecuritySettings>(SECURITY_PATH, { method: 'PUT', body: input }),
+    onSuccess: (saved) => queryClient.setQueryData(SECURITY_KEY, saved),
   })
 }
 

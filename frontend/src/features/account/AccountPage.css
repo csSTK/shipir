@@ -85,3 +85,13 @@
   font-size: var(--text-small-size);
   color: var(--color-ok);
 }
+
+.account__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--text-small-size);
+  color: var(--color-text-muted);
+}

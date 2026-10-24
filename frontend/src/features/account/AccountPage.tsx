@@ -1,7 +1,15 @@
 import { useState, type FormEvent } from 'react'
-import { Button, Card, PageHeader, Skeleton, Switch } from '../../shared/ui/index.ts'
+import { Badge, Button, Card, PageHeader, Skeleton, Switch, TextField } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
-import { useChangePassword, type CurrentUser } from '../auth/index.ts'
+import { useQueryClient } from '@tanstack/react-query'
+import {
+  CURRENT_USER_KEY,
+  TwoFactorEnrollment,
+  twoFactorErrorMessage,
+  useChangePassword,
+  useDisableTwoFactor,
+  type CurrentUser,
+} from '../auth/index.ts'
 import { checkPassword, isPasswordValid, violationMessage } from '../auth/passwordPolicy.ts'
 import {
   NOTIFICATION_TYPE_LABELS,
@@ -135,8 +143,82 @@ function PreferencesSection() {
   )
 }
 
+function DisableForm({ onCancel }: { onCancel: () => void }) {
+  const disable = useDisableTwoFactor()
+  const [password, setPassword] = useState('')
+  const [code, setCode] = useState('')
+  const onSubmit = (event: FormEvent) => {
+    event.preventDefault()
+    if (disable.isPending || !password || !code.trim()) return
+    disable.mutate({ password, code: code.trim() }, { onSuccess: () => setPassword('') })
+  }
+  return (
+    <form className="account__form" onSubmit={onSubmit}>
+      <TextField label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+      <TextField label="Authentication code" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" help="A code from your app or a recovery code." />
+      <div className="account__error" role="alert">
+        {disable.isError && twoFactorErrorMessage(disable.error, 'Could not disable two-factor authentication. Try again.')}
+      </div>
+      <div className="account__row">
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button variant="danger" type="submit" loading={disable.isPending}>
+          Disable
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+function TwoFactorSection({ enabled }: { enabled: boolean }) {
+  const queryClient = useQueryClient()
+  const [showCodes, setShowCodes] = useState(false)
+  const [disabling, setDisabling] = useState(false)
+
+  return (
+    <Card className="account__card" role="region" aria-labelledby="account-2fa">
+      <h2 className="account__heading" id="account-2fa">
+        Two-factor authentication
+      </h2>
+      {/* After confirming, `enabled` flips but the enrolment stays mounted until the recovery codes are dismissed. */}
+      {!enabled || showCodes ? (
+        <>
+          {!showCodes && (
+            <p className="account__row">
+              <Badge tone="muted">Off</Badge>
+              <span>Protect your account with a code from an authenticator app.</span>
+            </p>
+          )}
+          <TwoFactorEnrollment
+            onConfirmed={() => {
+              setShowCodes(true)
+              void queryClient.invalidateQueries({ queryKey: CURRENT_USER_KEY })
+            }}
+            onFinished={() => setShowCodes(false)}
+          />
+        </>
+      ) : (
+        <>
+          <p className="account__row">
+            <Badge tone="ok">Enabled</Badge>
+            <span>A code from your authenticator app is required at sign-in.</span>
+          </p>
+          {disabling ? (
+            <DisableForm onCancel={() => setDisabling(false)} />
+          ) : (
+            <div>
+              <Button onClick={() => setDisabling(true)}>Disable two-factor authentication</Button>
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  )
+}
+
 /** Personal settings: account info, password change, notification preferences. */
-export function AccountPage({ user }: { user: Pick<CurrentUser, 'username' | 'role'> }) {
+export function AccountPage({ user }: { user: Pick<CurrentUser, 'username' | 'role' | 'twoFactorEnabled'> }) {
   return (
     <div className="account">
       <PageHeader title="Account" subtitle="Your sign-in, password and notification preferences." />
@@ -152,6 +234,7 @@ export function AccountPage({ user }: { user: Pick<CurrentUser, 'username' | 'ro
         </dl>
       </Card>
       <PasswordSection username={user.username} />
+      <TwoFactorSection enabled={user.twoFactorEnabled === true} />
       <PreferencesSection />
     </div>
   )

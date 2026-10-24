@@ -15,6 +15,7 @@ const me = (role: string) => ({ username: 'u', role, setupRequired: false })
 test('admin creates a user and sees the one-time password once', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: me('ADMIN') })
   api.mock('GET', '/api/users', { body: users })
+  api.mock('GET', '/api/settings/security', { body: { require2faForAdmins: false, updatedAt: null } })
   api.mock('POST', '/api/users', {
     status: 201,
     body: { id: 'u3', username: 'carl', role: 'VIEWER', oneTimePassword: 'Secret-Pass-12345!' },
@@ -35,6 +36,7 @@ test('admin creates a user and sees the one-time password once', async ({ page, 
 test('role change on the last admin and deleting a user with history show inline errors', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: me('ADMIN') })
   api.mock('GET', '/api/users', { body: users })
+  api.mock('GET', '/api/settings/security', { body: { require2faForAdmins: false, updatedAt: null } })
   api.mock('PUT', '/api/users/u2/role', { status: 409, body: { code: 'LAST_ADMIN', message: 'x' } })
   api.mock('DELETE', '/api/users/u2', { status: 409, body: { code: 'USER_HAS_HISTORY', message: 'x' } })
   await page.goto('/settings/users')
@@ -55,6 +57,7 @@ test('operator cannot reach the page', async ({ page, api }) => {
 test('admin grants an operator access to an environment and a deployment', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: me('ADMIN') })
   api.mock('GET', '/api/users', { body: users })
+  api.mock('GET', '/api/settings/security', { body: { require2faForAdmins: false, updatedAt: null } })
   api.mock('GET', '/api/hosts', {
     body: [{ id: 'h1', name: 'prod', connectionType: 'LOCAL', host: null, port: null, tls: false, createdAt: '2026-10-01T10:00:00Z' }],
   })

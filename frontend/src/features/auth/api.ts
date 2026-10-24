@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError, apiFetch } from '../../shared/api/client.ts'
 
-export type SetupStep = 'PASSWORD' | 'ENVIRONMENT'
+export type SetupStep = 'PASSWORD' | 'TWO_FACTOR' | 'ENVIRONMENT'
 
 export interface CurrentUser {
   username: string
@@ -9,6 +9,16 @@ export interface CurrentUser {
   setupRequired: boolean
   /** Which first-start step is pending; `null` once setup is complete. */
   setupStep?: SetupStep | null
+  twoFactorEnabled?: boolean
+}
+
+/** Login answer for a user with 2FA: no session yet, a code is needed. */
+export interface MfaRequired {
+  mfaRequired: true
+}
+
+export function isMfaRequired(result: CurrentUser | MfaRequired | undefined): result is MfaRequired {
+  return !!result && 'mfaRequired' in result
 }
 
 export interface LoginRequest {
@@ -39,8 +49,51 @@ export function useLogin() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (request: LoginRequest) =>
-      apiFetch<CurrentUser>('/auth/login', { method: 'POST', body: request }),
+      apiFetch<CurrentUser | MfaRequired>('/auth/login', { method: 'POST', body: request }),
+    // With 2FA there is no session yet: the second step finishes the sign-in.
+    onSuccess: (result) => {
+      if (!isMfaRequired(result)) queryClient.setQueryData(CURRENT_USER_KEY, result)
+    },
+  })
+}
+
+/** Second sign-in step: TOTP code (6 digits) or recovery code (XXXXX-XXXXX). */
+export function useVerifyTwoFactor() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (code: string) =>
+      apiFetch<CurrentUser>('/auth/2fa/verify', { method: 'POST', body: { code } }),
     onSuccess: (user) => queryClient.setQueryData(CURRENT_USER_KEY, user),
+  })
+}
+
+export interface TwoFactorSetup {
+  secret: string
+  otpauthUri: string
+}
+
+/** Starts enrolment; the secret lives only in the caller's state until confirmed. */
+export function useTwoFactorSetup() {
+  return useMutation({
+    mutationFn: () => apiFetch<TwoFactorSetup>('/auth/2fa/setup', { method: 'POST' }),
+  })
+}
+
+export function useConfirmTwoFactor() {
+  return useMutation({
+    mutationFn: (code: string) =>
+      apiFetch<{ recoveryCodes: string[] }>('/auth/2fa/confirm', { method: 'POST', body: { code } }),
+  })
+}
+
+export function useDisableTwoFactor() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: { password: string; code: string }) =>
+      apiFetch<void>('/auth/2fa/disable', { method: 'POST', body: request }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: CURRENT_USER_KEY })
+    },
   })
 }
 

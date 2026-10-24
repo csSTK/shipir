@@ -30,6 +30,7 @@ function renderPage(handler?: (path: string, method: string, body: unknown) => u
   apiFetchMock.mockImplementation((path: string, options?: { method?: string; body?: unknown }) => {
     const method = options?.method ?? 'GET'
     if (method === 'GET' && path === '/users') return Promise.resolve(list)
+    if (method === 'GET' && path === '/settings/security') return Promise.resolve({ require2faForAdmins: false, updatedAt: null })
     const result = handler?.(path, method, options?.body)
     return result instanceof Error ? Promise.reject(result) : Promise.resolve(result)
   })

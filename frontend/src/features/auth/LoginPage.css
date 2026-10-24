@@ -111,3 +111,9 @@
 .login__link {
   align-self: center;
 }
+
+.login__hint {
+  margin: 0;
+  font-size: var(--text-small-size);
+  color: var(--color-text-muted);
+}

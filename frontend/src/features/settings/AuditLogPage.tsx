@@ -28,6 +28,12 @@ const formatTime = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'medium' })
 
 /** Settings > Audit log: ADMIN browses the audit trail; filters live in the URL. */
+/** A password-only LOGIN that still awaits the second factor reads as such. */
+function actionLabel(e: AuditLogEntry): string {
+  if (e.action === 'LOGIN' && e.details?.mfaPending === true) return 'Login (awaiting 2FA)'
+  return AUDIT_ACTION_LABELS[e.action] ?? e.action
+}
+
 export function AuditLogPage() {
   const [params, setParams] = useSearchParams()
   const action = params.get('action') ?? ''
@@ -69,7 +75,7 @@ export function AuditLogPage() {
   const columns: ResourceColumn<AuditLogEntry>[] = [
     { id: 'time', header: 'Time', defaultWidth: 200, hideable: false, render: (e) => formatTime(e.occurredAt) },
     { id: 'user', header: 'User', defaultWidth: 140, render: (e) => e.username },
-    { id: 'action', header: 'Action', defaultWidth: 220, render: (e) => AUDIT_ACTION_LABELS[e.action] ?? e.action },
+    { id: 'action', header: 'Action', defaultWidth: 220, render: (e) => actionLabel(e) },
     {
       id: 'outcome',
       header: 'Outcome',

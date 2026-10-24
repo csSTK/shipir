@@ -44,6 +44,11 @@ const page = (items: unknown[], p = 0, totalElements = items.length) => ({ items
 const lastPath = () => String(apiFetchMock.mock.calls.at(-1)?.[0])
 
 describe('AuditLogPage', () => {
+  it('reads a password-only login as awaiting 2FA', async () => {
+    renderPage(() => Promise.resolve(page([entry({ action: 'LOGIN', details: { mfaPending: true } })])))
+    expect(await screen.findByText('Login (awaiting 2FA)')).toBeInTheDocument()
+  })
+
   it('renders rows with readable action, highlighted failure and target', async () => {
     renderPage(() =>
       Promise.resolve(
