@@ -1,5 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
+import { Folder } from 'lucide-react'
 import { useRef, useState } from 'react'
+import { Button, EmptyState } from '../../../shared/ui/index.ts'
 import { formatSize } from '../../hosts/format.ts'
 import {
   describeListError,
@@ -62,11 +64,8 @@ export function ContainerFilesPanel({ hostId, containerId }: { hostId: string; c
   const uploading = progress !== null
 
   return (
-    <section className="cfiles" aria-labelledby="cfiles-title">
+    <section className="cfiles" aria-label="Files">
       <div className="cfiles__top">
-        <h3 id="cfiles-title" className="cfiles__heading">
-          Files
-        </h3>
         <input
           ref={input}
           type="file"
@@ -75,9 +74,9 @@ export function ContainerFilesPanel({ hostId, containerId }: { hostId: string; c
           disabled={uploading}
           onChange={(e) => void onPick(e.target.files?.[0])}
         />
-        <button type="button" className="sk-btn sk-btn--plain cfiles__btn" disabled={uploading} onClick={() => input.current?.click()}>
+        <Button disabled={uploading} onClick={() => input.current?.click()}>
           Upload here
-        </button>
+        </Button>
       </div>
       <nav aria-label="Path" className="cfiles__crumbs">
         {crumbs(path).map((c, i, all) =>
@@ -98,9 +97,9 @@ export function ContainerFilesPanel({ hostId, containerId }: { hostId: string; c
             Uploading {uploadName} … {Math.round((progress ?? 0) * 100)}%
           </span>
           <progress max={1} value={progress ?? 0} aria-label="Upload progress" />
-          <button type="button" className="sk-btn sk-btn--plain cfiles__btn" onClick={() => abort.current?.()}>
+          <Button size="sm" onClick={() => abort.current?.()}>
             Cancel
-          </button>
+          </Button>
         </div>
       )}
       {uploadError && (
@@ -113,12 +112,12 @@ export function ContainerFilesPanel({ hostId, containerId }: { hostId: string; c
       {error && (
         <div role="alert" className="sk-error">
           <p>{describeListError(error)}</p>
-          <button type="button" className="sk-btn sk-btn--plain cfiles__btn" onClick={() => void refetch()}>
+          <Button variant="ghost" size="sm" onClick={() => void refetch()}>
             Retry
-          </button>
+          </Button>
         </div>
       )}
-      {data && entries.length === 0 && <p className="cfiles__empty">This directory is empty.</p>}
+      {data && entries.length === 0 && <EmptyState icon={Folder} title="This directory is empty." />}
       {entries.length > 0 && (
         <ul className="cfiles__list">
           {entries.map((e) => (
@@ -137,7 +136,7 @@ export function ContainerFilesPanel({ hostId, containerId }: { hostId: string; c
               <span className="cfiles__meta">{e.modified ? dateFormat.format(new Date(e.modified)) : ''}</span>
               {(e.type === 'FILE' || e.type === 'DIRECTORY') && (
                 <a
-                  className="sk-btn sk-btn--plain cfiles__btn"
+                  className="ui-btn ui-btn--ghost ui-btn--sm"
                   href={downloadUrl(hostId, containerId, e.path)}
                   download
                   aria-label={`Download ${e.name}`}

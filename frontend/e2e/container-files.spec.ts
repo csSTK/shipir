@@ -35,6 +35,7 @@ test('admin browses directories and uploads a file', async ({ page, api }) => {
     return route.fulfill({ json: body })
   })
   await page.goto('/environments/a/containers/c1')
+  await page.getByRole('tab', { name: 'Files' }).click()
   await page.getByRole('button', { name: 'etc/' }).click()
   await expect(page.getByText('hosts', { exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Download hosts' })).toHaveAttribute('href', /download\?path=%2Fetc%2Fhosts/)
@@ -49,6 +50,7 @@ test('too large directory shows an inline hint', async ({ page, api }) => {
     route.fulfill({ status: 413, json: { code: 'SIZE_LIMIT_EXCEEDED', message: 'x' } }),
   )
   await page.goto('/environments/a/containers/c1')
+  await page.getByRole('tab', { name: 'Files' }).click()
   await expect(page.getByText(/too large to list/)).toBeVisible()
 })
 
@@ -56,5 +58,5 @@ test('operator does not see the files panel', async ({ page, api }) => {
   await setup(api, 'OPERATOR')
   await page.goto('/environments/a/containers/c1')
   await expect(page.getByRole('heading', { name: 'web' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Files' })).toHaveCount(0)
+  await expect(page.getByRole('tab', { name: 'Files' })).toHaveCount(0)
 })

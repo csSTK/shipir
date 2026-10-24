@@ -181,11 +181,11 @@ describe('ContainerDetailsPage files panel', () => {
   it('is shown to ADMIN only', async () => {
     role = 'ADMIN'
     renderPage(() => details)
-    expect(await screen.findByRole('heading', { name: 'Files' })).toBeInTheDocument()
+    expect(await screen.findByRole('tab', { name: 'Files' })).toBeInTheDocument()
     cleanup()
     role = 'OPERATOR'
     renderPage(() => details)
     await screen.findByRole('heading', { name: 'web' })
-    expect(screen.queryByRole('heading', { name: 'Files' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Files' })).not.toBeInTheDocument()
   })
 })
