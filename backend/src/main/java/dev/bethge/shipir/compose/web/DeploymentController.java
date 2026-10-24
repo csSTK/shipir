@@ -11,6 +11,7 @@ import dev.bethge.shipir.compose.dto.DeploymentDetailResponse;
 import dev.bethge.shipir.compose.dto.DeploymentEnvResponse;
 import dev.bethge.shipir.compose.dto.DeploymentSummaryResponse;
 import dev.bethge.shipir.compose.dto.DeploymentUpdateRequest;
+import dev.bethge.shipir.compose.dto.DeploymentVersionContentResponse;
 import dev.bethge.shipir.compose.dto.DeploymentVersionResponse;
 import dev.bethge.shipir.git.GitOperationException;
 import jakarta.validation.Valid;
@@ -111,6 +112,12 @@ class DeploymentController {
     @GetMapping("/{id}/versions")
     List<DeploymentVersionResponse> versions(@PathVariable UUID hostId, @PathVariable UUID id) {
         return runs.versions(hostId, id);
+    }
+
+    @GetMapping("/{id}/versions/{versionId}")
+    DeploymentVersionContentResponse version(@PathVariable UUID hostId, @PathVariable UUID id,
+                                             @PathVariable UUID versionId) {
+        return runs.version(hostId, id, versionId);
     }
 
     @PostMapping("/{id}/versions/{versionId}/rollback")

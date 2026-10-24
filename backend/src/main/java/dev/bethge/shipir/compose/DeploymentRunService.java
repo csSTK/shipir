@@ -12,6 +12,7 @@ import dev.bethge.shipir.common.security.SecretCipher;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
 import dev.bethge.shipir.compose.dto.DeploymentRunResponse;
 import dev.bethge.shipir.compose.dto.DeploymentSummaryResponse;
+import dev.bethge.shipir.compose.dto.DeploymentVersionContentResponse;
 import dev.bethge.shipir.compose.dto.DeploymentVersionResponse;
 import dev.bethge.shipir.compose.execution.ComposeCommand;
 import dev.bethge.shipir.compose.execution.ComposeExecutionException;
@@ -196,6 +197,38 @@ public class DeploymentRunService {
                         names.get(v.getCreatedBy()), v.getCreatedAt(), v.getId().equals(deployment.getCurrentVersionId()),
                         v.isDeployed()))
                 .toList();
+    }
+
+    /** One version's YAML and env keys, flagged against the currently deployed version; no env values. */
+    public DeploymentVersionContentResponse version(UUID hostId, UUID id, UUID versionId) {
+        deploymentService.requireView(hostId, id);
+        deploymentService.requireHost(hostId);
+        Deployment deployment = deploymentService.requireDeployment(hostId, id);
+        DeploymentVersion version = versionOf(deployment, versionId);
+        // current_version_id may point at a newer draft; the baseline is the latest version that was actually deployed
+        DeploymentVersion baseline = versions.findByDeploymentIdOrderByCreatedAtDesc(deployment.getId()).stream()
+                .filter(DeploymentVersion::isDeployed).findFirst().orElse(null);
+
+        Map<String, String> values = envMap(version);
+        Map<String, String> base = baseline == null ? Map.of() : envMap(baseline);
+        List<DeploymentVersionContentResponse.EnvKey> keys = values.entrySet().stream()
+                .map(e -> new DeploymentVersionContentResponse.EnvKey(e.getKey(),
+                        baseline != null && !e.getValue().equals(base.get(e.getKey()))))
+                .toList();
+        List<String> removed = base.keySet().stream().filter(k -> !values.containsKey(k)).toList();
+        String createdBy = users.findById(version.getCreatedBy()).map(User::getUsername).orElse(null);
+        return new DeploymentVersionContentResponse(version.getId(), version.getSource(), version.getCommitSha(),
+                createdBy, version.getCreatedAt(), version.getId().equals(deployment.getCurrentVersionId()),
+                version.isDeployed(), version.getYamlContent(), baseline == null ? null : baseline.getId(), keys, removed);
+    }
+
+    private Map<String, String> envMap(DeploymentVersion version) {
+        String text = decryptEnv(version);
+        Map<String, String> out = new java.util.LinkedHashMap<>();
+        if (text != null) {
+            EnvFile.parse(text).forEach(e -> out.put(e.key(), e.value()));
+        }
+        return out;
     }
 
     /**
