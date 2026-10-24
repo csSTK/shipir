@@ -82,6 +82,7 @@ test('sidebar section works on a narrow screen', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', me)
   api.mock('GET', '/api/notifications/unread-count', { body: { count: 0 } })
   api.mock('GET', '/api/hosts/overview', { body: [local] })
+  api.mock('GET', '/api/hosts/a/images', { body: [] })
   await page.goto('/environments/a')
   await page.getByRole('button', { name: 'Navigation' }).click()
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Images' }).click()
