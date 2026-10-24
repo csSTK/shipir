@@ -18,11 +18,22 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
 
     long countByUserIdAndReadAtIsNull(UUID userId);
 
-    Page<Notification> findByUserIdAndHostIdIn(UUID userId, Collection<UUID> hostIds, Pageable pageable);
+    /**
+     * Notifications the user may see: everything of {@code fullHosts}; on {@code partialHosts} (deployment grants
+     * only) host events and the ones of {@code deploymentIds}. Collections must not be empty.
+     */
+    String VISIBLE = "n.userId = :userId and (n.hostId in :fullHosts or (n.hostId in :partialHosts and "
+            + "(n.type in :hostTypes or n.deploymentId in :deploymentIds))) and (:unreadOnly = false or n.readAt is null)";
 
-    Page<Notification> findByUserIdAndHostIdInAndReadAtIsNull(UUID userId, Collection<UUID> hostIds, Pageable pageable);
+    @Query("select n from Notification n where " + VISIBLE)
+    Page<Notification> findVisible(UUID userId, Collection<UUID> fullHosts, Collection<UUID> partialHosts,
+                                   Collection<NotificationType> hostTypes, Collection<UUID> deploymentIds,
+                                   boolean unreadOnly, Pageable pageable);
 
-    long countByUserIdAndHostIdInAndReadAtIsNull(UUID userId, Collection<UUID> hostIds);
+    @Query("select count(n) from Notification n where " + VISIBLE + " and n.readAt is null")
+    long countVisibleUnread(UUID userId, Collection<UUID> fullHosts, Collection<UUID> partialHosts,
+                            Collection<NotificationType> hostTypes, Collection<UUID> deploymentIds,
+                            boolean unreadOnly);
 
     /** Idempotent: an already read notification keeps its original read time. Returns 1 if owned by the user. */
     @Modifying

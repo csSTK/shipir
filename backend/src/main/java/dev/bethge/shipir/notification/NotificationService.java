@@ -26,7 +26,6 @@ import java.time.Instant;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -115,17 +114,14 @@ public class NotificationService {
     public NotificationPageResponse list(UUID userId, boolean unreadOnly, int page, int size) {
         PageRequest pr = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE),
                 Sort.by(Sort.Direction.DESC, "createdAt"));
-        Optional<Set<UUID>> visible = visibleHosts(userId);
-        if (visible.isPresent() && visible.get().isEmpty()) {
-            return new NotificationPageResponse(List.of(), 0);
-        }
+        Visibility v = visibility(userId);
         Page<Notification> p;
-        if (visible.isEmpty()) {
+        if (v == null) {
             p = unreadOnly ? notifications.findByUserIdAndReadAtIsNull(userId, pr) : notifications.findByUserId(userId, pr);
+        } else if (v.isEmpty()) {
+            return new NotificationPageResponse(List.of(), 0);
         } else {
-            p = unreadOnly
-                    ? notifications.findByUserIdAndHostIdInAndReadAtIsNull(userId, visible.get(), pr)
-                    : notifications.findByUserIdAndHostIdIn(userId, visible.get(), pr);
+            p = notifications.findVisible(userId, v.full(), v.partial(), HOST_TYPES, v.deployments(), unreadOnly, pr);
         }
         return new NotificationPageResponse(p.getContent().stream().map(NotificationService::toDto).toList(),
                 p.getTotalElements());
@@ -133,38 +129,72 @@ public class NotificationService {
 
     @Transactional(readOnly = true)
     long unreadCount(UUID userId) {
-        Optional<Set<UUID>> visible = visibleHosts(userId);
-        if (visible.isEmpty()) {
+        Visibility v = visibility(userId);
+        if (v == null) {
             return notifications.countByUserIdAndReadAtIsNull(userId);
         }
-        return visible.get().isEmpty() ? 0
-                : notifications.countByUserIdAndHostIdInAndReadAtIsNull(userId, visible.get());
+        return v.isEmpty() ? 0 : notifications.countVisibleUnread(userId, v.full(), v.partial(), HOST_TYPES,
+                v.deployments(), true);
+    }
+
+    private static final Set<NotificationType> HOST_TYPES = Set.of(NotificationType.HOST_DOWN, NotificationType.HOST_UP);
+    private static final UUID NONE = new UUID(0, 0);
+
+    /** Visible scope for a non-ADMIN; sets are never empty (sentinel) so they can be used in {@code in} clauses. */
+    private record Visibility(Set<UUID> full, Set<UUID> partial, Set<UUID> deployments, boolean none) {
+        boolean isEmpty() { return none; }
     }
 
     /**
-     * Hosts whose notifications the user may see; empty = no restriction (ADMIN). Notifications of deleted hosts
-     * (no host id) and of hosts without a grant are hidden from everyone else.
+     * Null = no restriction (ADMIN). Otherwise hosts with a host grant (everything visible) and hosts reached only via
+     * deployment grants (host events and notifications of granted deployments). Notifications of deleted hosts (no
+     * host id) and of hosts without a grant are hidden from everyone else.
      */
-    private Optional<Set<UUID>> visibleHosts(UUID userId) {
+    private Visibility visibility(UUID userId) {
         User user = users.findById(userId).orElseThrow();
         if (user.getRole() == Role.ADMIN) {
-            return Optional.empty();
+            return null;
         }
-        return Optional.of(permissions.visibleHostIds(PermissionSubject.of(user)));
+        PermissionSubject subject = PermissionSubject.of(user);
+        Set<UUID> full = new java.util.HashSet<>();
+        Set<UUID> partial = new java.util.HashSet<>();
+        Set<UUID> deployments = new java.util.HashSet<>();
+        for (UUID hostId : permissions.visibleHostIds(subject)) {
+            if (permissions.hostFullyVisible(subject, hostId)) {
+                full.add(hostId);
+            } else {
+                partial.add(hostId);
+                deployments.addAll(permissions.visibleDeploymentIds(subject, hostId));
+            }
+        }
+        boolean none = full.isEmpty() && partial.isEmpty();
+        return new Visibility(orNone(full), orNone(partial), orNone(deployments), none);
     }
 
-    /** @return false if the notification does not exist or belongs to someone else */
+    private static Set<UUID> orNone(Set<UUID> ids) {
+        return ids.isEmpty() ? Set.of(NONE) : ids;
+    }
+
+    /** @return false if the notification does not exist, is hidden from the user or belongs to someone else */
     @Transactional
     public boolean markRead(UUID id, UUID userId) {
-        Optional<Set<UUID>> visible = visibleHosts(userId);
-        if (visible.isPresent()) {
-            boolean hidden = notifications.findById(id)
-                    .map(n -> n.getHostId() == null || !visible.get().contains(n.getHostId())).orElse(false);
+        Visibility v = visibility(userId);
+        if (v != null) {
+            boolean hidden = notifications.findById(id).map(n -> !isVisible(v, n)).orElse(false);
             if (hidden) {
                 return false;
             }
         }
         return notifications.markRead(id, userId, clock.instant()) > 0;
+    }
+
+    private static boolean isVisible(Visibility v, Notification n) {
+        if (n.getHostId() == null) {
+            return false;
+        }
+        return v.full().contains(n.getHostId()) || (v.partial().contains(n.getHostId())
+                && (HOST_TYPES.contains(n.getType()) || (n.getDeploymentId() != null
+                && v.deployments().contains(n.getDeploymentId()))));
     }
 
     @Transactional
