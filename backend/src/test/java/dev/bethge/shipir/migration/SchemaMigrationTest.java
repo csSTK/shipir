@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V22 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V23 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To21Successfully() {
+    void flywayAppliedVersions1To23Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23");
     }
 
     @Test
@@ -483,7 +483,8 @@ class SchemaMigrationTest {
         Map<String, Map<String, Object>> byName = columns.stream()
                 .collect(java.util.stream.Collectors.toMap(c -> (String) c.get("column_name"), c -> c));
         assertThat(byName.keySet()).containsExactlyInAnyOrder(
-                "id", "user_id", "type", "host_id", "host_name", "message", "created_at", "read_at");
+                "id", "user_id", "type", "host_id", "host_name", "deployment_id", "deployment_name",
+                "container_id", "container_name", "message", "created_at", "read_at");
 
         assertThat(byName.get("id").get("data_type")).isEqualTo("uuid");
         assertThat(byName.get("user_id").get("is_nullable")).isEqualTo("NO");
@@ -496,6 +497,13 @@ class SchemaMigrationTest {
         assertThat(byName.get("created_at").get("is_nullable")).isEqualTo("NO");
         assertThat(byName.get("read_at").get("data_type")).isEqualTo("timestamp with time zone");
         assertThat(byName.get("read_at").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("deployment_id").get("data_type")).isEqualTo("uuid");
+        assertThat(byName.get("deployment_id").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("deployment_name").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("container_id").get("data_type")).isEqualTo("text");
+        assertThat(byName.get("container_id").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("container_name").get("data_type")).isEqualTo("text");
+        assertThat(byName.get("container_name").get("is_nullable")).isEqualTo("YES");
     }
 
     @Test
@@ -512,11 +520,47 @@ class SchemaMigrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"HOST_DOWN", "HOST_UP"})
+    @ValueSource(strings = {"HOST_DOWN", "HOST_UP", "DEPLOYMENT_FAILED", "CONTAINER_CRASHED", "CONTAINER_UNHEALTHY",
+            "GIT_AUTO_UPDATE_FAILED"})
     void notificationAcceptsKnownTypes(String type) {
         UUID user = insertUser("alice");
         insertNotification(user, type);
         assertThat(count("notifications")).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"DEPLOYMENT_FAILED", "CONTAINER_CRASHED", "CONTAINER_UNHEALTHY", "GIT_AUTO_UPDATE_FAILED"})
+    void notificationPreferenceAcceptsNewTypes(String type) {
+        UUID user = insertUser("alice");
+        insertPreference(user, type, true);
+        assertThat(count("notification_preferences")).isEqualTo(1);
+    }
+
+    @Test
+    void deletingDeploymentSetsNotificationDeploymentIdNullAndKeepsDeploymentName() {
+        UUID owner = insertUser("alice");
+        UUID host = insertHost(owner);
+        UUID deployment = insertDeployment(host, owner, "web");
+        jdbc.update("""
+                INSERT INTO notifications (user_id, type, host_name, deployment_id, deployment_name, message)
+                VALUES (?, 'DEPLOYMENT_FAILED', 'prod', ?, 'web', 'Deployment web failed')
+                """, owner, deployment);
+        jdbc.update("DELETE FROM deployments WHERE id = ?", deployment);
+        Map<String, Object> row = jdbc.queryForMap("SELECT deployment_id, deployment_name FROM notifications");
+        assertThat(row.get("deployment_id")).isNull();
+        assertThat(row.get("deployment_name")).isEqualTo("web");
+    }
+
+    @Test
+    void notificationStoresContainerFields() {
+        UUID owner = insertUser("alice");
+        jdbc.update("""
+                INSERT INTO notifications (user_id, type, host_name, container_id, container_name, message)
+                VALUES (?, 'CONTAINER_CRASHED', 'prod', 'abc123', '/web-1', 'Container web-1 crashed')
+                """, owner);
+        Map<String, Object> row = jdbc.queryForMap("SELECT container_id, container_name FROM notifications");
+        assertThat(row.get("container_id")).isEqualTo("abc123");
+        assertThat(row.get("container_name")).isEqualTo("/web-1");
     }
 
     @Test
@@ -634,6 +678,27 @@ class SchemaMigrationTest {
                   AND (column_name LIKE '%url%' AND column_name <> 'url_encrypted' AND column_name <> 'url_hint')
                 """, Integer.class);
         assertThat(count).isZero();
+    }
+
+    @Test
+    void notificationWebhookAcceptsNewEventTypes() {
+        UUID user = insertUser("alice");
+        jdbc.update("""
+                INSERT INTO notification_webhooks (name, url_encrypted, url_hint, event_types, created_by)
+                VALUES ('ops-hook', ?, 'https://example.com', ARRAY['GIT_AUTO_UPDATE_FAILED', 'CONTAINER_UNHEALTHY'], ?)
+                """, new byte[] {1, 2, 3}, user);
+        assertThat(count("notification_webhooks")).isEqualTo(1);
+    }
+
+    @Test
+    void notificationWebhookRejectsUnknownEventType() {
+        UUID user = insertUser("alice");
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO notification_webhooks (name, url_encrypted, url_hint, event_types, created_by)
+                VALUES ('ops-hook', ?, 'https://example.com', ARRAY['HOST_EXPLODED'], ?)
+                """, new byte[] {1, 2, 3}, user))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("notification_webhooks_event_types_check");
     }
 
     @Test
