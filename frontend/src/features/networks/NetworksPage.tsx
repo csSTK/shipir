@@ -8,6 +8,7 @@ import { Badge, ResourceTable, type ResourceColumn } from '../../shared/ui/index
 import { useDeleteNetwork, useNetworks, type Network } from './api.ts'
 import { CreateNetworkDialog } from './CreateNetworkDialog.tsx'
 import './NetworksPage.css'
+import { Button } from '../../shared/ui/index.ts'
 
 const columns: ResourceColumn<Network>[] = [
   {
@@ -48,9 +49,9 @@ export function NetworksPage() {
       <div className="networks__bar">
         <h2 className="networks__title">Networks</h2>
         {canWrite && (
-          <button type="button" className="sk-btn sk-btn--primary" onClick={() => setCreating(true)}>
+          <Button variant="primary" onClick={() => setCreating(true)}>
             Create network
-          </button>
+          </Button>
         )}
       </div>
       <ResourceTable

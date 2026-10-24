@@ -7,6 +7,7 @@ import { useCurrentUser } from '../../auth/index.ts'
 import { ContainerFilesPanel } from '../files/ContainerFilesPanel.tsx'
 import { describeDetailsError, isNotFound, useContainerDetails, type ContainerDetails, type ContainerPort } from './api.ts'
 import './ContainerDetailsPage.css'
+import { Button } from '../../../shared/ui/index.ts'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' })
 const formatDate = (iso: string | null) => (iso ? dateFormat.format(new Date(iso)) : '–')
@@ -142,9 +143,9 @@ function Env({ env }: { env: ContainerDetails['env'] }) {
       ) : (
         <>
           {hasValues && (
-            <button type="button" className="sk-btn sk-btn--plain cdetails__btn" onClick={() => setRevealed((r) => !r)}>
+            <Button variant="ghost" size="sm" className="cdetails__btn" onClick={() => setRevealed((r) => !r)}>
               {revealed ? 'Hide values' : 'Reveal values'}
-            </button>
+            </Button>
           )}
           <dl className="cdetails__env">
             {env.map((e, i) => (
@@ -280,9 +281,9 @@ export function ContainerDetailsPage() {
         <div role="alert" className="sk-error">
           <p>{isNotFound(error) ? 'This container no longer exists.' : describeDetailsError(error)}</p>
           {!isNotFound(error) && (
-            <button type="button" className="sk-btn sk-btn--plain cdetails__btn" onClick={() => void refetch()}>
+            <Button variant="ghost" size="sm" className="cdetails__btn" onClick={() => void refetch()}>
               Retry
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -292,11 +293,11 @@ export function ContainerDetailsPage() {
             <h2 className="cdetails__title">{c.name}</h2>
             <Badge tone={stateTone(c.state)}>{c.state}</Badge>
             <nav className="cdetails__nav" aria-label="Container views">
-              <Link className="sk-btn sk-btn--plain cdetails__btn" to={`${base}/${cid}/logs`}>
+              <Link className="ui-btn ui-btn--ghost ui-btn--sm cdetails__btn" to={`${base}/${cid}/logs`}>
                 Logs
               </Link>
               {user?.role === 'ADMIN' && c.state === 'running' && (
-                <Link className="sk-btn sk-btn--plain cdetails__btn" to={`${base}/${cid}/console`}>
+                <Link className="ui-btn ui-btn--ghost ui-btn--sm cdetails__btn" to={`${base}/${cid}/console`}>
                   Console
                 </Link>
               )}

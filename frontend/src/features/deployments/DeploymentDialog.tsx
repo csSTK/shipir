@@ -1,30 +1,15 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
+import { Dialog } from '../../shared/ui/index.ts'
 import './DeploymentUi.css'
 
-/** Modal dialog shell: focus moves in and is restored, Escape and scrim click close it. */
-export function DeploymentDialog({ title, titleId, onClose, children }: { title: string; titleId: string; onClose: () => void; children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null
-    ref.current?.focus()
-    return () => previous?.focus()
-  }, [])
+/**
+ * Modal shell for deployment-style forms (also used by the create dialogs of other resources): the shared
+ * `Dialog` (focus trap and restore, Esc/scrim close, spring). `titleId` is kept for existing callers; Radix names the dialog itself.
+ */
+export function DeploymentDialog({ title, onClose, children }: { title: string; titleId?: string; onClose: () => void; children: ReactNode }) {
   return (
-    <div className="sk-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div
-        ref={ref}
-        className="sk-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={(e) => e.key === 'Escape' && onClose()}
-      >
-        <h2 id={titleId} className="sk-dialog__title">
-          {title}
-        </h2>
-        {children}
-      </div>
-    </div>
+    <Dialog open onOpenChange={(open) => !open && onClose()} title={title}>
+      {children}
+    </Dialog>
   )
 }

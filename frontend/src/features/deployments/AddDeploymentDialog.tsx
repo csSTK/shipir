@@ -11,6 +11,7 @@ import { ComposeWizard, referencedEnvKeys, specToState, type WizardState } from 
 import { TemplatePicker, type AppTemplate } from './templates/index.ts'
 import './wizard/wizard.css'
 import './templates/templates.css'
+import { Button } from '../../shared/ui/index.ts'
 
 const EMPTY_GIT_FORM: GitFormValue = { repoUrl: '', ref: 'main', composePath: 'compose.yaml', credentialId: '' }
 const NAME_PATTERN = /^[a-z0-9][a-z0-9_-]*$/
@@ -169,12 +170,12 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
           </p>
         )}
         <div className="sk-dialog__actions">
-          <button type="button" className="sk-btn sk-btn--plain" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className="sk-btn sk-btn--primary" disabled={create.isPending} hidden={source === 'file' && mode !== 'yaml'}>
+          </Button>
+          <Button variant="primary" type="submit" disabled={create.isPending} hidden={source === 'file' && mode !== 'yaml'}>
             Create deployment
-          </button>
+          </Button>
         </div>
       </form>
     </DeploymentDialog>

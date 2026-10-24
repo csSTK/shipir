@@ -56,10 +56,6 @@
   outline: 2px solid AccentColor;
   outline-offset: 2px;
 }
-.cconsole__btn:active:not(:disabled) {
-  transform: scale(0.97);
-  transition: transform 100ms ease-out;
-}
 .cconsole__state {
   margin-left: auto;
 }
@@ -83,11 +79,6 @@
 .cconsole__term {
   height: 100%;
   width: 100%;
-}
-@media (prefers-reduced-motion: reduce) {
-  .cconsole__btn:active:not(:disabled) {
-    transition: none;
-  }
 }
 @media (prefers-contrast: more) {
   .cconsole__frame {

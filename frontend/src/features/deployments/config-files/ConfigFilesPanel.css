@@ -26,18 +26,18 @@
   transition: transform 0.12s ease-out, background-color 0.15s ease;
 }
 .cf-file:hover {
-  background: color-mix(in srgb, currentColor 8%, transparent);
+  background: var(--color-surface-hover);
 }
 .cf-file:active {
   transform: scale(0.98);
 }
 .cf-file[aria-current='true'] {
-  background: color-mix(in srgb, currentColor 12%, transparent);
+  background: var(--color-surface-hover);
   font-weight: 600;
 }
 .cf-file:focus-visible {
-  outline: 2px solid AccentColor;
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--shadow-focus);
 }
 .cf-ro,
 .cf-dirty {
@@ -86,15 +86,15 @@
 .cf-new input {
   font: inherit;
   padding: 8px 12px;
-  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border: 1px solid var(--color-border);
   border-radius: 10px;
-  background: color-mix(in srgb, currentColor 5%, transparent);
+  background: var(--color-surface-sunken);
   color: inherit;
   min-width: 14rem;
 }
 .cf-new input:focus-visible {
-  outline: 2px solid AccentColor;
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--shadow-focus);
 }
 .cf-new__error {
   flex-basis: 100%;

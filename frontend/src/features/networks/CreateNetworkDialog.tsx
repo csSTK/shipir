@@ -3,6 +3,7 @@ import { DeploymentDialog } from '../deployments/DeploymentDialog.tsx'
 import { describeCreateError } from '../hosts/createResource.ts'
 import { validateVolumeName as validateName } from '../volumes/api.ts'
 import { useCreateNetwork, validateSubnet, type NetworkDriver } from './api.ts'
+import { Button } from '../../shared/ui/index.ts'
 
 /** Creates a network. Drivers other than bridge are offered to ADMIN only (the server enforces it too). */
 export function CreateNetworkDialog({ hostId, isAdmin, onClose }: { hostId: string; isAdmin: boolean; onClose: () => void }) {
@@ -88,12 +89,12 @@ export function CreateNetworkDialog({ hostId, isAdmin, onClose }: { hostId: stri
           </p>
         )}
         <div className="sk-dialog__actions">
-          <button type="button" className="sk-btn sk-btn--plain" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className="sk-btn sk-btn--primary" disabled={create.isPending}>
+          </Button>
+          <Button variant="primary" type="submit" disabled={create.isPending}>
             {create.isPending ? 'Creating…' : 'Create'}
-          </button>
+          </Button>
         </div>
       </form>
     </DeploymentDialog>

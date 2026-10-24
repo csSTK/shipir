@@ -2,6 +2,7 @@ import { useId, useState } from 'react'
 import type { EnvEntry } from '../api.ts'
 import { mergeEnv, parseEnv, validateEnv, type EnvIssue } from './envFile.ts'
 import './editor.css'
+import { Button } from '../../../shared/ui/index.ts'
 
 const ISSUE_TEXT: Record<EnvIssue, string> = {
   INVALID_KEY: 'Use letters, digits and underscores; do not start with a digit.',
@@ -67,9 +68,9 @@ export function EnvEditor({ value, onChange }: { value: EnvEntry[]; onChange: (n
                 autoComplete="off"
                 spellCheck={false}
               />
-              <button type="button" className="sk-btn sk-btn--plain" aria-label={`Remove variable ${i + 1}`} onClick={() => onChange(value.filter((_, j) => j !== i))}>
+              <Button variant="ghost" aria-label={`Remove variable ${i + 1}`} onClick={() => onChange(value.filter((_, j) => j !== i))}>
                 Remove
-              </button>
+              </Button>
             </div>
             {issue && (
               <p role="alert" className="ed-env__issue">
@@ -80,15 +81,15 @@ export function EnvEditor({ value, onChange }: { value: EnvEntry[]; onChange: (n
         )
       })}
       <div className="ed-env__tools">
-        <button type="button" className="sk-btn sk-btn--plain" onClick={() => onChange([...value, { key: '', value: '' }])}>
+        <Button variant="ghost" onClick={() => onChange([...value, { key: '', value: '' }])}>
           Add variable
-        </button>
-        <button type="button" className="sk-btn sk-btn--plain" aria-expanded={pasting} onClick={() => setPasting((p) => !p)}>
+        </Button>
+        <Button variant="ghost" aria-expanded={pasting} onClick={() => setPasting((p) => !p)}>
           Paste .env
-        </button>
-        <button type="button" className="sk-btn sk-btn--plain" aria-pressed={revealed} onClick={() => setRevealed((r) => !r)}>
+        </Button>
+        <Button variant="ghost" aria-pressed={revealed} onClick={() => setRevealed((r) => !r)}>
           {revealed ? 'Hide values' : 'Show values'}
-        </button>
+        </Button>
       </div>
       {pasting && (
         <div className="ed-env__paste">
@@ -97,9 +98,9 @@ export function EnvEditor({ value, onChange }: { value: EnvEntry[]; onChange: (n
           </label>
           <textarea id={pasteId} className="sk-yaml-input" rows={5} value={pasteText} onChange={(e) => setPasteText(e.target.value)} spellCheck={false} autoComplete="off" />
           <div>
-            <button type="button" className="sk-btn" onClick={applyPaste}>
+            <Button variant="secondary" onClick={applyPaste}>
               Add variables
-            </button>
+            </Button>
           </div>
         </div>
       )}

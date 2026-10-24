@@ -8,6 +8,7 @@ import { Badge } from '../../../shared/ui/index.ts'
 import { useContainers } from '../api.ts'
 import { describeExecError, useStartExec, type ExecSession, type Shell } from './api.ts'
 import './ContainerConsolePage.css'
+import { Button } from '../../../shared/ui/index.ts'
 
 type Phase = 'idle' | 'starting' | 'connecting' | 'live' | 'ended'
 
@@ -196,13 +197,13 @@ export function ContainerConsolePage() {
           </select>
         </label>
         {open ? (
-          <button type="button" className="sk-btn sk-btn--plain cconsole__btn" onClick={() => finish('Disconnected.')}>
+          <Button variant="ghost" className="cconsole__btn" onClick={() => finish('Disconnected.')}>
             Disconnect
-          </button>
+          </Button>
         ) : (
-          <button type="button" className="sk-btn cconsole__btn" onClick={connect}>
+          <Button variant="secondary" className="cconsole__btn" onClick={connect}>
             Connect
-          </button>
+          </Button>
         )}
         <div role="status" className="cconsole__state">
           {badge}

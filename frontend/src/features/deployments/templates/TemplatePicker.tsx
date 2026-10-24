@@ -2,6 +2,7 @@ import { useId, useState } from 'react'
 import { describeDeploymentError } from '../deploymentErrors.ts'
 import { useTemplates, type AppTemplate } from './api.ts'
 import './templates.css'
+import { Button } from '../../../shared/ui/index.ts'
 
 /** Searchable grid of bundled app templates; choosing one hands it to `onSelect`. */
 export function TemplatePicker({ onSelect, selectedId }: { onSelect: (template: AppTemplate) => void; selectedId?: string | null }) {
@@ -25,9 +26,9 @@ export function TemplatePicker({ onSelect, selectedId }: { onSelect: (template: 
       {error && (
         <div role="alert" className="sk-error">
           <p>{describeDeploymentError(error, 'Could not load the templates.')}</p>
-          <button type="button" className="sk-btn" onClick={() => void refetch()}>
+          <Button variant="secondary" onClick={() => void refetch()}>
             Retry
-          </button>
+          </Button>
         </div>
       )}
       {data && shown.length === 0 && <p className="tp__hint">{data.length === 0 ? 'No templates available.' : 'No template matches your search.'}</p>}

@@ -3,6 +3,7 @@ import { DeploymentDialog } from '../deployments/DeploymentDialog.tsx'
 import { formatSize } from './format.ts'
 import { describePruneError, usePrune, usePrunePreview, type ImagePruneMode, type PruneGroup, type PruneResult } from './prune.ts'
 import './PruneDialog.css'
+import { Button } from '../../shared/ui/index.ts'
 
 function Summary({ label, group }: { label: string; group: PruneGroup }) {
   return (
@@ -133,18 +134,17 @@ export function PruneDialog({ hostId, onClose }: { hostId: string; onClose: () =
         </>
       )}
       <div className="sk-dialog__actions">
-        <button type="button" className="sk-btn sk-btn--plain" onClick={onClose}>
+        <Button variant="ghost" onClick={onClose}>
           {result ? 'Close' : 'Cancel'}
-        </button>
+        </Button>
         {!result && (
-          <button
-            type="button"
-            className="sk-btn sk-btn--danger"
+          <Button variant="danger"
+            
             onClick={() => void confirm()}
             disabled={nothing || prune.isPending || preview.isPending}
-          >
+>
             {prune.isPending ? 'Cleaning up…' : 'Clean up'}
-          </button>
+          </Button>
         )}
       </div>
     </DeploymentDialog>

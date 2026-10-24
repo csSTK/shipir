@@ -14,6 +14,7 @@ import {
   type ConfigFileBackup,
 } from './api.ts'
 import './ConfigFilesPanel.css'
+import { Button, Card } from '../../../shared/ui/index.ts'
 
 // Monaco is large: load it only when a file is opened.
 const MonacoEditor = lazy(() => import('../editor/MonacoYamlEditor.tsx'))
@@ -70,15 +71,15 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
   const files = tree.data?.filter((e) => !e.directory) ?? []
 
   return (
-    <section className="cf sd-panel" aria-labelledby={`cf-${deploymentId}`}>
+    <Card className="cf sd-panel" role="region" aria-labelledby={`cf-${deploymentId}`}>
       <div className="sd-panel__head">
         <h3 className="sd-panel__title" id={`cf-${deploymentId}`}>
           Config files
         </h3>
         {canWrite && !creating && (
-          <button type="button" className="sk-btn" onClick={() => setCreating(true)}>
+          <Button variant="secondary" onClick={() => setCreating(true)}>
             New file
-          </button>
+          </Button>
         )}
       </div>
 
@@ -92,19 +93,18 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
         >
           <label htmlFor={pathId}>File path</label>
           <input id={pathId} value={newPath} placeholder="config/app.conf" onChange={(e) => setNewPath(e.target.value)} autoFocus spellCheck={false} />
-          <button type="submit" className="sk-btn sk-btn--primary" disabled={save.isPending}>
+          <Button variant="primary" type="submit" disabled={save.isPending}>
             Create
-          </button>
-          <button
-            type="button"
-            className="sk-btn sk-btn--plain"
+          </Button>
+          <Button variant="ghost"
+            
             onClick={() => {
               setCreating(false)
               setCreateError(null)
             }}
-          >
+>
             Cancel
-          </button>
+          </Button>
           {createError && (
             <p role="alert" className="sk-error cf-new__error">
               {createError}
@@ -120,9 +120,9 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
           <p role="alert" className="sk-error">
             {describeConfigError(tree.error, 'Could not load the files.')}
           </p>
-          <button type="button" className="sk-btn" onClick={() => void tree.refetch()}>
+          <Button variant="secondary" onClick={() => void tree.refetch()}>
             Retry
-          </button>
+          </Button>
         </div>
       ) : files.length === 0 ? (
         <p className="sd-muted">No config files yet.{canWrite ? ' Create one with New file.' : ''}</p>
@@ -182,7 +182,7 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
           <strong>{selected}</strong> has unsaved changes. Discard them and open another file?
         </ConfirmDialog>
       )}
-    </section>
+    </Card>
   )
 }
 
@@ -209,9 +209,9 @@ function FileView({
         <p role="alert" className="sk-error">
           {describeConfigError(file.error, 'Could not load the file.')}
         </p>
-        <button type="button" className="sk-btn" onClick={() => void file.refetch()}>
+        <Button variant="secondary" onClick={() => void file.refetch()}>
           Retry
-        </button>
+        </Button>
       </div>
     )
   return <FileEditor key={file.data.modifiedAt} hostId={hostId} deploymentId={deploymentId} file={file.data} canWrite={canWrite} onDirty={onDirty} onDeleted={onDeleted} />
@@ -293,12 +293,12 @@ function FileEditor({
         </div>
         {!readOnly && (
           <div className="sd-actions">
-            <button type="button" className="sk-btn sk-btn--primary" onClick={submit} disabled={!dirty || save.isPending}>
+            <Button variant="primary" onClick={submit} disabled={!dirty || save.isPending}>
               Save
-            </button>
-            <button type="button" className="sk-btn sk-btn--plain sk-btn--danger-text" onClick={() => setDialog('delete')}>
+            </Button>
+            <Button variant="danger" onClick={() => setDialog('delete')}>
               Delete
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -338,9 +338,9 @@ function FileEditor({
                 {new Date(b.createdAt).toLocaleString()} <span className="sd-muted">· {formatSize(b.size)}</span>
               </span>
               {!readOnly && (
-                <button type="button" className="sk-btn" aria-label={`Restore backup from ${new Date(b.createdAt).toLocaleString()}`} onClick={() => setDialog({ backup: b })}>
+                <Button variant="secondary" aria-label={`Restore backup from ${new Date(b.createdAt).toLocaleString()}`} onClick={() => setDialog({ backup: b })}>
                   Restore
-                </button>
+                </Button>
               )}
             </li>
           ))}

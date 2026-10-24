@@ -33,7 +33,7 @@
   margin: 0;
 }
 .vd-note--error {
-  color: #d92d20;
+  color: var(--color-bad);
   opacity: 1;
 }
 .vd-env {
@@ -56,15 +56,15 @@
   font-weight: 600;
 }
 .vd-env__item--added .vd-env__tag {
-  color: #067647;
+  color: var(--color-ok);
 }
 .vd-env__item--changed .vd-env__tag {
-  color: #b54708;
+  color: var(--color-warn);
 }
 .vd-env__item--removed .vd-env__tag {
-  color: #d92d20;
+  color: var(--color-bad);
 }
-.sk-dialog:has(.vd) {
+.ui-dialog:has(.vd) {
   width: min(60rem, 100%);
 }
 @media (max-width: 720px) {

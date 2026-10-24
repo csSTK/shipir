@@ -55,9 +55,9 @@ function renderPage() {
 
 function names() {
   return screen
-    .getAllByRole('row')
+    .getAllByRole('row', { hidden: true })
     .slice(1)
-    .map((r) => within(r).getAllByRole('cell')[0].textContent)
+    .map((r) => within(r).getAllByRole('cell', { hidden: true })[0].textContent)
 }
 
 describe('DeploymentsPage', () => {
@@ -328,6 +328,26 @@ describe('DeploymentsPage', () => {
       expect(screen.getByRole('dialog')).toBeInTheDocument()
       expect(names()).toContain('blog')
     })
+  })
+
+  it('shows the source of managed deployments and opens details from the overflow menu', async () => {
+    serve(
+      [{ name: 'shop', containerCount: 1, runningCount: 1, status: 'RUNNING', workingDir: null, managed: true, managedDeploymentId: 'm1' }],
+      {
+        role: 'OPERATOR',
+        managed: [
+          { id: 'm1', name: 'shop', status: 'RUNNING', source: 'GIT', lastDeployedAt: null, createdAt: '2026-10-01T10:00:00Z' },
+          { id: 'm2', name: 'draft', status: 'STOPPED', source: 'FILE', lastDeployedAt: null, createdAt: '2026-10-01T10:00:00Z' },
+        ],
+      },
+    )
+    renderPage()
+    await screen.findByRole('link', { name: 'shop' })
+    expect(within(screen.getByRole('row', { name: /shop/ })).getByText('Git')).toBeInTheDocument()
+    expect(within(screen.getByRole('row', { name: /draft/ })).getByText('File')).toBeInTheDocument()
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions for draft' }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Open details' }))
+    expect(await screen.findByTestId('where')).toHaveTextContent('/environments/h1/deployments/m2')
   })
 
   it('shows an update badge linking managed deployments to their detail page', async () => {

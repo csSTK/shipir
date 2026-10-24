@@ -7,6 +7,7 @@ import { ENV_RESOURCES, type EnvResourceSlug } from './resources.ts'
 import { PruneDialog } from './PruneDialog.tsx'
 import './EnvironmentsOverview.css'
 import './EnvironmentDashboard.css'
+import { Button } from '../../shared/ui/index.ts'
 
 /** Count shown on a resource tile; null when the overview does not provide it. */
 function countFor(env: HostOverview, slug: EnvResourceSlug): number | null {
@@ -70,9 +71,9 @@ export function EnvironmentDashboard() {
         <h2 className="envs__title">{env.name}</h2>
         <span className={`env-badge env-badge--${up ? 'up' : 'down'}`}>{up ? 'Up' : 'Down'}</span>
         {up && canClean && (
-          <button type="button" className="sk-btn sk-btn--plain dash__clean" onClick={() => setPruning(true)}>
+          <Button variant="ghost" className="dash__clean" onClick={() => setPruning(true)}>
             Clean up
-          </button>
+          </Button>
         )}
       </header>
       {up ? (

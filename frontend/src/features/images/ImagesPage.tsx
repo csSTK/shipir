@@ -8,6 +8,7 @@ import { Badge, ResourceTable, type ResourceColumn } from '../../shared/ui/index
 import { useDeleteImage, useImages, type Image } from './api.ts'
 import { PullImageDialog } from './PullImageDialog.tsx'
 import './ImagesPage.css'
+import { Button } from '../../shared/ui/index.ts'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -53,10 +54,10 @@ function updateColumn(onPull: ((i: Image) => void) | null): ResourceColumn<Image
       if (!i.updateAvailable) return '–'
       if (!onPull || !i.repoTags.length) return <Badge tone="warn">Update available</Badge>
       return (
-        <button type="button" className="sk-btn sk-btn--plain images__update" aria-label={`Pull & update ${i.repoTags[0]}`} onClick={() => onPull(i)}>
+        <Button variant="ghost" className="images__update" aria-label={`Pull & update ${i.repoTags[0]}`} onClick={() => onPull(i)}>
           <Badge tone="warn">Update available</Badge>
           <span>Pull &amp; update</span>
-        </button>
+        </Button>
       )
     },
   }
@@ -79,9 +80,9 @@ export function ImagesPage() {
       <div className="images__bar">
         <h2 className="images__title">Images</h2>
         {canWrite && (
-          <button type="button" className="sk-btn sk-btn--primary" onClick={() => setPulling({ reference: '' })}>
+          <Button variant="primary" onClick={() => setPulling({ reference: '' })}>
             Pull image
-          </button>
+          </Button>
         )}
       </div>
       <ResourceTable

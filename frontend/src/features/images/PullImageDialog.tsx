@@ -3,6 +3,7 @@ import { DeployOutput } from '../deployments/deploy-output/DeployOutput.tsx'
 import { DeploymentDialog } from '../deployments/DeploymentDialog.tsx'
 import { describePullError, usePullImage, useRefreshAfterPull } from './api.ts'
 import './ImagesPage.css'
+import { Button } from '../../shared/ui/index.ts'
 
 interface Props {
   hostId: string
@@ -37,9 +38,9 @@ export function PullImageDialog({ hostId, initialReference = '', onClose }: Prop
         <>
           <DeployOutput title={`Pulling ${reference.trim()}`} runId={runId} onFinished={() => void refresh()} />
           <div className="sk-dialog__actions">
-            <button type="button" className="sk-btn sk-btn--primary" onClick={onClose}>
+            <Button variant="primary" onClick={onClose}>
               Close
-            </button>
+            </Button>
           </div>
         </>
       ) : (
@@ -62,12 +63,12 @@ export function PullImageDialog({ hostId, initialReference = '', onClose }: Prop
             </p>
           )}
           <div className="sk-dialog__actions">
-            <button type="button" className="sk-btn sk-btn--plain" onClick={onClose}>
+            <Button variant="ghost" onClick={onClose}>
               Cancel
-            </button>
-            <button type="submit" className="sk-btn sk-btn--primary" disabled={pull.isPending || !reference.trim()}>
+            </Button>
+            <Button variant="primary" type="submit" disabled={pull.isPending || !reference.trim()}>
               {pull.isPending ? 'Starting…' : 'Pull'}
-            </button>
+            </Button>
           </div>
         </form>
       )}

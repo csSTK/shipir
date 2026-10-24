@@ -5,6 +5,7 @@ import { describeCreateError } from '../hosts/createResource.ts'
 import { useCreateContainer, type RestartPolicy } from './api.ts'
 import { buildContainerSpec, INITIAL_CONTAINER_FORM, validateContainerForm, type FormState, type MountRow, type PortRow } from './containerForm.ts'
 import './CreateContainerDialog.css'
+import { Button } from '../../shared/ui/index.ts'
 
 /** Creates a container (optionally started). ADMIN-only options are not rendered for others. */
 export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: string; isAdmin: boolean; onClose: () => void }) {
@@ -101,9 +102,9 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
                 <option value="tcp">tcp</option>
                 <option value="udp">udp</option>
               </select>
-              <button type="button" className="sk-btn sk-btn--plain" aria-label={`Remove port ${i + 1}`} onClick={() => set('ports', form.ports.filter((_, j) => j !== i))}>
+              <Button variant="ghost" aria-label={`Remove port ${i + 1}`} onClick={() => set('ports', form.ports.filter((_, j) => j !== i))}>
                 Remove
-              </button>
+              </Button>
               {(show(`port${i}host`) || show(`port${i}container`)) && (
                 <span role="alert" className="sk-error ccd__row-error">
                   {problems[`port${i}host`] ?? problems[`port${i}container`]}
@@ -113,9 +114,9 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
           ))}
           {fieldError('ports')}
           <div>
-            <button type="button" className="sk-btn sk-btn--plain" onClick={() => set('ports', [...form.ports, { hostPort: '', containerPort: '', protocol: 'tcp' }])}>
+            <Button variant="ghost" onClick={() => set('ports', [...form.ports, { hostPort: '', containerPort: '', protocol: 'tcp' }])}>
               Add port
-            </button>
+            </Button>
           </div>
         </fieldset>
 
@@ -152,9 +153,9 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
               <label className="ccd__check">
                 <input type="checkbox" checked={m.readOnly} onChange={(e) => setMount(i, { readOnly: e.target.checked })} aria-label={`Mount ${i + 1} read-only`} /> Read-only
               </label>
-              <button type="button" className="sk-btn sk-btn--plain" aria-label={`Remove mount ${i + 1}`} onClick={() => set('mounts', form.mounts.filter((_, j) => j !== i))}>
+              <Button variant="ghost" aria-label={`Remove mount ${i + 1}`} onClick={() => set('mounts', form.mounts.filter((_, j) => j !== i))}>
                 Remove
-              </button>
+              </Button>
               {(show(`mount${i}source`) || show(`mount${i}target`)) && (
                 <span role="alert" className="sk-error ccd__row-error">
                   {problems[`mount${i}source`] ?? problems[`mount${i}target`]}
@@ -163,9 +164,9 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
             </div>
           ))}
           <div>
-            <button type="button" className="sk-btn sk-btn--plain" onClick={() => set('mounts', [...form.mounts, { type: 'VOLUME', source: '', target: '', readOnly: false }])}>
+            <Button variant="ghost" onClick={() => set('mounts', [...form.mounts, { type: 'VOLUME', source: '', target: '', readOnly: false }])}>
               Add mount
-            </button>
+            </Button>
           </div>
         </fieldset>
 
@@ -218,12 +219,12 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
           </p>
         )}
         <div className="sk-dialog__actions">
-          <button type="button" className="sk-btn sk-btn--plain" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className="sk-btn sk-btn--primary" disabled={create.isPending}>
+          </Button>
+          <Button variant="primary" type="submit" disabled={create.isPending}>
             {create.isPending ? 'Creating…' : 'Create'}
-          </button>
+          </Button>
         </div>
       </form>
     </DeploymentDialog>

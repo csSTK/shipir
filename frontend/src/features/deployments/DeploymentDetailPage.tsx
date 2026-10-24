@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../shared/api/client.ts'
-import { Badge } from '../../shared/ui/index.ts'
+import { Badge, Button, Card, PageHeader, Skeleton } from '../../shared/ui/index.ts'
 import { useCurrentUser } from '../auth/index.ts'
 import {
   useDeleteDeployment,
@@ -71,7 +71,10 @@ export function DeploymentDetailPage() {
   if (deployment.isPending) {
     return (
       <section className="sd" aria-busy="true">
-        <div role="status" aria-label="Loading deployment" className="sd-skeleton" />
+        <div role="status" aria-label="Loading deployment" className="sd-skeleton">
+          <Skeleton height="2rem" width="40%" />
+          <Skeleton height="10rem" />
+        </div>
       </section>
     )
   }
@@ -83,15 +86,15 @@ export function DeploymentDetailPage() {
         <Link className="sd-back" to={listPath}>
           Deployments
         </Link>
-        <h2 className="sd-title">{notFound ? 'Deployment not found' : 'Could not load the deployment'}</h2>
+        <PageHeader title={notFound ? 'Deployment not found' : 'Could not load the deployment'} />
         <p role="alert" className="sd-muted">
           {notFound ? 'This deployment does not exist or was deleted.' : describeDeploymentError(deployment.error, 'Something went wrong. Try again.')}
         </p>
         {!notFound && (
           <div>
-            <button type="button" className="sk-btn" onClick={() => void deployment.refetch()}>
+            <Button variant="secondary" onClick={() => void deployment.refetch()}>
               Retry
-            </button>
+            </Button>
           </div>
         )}
       </section>
@@ -175,45 +178,46 @@ export function DeploymentDetailPage() {
       <Link className="sd-back" to={listPath}>
         Deployments
       </Link>
-      <header className="sd-head">
-        <div className="sd-head__main">
-          <h2 className="sd-title">{data.name}</h2>
-          <div className="sd-meta">
+      <PageHeader
+        title={data.name}
+        subtitle={
+          <span className="sd-meta">
             <Badge tone={status.tone}>{status.label}</Badge>
-            <span className="sd-muted">{data.source === 'GIT' ? 'From Git' : 'Compose file'}</span>
-            <span className="sd-muted">Last deployed: {formatDate(data.lastDeployedAt)}</span>
-          </div>
-        </div>
-        {canWrite && (
-          <div className="sd-actions">
-            <button type="button" className="sk-btn sk-btn--primary" onClick={onDeployClick} disabled={busy || versions.isPending}>
-              Deploy
-            </button>
-            {data.source === 'GIT' && (
-              <button type="button" className="sk-btn" onClick={startRedeploy} disabled={busy}>
-                Pull &amp; redeploy
-              </button>
-            )}
-            {data.source === 'FILE' && (
-              <button
-                type="button"
-                className="sk-btn"
-                onClick={startPullUpdate}
-                disabled={busy || !hasDeployed}
-                title={hasDeployed ? 'Pull newer images and recreate the containers' : 'Deploy once first'}
-              >
-                {pullUpdate.isPending ? 'Updating…' : 'Pull & update'}
-              </button>
-            )}
-            <button type="button" className="sk-btn" onClick={() => setDialog({ kind: 'stop' })} disabled={busy}>
-              Stop
-            </button>
-            <button type="button" className="sk-btn sk-btn--plain sk-btn--danger-text" onClick={() => setDialog({ kind: 'delete' })} disabled={busy}>
-              Delete
-            </button>
-          </div>
-        )}
-      </header>
+            <span>{data.source === 'GIT' ? 'From Git' : 'Compose file'}</span>
+            <span>Last deployed: {formatDate(data.lastDeployedAt)}</span>
+          </span>
+        }
+        actions={
+          canWrite ? (
+            <div className="sd-actions">
+              <Button variant="primary" onClick={onDeployClick} disabled={busy || versions.isPending}>
+                Deploy
+              </Button>
+              {data.source === 'GIT' && (
+                <Button variant="secondary" onClick={startRedeploy} disabled={busy}>
+                  Pull &amp; redeploy
+                </Button>
+              )}
+              {data.source === 'FILE' && (
+                <Button
+                  variant="secondary"
+                  onClick={startPullUpdate}
+                  disabled={busy || !hasDeployed}
+                  title={hasDeployed ? 'Pull newer images and recreate the containers' : 'Deploy once first'}
+                >
+                  {pullUpdate.isPending ? 'Updating…' : 'Pull & update'}
+                </Button>
+              )}
+              <Button variant="secondary" onClick={() => setDialog({ kind: 'stop' })} disabled={busy}>
+                Stop
+              </Button>
+              <Button variant="danger" onClick={() => setDialog({ kind: 'delete' })} disabled={busy}>
+                Delete
+              </Button>
+            </div>
+          ) : undefined
+        }
+      />
 
       {actionError && (
         <p role="alert" className="sk-error">
@@ -234,7 +238,7 @@ export function DeploymentDetailPage() {
 
       <ConfigFilesPanel hostId={hostId} deploymentId={deploymentId} canWrite={canWrite} />
 
-      <div className="sd-panel">
+      <Card className="sd-panel">
         <h3 className="sd-panel__title">Versions</h3>
         {versions.isPending ? (
           <p className="sd-muted">Loading versions…</p>
@@ -263,15 +267,15 @@ export function DeploymentDetailPage() {
                   {!v.deployed && <Badge tone="muted">Draft</Badge>}
                 </div>
                 {canWrite && v.deployed && !v.current && (
-                  <button type="button" className="sk-btn" aria-label={`Roll back to ${formatDate(v.createdAt)}`} onClick={() => setDialog({ kind: 'rollback', version: v })} disabled={busy}>
+                  <Button variant="secondary" aria-label={`Roll back to ${formatDate(v.createdAt)}`} onClick={() => setDialog({ kind: 'rollback', version: v })} disabled={busy}>
                     Rollback
-                  </button>
+                  </Button>
                 )}
               </li>
             ))}
           </ul>
         )}
-      </div>
+      </Card>
 
       {dialog?.kind === 'stop' && (
         <ConfirmDialog title="Stop deployment" confirmLabel="Stop" pending={stop.isPending} error={dialogError} onConfirm={confirmStop} onClose={closeDialog}>

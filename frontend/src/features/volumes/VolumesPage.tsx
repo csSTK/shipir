@@ -8,6 +8,7 @@ import { Badge, ResourceTable, type ResourceColumn } from '../../shared/ui/index
 import { useDeleteVolume, useVolumes, type Volume } from './api.ts'
 import { CreateVolumeDialog } from './CreateVolumeDialog.tsx'
 import './VolumesPage.css'
+import { Button } from '../../shared/ui/index.ts'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -44,9 +45,9 @@ export function VolumesPage() {
       <div className="volumes__bar">
         <h2 className="volumes__title">Volumes</h2>
         {canWrite && (
-          <button type="button" className="sk-btn sk-btn--primary" onClick={() => setCreating(true)}>
+          <Button variant="primary" onClick={() => setCreating(true)}>
             Create volume
-          </button>
+          </Button>
         )}
       </div>
       <ResourceTable

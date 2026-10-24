@@ -2,6 +2,7 @@ import { useId, useState, type FormEvent } from 'react'
 import { DeploymentDialog } from '../deployments/DeploymentDialog.tsx'
 import { describeCreateError } from '../hosts/createResource.ts'
 import { useCreateVolume, validateVolumeName } from './api.ts'
+import { Button } from '../../shared/ui/index.ts'
 
 /** Creates a local volume. Client checks mirror the server; server errors stay inline. */
 export function CreateVolumeDialog({ hostId, onClose }: { hostId: string; onClose: () => void }) {
@@ -48,12 +49,12 @@ export function CreateVolumeDialog({ hostId, onClose }: { hostId: string; onClos
           </p>
         )}
         <div className="sk-dialog__actions">
-          <button type="button" className="sk-btn sk-btn--plain" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className="sk-btn sk-btn--primary" disabled={create.isPending}>
+          </Button>
+          <Button variant="primary" type="submit" disabled={create.isPending}>
             {create.isPending ? 'Creating…' : 'Create'}
-          </button>
+          </Button>
         </div>
       </form>
     </DeploymentDialog>

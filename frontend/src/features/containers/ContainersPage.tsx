@@ -12,6 +12,7 @@ import { ConfirmDialog } from '../deployments/ConfirmDialog.tsx'
 import { actionsFor, describeActionError, useContainerAction, useContainers, useDeleteContainer, type Container, type ContainerAction } from './api.ts'
 import { CreateContainerDialog } from './CreateContainerDialog.tsx'
 import './ContainersPage.css'
+import { Button } from '../../shared/ui/index.ts'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -144,7 +145,7 @@ const logsColumn: ResourceColumn<Container> = {
   id: 'logs',
   header: 'Logs',
   render: (c) => (
-    <Link className="sk-btn sk-btn--plain containers__btn" to={`${c.id}/logs`} aria-label={`Logs of ${c.name}`}>
+    <Link className="ui-btn ui-btn--ghost ui-btn--sm containers__btn" to={`${c.id}/logs`} aria-label={`Logs of ${c.name}`}>
       Logs
     </Link>
   ),
@@ -156,7 +157,7 @@ const consoleColumn: ResourceColumn<Container> = {
   header: 'Console',
   render: (c) =>
     c.state === 'running' ? (
-      <Link className="sk-btn sk-btn--plain containers__btn" to={`${c.id}/console`} aria-label={`Console of ${c.name}`}>
+      <Link className="ui-btn ui-btn--ghost ui-btn--sm containers__btn" to={`${c.id}/console`} aria-label={`Console of ${c.name}`}>
         Console
       </Link>
     ) : (
@@ -183,16 +184,16 @@ function actionColumn(pending: { id: string; action: ContainerAction } | null, o
       return (
         <span className="containers__actions">
           {actionsFor(c.state).map((a) => (
-            <button
+            <Button
               key={a}
-              type="button"
-              className={`sk-btn ${a === 'kill' ? 'sk-btn--danger-text' : 'sk-btn--plain'} containers__btn`}
+              size="sm"
+              variant={a === 'kill' ? 'danger' : 'ghost'}
               aria-label={`${LABELS[a][0]} container ${c.name}`}
               disabled={busy}
               onClick={() => onAction(c, a)}
             >
               {busy && pending.action === a ? LABELS[a][1] : LABELS[a][0]}
-            </button>
+            </Button>
           ))}
         </span>
       )
@@ -269,9 +270,9 @@ export function ContainersPage() {
       <div className="containers__bar">
         <h2 className="containers__title">Containers</h2>
         {canWrite && (
-          <button type="button" className="sk-btn sk-btn--primary" onClick={() => setCreating(true)}>
+          <Button variant="primary" onClick={() => setCreating(true)}>
             Create container
-          </button>
+          </Button>
         )}
       </div>
       {actionError && (

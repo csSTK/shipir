@@ -3,6 +3,7 @@ import { ApiError } from '../../shared/api/client.ts'
 import { useLoadDeploymentEnv, useUpdateDeployment, type EnvEntry, type ManagedDeploymentDetail } from './api.ts'
 import { EnvEditor, toPayload, validateEnv, YamlEditor } from './editor/index.ts'
 import { describeDeploymentError } from './deploymentErrors.ts'
+import { Button, Card } from '../../shared/ui/index.ts'
 
 /**
  * Compose file and environment variables of a deployment. Read-only until "Edit"; saving creates a draft
@@ -63,13 +64,13 @@ export function DeploymentContentPanel({ deployment, hostId, canWrite }: { deplo
   }
 
   return (
-    <div className="sd-panel">
+    <Card className="sd-panel">
       <div className="sd-panel__head">
         <h3 className="sd-panel__title">Compose file</h3>
         {canWrite && !editing && (
-          <button type="button" className="sk-btn" onClick={startEdit}>
+          <Button variant="secondary" onClick={startEdit}>
             Edit
-          </button>
+          </Button>
         )}
       </div>
       {saved && !editing && (
@@ -111,9 +112,9 @@ export function DeploymentContentPanel({ deployment, hostId, canWrite }: { deplo
                 </p>
               )}
               <div>
-                <button type="button" className="sk-btn" onClick={openValues} disabled={loadEnv.isPending}>
+                <Button variant="secondary" onClick={openValues} disabled={loadEnv.isPending}>
                   Edit variables
-                </button>
+                </Button>
               </div>
             </>
           )}
@@ -128,15 +129,15 @@ export function DeploymentContentPanel({ deployment, hostId, canWrite }: { deplo
             </p>
           )}
           <div className="sd-panel__actions">
-            <button type="button" className="sk-btn sk-btn--plain" onClick={cancel} disabled={update.isPending}>
+            <Button variant="ghost" onClick={cancel} disabled={update.isPending}>
               Cancel
-            </button>
-            <button type="button" className="sk-btn sk-btn--primary" onClick={save} disabled={update.isPending}>
+            </Button>
+            <Button variant="primary" onClick={save} disabled={update.isPending}>
               Save
-            </button>
+            </Button>
           </div>
         </>
       )}
-    </div>
+    </Card>
   )
 }

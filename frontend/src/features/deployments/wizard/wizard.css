@@ -10,7 +10,7 @@
   gap: 12px;
   margin: 0;
   padding: 14px;
-  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border: 1px solid var(--color-border);
   border-radius: 14px;
   min-width: 0;
 }
@@ -80,9 +80,9 @@
   font: inherit;
   font-size: 1rem;
   padding: 8px 12px;
-  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border: 1px solid var(--color-border);
   border-radius: 10px;
-  background: color-mix(in srgb, currentColor 5%, transparent);
+  background: var(--color-surface-sunken);
   color: inherit;
   min-width: 0;
 }
@@ -90,11 +90,11 @@
 .wz-field select:focus-visible,
 .wz-chip input:focus-visible,
 .wz-check input:focus-visible {
-  outline: 2px solid AccentColor;
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--shadow-focus);
 }
 .wz-field__error {
-  color: #d92d20;
+  color: var(--color-bad);
   font-size: 0.8125rem;
 }
 .wz-check {
@@ -115,14 +115,14 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border: 1px solid var(--color-border);
   border-radius: 999px;
   font-size: 0.875rem;
   cursor: pointer;
 }
 .wz-chip:has(input:checked) {
-  background: color-mix(in srgb, AccentColor 14%, transparent);
-  border-color: AccentColor;
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
 }
 .wz-add {
   align-self: flex-start;
@@ -146,7 +146,7 @@
   padding: 3px;
   gap: 2px;
   border-radius: 12px;
-  background: color-mix(in srgb, currentColor 7%, transparent);
+  background: var(--color-surface-sunken);
   align-self: flex-start;
 }
 .wz-mode {
@@ -162,12 +162,12 @@
   transform: scale(0.97);
 }
 .wz-mode:has(input:checked) {
-  background: Canvas;
-  box-shadow: 0 1px 3px color-mix(in srgb, #000 18%, transparent);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-sm);
 }
 .wz-mode:has(input:focus-visible) {
-  outline: 2px solid AccentColor;
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--shadow-focus);
 }
 .wz-mode input {
   position: absolute;
@@ -197,6 +197,6 @@
 }
 
 /* Class display rules must not override the hidden attribute of the mode panels. */
-.sk-dialog [hidden] {
+.ui-dialog [hidden] {
   display: none !important;
 }

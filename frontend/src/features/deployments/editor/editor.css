@@ -6,15 +6,15 @@
 }
 .ed-yaml__frame {
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border: 1px solid var(--color-border);
   border-radius: 12px;
   transition: border-color 0.15s ease;
 }
 .ed-yaml__frame:focus-within {
-  border-color: AccentColor;
+  border-color: var(--color-accent);
 }
 .ed-yaml__frame[data-invalid='true'] {
-  border-color: #d92d20;
+  border-color: var(--color-bad);
 }
 .ed-yaml__loading {
   display: grid;
@@ -25,7 +25,7 @@
 }
 .ed-yaml__error {
   font-size: 0.875rem;
-  color: #d92d20;
+  color: var(--color-bad);
 }
 .ed-yaml__error p {
   margin: 0;
@@ -68,24 +68,24 @@
   font: inherit;
   font-size: 1rem;
   padding: 8px 12px;
-  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border: 1px solid var(--color-border);
   border-radius: 10px;
-  background: color-mix(in srgb, currentColor 5%, transparent);
+  background: var(--color-surface-sunken);
   color: inherit;
   min-width: 0;
 }
 .ed-env__row input[aria-invalid='true'] {
-  border-color: #d92d20;
+  border-color: var(--color-bad);
 }
 .ed-env__row input:focus-visible,
 .ed-env__paste textarea:focus-visible {
-  outline: 2px solid AccentColor;
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--shadow-focus);
 }
 .ed-env__issue {
   margin: 0;
   font-size: 0.8125rem;
-  color: #d92d20;
+  color: var(--color-bad);
 }
 .ed-env__tools {
   display: flex;

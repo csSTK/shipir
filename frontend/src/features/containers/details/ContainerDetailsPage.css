@@ -17,8 +17,7 @@
 .cdetails__back:hover {
   opacity: 1;
 }
-.cdetails__back:focus-visible,
-.cdetails__btn:focus-visible {
+.cdetails__back:focus-visible {
   outline: 2px solid AccentColor;
   outline-offset: 2px;
   border-radius: 4px;
@@ -45,10 +44,6 @@
 .cdetails__btn {
   align-self: flex-start;
   text-decoration: none;
-  transition: transform 120ms ease-out;
-}
-.cdetails__btn:active {
-  transform: scale(0.97);
 }
 .cdetails__section {
   padding: 16px 20px;

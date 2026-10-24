@@ -1,5 +1,6 @@
-import { useId, type ReactNode } from 'react'
-import { DeploymentDialog } from './DeploymentDialog.tsx'
+import type { ReactNode } from 'react'
+import { Button, Dialog } from '../../shared/ui/index.ts'
+import './DeploymentUi.css'
 
 interface Props {
   title: string
@@ -15,11 +16,24 @@ interface Props {
   details?: ReactNode
 }
 
-/** Confirmation for rollback, delete and stop. */
+/** Confirmation for rollback, delete and stop; content-rich variant of the shared `ConfirmDialog` (details, inline error). */
 export function ConfirmDialog({ title, confirmLabel, danger = false, pending = false, error = null, onConfirm, onClose, children, details }: Props) {
-  const titleId = useId()
   return (
-    <DeploymentDialog title={title} titleId={titleId} onClose={onClose}>
+    <Dialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={title}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm} disabled={pending} loading={pending}>
+            {confirmLabel}
+          </Button>
+        </>
+      }
+    >
       <p className="sk-dialog__text">{children}</p>
       {details}
       {error && (
@@ -27,14 +41,6 @@ export function ConfirmDialog({ title, confirmLabel, danger = false, pending = f
           {error}
         </p>
       )}
-      <div className="sk-dialog__actions">
-        <button type="button" className="sk-btn sk-btn--plain" onClick={onClose}>
-          Cancel
-        </button>
-        <button type="button" className={`sk-btn ${danger ? 'sk-btn--danger' : 'sk-btn--primary'}`} onClick={onConfirm} disabled={pending}>
-          {confirmLabel}
-        </button>
-      </div>
-    </DeploymentDialog>
+    </Dialog>
   )
 }

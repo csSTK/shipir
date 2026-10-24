@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { FileText, GitBranch, Play, Square, Trash2 } from 'lucide-react'
 import { describeResourceError } from '../hosts/format.ts'
 import { useCurrentUser } from '../auth/index.ts'
-import { Badge, ResourceTable, type ResourceColumn } from '../../shared/ui/index.ts'
+import { Badge, Button, PageHeader, ResourceTable, type MenuEntry, type ResourceColumn } from '../../shared/ui/index.ts'
 import {
   useDeployDeployment,
   useManagedDeployments,
@@ -15,6 +16,7 @@ import {
 } from './api.ts'
 import { AddDeploymentDialog } from './AddDeploymentDialog.tsx'
 import { ConfirmDialog } from './ConfirmDialog.tsx'
+import type { RowActions } from '../../shared/ui/ResourceTable.tsx'
 import { describeDeploymentError } from './deploymentErrors.ts'
 import './DeploymentUi.css'
 import './DeploymentsPage.css'
@@ -49,6 +51,7 @@ function joinRows(live: DeploymentSummary[], managed: ManagedDeployment[]): Row[
 /** `/environments/:id/deployments`: Compose projects of one environment, plus managed deployments. */
 export function DeploymentsPage() {
   const { id = '' } = useParams()
+  const navigate = useNavigate()
   const { data: user } = useCurrentUser()
   const canWrite = user?.role === 'ADMIN' || user?.role === 'OPERATOR'
   const live = useDeployments(id)
@@ -130,6 +133,20 @@ export function DeploymentsPage() {
       },
     },
     {
+      id: 'source',
+      header: 'Source',
+      sortValue: (r) => r.managed?.source ?? '',
+      render: (r) =>
+        r.managed ? (
+          <span className="deployments__source">
+            {r.managed.source === 'GIT' ? <GitBranch size={16} strokeWidth={1.75} aria-hidden="true" /> : <FileText size={16} strokeWidth={1.75} aria-hidden="true" />}
+            {r.managed.source === 'GIT' ? 'Git' : 'File'}
+          </span>
+        ) : (
+          '–'
+        ),
+    },
+    {
       id: 'update',
       header: 'Update',
       sortValue: (r) => (r.live?.updateAvailable ? 1 : 0),
@@ -160,50 +177,53 @@ export function DeploymentsPage() {
       render: (r) => (r.managed ? <Badge tone="ok">Managed</Badge> : '–'),
     },
   ]
-  if (canWrite) {
-    columns.push({
-      id: 'actions',
-      header: 'Actions',
-      render: (r) =>
-        r.managed ? (
-          <span className="deployments__actions">
-            <button type="button" className="sk-btn sk-btn--plain" aria-label={`Deploy ${r.name}`} onClick={() => run('Deploy', r.managed!)} disabled={deploy.isPending || stop.isPending}>
-              Deploy
-            </button>
-            <button type="button" className="sk-btn sk-btn--plain" aria-label={`Stop ${r.name}`} onClick={() => run('Stop', r.managed!)} disabled={deploy.isPending || stop.isPending}>
-              Stop
-            </button>
-          </span>
-        ) : r.live ? (
-          <button
-            type="button"
-            className="sk-btn sk-btn--plain sk-btn--danger-text"
-            aria-label={`Remove ${r.name}`}
-            onClick={() => {
-              setNotice(null)
-              setRemoveError(null)
-              setRemoving(r.name)
-            }}
-            disabled={remove.isPending}
-          >
-            Remove
-          </button>
-        ) : (
-          '–'
-        ),
-    })
+  const busy = deploy.isPending || stop.isPending
+  function rowActions(r: Row): RowActions {
+    const details: MenuEntry = r.managed
+      ? { label: 'Open details', onSelect: () => navigate(`/environments/${id}/deployments/${r.managed!.id}`) }
+      : { label: 'Show containers', onSelect: () => navigate(`/environments/${id}/containers?deployment=${encodeURIComponent(r.name)}`) }
+    if (!canWrite) return { menu: [details] }
+    if (r.managed) {
+      return {
+        primary: [
+          { label: 'Deploy', icon: Play, onSelect: () => run('Deploy', r.managed!), disabled: busy },
+          { label: 'Stop', icon: Square, onSelect: () => run('Stop', r.managed!), disabled: busy },
+        ],
+        menu: [details],
+      }
+    }
+    return {
+      primary: r.live
+        ? [
+            {
+              label: 'Remove',
+              icon: Trash2,
+              danger: true,
+              disabled: remove.isPending,
+              onSelect: () => {
+                setNotice(null)
+                setRemoveError(null)
+                setRemoving(r.name)
+              },
+            },
+          ]
+        : [],
+      menu: [details],
+    }
   }
 
   return (
     <section className="deployments">
-      <div className="deployments__bar">
-        <h2 className="deployments__title">Deployments</h2>
-        {canWrite && (
-          <button type="button" className="sk-btn sk-btn--primary" onClick={() => setAdding(true)}>
-            Add deployment
-          </button>
-        )}
-      </div>
+      <PageHeader
+        title="Deployments"
+        actions={
+          canWrite ? (
+            <Button variant="primary" onClick={() => setAdding(true)}>
+              Add deployment
+            </Button>
+          ) : undefined
+        }
+      />
       {notice && (
         <p role={notice.tone === 'error' ? 'alert' : 'status'} className={notice.tone === 'error' ? 'sk-error' : 'deployments__notice'}>
           {notice.text}
@@ -216,6 +236,8 @@ export function DeploymentsPage() {
         rowKey={(r) => r.managed?.id ?? r.name}
         searchText={(r) => `${r.name} ${r.live?.workingDir ?? ''}`}
         defaultSort="name"
+        rowActions={rowActions}
+        rowLabel={(r) => r.name}
         emptyMessage="No deployments in this environment."
         isPending={live.isPending}
         error={live.error ? describeResourceError(live.error) : null}

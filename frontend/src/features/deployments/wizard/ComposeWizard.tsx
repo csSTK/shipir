@@ -15,6 +15,7 @@ import {
   type WizardState,
 } from './model.ts'
 import './wizard.css'
+import { Button } from '../../../shared/ui/index.ts'
 
 function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
   return (
@@ -85,14 +86,14 @@ function ResourceList({
             <input type="checkbox" checked={r.external} onChange={(e) => onChange(patchAt(rows, i, { external: e.target.checked }))} />
             <span>Already exists</span>
           </label>
-          <button type="button" className="sk-btn sk-btn--plain" aria-label={`Remove ${singular.toLowerCase()} ${i + 1}`} onClick={() => onChange(remove(rows, i))}>
+          <Button variant="ghost" aria-label={`Remove ${singular.toLowerCase()} ${i + 1}`} onClick={() => onChange(remove(rows, i))}>
             Remove
-          </button>
+          </Button>
         </div>
       ))}
-      <button type="button" className="sk-btn" onClick={() => onChange([...rows, { name: '', driver: '', external: false }])}>
+      <Button variant="secondary" onClick={() => onChange([...rows, { name: '', driver: '', external: false }])}>
         Add {singular.toLowerCase()}
-      </button>
+      </Button>
     </section>
   )
 }
@@ -122,9 +123,9 @@ function ServiceCard({
       <div className="wz-card__head">
         <h3 className="wz-section__title">Service {n}</h3>
         {state.services.length > 1 && (
-          <button type="button" className="sk-btn sk-btn--plain sk-btn--danger-text" aria-label={`Remove service ${n}`} onClick={onRemove}>
+          <Button variant="danger" aria-label={`Remove service ${n}`} onClick={onRemove}>
             Remove
-          </button>
+          </Button>
         )}
       </div>
       <div className="wz-row wz-row--two">
@@ -167,14 +168,14 @@ function ServiceCard({
                 <option value="udp">udp</option>
               </select>
             </Field>
-            <button type="button" className="sk-btn sk-btn--plain" aria-label={`Remove service ${n} port ${j + 1}`} onClick={() => onChange({ ports: remove(service.ports, j) })}>
+            <Button variant="ghost" aria-label={`Remove service ${n} port ${j + 1}`} onClick={() => onChange({ ports: remove(service.ports, j) })}>
               Remove
-            </button>
+            </Button>
           </div>
         ))}
-        <button type="button" className="sk-btn" onClick={() => onChange({ ports: [...service.ports, { host: '', container: '', protocol: 'tcp' }] })}>
+        <Button variant="secondary" onClick={() => onChange({ ports: [...service.ports, { host: '', container: '', protocol: 'tcp' }] })}>
           Add port to service {n}
-        </button>
+        </Button>
       </fieldset>
 
       <fieldset className="wz-group">
@@ -191,14 +192,14 @@ function ServiceCard({
               <input type="checkbox" checked={r.ref} onChange={(e) => onChange({ env: patchAt(service.env, j, { ref: e.target.checked }) })} />
               <span>From deployment variable</span>
             </label>
-            <button type="button" className="sk-btn sk-btn--plain" aria-label={`Remove service ${n} env ${j + 1}`} onClick={() => onChange({ env: remove(service.env, j) })}>
+            <Button variant="ghost" aria-label={`Remove service ${n} env ${j + 1}`} onClick={() => onChange({ env: remove(service.env, j) })}>
               Remove
-            </button>
+            </Button>
           </div>
         ))}
-        <button type="button" className="sk-btn" onClick={() => onChange({ env: [...service.env, { key: '', value: '', ref: false }] })}>
+        <Button variant="secondary" onClick={() => onChange({ env: [...service.env, { key: '', value: '', ref: false }] })}>
           Add env var to service {n}
-        </button>
+        </Button>
       </fieldset>
 
       <fieldset className="wz-group">
@@ -215,14 +216,14 @@ function ServiceCard({
               <input type="checkbox" checked={r.readOnly} onChange={(e) => onChange({ volumes: patchAt(service.volumes, j, { readOnly: e.target.checked }) })} />
               <span>Read only</span>
             </label>
-            <button type="button" className="sk-btn sk-btn--plain" aria-label={`Remove service ${n} mount ${j + 1}`} onClick={() => onChange({ volumes: remove(service.volumes, j) })}>
+            <Button variant="ghost" aria-label={`Remove service ${n} mount ${j + 1}`} onClick={() => onChange({ volumes: remove(service.volumes, j) })}>
               Remove
-            </button>
+            </Button>
           </div>
         ))}
-        <button type="button" className="sk-btn" onClick={() => onChange({ volumes: [...service.volumes, { source: '', target: '', readOnly: false }] })}>
+        <Button variant="secondary" onClick={() => onChange({ volumes: [...service.volumes, { source: '', target: '', readOnly: false }] })}>
           Add volume to service {n}
-        </button>
+        </Button>
       </fieldset>
 
       <Toggle name={`${p}-networks`} label="Networks" options={networkNames} selected={service.networks} onChange={(networks) => onChange({ networks })} />
@@ -279,9 +280,9 @@ export function ComposeWizard({ onContinue, initial }: { onContinue: (yaml: stri
           onRemove={() => change({ ...state, services: remove(state.services, i) })}
         />
       ))}
-      <button type="button" className="sk-btn wz-add" onClick={() => change({ ...state, services: [...state.services, emptyService()] })}>
+      <Button variant="secondary" className="wz-add" onClick={() => change({ ...state, services: [...state.services, emptyService()] })}>
         Add service
-      </button>
+      </Button>
       <ResourceList kind="networks" title="Networks" rows={state.networks} fields={fields} onChange={(networks) => change({ ...state, networks })} />
       <ResourceList kind="volumes" title="Volumes" rows={state.volumes} fields={fields} onChange={(volumes) => change({ ...state, volumes })} />
 
@@ -307,9 +308,9 @@ export function ComposeWizard({ onContinue, initial }: { onContinue: (yaml: stri
       )}
 
       <div className="wz-actions">
-        <button type="button" className="sk-btn" onClick={preview} disabled={generate.isPending}>
+        <Button variant="secondary" onClick={preview} disabled={generate.isPending}>
           Preview YAML
-        </button>
+        </Button>
       </div>
 
       {yaml !== null && (
@@ -319,9 +320,9 @@ export function ComposeWizard({ onContinue, initial }: { onContinue: (yaml: stri
           </h3>
           <YamlEditor label="Generated Compose file" value={yaml} readOnly height="220px" />
           <div className="wz-actions">
-            <button type="button" className="sk-btn sk-btn--primary" onClick={() => onContinue(yaml, referencedEnvKeys(state))}>
+            <Button variant="primary" onClick={() => onContinue(yaml, referencedEnvKeys(state))}>
               Continue in editor
-            </button>
+            </Button>
           </div>
         </section>
       )}

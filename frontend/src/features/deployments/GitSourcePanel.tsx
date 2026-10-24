@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSetAutoUpdate, type GitInfo } from './api.ts'
 import { describePollError, describeDeploymentError } from './deploymentErrors.ts'
+import { Button, Card } from '../../shared/ui/index.ts'
 
 const DEFAULT_INTERVAL_MINUTES = 5
 
@@ -30,7 +31,7 @@ export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploy
   }
 
   return (
-    <section className="sd-panel" aria-labelledby={`git-${deploymentId}`}>
+    <Card className="sd-panel" role="region" aria-labelledby={`git-${deploymentId}`}>
       <h3 className="sd-panel__title" id={`git-${deploymentId}`}>
         Git source
       </h3>
@@ -80,9 +81,9 @@ export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploy
         </label>
         {canWrite && (
           <div>
-            <button type="button" className="sk-btn" onClick={submit} disabled={save.isPending}>
+            <Button variant="secondary" onClick={submit} disabled={save.isPending}>
               Save auto-update
-            </button>
+            </Button>
           </div>
         )}
         {saved && (
@@ -102,6 +103,6 @@ export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploy
           </p>
         )}
       </div>
-    </section>
+    </Card>
   )
 }
