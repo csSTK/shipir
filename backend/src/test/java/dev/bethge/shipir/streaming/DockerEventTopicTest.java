@@ -93,6 +93,8 @@ class DockerEventTopicTest {
     @Autowired
     PasswordEncoder encoder;
     @Autowired
+    org.springframework.jdbc.core.JdbcTemplate jdbc;
+    @Autowired
     DockerEventStreamService events;
     @MockitoSpyBean
     DockerEventService eventService;
@@ -117,6 +119,7 @@ class DockerEventTopicTest {
         user.changePasswordHash(encoder.encode(PASSWORD), Instant.now());
         user = users.save(user);
         hostId = hosts.save(DockerHost.local("events-" + UUID.randomUUID(), user.getId())).getId();
+        jdbc.update("INSERT INTO permissions (user_id, host_id, level) VALUES (?, ?, \'VIEW\')", user.getId(), hostId);
         login();
     }
 

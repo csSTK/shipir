@@ -79,6 +79,8 @@ class LogStreamTest {
     @Autowired
     PasswordEncoder encoder;
     @Autowired
+    org.springframework.jdbc.core.JdbcTemplate jdbc;
+    @Autowired
     LogStreamHandler handler;
     @MockitoBean
     ContainerLogService logService;
@@ -100,6 +102,7 @@ class LogStreamTest {
         user.changePasswordHash(encoder.encode(PASSWORD), Instant.now());
         user = users.save(user);
         hostId = hosts.save(DockerHost.local("logs-" + UUID.randomUUID(), user.getId())).getId();
+        jdbc.update("INSERT INTO permissions (user_id, host_id, level) VALUES (?, ?, \'VIEW\')", user.getId(), hostId);
         when(logService.follow(any(), any(DockerEndpoint.class), any(), anyInt(), anyBoolean(), any(), any()))
                 .thenAnswer(inv -> {
                     follows.incrementAndGet();
@@ -275,11 +278,10 @@ class LogStreamTest {
     }
 
     @Test
-    void unknownHostSendsStatusError() throws Exception {
+    void unknownHostIsRefusedLikeAnInvisibleOne() throws Exception {
         StompSession s = connect();
-        BlockingQueue<String> q = subscribe(s, "/topic/hosts/" + UUID.randomUUID() + "/containers/web/logs");
-        assertThat(q.poll(5, TimeUnit.SECONDS)).contains("\"status\":\"ERROR\"").contains("NOT_FOUND");
-        s.disconnect();
+        subscribe(s, "/topic/hosts/" + UUID.randomUUID() + "/containers/web/logs");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !s.isConnected());
     }
 
     @Test

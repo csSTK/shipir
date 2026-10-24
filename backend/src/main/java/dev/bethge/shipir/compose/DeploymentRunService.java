@@ -230,6 +230,7 @@ public class DeploymentRunService {
             String runId = UUID.randomUUID().toString();
             // The ScopedValue is not inherited by the worker thread: capture the AI marker now, write it into the result entry.
             Map<String, Object> aiMarker = AiInvocationContext.active() ? aiMarker() : Map.of();
+            streams.registerRun(runId, hostId, deployment.getId());
             Consumer<String> sink = streams.start(runId);
             Thread.ofVirtual().name("deploy-" + runId).start(
                     () -> run(deployment, version, endpoint, runId, sink, SYSTEM_USER.equals(username) ? null : userId,

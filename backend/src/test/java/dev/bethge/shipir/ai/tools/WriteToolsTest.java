@@ -104,6 +104,8 @@ class WriteToolsTest {
         jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
                 + "SELECT 'Local host', 'LOCAL', id FROM users WHERE username = 'admin'");
         hostId = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'Local host'", UUID.class);
+        grant("operator", hostId, "OPERATE");
+        grant("viewer", hostId, "VIEW");
         ComposeProcessResult ok = new ComposeProcessResult(0, false, List.of());
         when(execution.execute(any(), any(), any(), any(), any())).thenReturn(ok);
         when(execution.execute(any(), any(), any(), any(), any(), any())).thenReturn(ok);
@@ -111,6 +113,11 @@ class WriteToolsTest {
         deploymentId = deployments.create(hostId, new DeploymentCreateRequest("web", YAML, List.of(new EnvEntry("API_TOKEN", ENV_SECRET))),
                 "admin").id();
         jdbc.update("DELETE FROM audit_log");
+    }
+
+    private void grant(String username, UUID host, String level) {
+        jdbc.update("INSERT INTO permissions (user_id, host_id, level) SELECT id, ?, ? FROM users WHERE username = ?",
+                host, level, username);
     }
 
     private ToolContext ctx(Role role) {
@@ -213,6 +220,30 @@ class WriteToolsTest {
         assertThat(result.error()).isTrue();
         assertThat(result.content()).contains("DEPLOYMENT_NAME_TAKEN");
         assertThat(auditEntry("DEPLOYMENT_CREATE").get("outcome")).isEqualTo("FAILURE");
+    }
+
+    @Test
+    void writeToolOnANonGrantedTargetIsAnErrorResult() {
+        jdbc.update("DELETE FROM permissions");
+
+        ToolResult create = confirmed("create_deployment",
+                mapper.writeValueAsString(Map.of("hostId", hostId.toString(), "name", "other", "yaml", YAML)), Role.OPERATOR);
+        ToolResult run = confirmed("run_deployment", stack(hostId, deploymentId), Role.OPERATOR);
+
+        assertThat(create.error()).isTrue();
+        assertThat(run.error()).isTrue();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM deployments", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void viewGrantDoesNotAllowWriteTools() {
+        jdbc.update("DELETE FROM permissions");
+        jdbc.update("INSERT INTO permissions (user_id, host_id, level) SELECT id, ?, 'VIEW' FROM users WHERE username = 'operator'",
+                hostId);
+
+        ToolResult result = confirmed("run_deployment", stack(hostId, deploymentId), Role.OPERATOR);
+
+        assertThat(result.error()).isTrue();
     }
 
     @Test

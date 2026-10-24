@@ -50,6 +50,21 @@ public class ComposeOutputStreamService {
     }
 
     private final Map<String, Stream> streams = new HashMap<>();
+    /** Which host/deployment a run belongs to (for the SUBSCRIBE permission check); trimmed together with the streams. */
+    private final Map<String, RunTarget> runTargets = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Host and managed deployment of a run. */
+    record RunTarget(java.util.UUID hostId, java.util.UUID deploymentId) {
+    }
+
+    /** Records which deployment a run belongs to; call before {@link #start}. */
+    public void registerRun(String runId, java.util.UUID hostId, java.util.UUID deploymentId) {
+        runTargets.put(runId, new RunTarget(hostId, deploymentId));
+    }
+
+    java.util.Optional<RunTarget> targetOf(String runId) {
+        return java.util.Optional.ofNullable(runTargets.get(runId));
+    }
     private final MessageChannel clientOutbound;
     private final JsonMapper mapper;
     private final StreamProperties properties;
@@ -71,6 +86,7 @@ public class ComposeOutputStreamService {
         synchronized (streams) {
             evictExpired();
             Stream old = streams.put(runId, new Stream());
+            runTargets.keySet().retainAll(streams.keySet());
             if (old != null) {
                 streams.get(runId).subscribers.addAll(old.subscribers);
             }

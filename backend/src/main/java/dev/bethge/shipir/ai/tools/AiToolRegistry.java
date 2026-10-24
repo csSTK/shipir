@@ -117,7 +117,7 @@ public class AiToolRegistry {
             return ToolResult.error("CONFIRMATION_REQUIRED",
                     "'" + name + "' changes state and needs the user's confirmation before it runs.");
         }
-        return run(p.tool, p.args, ctx);
+        return runAs(ctx, () -> run(p.tool, p.args, ctx));
     }
 
     /**

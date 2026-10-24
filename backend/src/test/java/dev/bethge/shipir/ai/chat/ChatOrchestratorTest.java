@@ -166,6 +166,13 @@ class ChatOrchestratorTest {
         jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
                 + "SELECT 'Chat host', 'LOCAL', id FROM users WHERE username = 'admin'");
         hostId = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'Chat host'", UUID.class);
+        grant("operator", hostId, "OPERATE");
+        grant("viewer", hostId, "VIEW");
+    }
+
+    private void grant(String username, UUID host, String level) {
+        jdbc.update("INSERT INTO permissions (user_id, host_id, level) SELECT id, ?, ? FROM users WHERE username = ?",
+                host, level, username);
     }
 
     record Login(MockHttpSession session, Cookie csrf) {

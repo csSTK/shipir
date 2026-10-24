@@ -58,7 +58,7 @@ class ComposeOutputStreamTest {
 
     @BeforeEach
     void user() {
-        User u = users.findByUsername("viewer").orElseGet(() -> new User("viewer", "x", Role.VIEWER));
+        User u = users.findByUsername("streamadmin").orElseGet(() -> new User("streamadmin", "x", Role.ADMIN));
         u.changePasswordHash(encoder.encode(PASSWORD), Instant.now());
         users.save(u);
     }
@@ -81,7 +81,7 @@ class ComposeOutputStreamTest {
         call(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/me")));
         HttpResponse<String> r = call(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/login"))
                 .header("Content-Type", "application/json").header("X-XSRF-TOKEN", cookie("XSRF-TOKEN"))
-                .POST(HttpRequest.BodyPublishers.ofString("{\"username\":\"viewer\",\"password\":\"" + PASSWORD + "\"}")));
+                .POST(HttpRequest.BodyPublishers.ofString("{\"username\":\"streamadmin\",\"password\":\"" + PASSWORD + "\"}")));
         assertThat(r.statusCode()).isEqualTo(200);
         csrf = cookie("XSRF-TOKEN");
     }

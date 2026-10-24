@@ -19,9 +19,9 @@ import java.util.regex.Pattern;
 /**
  * Inbound STOMP frame policy: CONNECT needs an authenticated handshake principal and the CSRF token (header
  * {@code X-XSRF-TOKEN} equal to the {@code XSRF-TOKEN} cookie of the handshake, see {@link CsrfHandshakeInterceptor}),
- * SUBSCRIBE only to {@code /topic/deployments/{id}} (registers the subscription for replay) and
+ * SUBSCRIBE only to {@code /topic/deployments/{id}} (needs view access to the run's deployment; registers the subscription for replay) and
  * {@code /topic/chat/{sessionId}} (owner only, via {@link ChatTopicAccess}) and container logs
- * {@code /topic/hosts/{hostId}/containers/{id}/logs} (any authenticated user, see {@link LogStreamHandler}), Docker events {@code /topic/hosts/{hostId}/events} (any authenticated user, see {@link DockerEventStreamService}), interactive console {@code /topic/exec/{id}} (ADMIN owner, see {@link ExecSessionHandler}); clients may only SEND
+ * {@code /topic/hosts/{hostId}/containers/{id}/logs} (hosts the user fully sees, see {@link LogStreamHandler}), Docker events {@code /topic/hosts/{hostId}/events} (hosts the user fully sees, see {@link DockerEventStreamService}), interactive console {@code /topic/exec/{id}} (ADMIN owner, see {@link ExecSessionHandler}); clients may only SEND
  * input/resize frames of their own console to {@code /app/exec/{id}/{input|resize}}.
  */
 @Component
@@ -44,10 +44,12 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
     private final LogStreamHandler logStreams;
     private final ExecSessionHandler execSessions;
     private final DockerEventStreamService eventStreams;
+    private final StreamAccess access;
 
     StompSecurityInterceptor(ComposeOutputStreamService streams, ChatTopicAccess chatAccess,
                              LogStreamHandler logStreams, ExecSessionHandler execSessions,
-                             DockerEventStreamService eventStreams) {
+                             DockerEventStreamService eventStreams, StreamAccess access) {
+        this.access = access;
         this.eventStreams = eventStreams;
         this.execSessions = execSessions;
         this.streams = streams;
@@ -86,7 +88,8 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                 }
                 var eventHost = DockerEventStreamService.parse(destination);
                 if (eventHost != null) {
-                    if (!eventStreams.mayFollow(accessor.getUser().getName(), eventHost)) {
+                    if (!eventStreams.mayFollow(accessor.getUser().getName(), eventHost)
+                            || !access.hostFullyVisible(accessor.getUser().getName(), eventHost)) {
                         throw new MessageDeliveryException("Subscription destination not allowed");
                     }
                     eventStreams.subscribe(eventHost, accessor.getSessionId(), accessor.getSubscriptionId());
@@ -94,7 +97,8 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                 }
                 var logTarget = LogStreamHandler.parse(destination);
                 if (logTarget != null) {
-                    if (!logStreams.mayFollow(accessor.getUser().getName(), logTarget)) {
+                    if (!logStreams.mayFollow(accessor.getUser().getName(), logTarget)
+                            || !access.hostFullyVisible(accessor.getUser().getName(), logTarget.hostId())) {
                         throw new MessageDeliveryException("Subscription destination not allowed");
                     }
                     LogStreamHandler.Options options;
@@ -109,6 +113,9 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                 }
                 var m = DEPLOYMENT_TOPIC.matcher(destination);
                 if (!m.matches()) {
+                    throw new MessageDeliveryException("Subscription destination not allowed");
+                }
+                if (!access.mayFollowRun(accessor.getUser().getName(), streams.targetOf(m.group(1)))) {
                     throw new MessageDeliveryException("Subscription destination not allowed");
                 }
                 streams.subscribe(m.group(1), accessor.getSessionId(), accessor.getSubscriptionId());

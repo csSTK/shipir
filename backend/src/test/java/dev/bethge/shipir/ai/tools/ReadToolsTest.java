@@ -120,6 +120,10 @@ class ReadToolsTest {
                 + "tls_key_encrypted, owner_user_id) SELECT 'Remote host', 'TCP', '10.0.0.1', 2376, ?, ?, ?, id "
                 + "FROM users WHERE username = 'admin'", pem, pem, pem);
         tcpHostId = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'Remote host'", UUID.class);
+        grant("operator", hostId, "OPERATE");
+        grant("viewer", hostId, "VIEW");
+        grant("operator", tcpHostId, "OPERATE");
+        grant("viewer", tcpHostId, "VIEW");
         jdbc.update("INSERT INTO notification_webhooks (name, url_encrypted, url_hint, event_types, created_by) "
                         + "SELECT 'hook', ?, 'https://hooks.example', ARRAY['HOST_DOWN'], id FROM users WHERE username = 'admin'",
                 WEBHOOK_SECRET.getBytes(StandardCharsets.UTF_8));
@@ -130,6 +134,11 @@ class ReadToolsTest {
         DeploymentDetailResponse created = deployments.create(hostId, new DeploymentCreateRequest("web",
                 "services:\n  web:\n    image: nginx\n", List.of(new EnvEntry("API_TOKEN", ENV_SECRET))), "admin");
         deploymentId = created.id();
+    }
+
+    private void grant(String username, UUID host, String level) {
+        jdbc.update("INSERT INTO permissions (user_id, host_id, level) SELECT id, ?, ? FROM users WHERE username = ?",
+                host, level, username);
     }
 
     private ToolContext ctx(Role role) {
@@ -190,6 +199,39 @@ class ReadToolsTest {
         verify(resources).images(eq(hostId));
         verify(resources).networks(eq(hostId));
         verify(resources).volumes(eq(hostId));
+    }
+
+    @Test
+    void listToolsOnlyReturnTheGrantedObjects() {
+        jdbc.update("DELETE FROM permissions");
+        grant("viewer", tcpHostId, "VIEW");
+
+        JsonNode hosts = mapper.readTree(run("list_hosts", "{}", Role.VIEWER).content());
+        assertThat(hosts).hasSize(1);
+        assertThat(hosts.get(0).get("name").asString()).isEqualTo("Remote host");
+        // an admin is not filtered
+        assertThat(mapper.readTree(run("list_hosts", "{}", Role.ADMIN).content())).hasSize(2);
+    }
+
+    @Test
+    void ungrantedHostAndDeploymentAreNotFoundForTools() {
+        jdbc.update("DELETE FROM permissions");
+
+        ToolResult detail = run("get_managed_deployment", stack(hostId, deploymentId), Role.OPERATOR);
+
+        assertThat(detail.error()).isTrue();
+        assertThat(detail.content()).contains("NOT_FOUND").doesNotContain("nginx");
+    }
+
+    @Test
+    void deploymentGrantShowsOnlyThatDeployment() {
+        jdbc.update("DELETE FROM permissions");
+        jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) SELECT id, ?, 'VIEW' FROM users WHERE username = 'viewer'",
+                deploymentId);
+
+        ToolResult detail = run("get_managed_deployment", stack(hostId, deploymentId), Role.VIEWER);
+
+        assertThat(detail.error()).as(detail.content()).isFalse();
     }
 
     @Test
