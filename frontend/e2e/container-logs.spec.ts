@@ -58,6 +58,7 @@ test.beforeEach(({ api }) => {
   api.mock('GET', '/api/auth/me', { body: { username: 'u', role: 'VIEWER', setupRequired: false } })
   api.mock('GET', '/api/hosts/overview', { body: [host] })
   api.mock('GET', '/api/hosts/a/containers', { body: [container] })
+  api.mock('GET', '/api/hosts/a/images', { body: [] })
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
 })
 

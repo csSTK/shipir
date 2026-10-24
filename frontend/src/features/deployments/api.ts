@@ -14,6 +14,8 @@ export interface DeploymentSummary {
   /** True when Shipir manages this project; optional for older servers. */
   managed?: boolean
   managedDeploymentId?: string | null
+  /** A newer image exists in a registry for one of the project's images. */
+  updateAvailable?: boolean
 }
 
 export function useDeployments(hostId: string) {

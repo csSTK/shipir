@@ -41,6 +41,13 @@ const containers = [
   { ...base, id: '3', name: 'cache', image: 'redis:7', state: 'running', health: 'unhealthy' },
 ]
 
+/** Routes the three lists the page reads; `extra` overrides deployments/images. */
+function mockContainers(extra: { deployments?: unknown[]; images?: unknown[] } = {}) {
+  apiFetch.mockImplementation((path: string) =>
+    Promise.resolve(path.endsWith('/containers') ? containers : path.endsWith('/images') ? (extra.images ?? []) : (extra.deployments ?? [])),
+  )
+}
+
 function renderAt(url: string, role = 'OPERATOR') {
   apiFetchRole = role
   return render(
@@ -63,7 +70,7 @@ function names() {
 
 describe('ContainersPage', () => {
   it('loads the containers of the environment and lists name, state, health, image, deployment, ports', async () => {
-    apiFetch.mockResolvedValue(containers)
+    mockContainers()
     renderAt('/environments/h1/containers')
     expect(screen.getByRole('status', { name: 'Loading containers' })).toBeInTheDocument()
     expect(await screen.findByText('nginx:1')).toBeInTheDocument()
@@ -77,7 +84,7 @@ describe('ContainersPage', () => {
   })
 
   it('searches by name, image and deployment', async () => {
-    apiFetch.mockResolvedValue(containers)
+    mockContainers()
     renderAt('/environments/h1/containers')
     await screen.findByText('nginx:1')
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'redis' } })
@@ -87,7 +94,7 @@ describe('ContainersPage', () => {
   })
 
   it('sorts by name descending when the header is clicked', async () => {
-    apiFetch.mockResolvedValue(containers)
+    mockContainers()
     renderAt('/environments/h1/containers')
     await screen.findByText('nginx:1')
     fireEvent.click(screen.getByRole('button', { name: 'Name' }))
@@ -95,7 +102,7 @@ describe('ContainersPage', () => {
   })
 
   it('filters by the deployment query parameter and clears it', async () => {
-    apiFetch.mockResolvedValue(containers)
+    mockContainers()
     renderAt('/environments/h1/containers?deployment=shop')
     await screen.findByText('nginx:1')
     expect(names()).toEqual(['api', 'web'])
@@ -186,7 +193,7 @@ describe('ContainersPage', () => {
   })
 
   it('shows live CPU and memory with a sparkline for running containers and dashes otherwise', async () => {
-    apiFetch.mockResolvedValue(containers)
+    mockContainers()
     const { unmount } = renderAt('/environments/h1/containers')
     await screen.findByText('nginx:1')
     const sample = (cpu: number) => ({ containerId: '1', cpu, memUsed: 64 * 1024 * 1024, memLimit: 512 * 1024 * 1024, netRx: 0, netTx: 0, blkRead: 0, blkWrite: 0 })
@@ -201,5 +208,23 @@ describe('ContainersPage', () => {
     expect(within(api).getAllByText('–').length).toBeGreaterThanOrEqual(2)
     unmount()
     expect(statsUnsubscribe).toHaveBeenCalled()
+  })
+
+  it('shows an update badge from the deployment flag, linking to the managed deployment', async () => {
+    mockContainers({ deployments: [{ name: 'shop', updateAvailable: true, managedDeploymentId: 'm1' }] })
+    renderAt('/environments/h1/containers')
+    await screen.findByText('nginx:1')
+    const link = within(screen.getByRole('row', { name: /web/ })).getByRole('link', { name: 'Update available for web' })
+    expect(link).toHaveAttribute('href', '/environments/h1/deployments/m1')
+    expect(within(screen.getByRole('row', { name: /cache/ })).queryByText('Update available')).not.toBeInTheDocument()
+  })
+
+  it('shows an update badge from the image flag for containers outside Compose', async () => {
+    mockContainers({ images: [{ id: 'x', repoTags: ['redis:7'], updateAvailable: true }] })
+    renderAt('/environments/h1/containers')
+    await screen.findByText('redis:7')
+    const link = within(screen.getByRole('row', { name: /cache/ })).getByRole('link', { name: 'Update available for cache' })
+    expect(link).toHaveAttribute('href', '/environments/h1/images')
+    expect(screen.getAllByText('Update available')).toHaveLength(1)
   })
 })

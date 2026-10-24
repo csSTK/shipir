@@ -329,4 +329,21 @@ describe('DeploymentsPage', () => {
       expect(names()).toContain('blog')
     })
   })
+
+  it('shows an update badge linking managed deployments to their detail page', async () => {
+    serve(
+      [
+        { name: 'shop', containerCount: 1, runningCount: 1, status: 'RUNNING', workingDir: null, managed: true, managedDeploymentId: 'm1', updateAvailable: true },
+        { name: 'blog', containerCount: 1, runningCount: 1, status: 'RUNNING', workingDir: null, updateAvailable: true },
+        { name: 'old', containerCount: 1, runningCount: 1, status: 'RUNNING', workingDir: null, updateAvailable: false },
+      ],
+      { managed: [{ id: 'm1', name: 'shop', status: 'RUNNING', source: 'FILE', lastDeployedAt: null, createdAt: '2026-10-01T10:00:00Z' }] },
+    )
+    renderPage()
+    await screen.findByText('shop')
+    expect(screen.getAllByText('Update available')).toHaveLength(2)
+    fireEvent.click(screen.getByRole('link', { name: 'Pull & update shop' }))
+    expect(await screen.findByTestId('where')).toHaveTextContent('/environments/h1/deployments/m1')
+    expect(screen.queryByRole('link', { name: 'Pull & update blog' })).not.toBeInTheDocument()
+  })
 })

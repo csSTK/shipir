@@ -130,6 +130,23 @@ export function DeploymentsPage() {
       },
     },
     {
+      id: 'update',
+      header: 'Update',
+      sortValue: (r) => (r.live?.updateAvailable ? 1 : 0),
+      render: (r) => {
+        if (!r.live?.updateAvailable) return '–'
+        const badge = <Badge tone="warn">Update available</Badge>
+        // Pull & update lives on the detail page of managed deployments.
+        return r.managed ? (
+          <Link className="deployments__link" to={`/environments/${id}/deployments/${r.managed.id}`} aria-label={`Pull & update ${r.name}`}>
+            {badge}
+          </Link>
+        ) : (
+          badge
+        )
+      },
+    },
+    {
       id: 'running',
       header: 'Running',
       sortValue: (r) => r.live?.runningCount ?? 0,

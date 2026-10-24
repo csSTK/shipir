@@ -53,11 +53,13 @@ test('a container event refreshes the open containers list without reload', asyn
   api.mock('GET', '/api/hosts/overview', { body: [host] })
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   api.mock('GET', '/api/hosts/a/containers', { body: [container('web')] })
+  api.mock('GET', '/api/hosts/a/images', { body: [] })
   const push = await mockBroker(page)
   await page.goto('/environments/a/containers')
   await expect(page.getByText('web', { exact: true })).toBeVisible()
 
   api.mock('GET', '/api/hosts/a/containers', { body: [container('web'), container('worker')] })
+  api.mock('GET', '/api/hosts/a/images', { body: [] })
   await expect.poll(async () => {
     push({ seq: 1, type: 'EVENT', events: [{ type: 'CONTAINER', action: 'start', id: 'worker', time: '2026-10-24T10:00:00Z' }] })
     return page.getByText('worker', { exact: true }).count()

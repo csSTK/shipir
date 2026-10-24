@@ -77,3 +77,30 @@
   min-width: 4.5rem;
   font-variant-numeric: tabular-nums;
 }
+
+.containers__image {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+.containers__update {
+  text-decoration: none;
+  display: inline-block;
+  transition: transform 120ms ease-out;
+}
+.containers__update:active {
+  transform: scale(0.97);
+}
+.containers__update:focus-visible {
+  outline: 2px solid AccentColor;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .containers__update {
+    transition: none;
+  }
+  .containers__update:active {
+    transform: none;
+  }
+}

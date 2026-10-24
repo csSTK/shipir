@@ -31,6 +31,7 @@ test.beforeEach(({ api }) => {
 test('operator deletes a stopped container', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', as('OPERATOR'))
   api.mock('GET', '/api/hosts/a/containers', { body: containers })
+  api.mock('GET', '/api/hosts/a/images', { body: [] })
   api.mock('GET', '/api/hosts/a/deployments', { body: [{ name: 'shop', containerCount: 1, runningCount: 1, managedDeploymentId: 'd1' }] })
   api.mock('DELETE', '/api/hosts/a/containers/c2', { status: 204 })
   await page.goto('/environments/a/containers')
@@ -46,6 +47,7 @@ test('operator deletes a stopped container', async ({ page, api }) => {
 test('running managed container: warning and force', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', as('ADMIN'))
   api.mock('GET', '/api/hosts/a/containers', { body: containers })
+  api.mock('GET', '/api/hosts/a/images', { body: [] })
   api.mock('GET', '/api/hosts/a/deployments', { body: [{ name: 'shop', containerCount: 1, runningCount: 1, managedDeploymentId: 'd1' }] })
   api.mock('DELETE', '/api/hosts/a/containers/c1', { status: 204 })
   await page.goto('/environments/a/containers')

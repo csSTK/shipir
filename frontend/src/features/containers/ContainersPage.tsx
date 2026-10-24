@@ -1,7 +1,8 @@
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useSearchParams, useParams } from 'react-router-dom'
 import { useCurrentUser } from '../auth/index.ts'
-import { useDeployments } from '../deployments/api.ts'
+import { useDeployments, type DeploymentSummary } from '../deployments/api.ts'
+import { useImages, withTag, type Image } from '../images/api.ts'
 import { deleteColumn } from '../hosts/deleteColumn.tsx'
 import { DeleteResourceDialog } from '../hosts/DeleteResourceDialog.tsx'
 import { describeResourceError, formatSize } from '../hosts/format.ts'
@@ -24,7 +25,19 @@ function healthTone(health: string): 'ok' | 'warn' | 'bad' {
   return health === 'healthy' ? 'ok' : health === 'unhealthy' ? 'bad' : 'warn'
 }
 
-const baseColumns: ResourceColumn<Container>[] = [
+/** Containers have no flag of their own: the compose project's flag, or the flag of the image behind the tag. */
+function updateTarget(hostId: string, c: Container, deployments: DeploymentSummary[], images: Image[]): string | null {
+  const project = c.composeProject ? deployments.find((d) => d.name === c.composeProject && d.updateAvailable) : undefined
+  if (project) {
+    return project.managedDeploymentId ? `/environments/${hostId}/deployments/${project.managedDeploymentId}` : `/environments/${hostId}/deployments`
+  }
+  const ref = withTag(c.image)
+  return images.some((i) => i.updateAvailable && i.repoTags.includes(ref)) ? `/environments/${hostId}/images` : null
+}
+
+/** `updates` maps container id to the page where its update is applied. */
+function baseColumnsFor(updates: Map<string, string>): ResourceColumn<Container>[] {
+  return [
   {
     id: 'name',
     header: 'Name',
@@ -47,7 +60,21 @@ const baseColumns: ResourceColumn<Container>[] = [
     sortValue: (c) => c.health,
     render: (c) => (c.health ? <Badge tone={healthTone(c.health)}>{c.health}</Badge> : '–'),
   },
-  { id: 'image', header: 'Image', sortValue: (c) => c.image, render: (c) => c.image },
+  {
+    id: 'image',
+    header: 'Image',
+    sortValue: (c) => c.image,
+    render: (c) => (
+      <span className="containers__image">
+        {c.image}
+        {updates.has(c.id) && (
+          <Link className="containers__update" to={updates.get(c.id)!} aria-label={`Update available for ${c.name}`}>
+            <Badge tone="warn">Update available</Badge>
+          </Link>
+        )}
+      </span>
+    ),
+  },
   { id: 'deployment', header: 'Deployment', sortValue: (c) => c.composeProject, render: (c) => c.composeProject ?? '–' },
   {
     id: 'ports',
@@ -69,7 +96,8 @@ const baseColumns: ResourceColumn<Container>[] = [
     sortValue: (c) => Date.parse(c.created),
     render: (c) => dateFormat.format(new Date(c.created)),
   },
-]
+  ]
+}
 
 const last = (samples: StatSample[] | undefined) => samples?.[samples.length - 1]
 
@@ -214,6 +242,19 @@ export function ContainersPage() {
   }
   const isAdmin = user?.role === 'ADMIN'
   const { series } = useContainerStats(id)
+  const deployments = useDeployments(id)
+  const images = useImages(id)
+  const updates = useMemo(() => {
+    const map = new Map<string, string>()
+    const d = Array.isArray(deployments.data) ? deployments.data : []
+    const im = Array.isArray(images.data) ? images.data : []
+    for (const c of data ?? []) {
+      const target = updateTarget(id, c, d, im)
+      if (target) map.set(c.id, target)
+    }
+    return map
+  }, [id, data, deployments.data, images.data])
+  const baseColumns = useMemo(() => baseColumnsFor(updates), [updates])
   const withStats = [...baseColumns.slice(0, 4), ...statsColumns(series), ...baseColumns.slice(4)]
   const tableColumns = canWrite
     ? [...withStats, logsColumn, ...(isAdmin ? [consoleColumn] : []), actionColumn(pending, (c, a) => (a === 'kill' ? setKillTarget(c) : run(c, a))), deleteColumn<Container>('container', (c) => c.name, setTarget)]

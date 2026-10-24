@@ -63,7 +63,7 @@ describe('ImagesPage', () => {
     apiFetch.mockResolvedValue(images)
     renderPage()
     const row = (await screen.findByText('<none>')).closest('tr')!
-    expect(within(row).getByText('–')).toBeInTheDocument()
+    expect(within(row).getAllByText('–').length).toBeGreaterThan(0)
   })
 
   it('searches by tag and id and sorts by size', async () => {

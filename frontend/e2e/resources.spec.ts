@@ -35,6 +35,7 @@ test.beforeEach(({ api }) => {
 test('deployments: search, sort, click opens filtered containers', async ({ page, api }) => {
   api.mock('GET', '/api/hosts/a/deployments', { body: deployments })
   api.mock('GET', '/api/hosts/a/containers', { body: containers })
+  api.mock('GET', '/api/hosts/a/images', { body: [] })
   await page.goto('/environments/a/deployments')
   const rows = page.getByRole('table', { name: 'deployments' }).getByRole('row')
   await expect(rows.nth(1)).toContainText('blog')
@@ -55,6 +56,8 @@ test('deployments: search, sort, click opens filtered containers', async ({ page
 
 test('containers: search and sort', async ({ page, api }) => {
   api.mock('GET', '/api/hosts/a/containers', { body: containers })
+  api.mock('GET', '/api/hosts/a/images', { body: [] })
+  api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   await page.goto('/environments/a/containers')
   const table = page.getByRole('table', { name: 'containers' })
   await expect(table.getByRole('row').nth(1)).toContainText('api')
@@ -67,6 +70,8 @@ test('containers: search and sort', async ({ page, api }) => {
 
 test('containers: unreachable host shows the error', async ({ page, api }) => {
   api.mock('GET', '/api/hosts/a/containers', { status: 502, body: { code: 'UNREACHABLE', message: 'x' } })
+  api.mock('GET', '/api/hosts/a/images', { body: [] })
+  api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   await page.goto('/environments/a/containers')
   await expect(page.getByRole('alert')).toHaveText('Could not reach the Docker host.')
 })

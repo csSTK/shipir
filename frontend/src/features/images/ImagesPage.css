@@ -21,3 +21,14 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.875em;
 }
+.images__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.images__update {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}

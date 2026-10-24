@@ -52,6 +52,7 @@ function asRole(api: ApiMock, role: string) {
   api.mock('GET', '/api/auth/me', { body: { username: 'u', role, setupRequired: false } })
   api.mock('GET', '/api/hosts/overview', { body: [host] })
   api.mock('GET', '/api/hosts/a/containers', { body: containers })
+  api.mock('GET', '/api/hosts/a/images', { body: [] })
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
 }
 

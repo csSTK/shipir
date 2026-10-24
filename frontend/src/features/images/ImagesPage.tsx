@@ -6,6 +6,7 @@ import { useParams } from 'react-router-dom'
 import { describeResourceError, formatSize } from '../hosts/format.ts'
 import { Badge, ResourceTable, type ResourceColumn } from '../../shared/ui/index.ts'
 import { useDeleteImage, useImages, type Image } from './api.ts'
+import { PullImageDialog } from './PullImageDialog.tsx'
 import './ImagesPage.css'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -42,6 +43,25 @@ const columns: ResourceColumn<Image>[] = [
   },
 ]
 
+/** 'Update available' badge; writers get it as a button that opens the pull dialog for the image's first tag. */
+function updateColumn(onPull: ((i: Image) => void) | null): ResourceColumn<Image> {
+  return {
+    id: 'update',
+    header: 'Update',
+    sortValue: (i) => (i.updateAvailable ? 1 : 0),
+    render: (i) => {
+      if (!i.updateAvailable) return '–'
+      if (!onPull || !i.repoTags.length) return <Badge tone="warn">Update available</Badge>
+      return (
+        <button type="button" className="sk-btn sk-btn--plain images__update" aria-label={`Pull & update ${i.repoTags[0]}`} onClick={() => onPull(i)}>
+          <Badge tone="warn">Update available</Badge>
+          <span>Pull &amp; update</span>
+        </button>
+      )
+    },
+  }
+}
+
 /** `/environments/:id/images`: all images of one environment. */
 export function ImagesPage() {
   const { id = '' } = useParams()
@@ -50,11 +70,20 @@ export function ImagesPage() {
   const { data, isPending, error, refetch } = useImages(id)
   const del = useDeleteImage(id)
   const [target, setTarget] = useState<Image | null>(null)
-  const tableColumns = canWrite ? [...columns, deleteColumn<Image>('image', (i) => i.repoTags[0] ?? shortId(i.id), setTarget)] : columns
+  const [pulling, setPulling] = useState<{ reference: string } | null>(null)
+  const withUpdate = [...columns, updateColumn(canWrite ? (i) => setPulling({ reference: i.repoTags[0] }) : null)]
+  const tableColumns = canWrite ? [...withUpdate, deleteColumn<Image>('image', (i) => i.repoTags[0] ?? shortId(i.id), setTarget)] : withUpdate
 
   return (
     <section className="images">
-      <h2 className="images__title">Images</h2>
+      <div className="images__bar">
+        <h2 className="images__title">Images</h2>
+        {canWrite && (
+          <button type="button" className="sk-btn sk-btn--primary" onClick={() => setPulling({ reference: '' })}>
+            Pull image
+          </button>
+        )}
+      </div>
       <ResourceTable
         label="images"
         columns={tableColumns}
@@ -67,6 +96,7 @@ export function ImagesPage() {
         error={error ? describeResourceError(error) : null}
         onRetry={() => void refetch()}
       />
+      {pulling && <PullImageDialog hostId={id} initialReference={pulling.reference} onClose={() => setPulling(null)} />}
       {target && (
         <DeleteResourceDialog
           kind="image"

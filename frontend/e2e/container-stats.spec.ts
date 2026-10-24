@@ -59,6 +59,7 @@ test('containers list shows live CPU and memory with sparklines, dashes for stop
   api.mock('GET', '/api/hosts/overview', { body: [host] })
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   api.mock('GET', '/api/hosts/a/containers', { body: [container('c1', 'web', 'running'), container('c2', 'old', 'exited')] })
+  api.mock('GET', '/api/hosts/a/images', { body: [] })
   const push = await mockBroker(page)
   await page.goto('/environments/a/containers')
   const web = page.getByRole('row', { name: /web/ })
