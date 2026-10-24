@@ -101,6 +101,7 @@ class SecurityConfig {
                                 "/api/hosts/*/volumes").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/hosts/*/images/pull").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/hosts/*/containers/*/exec").hasRole("ADMIN")
+                        .requestMatchers("/api/hosts/*/containers/*/files", "/api/hosts/*/containers/*/files/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/hosts/*/prune/preview").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/hosts/*/prune").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.GET, "/api/hosts", "/api/hosts/**").authenticated()

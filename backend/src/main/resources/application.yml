@@ -16,6 +16,9 @@ shipir:
   git:
     poll-enabled: true
     poll-tick: 60s
+  container-files:
+    max-bytes: 100MB
+    max-scan-bytes: 64MB
   stacks:
     base-dir: ${SHIPIR_STACKS_BASE_DIR:./data/stacks}
   initial-admin:
@@ -34,6 +37,13 @@ spring:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:shipir}
     username: ${DB_USER:shipir}
     password: ${DB_PASSWORD}
+  servlet:
+    multipart:
+      # container file upload (shipir.container-files.max-bytes = 100MB) plus multipart framing; parsed lazily so the
+      # controller advice can answer a too-large upload with 413
+      max-file-size: 101MB
+      max-request-size: 101MB
+      resolve-lazily: true
   jpa:
     hibernate:
       ddl-auto: validate
