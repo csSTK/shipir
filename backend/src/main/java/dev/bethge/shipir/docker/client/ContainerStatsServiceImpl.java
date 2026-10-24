@@ -1,5 +1,6 @@
 package dev.bethge.shipir.docker.client;
 
+import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.async.ResultCallback;
 import com.github.dockerjava.api.model.BlkioStatEntry;
 import com.github.dockerjava.api.model.CpuStatsConfig;
@@ -18,6 +19,7 @@ import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -47,32 +49,42 @@ public class ContainerStatsServiceImpl implements ContainerStatsService {
 
     @Override
     public ContainerStatsDto snapshot(UUID hostId, DockerEndpoint endpoint, String containerId) {
-        return calls.call(hostId, endpoint, client -> {
-            CompletableFuture<ContainerStatsDto> first = new CompletableFuture<>();
-            ResultCallback.Adapter<Statistics> callback = new ResultCallback.Adapter<>() {
-                @Override
-                public void onNext(Statistics stats) {
-                    first.complete(toDto(stats));
-                }
+        DockerClient client;
+        try {
+            client = calls.manager().client(hostId, endpoint);
+        } catch (Exception e) {
+            throw calls.translate(e);
+        }
+        CompletableFuture<ContainerStatsDto> first = new CompletableFuture<>();
+        ResultCallback.Adapter<Statistics> callback = new ResultCallback.Adapter<>() {
+            @Override
+            public void onNext(Statistics stats) {
+                first.complete(toDto(stats));
+            }
 
-                @Override
-                public void onError(Throwable throwable) {
-                    first.completeExceptionally(throwable);
-                    super.onError(throwable);
-                }
-            };
-            try (callback) {
+            @Override
+            public void onError(Throwable throwable) {
+                first.completeExceptionally(throwable); // reported to the caller, so no super (it logs at ERROR)
+                closeQuietly(this);
+            }
+        };
+        // on expiry only this stats stream is closed: evicting the shared client would kill the host's other streams
+        try (callback) {
+            return calls.callWithDeadline(() -> {
                 client.statsCmd(containerId).withNoStream(true).exec(callback);
                 return first.get();
-            } catch (java.util.concurrent.ExecutionException e) {
-                throw new IllegalStateException(e.getCause()); // cause chain is classified by DockerCallSupport
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException(e);
-            } catch (IOException e) {
-                throw new IllegalStateException(e);
-            }
-        });
+            }, () -> closeQuietly(callback));
+        } catch (Exception e) {
+            throw calls.translate(e instanceof ExecutionException ee && ee.getCause() instanceof Exception cause ? cause : e);
+        }
+    }
+
+    private static void closeQuietly(Closeable closeable) {
+        try {
+            closeable.close();
+        } catch (IOException ignored) {
+            // the stream is gone either way
+        }
     }
 
     /** Converts a raw sample; CPU from the delta to the sample's own {@code precpu_stats}. */
