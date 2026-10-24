@@ -23,7 +23,13 @@ class OidcSettingsApiTest extends OidcTestBase {
                 .andExpect(jsonPath("$.enabled").value(false))
                 .andExpect(jsonPath("$.clientSecretConfigured").value(false))
                 .andExpect(jsonPath("$.localLoginEnabled").value(true))
-                .andExpect(jsonPath("$.scopes").value("openid email profile"));
+                .andExpect(jsonPath("$.scopes").value("openid email profile"))
+                .andExpect(jsonPath("$.redirectUri").value("http://localhost/api/auth/oidc/callback"));
+    }
+
+    @Test
+    void localUserHasNoExternalIssuer() throws Exception {
+        assertThat(meJson(login("admin").session())).contains("\"externalIssuer\":null");
     }
 
     @Test

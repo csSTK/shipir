@@ -218,7 +218,11 @@ function TwoFactorSection({ enabled }: { enabled: boolean }) {
 }
 
 /** Personal settings: account info, password change, notification preferences. */
-export function AccountPage({ user }: { user: Pick<CurrentUser, 'username' | 'role' | 'twoFactorEnabled'> }) {
+export function AccountPage({
+  user,
+}: {
+  user: Pick<CurrentUser, 'username' | 'role' | 'twoFactorEnabled' | 'externalIssuer'>
+}) {
   return (
     <div className="account">
       <PageHeader title="Account" subtitle="Your sign-in, password and notification preferences." />
@@ -231,6 +235,12 @@ export function AccountPage({ user }: { user: Pick<CurrentUser, 'username' | 'ro
           <dd>{user.username}</dd>
           <dt>Role</dt>
           <dd>{user.role}</dd>
+          {user.externalIssuer && (
+            <>
+              <dt>Single sign-on</dt>
+              <dd>Linked to {user.externalIssuer}</dd>
+            </>
+          )}
         </dl>
       </Card>
       <PasswordSection username={user.username} />

@@ -154,6 +154,63 @@ export function useTestAiConnection() {
   })
 }
 
+export type OidcRole = 'ADMIN' | 'OPERATOR' | 'VIEWER'
+
+/** The client secret is never returned, only whether one is stored and a masked hint. */
+export interface OidcSettings {
+  issuerUrl: string | null
+  clientId: string | null
+  clientSecretConfigured: boolean
+  clientSecretHint: string | null
+  scopes: string
+  groupsClaim: string
+  roleMapping: Partial<Record<OidcRole, string[]>>
+  autoProvision: boolean
+  localLoginEnabled: boolean
+  enabled: boolean
+  /** What to register with the provider, computed by the backend. */
+  redirectUri: string
+}
+
+/** `clientSecret` omitted keeps the stored secret, an empty string clears it. A blank issuer switches single sign-on off. */
+export interface OidcSettingsInput {
+  issuerUrl: string
+  clientId: string
+  clientSecret?: string
+  scopes: string
+  groupsClaim: string
+  roleMapping: Record<OidcRole, string[]>
+  autoProvision: boolean
+  localLoginEnabled: boolean
+}
+
+export type OidcTestStatus = 'OK' | 'UNREACHABLE' | 'INVALID'
+
+export const OIDC_SETTINGS_KEY = ['settings-oidc'] as const
+const OIDC_PATH = '/settings/oidc'
+
+export function useOidcSettings() {
+  return useQuery({ queryKey: OIDC_SETTINGS_KEY, queryFn: () => apiFetch<OidcSettings>(OIDC_PATH) })
+}
+
+export function useSaveOidcSettings() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: OidcSettingsInput) => apiFetch<OidcSettings>(OIDC_PATH, { method: 'PUT', body: input }),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(OIDC_SETTINGS_KEY, saved)
+      void queryClient.invalidateQueries({ queryKey: ['auth', 'oidc-config'] })
+    },
+  })
+}
+
+/** Runs discovery against the stored issuer, not unsaved form values. */
+export function useTestOidcConnection() {
+  return useMutation({
+    mutationFn: () => apiFetch<{ status: OidcTestStatus }>(`${OIDC_PATH}/test`, { method: 'POST' }),
+  })
+}
+
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
   LOGIN: 'Login',
   LOGOUT: 'Logout',

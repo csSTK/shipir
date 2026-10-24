@@ -31,10 +31,10 @@ function route(overrides: Record<string, () => unknown> = {}) {
   }) as typeof apiFetch)
 }
 
-function renderPage() {
+function renderPage(externalIssuer: string | null = null) {
   return render(
     <QueryClientProvider client={queryClient}>
-      <AccountPage user={{ username: 'pat', role: 'OPERATOR' }} />
+      <AccountPage user={{ username: 'pat', role: 'OPERATOR', externalIssuer }} />
     </QueryClientProvider>,
   )
 }
@@ -54,6 +54,15 @@ afterEach(() => {
 })
 
 describe('AccountPage', () => {
+  it('shows the linked identity only for single sign-on users', () => {
+    route()
+    renderPage('https://id.example.com')
+    expect(screen.getByText('Linked to https://id.example.com')).toBeInTheDocument()
+    cleanup()
+    renderPage(null)
+    expect(screen.queryByText(/Linked to/)).not.toBeInTheDocument()
+  })
+
   it('shows username and role read-only', () => {
     route()
     renderPage()

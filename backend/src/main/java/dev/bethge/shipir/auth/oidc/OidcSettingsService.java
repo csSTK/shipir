@@ -8,6 +8,7 @@ import dev.bethge.shipir.auth.UserRepository;
 import dev.bethge.shipir.auth.oidc.dto.OidcPublicConfigResponse;
 import dev.bethge.shipir.auth.oidc.dto.OidcSettingsRequest;
 import dev.bethge.shipir.auth.oidc.dto.OidcSettingsResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import dev.bethge.shipir.auth.oidc.dto.OidcTestResponse;
 import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
 import dev.bethge.shipir.common.security.SecretCipher;
@@ -56,13 +57,13 @@ class OidcSettingsService implements LocalLoginPolicy {
     }
 
     @Transactional(readOnly = true)
-    OidcSettingsResponse get() {
-        return toResponse(load());
+    OidcSettingsResponse get(HttpServletRequest request) {
+        return toResponse(load(), request);
     }
 
     @Auditable(action = "OIDC_SETTINGS_UPDATE", targetType = "OIDC_SETTINGS", targetId = "'1'")
     @Transactional
-    OidcSettingsResponse update(OidcSettingsRequest request, String username) {
+    OidcSettingsResponse update(OidcSettingsRequest request, String username, HttpServletRequest http) {
         OidcSettings s = load();
         String issuer = blankToNull(request.issuerUrl());
         String clientId = blankToNull(request.clientId());
@@ -94,7 +95,7 @@ class OidcSettingsService implements LocalLoginPolicy {
                     "Password login can only be switched off while single sign-on is fully configured");
         }
         settings.saveAndFlush(s);
-        return toResponse(s);
+        return toResponse(s, http);
     }
 
     /** Not transactional: the network call must not hold a database connection. */
@@ -188,10 +189,10 @@ class OidcSettingsService implements LocalLoginPolicy {
         return t.length() >= 12 ? "••••" + t.substring(t.length() - 4) : "••••";
     }
 
-    private OidcSettingsResponse toResponse(OidcSettings s) {
+    private OidcSettingsResponse toResponse(OidcSettings s, HttpServletRequest request) {
         return new OidcSettingsResponse(s.getIssuerUrl(), s.getClientId(), s.getClientSecretCiphertext() != null,
                 s.getClientSecretHint(), s.getScopes(), s.getGroupsClaim(),
                 RoleMapping.parse(mapper, s.getRoleMapping()), s.isAutoProvision(), s.isLocalLoginEnabled(),
-                s.isEnabled());
+                s.isEnabled(), OidcRedirect.uri(properties, request));
     }
 }

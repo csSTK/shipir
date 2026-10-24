@@ -46,7 +46,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -71,7 +70,6 @@ class OidcLoginService {
     }
 
     private static final Logger log = LoggerFactory.getLogger(OidcLoginService.class);
-    static final String CALLBACK_PATH = "/api/auth/oidc/callback";
     private static final String PENDING_ATTRIBUTE = OidcLoginService.class.getName() + ".PENDING";
     private static final String DEFAULT_GROUPS_CLAIM = "groups";
 
@@ -265,9 +263,7 @@ class OidcLoginService {
     }
 
     private String redirectUri(HttpServletRequest request) {
-        String base = properties.publicBaseUrl().isBlank() ? ServletUriComponentsBuilder.fromContextPath(request)
-                .toUriString() : properties.publicBaseUrl();
-        return (base.endsWith("/") ? base.substring(0, base.length() - 1) : base) + CALLBACK_PATH;
+        return OidcRedirect.uri(properties, request);
     }
 
     private static String displayName(Jwt token, String subject) {

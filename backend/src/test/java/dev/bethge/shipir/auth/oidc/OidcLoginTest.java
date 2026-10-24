@@ -65,7 +65,8 @@ class OidcLoginTest extends OidcTestBase {
 
         assertThat(f.callbackLocation()).isEqualTo("/");
         String me = meJson(f.session());
-        assertThat(me).contains("\"username\":\"alice\"", "\"role\":\"OPERATOR\"", "\"setupRequired\":false");
+        assertThat(me).contains("\"username\":\"alice\"", "\"role\":\"OPERATOR\"", "\"setupRequired\":false",
+                "\"externalIssuer\":\"" + provider.issuer() + "\"");
         Map<String, Object> row = jdbc.queryForMap(
                 "SELECT external_issuer, external_subject, password_changed_at FROM users WHERE username = 'alice'");
         assertThat(row.get("external_issuer")).isEqualTo(provider.issuer());

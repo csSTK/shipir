@@ -25,7 +25,7 @@ const type = (label: string | RegExp, value: string) =>
 
 async function openStepTwo() {
   renderLogin()
-  fireEvent.click(screen.getByRole('button', { name: /forgot password/i }))
+  fireEvent.click(await screen.findByRole('button', { name: /forgot password/i }))
   type('Username', 'admin')
   apiFetchMock.mockResolvedValueOnce(undefined)
   fireEvent.click(screen.getByRole('button', { name: /request code/i }))
@@ -45,9 +45,9 @@ afterEach(() => {
 })
 
 describe('password reset', () => {
-  it('opens the username step from the login page and goes back', () => {
+  it('opens the username step from the login page and goes back', async () => {
     renderLogin()
-    fireEvent.click(screen.getByRole('button', { name: /forgot password/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /forgot password/i }))
     expect(screen.getByRole('heading', { name: /reset your password/i })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /back to sign in/i }))
     expect(screen.getByRole('heading', { name: /sign in to shipir/i })).toBeInTheDocument()
@@ -66,7 +66,7 @@ describe('password reset', () => {
 
   it('disables the request button while pending', async () => {
     renderLogin()
-    fireEvent.click(screen.getByRole('button', { name: /forgot password/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /forgot password/i }))
     type('Username', 'admin')
     apiFetchMock.mockReturnValue(new Promise(() => {}))
     fireEvent.click(screen.getByRole('button', { name: /request code/i }))

@@ -5,6 +5,7 @@ import dev.bethge.shipir.auth.oidc.dto.OidcSettingsResponse;
 import dev.bethge.shipir.auth.oidc.dto.OidcTestResponse;
 import dev.bethge.shipir.common.exception.ErrorResponse;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -27,13 +28,14 @@ class OidcSettingsController {
     }
 
     @GetMapping
-    OidcSettingsResponse get() {
-        return service.get();
+    OidcSettingsResponse get(HttpServletRequest request) {
+        return service.get(request);
     }
 
     @PutMapping
-    OidcSettingsResponse update(@Valid @RequestBody OidcSettingsRequest request, Authentication authentication) {
-        return service.update(request, authentication.getName());
+    OidcSettingsResponse update(@Valid @RequestBody OidcSettingsRequest request, Authentication authentication,
+                                  HttpServletRequest http) {
+        return service.update(request, authentication.getName(), http);
     }
 
     @PostMapping("/test")

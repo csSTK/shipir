@@ -7,6 +7,7 @@ import {
   GitBranch,
   HardDrive,
   KeyRound,
+  LogIn,
   Layers,
   LayoutDashboard,
   MessagesSquare,
@@ -126,6 +127,9 @@ export function Sidebar({ role, onNavigate, drawer = false }: Props) {
           </Item>
           <Item to="/settings/registries" icon={KeyRound} onNavigate={onNavigate}>
             Registries
+          </Item>
+          <Item to="/settings/oidc" icon={LogIn} onNavigate={onNavigate}>
+            Single sign-on
           </Item>
           <Item to="/settings/ai" icon={Bot} end onNavigate={onNavigate}>
             AI assistant

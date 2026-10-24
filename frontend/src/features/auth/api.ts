@@ -10,6 +10,8 @@ export interface CurrentUser {
   /** Which first-start step is pending; `null` once setup is complete. */
   setupStep?: SetupStep | null
   twoFactorEnabled?: boolean
+  /** Issuer of the linked single sign-on identity; null/absent for local accounts. */
+  externalIssuer?: string | null
 }
 
 /** Login answer for a user with 2FA: no session yet, a code is needed. */
@@ -145,5 +147,29 @@ export function useConfirmPasswordReset() {
   return useMutation({
     mutationFn: (request: ConfirmPasswordResetRequest) =>
       apiFetch<void>('/auth/password-reset/confirm', { method: 'POST', body: request }),
+  })
+}
+
+export interface OidcPublicConfig {
+  enabled: boolean
+  /** Provider host shown on the button; null while single sign-on is off. */
+  displayName: string | null
+  localLoginEnabled: boolean
+}
+
+const OIDC_DEFAULT: OidcPublicConfig = { enabled: false, displayName: null, localLoginEnabled: true }
+
+/** Public. Any failure falls back to plain local login so the login page never breaks. */
+export function useOidcConfig() {
+  return useQuery({
+    queryKey: ['auth', 'oidc-config'],
+    queryFn: async () => {
+      try {
+        return (await apiFetch<OidcPublicConfig>('/auth/oidc/config')) ?? OIDC_DEFAULT
+      } catch {
+        return OIDC_DEFAULT
+      }
+    },
+    retry: false,
   })
 }

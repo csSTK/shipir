@@ -24,6 +24,8 @@ export const test = base.extend<{ api: ApiMock }>({
       // The shell polls the unread badge on every page; default to none, specs override.
       const mocks = new Map<string, MockResponse>([
         [key('GET', '/api/notifications/unread-count'), { body: { count: 0 } }],
+        // The login page asks for it; default to single sign-on off, specs override.
+        [key('GET', '/api/auth/oidc/config'), { body: { enabled: false, displayName: null, localLoginEnabled: true } }],
       ])
       const unmocked: string[] = []
 
