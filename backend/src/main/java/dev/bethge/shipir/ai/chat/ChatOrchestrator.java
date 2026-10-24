@@ -332,7 +332,7 @@ public class ChatOrchestrator {
         if (json != null) {
             for (JsonNode n : mapper.readTree(json)) {
                 calls.add(new LlmToolCall(n.path("id").asString(), n.path("name").asString(),
-                        n.path("arguments").asString("{}")));
+                        n.path("arguments").asString("{}"), n.path("thoughtSignature").asString(null)));
             }
         }
         return calls;
@@ -377,8 +377,12 @@ public class ChatOrchestrator {
     private String callsJson(List<LlmToolCall> calls) {
         ArrayNode array = mapper.createArrayNode();
         for (LlmToolCall c : calls) {
-            array.add(mapper.createObjectNode().put("id", c.id()).put("name", c.name())
-                    .put("arguments", maskEnv(c.argumentsJson())));
+            ObjectNode node = mapper.createObjectNode().put("id", c.id()).put("name", c.name())
+                    .put("arguments", maskEnv(c.argumentsJson()));
+            if (c.thoughtSignature() != null) {
+                node.put("thoughtSignature", c.thoughtSignature());
+            }
+            array.add(node);
         }
         return array.toString();
     }

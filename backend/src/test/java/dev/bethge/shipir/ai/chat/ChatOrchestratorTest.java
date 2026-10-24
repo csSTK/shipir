@@ -332,6 +332,25 @@ class ChatOrchestratorTest {
     }
 
     @Test
+    void thoughtSignatureSurvivesPersistenceAndPendingConfirmButIsNotExposed() throws Exception {
+        Login l = login("admin");
+        String id = newSession(l);
+        llm.script.add(m -> new LlmResponse("", List.of(
+                new LlmToolCall("call-1", "rename_host", renameArgs(), "sig-abc"))));
+        llm.answer("Done.");
+        say(l, id, "Rename my host");
+
+        JsonNode msgs = messages(l, id);
+        assertThat(msgs.toString()).doesNotContain("sig-abc");
+        action(l, id, pendingId(msgs), "confirm", 200);
+
+        List<LlmMessage> second = llm.conversations.get(1);
+        LlmMessage assistant = second.stream().filter(m -> m.role() == LlmMessage.Role.ASSISTANT).findFirst().orElseThrow();
+        assertThat(assistant.toolCalls()).hasSize(1);
+        assertThat(assistant.toolCalls().get(0).thoughtSignature()).isEqualTo("sig-abc");
+    }
+
+    @Test
     void rejectRecordsOutcomeAndTellsTheModel() throws Exception {
         Login l = login("admin");
         String id = newSession(l);

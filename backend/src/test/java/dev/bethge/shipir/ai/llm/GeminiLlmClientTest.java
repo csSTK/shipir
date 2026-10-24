@@ -167,6 +167,32 @@ class GeminiLlmClientTest {
     }
 
     @Test
+    void thoughtSignatureIsReadFromTheStreamAndEchoedBackOnTheFunctionCallPart() {
+        sse("{\"candidates\":[{\"content\":{\"parts\":[{\"functionCall\":{\"name\":\"list_hosts\"},"
+                + "\"thoughtSignature\":\"sig-123\"}]}}]}");
+        LlmResponse first = chat(List.of(LlmMessage.user("hi")), List.of(), new ArrayList<>());
+        LlmToolCall call = first.toolCalls().get(0);
+        assertThat(call.thoughtSignature()).isEqualTo("sig-123");
+
+        sse(textChunk("ok"));
+        chat(List.of(LlmMessage.user("hi"), LlmMessage.assistant("", List.of(call)),
+                LlmMessage.tool(call.id(), "r")), List.of(), new ArrayList<>());
+
+        JsonNode part = sentBody().path("contents").path(1).path("parts").path(0);
+        assertThat(part.path("functionCall").path("name").asString()).isEqualTo("list_hosts");
+        assertThat(part.path("thoughtSignature").asString()).isEqualTo("sig-123");
+    }
+
+    @Test
+    void callsWithoutSignatureSendNoSignatureField() {
+        sse(textChunk("ok"));
+        chat(List.of(LlmMessage.user("hi"),
+                LlmMessage.assistant("", List.of(new LlmToolCall("i", "t", "{}"))), LlmMessage.tool("i", "r")),
+                List.of(), new ArrayList<>());
+        assertThat(requestBody.get()).doesNotContain("thoughtSignature");
+    }
+
+    @Test
     void toolsBecomeFunctionDeclarationsWithoutUnsupportedKeywords() {
         sse(textChunk("ok"));
         Map<String, Object> schema = Map.of(

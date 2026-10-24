@@ -194,6 +194,7 @@ public class ChatSessionService {
         for (JsonNode call : toolCalls) {
             if (call instanceof tools.jackson.databind.node.ObjectNode o) {
                 o.remove("envCiphertext");
+                o.remove("thoughtSignature");
                 String args = o.path("arguments").asString(null);
                 if (args != null && args.contains("\"env\"")) {
                     JsonNode parsed = mapper.readTree(args);

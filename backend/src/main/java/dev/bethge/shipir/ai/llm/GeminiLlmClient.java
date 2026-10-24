@@ -150,7 +150,12 @@ public class GeminiLlmClient implements LlmClient {
                     }
                     for (LlmToolCall c : m.toolCalls()) {
                         toolNamesById.put(c.id(), c.name());
-                        parts.add(Map.of("functionCall", Map.of("name", c.name(), "args", parseArgs(c.argumentsJson()))));
+                        Map<String, Object> part = new LinkedHashMap<>();
+                        part.put("functionCall", Map.of("name", c.name(), "args", parseArgs(c.argumentsJson())));
+                        if (c.thoughtSignature() != null && !c.thoughtSignature().isEmpty()) {
+                            part.put("thoughtSignature", c.thoughtSignature());
+                        }
+                        parts.add(part);
                     }
                     if (!parts.isEmpty()) {
                         contents.add(content("model", parts));
@@ -337,7 +342,8 @@ public class GeminiLlmClient implements LlmClient {
                 }
                 JsonNode args = fc.path("args");
                 String argsJson = args.isObject() ? mapper.writeValueAsString(args) : "{}";
-                toolCalls.add(new LlmToolCall("gemini-" + UUID.randomUUID(), name, argsJson));
+                toolCalls.add(new LlmToolCall("gemini-" + UUID.randomUUID(), name, argsJson,
+                        part.path("thoughtSignature").asString(null)));
             }
         }
     }
