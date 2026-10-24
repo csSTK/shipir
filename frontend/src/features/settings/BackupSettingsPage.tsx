@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react'
+import { Button, Card, TextField } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { useCreateBackup } from './api.ts'
-import './BackupSettingsPage.css'
+import { SettingsPage } from './SettingsPage.tsx'
+import './SettingsPage.css'
 
 const MIN_LENGTH = 12
 const MAX_LENGTH = 128
@@ -22,8 +24,7 @@ function errorMessage(error: unknown): string {
   return 'Could not create the backup. Try again.'
 }
 
-/** Settings > Backup: ADMIN downloads an encrypted export of the database and stack files. */
-export function BackupSettingsPage() {
+function BackupForm() {
   const [passphrase, setPassphrase] = useState('')
   const [confirm, setConfirm] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
@@ -51,76 +52,72 @@ export function BackupSettingsPage() {
   }
 
   return (
-    <section className="bk">
-      <h2 className="bk-title">Backup</h2>
-      <p className="bk-lead">
-        Download an encrypted copy of the Shipir database and stack files. The passphrase you choose protects the file.
-      </p>
-
-      <div className="bk-note" role="note">
-        <p>
-          <strong>The passphrase cannot be recovered.</strong> Without it the backup cannot be opened, so store it
-          somewhere safe.
-        </p>
-        <p>
-          The encryption key (<code>SHIPIR_ENCRYPTION_KEY</code>) is not part of the backup. Keep it separately: the
-          encrypted values in the database need it after a restore.
-        </p>
-      </div>
-
-      <form className="bk-form" onSubmit={submit} noValidate>
-        <label className="bk-field">
-          <span>Passphrase</span>
-          <input
-            type="password"
-            autoComplete="new-password"
-            maxLength={MAX_LENGTH}
-            value={passphrase}
-            aria-describedby="bk-passphrase-hint"
-            onChange={(e) => {
-              setPassphrase(e.target.value)
-              setDone(false)
-            }}
-          />
-        </label>
-        <p id="bk-passphrase-hint" className="bk-muted">
-          At least {MIN_LENGTH} characters.
-        </p>
-        <label className="bk-field">
-          <span>Confirm passphrase</span>
-          <input
-            type="password"
-            autoComplete="new-password"
-            maxLength={MAX_LENGTH}
-            value={confirm}
-            onChange={(e) => {
-              setConfirm(e.target.value)
-              setDone(false)
-            }}
-          />
-        </label>
-
+    <Card>
+      <form className="settings__form" onSubmit={submit} noValidate>
+        <TextField
+          label="Passphrase"
+          type="password"
+          autoComplete="new-password"
+          maxLength={MAX_LENGTH}
+          value={passphrase}
+          help={`At least ${MIN_LENGTH} characters.`}
+          onChange={(e) => {
+            setPassphrase(e.target.value)
+            setDone(false)
+          }}
+        />
+        <TextField
+          label="Confirm passphrase"
+          type="password"
+          autoComplete="new-password"
+          maxLength={MAX_LENGTH}
+          value={confirm}
+          onChange={(e) => {
+            setConfirm(e.target.value)
+            setDone(false)
+          }}
+        />
         {problem && (
-          <p role="alert" className="bk-error">
+          <p role="alert" className="settings__error">
             {problem}
           </p>
         )}
         {done && (
-          <p role="status" className="bk-ok">
+          <p role="status" className="settings__ok">
             Backup downloaded.
           </p>
         )}
-
-        <div className="bk-actions">
-          <button type="submit" className="bk-btn bk-btn--primary" disabled={backup.isPending}>
+        <div className="settings__actions">
+          <Button variant="primary" type="submit" loading={backup.isPending}>
             {backup.isPending ? 'Creating backup…' : 'Download backup'}
-          </button>
+          </Button>
         </div>
       </form>
+    </Card>
+  )
+}
 
-      <p className="bk-muted">
+/** Settings > Backup: ADMIN downloads an encrypted export of the database and stack files. */
+export function BackupSettingsPage() {
+  return (
+    <SettingsPage
+      title="Backup"
+      subtitle="Download an encrypted copy of the Shipir database and stack files. The passphrase you choose protects the file."
+    >
+      <Card role="note" className="settings__form">
+        <p className="settings__text">
+          <strong>The passphrase cannot be recovered.</strong> Without it the backup cannot be opened, so store it
+          somewhere safe.
+        </p>
+        <p className="settings__muted">
+          The encryption key (<code>SHIPIR_ENCRYPTION_KEY</code>) is not part of the backup. Keep it separately: the
+          encrypted values in the database need it after a restore.
+        </p>
+      </Card>
+      <BackupForm />
+      <p className="settings__muted">
         To restore a backup, follow <em>Backup &amp; restore</em> in the README.
       </p>
-    </section>
+    </SettingsPage>
   )
 }
