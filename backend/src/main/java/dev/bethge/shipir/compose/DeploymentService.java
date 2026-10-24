@@ -84,6 +84,12 @@ public class DeploymentService {
         this.git = git;
     }
 
+    /** Validated on-disk directory of a managed deployment (may not exist before the first write); for the config editor. */
+    public java.nio.file.Path directoryOf(UUID hostId, UUID id) {
+        requireHost(hostId);
+        return files.deploymentDir(hostId, requireDeployment(hostId, id).getName());
+    }
+
     public List<DeploymentSummaryResponse> list(UUID hostId) {
         requireHost(hostId);
         return deployments.findByHostIdOrderByNameAsc(hostId).stream()

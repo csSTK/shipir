@@ -22,7 +22,7 @@ This file holds the parts of the original planning handoff that aren't permanent
 - [x] **DECIDED (shipr-r3w):** 'Stack' is renamed to 'deployment' everywhere (UI, API, code, DB via V16); a single deploy execution is a 'run' (`runId`). The `shipir.stacks.base-dir` / `SHIPIR_STACKS_BASE_DIR` setting, on-disk layout and compose project names are kept. Historic `STACK_*` audit rows are not rewritten.
 - [x] **DECIDED (shipr-e42):** Stack directories live under `shipir.stacks.base-dir` (env `SHIPIR_STACKS_BASE_DIR`, `/data/stacks` on the `shipir-stacks` volume in hosting), one dir per `<host-id>/<stack-name>`; the DB (`stack_versions`) is the source of truth and files are rewritten on deploy.
 - [x] **DECIDED (shipr-9sm):** AI chat assistant is in scope (was out of scope). Decisions are recorded in CLAUDE.md under "AI assistant".
-- [x] **DECIDED (shipr-6ta):** The config editor works inside managed deployment directories (`<stacks-base>/<hostId>/<name>/`), no separate setting. `compose.yaml`/`.env` are excluded and the Git checkout `repo/` is read-only.
+- [x] **DECIDED (shipr-6ta):** The config editor works inside managed deployment directories (`<stacks-base>/<hostId>/<name>/`), no separate setting. `compose.yaml`/`.env` are excluded and the Git checkout `repo/` is read-only. Backups live in `<deployment dir>/.shipir-backups/<sha256 of path>/` (newest 10 per file, `shipir.config-editor.backups-per-file`), files are UTF-8 text up to 1 MiB, no separate `config_files` table (the directory is the source of truth), so the planned `create_config_files` migration is dropped.
 
 ## Recommended build order
 
@@ -46,11 +46,10 @@ This file holds the parts of the original planning handoff that aren't permanent
 
 Implemented in `backend/src/main/resources/db/migration/`: `V1__create_users`, `V2__create_docker_hosts`, `V3__create_stacks`, `V4__create_stack_versions`, `V5__add_users_password_changed_at`, `V6__add_docker_hosts_tls_columns`, `V7__create_password_reset_codes`, `V8__create_audit_log`, `V9__create_notifications`, `V10__create_notification_webhooks`, `V11__create_retention_settings`, `V12__create_git_credentials`, `V13__extend_stacks_for_deploy`, `V14__add_stack_versions_deployed_at`, `V15__add_stacks_git_poll_state`, `V16__rename_stacks_to_deployments` `V17__create_ai_chat` `V18__add_users_disabled_at` (drafts removed; see the decided review notes below).
 
-Still planned, numbered from V19 on: `create_config_files`, `create_permissions`.
+Still planned, numbered from V19 on: `create_permissions`.
 
 ### Rough model for the remaining tables
 
-- `ConfigFile (id, stackId, relativePath, description)`
 - `Permission (id, userId, hostId nullable, stackId nullable, permissionLevel)`
 
 ## Review notes (decided)

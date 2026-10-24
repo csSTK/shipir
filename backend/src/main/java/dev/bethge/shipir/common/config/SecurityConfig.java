@@ -85,7 +85,8 @@ class SecurityConfig {
                         // managed deployments: every role reads (env values only ADMIN/OPERATOR), ADMIN/OPERATOR write
                         .requestMatchers(HttpMethod.GET, "/api/hosts/*/managed-deployments/*/env").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.GET, "/api/hosts/*/managed-deployments", "/api/hosts/*/managed-deployments/*",
-                                "/api/hosts/*/managed-deployments/*/versions").authenticated()
+                                "/api/hosts/*/managed-deployments/*/versions", "/api/hosts/*/managed-deployments/*/files",
+                                "/api/hosts/*/managed-deployments/*/files/backups").authenticated()
                         .requestMatchers("/api/hosts/*/managed-deployments", "/api/hosts/*/managed-deployments/**").hasAnyRole("ADMIN", "OPERATOR")
                         // environments: every role reads, only ADMIN writes (create, test, rename, delete)
                         .requestMatchers(HttpMethod.DELETE, "/api/hosts/*/deployments/*").hasAnyRole("ADMIN", "OPERATOR")
