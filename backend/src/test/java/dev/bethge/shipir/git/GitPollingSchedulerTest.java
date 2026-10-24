@@ -45,6 +45,22 @@ class GitPollingSchedulerTest {
     }
 
     @Test
+    void pollsAndRedeploysInsideTheSystemScope() {
+        List<Boolean> scopeDuringRedeploy = new ArrayList<>();
+        when(deployments.redeploy(any())).thenAnswer(inv -> {
+            scopeDuringRedeploy.add(dev.bethge.shipir.common.security.SystemScope.active());
+            return RedeployOutcome.STARTED;
+        });
+        deployment("aaa", null, null);
+        when(git.remoteCommit(any(), any(), any())).thenReturn("bbb");
+
+        scheduler.tick();
+
+        assertThat(scopeDuringRedeploy).containsExactly(true);
+        assertThat(dev.bethge.shipir.common.security.SystemScope.active()).isFalse();
+    }
+
+    @Test
     void redeploysOnlyWhenTheRemoteCommitChanged() {
         AutoUpdateDeployment changed = deployment("aaa", null, null);
         AutoUpdateDeployment same = deployment("bbb", null, null);

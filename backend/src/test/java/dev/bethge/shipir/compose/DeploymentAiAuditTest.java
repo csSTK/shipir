@@ -49,7 +49,7 @@ class DeploymentAiAuditTest extends DeploymentTestBase {
     void deployFromChatMarksResultEntryAsAi() throws Exception {
         String id = create(login("admin"));
         UUID session = UUID.randomUUID();
-        AiInvocationContext.callAs(session, () -> runs.deploy(hostId, UUID.fromString(id), "admin"));
+        dev.bethge.shipir.common.security.SystemScope.call(() -> AiInvocationContext.callAs(session, () -> runs.deploy(hostId, UUID.fromString(id), "admin")));
 
         String details = resultDetails("DEPLOYMENT_DEPLOY_RESULT");
         assertThat((String) JsonPath.read(details, "$.via")).isEqualTo("AI");
@@ -62,7 +62,7 @@ class DeploymentAiAuditTest extends DeploymentTestBase {
         String id = create(login("admin"));
         UUID session = UUID.randomUUID();
         UUID versionId = jdbc.queryForObject("SELECT id FROM deployment_versions LIMIT 1", UUID.class);
-        AiInvocationContext.callAs(session, () -> runs.rollback(hostId, UUID.fromString(id), versionId, "admin"));
+        dev.bethge.shipir.common.security.SystemScope.call(() -> AiInvocationContext.callAs(session, () -> runs.rollback(hostId, UUID.fromString(id), versionId, "admin")));
 
         String details = resultDetails("DEPLOYMENT_ROLLBACK_RESULT");
         assertThat((String) JsonPath.read(details, "$.via")).isEqualTo("AI");
@@ -72,7 +72,7 @@ class DeploymentAiAuditTest extends DeploymentTestBase {
     @Test
     void normalDeployHasNoMarker() throws Exception {
         String id = create(login("admin"));
-        runs.deploy(hostId, UUID.fromString(id), "admin");
+        dev.bethge.shipir.common.security.SystemScope.run(() -> runs.deploy(hostId, UUID.fromString(id), "admin"));
 
         String details = resultDetails("DEPLOYMENT_DEPLOY_RESULT");
         assertThat(details).doesNotContain("via").doesNotContain("chatSessionId");

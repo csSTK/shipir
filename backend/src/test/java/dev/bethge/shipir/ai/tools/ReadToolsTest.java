@@ -131,8 +131,8 @@ class ReadToolsTest {
         ComposeProcessResult ok = new ComposeProcessResult(0, false, List.of());
         when(execution.execute(any(), any(), any(), any(), any())).thenReturn(ok);
         when(execution.execute(any(), any(), any(), any(), any(), any())).thenReturn(ok);
-        DeploymentDetailResponse created = deployments.create(hostId, new DeploymentCreateRequest("web",
-                "services:\n  web:\n    image: nginx\n", List.of(new EnvEntry("API_TOKEN", ENV_SECRET))), "admin");
+        DeploymentDetailResponse created = dev.bethge.shipir.common.security.SystemScope.call(() -> deployments.create(hostId, new DeploymentCreateRequest("web",
+                "services:\n  web:\n    image: nginx\n", List.of(new EnvEntry("API_TOKEN", ENV_SECRET))), "admin"));
         deploymentId = created.id();
     }
 

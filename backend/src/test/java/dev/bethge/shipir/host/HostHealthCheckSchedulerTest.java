@@ -79,6 +79,24 @@ class HostHealthCheckSchedulerTest {
     }
 
     @Test
+    void checkRunsInsideTheSystemScope() {
+        var access = mock(dev.bethge.shipir.permission.CurrentAccess.class);
+        List<Boolean> scope = new ArrayList<>();
+        when(access.visibleHostIds()).thenAnswer(inv -> {
+            scope.add(dev.bethge.shipir.common.security.SystemScope.active());
+            return java.util.Optional.empty();
+        });
+        overview.shutdown();
+        overview = new HostOverviewService(repository, mock(HostEndpointResolver.class), docker, connections,
+                new HostOverviewProperties(Duration.ofSeconds(1), Duration.ofSeconds(60), true), access);
+        scheduler = new HostHealthCheckScheduler(overview, publisher, clock);
+
+        scheduler.check();
+
+        assertThat(scope).containsExactly(true);
+    }
+
+    @Test
     void baselineEmitsNothing() {
         host("a");
         failing.put("b", true);

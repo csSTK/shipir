@@ -2,6 +2,7 @@ package dev.bethge.shipir.permission;
 
 import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.auth.UserRepository;
+import dev.bethge.shipir.common.security.SystemScope;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -13,9 +14,10 @@ import java.util.UUID;
 /**
  * Permission checks for the signed-in user of the current thread, for feature services.
  * <ul>
- *   <li><b>No authentication in the SecurityContext = system caller</b> (scheduler, health check, auto-update, async
- *       deploy workers): every check passes and nothing is filtered.</li>
+ *   <li><b>Inside {@link SystemScope}</b> without authentication (scheduler, health check, auto-update): every check
+ *       passes and nothing is filtered.</li>
  *   <li>Authenticated but unknown or disabled user (or anonymous): nothing is allowed.</li>
+ *   <li>Neither authentication nor system scope: nothing is allowed (fail closed).</li>
  * </ul>
  * Callers map a {@code false} to their own exception: 404 when not viewable, 403 when viewable but not operable.
  */
@@ -33,11 +35,11 @@ public class CurrentAccess {
         this.users = users;
     }
 
-    /** Empty = system caller (no authentication on this thread). */
+    /** Empty = system caller (no authentication and {@link SystemScope} bound). */
     public Optional<PermissionSubject> subject() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null) {
-            return Optional.empty();
+            return SystemScope.active() ? Optional.empty() : Optional.of(NOBODY);
         }
         if (!auth.isAuthenticated() || auth.getName() == null) {
             return Optional.of(NOBODY);

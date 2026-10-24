@@ -1,5 +1,6 @@
 package dev.bethge.shipir.git;
 
+import dev.bethge.shipir.common.security.SystemScope;
 import dev.bethge.shipir.git.AutoUpdateDeployments.AutoUpdateDeployment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +40,10 @@ public class GitPollingScheduler {
 
     @Scheduled(fixedDelayString = "${shipir.git.poll-tick:60s}", initialDelayString = "${shipir.git.poll-tick:60s}")
     public void tick() {
+        SystemScope.run(this::pollAll);
+    }
+
+    private void pollAll() {
         Instant now = clock.instant();
         for (AutoUpdateDeployment deployment : deployments.findEnabled()) {
             try {

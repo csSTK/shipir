@@ -1,5 +1,6 @@
 package dev.bethge.shipir.retention;
 
+import dev.bethge.shipir.common.security.SystemScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -22,7 +23,7 @@ class RetentionPurgeJob {
     @Scheduled(cron = "${shipir.retention.purge-cron:0 0 3 * * *}", zone = "UTC")
     void run() {
         try {
-            purgeService.purge();
+            SystemScope.run(purgeService::purge);
         } catch (RuntimeException e) {
             log.error("Retention purge failed: {}", e.toString());
         }
