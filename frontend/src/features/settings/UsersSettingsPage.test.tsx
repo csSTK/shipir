@@ -16,7 +16,12 @@ afterEach(() => {
   vi.resetAllMocks()
 })
 
-const base = { passwordChangeRequired: false, createdAt: '2026-10-01T10:00:00Z', disabledAt: null }
+const base = {
+  passwordChangeRequired: false,
+  createdAt: '2026-10-01T10:00:00Z',
+  passwordChangedAt: '2026-10-03T10:00:00Z',
+  disabledAt: null,
+}
 const me: ManagedUser = { ...base, id: 'u1', username: 'root', role: 'ADMIN', disabled: false }
 const anna: ManagedUser = { ...base, id: 'u2', username: 'anna', role: 'OPERATOR', disabled: false }
 const bob: ManagedUser = { ...base, id: 'u3', username: 'bob', role: 'VIEWER', disabled: true, disabledAt: '2026-10-02T10:00:00Z' }
@@ -49,6 +54,23 @@ describe('UsersSettingsPage', () => {
     expect(screen.queryByRole('button', { name: 'Disable root' })).toBeNull()
     expect((screen.getByLabelText('Role for root') as HTMLSelectElement).disabled).toBe(true)
     expect(screen.getByRole('button', { name: 'Enable bob' })).toBeTruthy()
+  })
+
+  it('shows the password change date, or the pending badge until the user chooses a password', async () => {
+    const dana: ManagedUser = {
+      ...base,
+      id: 'u4',
+      username: 'dana',
+      role: 'VIEWER',
+      disabled: false,
+      passwordChangeRequired: true,
+      passwordChangedAt: null,
+    }
+    renderPage(undefined, [me, anna, dana])
+    expect(await screen.findByText('dana')).toBeTruthy()
+    expect(screen.getAllByText(/^Password changed .*2026/)).toHaveLength(2)
+    expect(screen.getAllByText('Password change pending')).toHaveLength(1)
+    expect(screen.queryByText(/^Created /)).toBeNull()
   })
 
   it('creates a user and shows the one-time password once', async () => {

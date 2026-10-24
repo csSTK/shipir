@@ -348,6 +348,8 @@ export interface ManagedUser {
   /** True until the user has chosen their own password. */
   passwordChangeRequired: boolean
   createdAt: string
+  /** Null while the user has not chosen their own password yet. */
+  passwordChangedAt: string | null
   disabledAt: string | null
 }
 

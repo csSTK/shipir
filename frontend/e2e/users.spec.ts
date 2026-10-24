@@ -1,6 +1,11 @@
 import { expect, test } from './fixtures/api.ts'
 
-const base = { passwordChangeRequired: false, createdAt: '2026-10-01T10:00:00Z', disabledAt: null }
+const base = {
+  passwordChangeRequired: false,
+  createdAt: '2026-10-01T10:00:00Z',
+  passwordChangedAt: '2026-10-03T10:00:00Z',
+  disabledAt: null,
+}
 const users = [
   { ...base, id: 'u1', username: 'u', role: 'ADMIN', disabled: false },
   { ...base, id: 'u2', username: 'anna', role: 'OPERATOR', disabled: false },

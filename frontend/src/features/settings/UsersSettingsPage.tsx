@@ -206,9 +206,8 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-function statusOf(u: ManagedUser): { label: string; tone: 'ok' | 'bad' | 'warn' } {
+function statusOf(u: ManagedUser): { label: string; tone: 'ok' | 'bad' } {
   if (u.disabled) return { label: 'Disabled', tone: 'bad' }
-  if (u.passwordChangeRequired) return { label: 'Password change pending', tone: 'warn' }
   return { label: 'Active', tone: 'ok' }
 }
 
@@ -269,7 +268,11 @@ export function UsersSettingsPage({ currentUsername }: { currentUsername: string
                   <strong>{u.username}</strong>
                   {self && <span className="us-muted">You</span>}
                   <span className={`us-badge us-badge--${status.tone}`}>{status.label}</span>
-                  <span className="us-muted">Created {formatDate(u.createdAt)}</span>
+                  {u.passwordChangedAt ? (
+                    <span className="us-muted">Password changed {formatDate(u.passwordChangedAt)}</span>
+                  ) : (
+                    <span className="us-badge us-badge--warn">Password change pending</span>
+                  )}
                 </div>
                 <div className="us-row__actions">
                   <select

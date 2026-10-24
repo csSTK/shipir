@@ -184,6 +184,28 @@ class UserAdminApiTest {
     }
 
     @Test
+    void listExposesPasswordChangedAtAndIsNullWhileTheUserHasNotChosenOne() throws Exception {
+        Session admin = admin();
+        create(admin, "pending1", "VIEWER");
+        activeUser(admin, "done1", "VIEWER");
+
+        JsonNode list = json.readTree(call(admin, "GET", "/api/users", null).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertThat(userNode(list, "pending1").get("passwordChangedAt").isNull()).isTrue();
+        assertThat(userNode(list, "done1").get("passwordChangedAt").isString()).isTrue();
+        assertThat(userNode(list, "admin").get("passwordChangedAt").isString()).isTrue();
+    }
+
+    private static JsonNode userNode(JsonNode list, String username) {
+        for (JsonNode node : list) {
+            if (username.equals(node.get("username").asString())) {
+                return node;
+            }
+        }
+        throw new AssertionError("no user " + username + " in list");
+    }
+
+    @Test
     void createRejectsDuplicateAndInvalidUsername() throws Exception {
         Session admin = admin();
         create(admin, "dupe", "VIEWER");
@@ -266,7 +288,8 @@ class UserAdminApiTest {
         Session admin = admin();
         create(admin, "owner", "ADMIN");
         UUID owner = idOf("owner");
-        jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) VALUES ('h1', 'LOCAL', ?)", owner);
+        // reuse the LOCAL host from reset(): at most one LOCAL environment exists (V21)
+        jdbc.update("UPDATE docker_hosts SET owner_user_id = ? WHERE name = 'base'", owner);
         call(admin, "DELETE", "/api/users/" + owner, null)
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("USER_HAS_HISTORY"));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM users WHERE username = 'owner'", Long.class)).isOne();
