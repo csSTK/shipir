@@ -22,6 +22,7 @@ This is a learning and portfolio project focused on Java backend development. Th
 - **Live streaming:** container logs, container stats (CPU, memory, network, disk I/O with sparklines), Docker events, Compose output and an exec terminal over WebSocket.
 - **Access control:** users with roles (Admin, Operator, Viewer) plus fine-grained permissions per host and deployment.
 - **Audit log:** a record of who did what, and when.
+- **Search:** Cmd/Ctrl+K opens a command palette that finds the environments, deployments and containers you can see, and jumps to any page.
 - **AI assistant:** an in-app chat (any OpenAI-compatible API, NVIDIA build by default; an admin sets the key at Settings > AI assistant) that answers from live data and acts as the signed-in user with their role. Every change waits for an explicit Confirm. Chats are saved, can be reopened, and can be shared read-only with admins for debugging.
 
 ## Upgrade notes
