@@ -21,7 +21,7 @@ import java.util.regex.Pattern;
  * {@code X-XSRF-TOKEN} equal to the {@code XSRF-TOKEN} cookie of the handshake, see {@link CsrfHandshakeInterceptor}),
  * SUBSCRIBE only to {@code /topic/deployments/{id}} (needs view access to the run's deployment; registers the subscription for replay) and
  * {@code /topic/chat/{sessionId}} (owner only, via {@link ChatTopicAccess}) and container logs
- * {@code /topic/hosts/{hostId}/containers/{id}/logs} (hosts the user fully sees, see {@link LogStreamHandler}), Docker events {@code /topic/hosts/{hostId}/events} (hosts the user fully sees, see {@link DockerEventStreamService}), interactive console {@code /topic/exec/{id}} (ADMIN owner, see {@link ExecSessionHandler}); clients may only SEND
+ * {@code /topic/hosts/{hostId}/containers/{id}/logs} (hosts the user fully sees, see {@link LogStreamHandler}), Docker events {@code /topic/hosts/{hostId}/events} (hosts the user fully sees, see {@link DockerEventStreamService}), container stats {@code /topic/hosts/{hostId}/stats} (visible hosts, frames filtered per user, see {@link ContainerStatsStreamService}), interactive console {@code /topic/exec/{id}} (ADMIN owner, see {@link ExecSessionHandler}); clients may only SEND
  * input/resize frames of their own console to {@code /app/exec/{id}/{input|resize}}.
  */
 @Component
@@ -44,11 +44,14 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
     private final LogStreamHandler logStreams;
     private final ExecSessionHandler execSessions;
     private final DockerEventStreamService eventStreams;
+    private final ContainerStatsStreamService statsStreams;
     private final StreamAccess access;
 
     StompSecurityInterceptor(ComposeOutputStreamService streams, ChatTopicAccess chatAccess,
                              LogStreamHandler logStreams, ExecSessionHandler execSessions,
-                             DockerEventStreamService eventStreams, StreamAccess access) {
+                             DockerEventStreamService eventStreams, ContainerStatsStreamService statsStreams,
+                             StreamAccess access) {
+        this.statsStreams = statsStreams;
         this.access = access;
         this.eventStreams = eventStreams;
         this.execSessions = execSessions;
@@ -95,6 +98,16 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                     eventStreams.subscribe(eventHost, accessor.getSessionId(), accessor.getSubscriptionId());
                     break;
                 }
+                var statsHost = ContainerStatsStreamService.parse(destination);
+                if (statsHost != null) {
+                    // visible host suffices; each frame is filtered to the containers the user may see
+                    if (!access.hostVisible(accessor.getUser().getName(), statsHost)) {
+                        throw new MessageDeliveryException("Subscription destination not allowed");
+                    }
+                    statsStreams.subscribe(statsHost, accessor.getUser().getName(), accessor.getSessionId(),
+                            accessor.getSubscriptionId());
+                    break;
+                }
                 var logTarget = LogStreamHandler.parse(destination);
                 if (logTarget != null) {
                     if (!logStreams.mayFollow(accessor.getUser().getName(), logTarget)
@@ -124,6 +137,7 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                 streams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
                 logStreams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
                 eventStreams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
+                statsStreams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
                 execSessions.detach(accessor.getSessionId(), accessor.getSubscriptionId());
             }
             case SEND -> {
@@ -171,6 +185,7 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
         streams.unsubscribe(event.getSessionId(), null);
         logStreams.unsubscribe(event.getSessionId(), null);
         eventStreams.unsubscribe(event.getSessionId(), null);
+        statsStreams.unsubscribe(event.getSessionId(), null);
         execSessions.detach(event.getSessionId(), null);
     }
 
