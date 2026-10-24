@@ -50,3 +50,6 @@ build/
 
 # Local Compose stack files (shipir.stacks.base-dir default), may contain .env secrets
 backend/data/
+
+# Local backups (contain plaintext stack .env files)
+backups/

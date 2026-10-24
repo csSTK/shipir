@@ -175,6 +175,33 @@ docker compose -f docker-compose.demo.yml down -v      # stops the stack and del
 
 `DOCKER_GID` is required as in the hosting stack (see the Docker socket note above); set it in `.env` or inline. The demo uses the same socket mount, so it has the same root-equivalent access to the host.
 
+### Backup & restore
+
+A backup has two parts: the PostgreSQL database (users, environments, permissions, audit log, notifications, deployment records and their encrypted secrets) and the `shipir-stacks` volume (stack files, `.env` files, Git checkouts, config-file backups). Both are needed for a complete restore.
+
+```bash
+scripts/backup.sh                       # writes backups/shipir-<UTC time>/ (database.dump, stacks.tar.gz, MANIFEST)
+```
+
+The database is external, so `pg_dump` runs on your machine with the PostgreSQL 16 client tools (`pg_dump`, `pg_restore`, `psql`) and connects to `DB_HOST`, like the backend. The script also needs Docker and `openssl`, and reads `DB_*` and `SHIPIR_ENCRYPTION_KEY` from `.env` (it never runs `.env` as code). The backend container must exist (`docker compose -f docker-compose.yml create backend`), but it does not need to run. Without a stop, a stack deployed during the backup may be in the dump but not in the files; stop the backend first (`docker compose -f docker-compose.yml stop backend`) for a fully consistent copy.
+
+The backup is not encrypted and holds the stack `.env` files in plain text, so treat it like a secret: keep it out of git and off shared disks.
+
+**The encryption key.** `SHIPIR_ENCRYPTION_KEY` is not stored in the backup. It is needed for the values the database keeps encrypted: TLS material of TCP hosts, Git and registry credentials, webhook URLs and AI API keys. Keep the key in a password manager, separate from the backups. Losing it has these consequences:
+
+- The database and the stack files still restore, but the encrypted values are unreadable for good. Re-entering them is the only way back.
+- With TCP+TLS hosts present, the backend refuses to start without the key. With a different key, decryption fails (`DECRYPTION_FAILED`); without one, features show `ENCRYPTION_KEY_MISSING`.
+- `scripts/backup.sh` stores only a SHA-256 fingerprint of the key in `MANIFEST`, and `scripts/restore.sh` refuses to run with a key that does not match it.
+
+**Restore into an empty database.** Restore only onto a fresh, empty database and an empty `shipir-stacks` volume. The script refuses otherwise. A backend that has already started on the database has run Flyway and must not be used.
+
+1. Create an empty PostgreSQL 16 database and user, and point `DB_*` in `.env` at it. Set `SHIPIR_ENCRYPTION_KEY` to the original key.
+2. Create the backend container without starting it: `docker compose -f docker-compose.yml create backend`.
+3. Run `scripts/restore.sh backups/shipir-<UTC time>` and type `RESTORE` when asked. The script stops the backend, restores the database with `pg_restore`, then unpacks the stacks into the volume. It never removes a volume.
+4. Start the stack: `docker compose -f docker-compose.yml up -d`. Flyway checks the restored schema history on startup.
+
+ADMINs can also download an encrypted export from Settings > Backup. That feature is separate from these scripts, and restoring still follows the procedure above.
+
 ### Backend (Java 25, Spring Boot 4.1.1)
 
 ```bash
