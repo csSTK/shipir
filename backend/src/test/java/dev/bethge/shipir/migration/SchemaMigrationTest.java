@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To19Successfully() {
+    void flywayAppliedVersions1To21Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21");
     }
 
     @Test
@@ -65,6 +65,18 @@ class SchemaMigrationTest {
     void localHostWithoutHostPortOrTlsIsAccepted() {
         insertHost("local", "LOCAL", null, null, insertUser("alice"));
         assertThat(count("docker_hosts")).isEqualTo(1);
+    }
+
+    @Test
+    void secondLocalHostIsRejectedButManyTcpHostsAreAccepted() {
+        UUID owner = insertUser("alice");
+        insertHost("local", "LOCAL", null, null, owner);
+        insertHost("tcp-1", "TCP", "docker.local", 2375, owner);
+        insertHost("tcp-2", "TCP", "docker.local", 2376, owner);
+        assertThat(count("docker_hosts")).isEqualTo(3);
+        assertThatThrownBy(() -> insertHost("local-2", "LOCAL", null, null, owner))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("docker_hosts_single_local_idx");
     }
 
     @Test
@@ -163,8 +175,8 @@ class SchemaMigrationTest {
     @Test
     void duplicateDockerHostNameIsRejected() {
         UUID owner = insertUser("alice");
-        insertHost("same", "LOCAL", null, null, owner);
-        assertThatThrownBy(() -> insertHost("same", "LOCAL", null, null, owner))
+        insertHost("same", "TCP", "docker.local", 2375, owner);
+        assertThatThrownBy(() -> insertHost("same", "TCP", "docker.local", 2375, owner))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("docker_hosts_name_key");
     }
@@ -1381,7 +1393,7 @@ class SchemaMigrationTest {
     }
 
     private UUID insertHost(UUID owner) {
-        return insertHost("host-" + UUID.randomUUID(), "LOCAL", null, null, owner);
+        return insertHost("host-" + UUID.randomUUID(), "TCP", "docker.local", 2375, owner);
     }
 
     private UUID insertHost(String name, String connectionType, String host, Integer port, UUID owner) {

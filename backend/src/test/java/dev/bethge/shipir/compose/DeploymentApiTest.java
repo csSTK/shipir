@@ -218,8 +218,8 @@ class DeploymentApiTest extends DeploymentTestBase {
     void deploymentOfAnotherHostIsNotReachableThroughThisHost() throws Exception {
         Login admin = login("admin");
         String id = create(admin, "web", null);
-        jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
-                + "SELECT 'Other', 'LOCAL', id FROM users WHERE username = 'admin'");
+        jdbc.update("INSERT INTO docker_hosts (name, connection_type, host, port, owner_user_id) "
+                + "SELECT 'Other', 'TCP', 'other.local', 2375, id FROM users WHERE username = 'admin'");
         UUID other = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'Other'", UUID.class);
         mvc.perform(get("/api/hosts/" + other + "/managed-deployments/" + id).session(admin.session()))
                 .andExpect(status().isNotFound());

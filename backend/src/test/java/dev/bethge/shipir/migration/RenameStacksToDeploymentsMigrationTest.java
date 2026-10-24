@@ -114,7 +114,8 @@ class RenameStacksToDeploymentsMigrationTest {
     @Test
     void deletingHostStillCascadesToDeploymentsAndVersions() {
         UUID otherHost = jdbc.queryForObject("""
-                INSERT INTO docker_hosts (name, connection_type, owner_user_id) VALUES ('doomed', 'LOCAL', ?) RETURNING id
+                INSERT INTO docker_hosts (name, connection_type, host, port, owner_user_id)
+                VALUES ('doomed', 'TCP', 'doomed.local', 2375, ?) RETURNING id
                 """, UUID.class, user);
         UUID d = jdbc.queryForObject("""
                 INSERT INTO deployments (name, host_id, compose_file_path, created_by)

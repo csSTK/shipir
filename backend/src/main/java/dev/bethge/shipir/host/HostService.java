@@ -27,6 +27,8 @@ import java.util.UUID;
 @Service
 public class HostService {
 
+    private static final String LOCAL_INDEX = "docker_hosts_single_local_idx";
+
     private final DockerHostRepository hosts;
     private final UserRepository users;
     private final SecretCipher cipher;
@@ -70,8 +72,7 @@ public class HostService {
             throw nameTaken();
         }
         if (request.connectionType() == ConnectionType.LOCAL && hosts.existsByConnectionType(ConnectionType.LOCAL)) {
-            throw new HostException(HttpStatus.CONFLICT, "LOCAL_HOST_EXISTS",
-                    "A local environment already exists");
+            throw localExists();
         }
         ConnectionTestResult result = docker.ping(endpoint);
         if (!result.ok()) {
@@ -88,8 +89,8 @@ public class HostService {
         try {
             return toResponse(hosts.saveAndFlush(host));
         } catch (DataIntegrityViolationException e) {
-            // lost a race against another request with the same name
-            throw nameTaken();
+            // lost a race against another request with the same name or the single LOCAL environment
+            throw isLocalIndexViolation(e) ? localExists() : nameTaken();
         }
     }
 
@@ -121,6 +122,19 @@ public class HostService {
     private DockerHost find(UUID id) {
         return hosts.findById(id).orElseThrow(
                 () -> new HostException(HttpStatus.NOT_FOUND, "HOST_NOT_FOUND", "Environment not found"));
+    }
+
+    private static HostException localExists() {
+        return new HostException(HttpStatus.CONFLICT, "LOCAL_HOST_EXISTS", "A local environment already exists");
+    }
+
+    private static boolean isLocalIndexViolation(DataIntegrityViolationException e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t.getMessage() != null && t.getMessage().contains(LOCAL_INDEX)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static HostException nameTaken() {
