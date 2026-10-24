@@ -202,6 +202,16 @@ export function useGenerateCompose() {
   })
 }
 
+/** Pulls newer images and recreates the containers of a FILE deployment (`POST .../pull-update`, 202); output streams like a deploy. */
+export function usePullUpdate(hostId: string) {
+  const invalidate = useInvalidateDeployments(hostId)
+  return useMutation({
+    mutationFn: (deploymentId: string) =>
+      apiFetch<DeploymentRun>(`${managedBase(hostId)}/${deploymentId}/pull-update`, { method: 'POST' }),
+    onSuccess: () => void invalidate(),
+  })
+}
+
 /** Pulls the repository and redeploys (`POST .../git/redeploy`, 202); output streams like a normal deploy. */
 export function useGitRedeploy(hostId: string) {
   const invalidate = useInvalidateDeployments(hostId)

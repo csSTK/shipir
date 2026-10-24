@@ -9,6 +9,7 @@ import {
   useDeployDeployment,
   useGitRedeploy,
   useManagedDeployment,
+  usePullUpdate,
   useRollbackDeployment,
   useDeploymentVersions,
   useStopDeployment,
@@ -50,6 +51,7 @@ export function DeploymentDetailPage() {
   const versions = useDeploymentVersions(hostId, deploymentId)
   const deploy = useDeployDeployment(hostId)
   const redeploy = useGitRedeploy(hostId)
+  const pullUpdate = usePullUpdate(hostId)
   const stop = useStopDeployment(hostId)
   const rollback = useRollbackDeployment(hostId)
   const remove = useDeleteDeployment(hostId)
@@ -96,7 +98,7 @@ export function DeploymentDetailPage() {
   }
 
   const data = deployment.data
-  const busy = deploy.isPending || redeploy.isPending || stop.isPending || rollback.isPending
+  const busy = deploy.isPending || redeploy.isPending || pullUpdate.isPending || stop.isPending || rollback.isPending
 
   function startDeploy() {
     setActionError(null)
@@ -111,6 +113,14 @@ export function DeploymentDetailPage() {
     redeploy.mutate(deploymentId, {
       onSuccess: (d) => setStarted({ kind: 'Pull & redeploy', runId: d.runId }),
       onError: (err) => setActionError(describeDeploymentError(err, 'Could not start the redeployment. Try again.')),
+    })
+  }
+
+  function startPullUpdate() {
+    setActionError(null)
+    pullUpdate.mutate(deploymentId, {
+      onSuccess: (d) => setStarted({ kind: 'Pull & update', runId: d.runId }),
+      onError: (err) => setActionError(describeDeploymentError(err, 'Could not start the update. Try again.')),
     })
   }
 
@@ -145,6 +155,7 @@ export function DeploymentDetailPage() {
   }
 
   const status = STATUS[data.status]
+  const hasDeployed = versions.data?.some((v) => v.deployed) ?? false
 
   return (
     <section className="sd">
@@ -168,6 +179,17 @@ export function DeploymentDetailPage() {
             {data.source === 'GIT' && (
               <button type="button" className="sk-btn" onClick={startRedeploy} disabled={busy}>
                 Pull &amp; redeploy
+              </button>
+            )}
+            {data.source === 'FILE' && (
+              <button
+                type="button"
+                className="sk-btn"
+                onClick={startPullUpdate}
+                disabled={busy || !hasDeployed}
+                title={hasDeployed ? 'Pull newer images and recreate the containers' : 'Deploy once first'}
+              >
+                {pullUpdate.isPending ? 'Updating…' : 'Pull & update'}
               </button>
             )}
             <button type="button" className="sk-btn" onClick={() => setDialog({ kind: 'stop' })} disabled={busy}>

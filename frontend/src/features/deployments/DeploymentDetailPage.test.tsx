@@ -115,6 +115,43 @@ describe('DeploymentDetailPage', () => {
     expect(screen.getByText('d-42')).toBeInTheDocument()
   })
 
+  it('pulls and updates a deployed FILE deployment and shows the run', async () => {
+    serve('OPERATOR', { [`POST ${BASE}/pull-update`]: () => ({ runId: 'pu-7', versionId: 'v4' }) })
+    renderPage()
+    const button = await screen.findByRole('button', { name: 'Pull & update' })
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+    expect(await screen.findByLabelText('Deployment output')).toBeInTheDocument()
+    expect(screen.getByText('pu-7')).toBeInTheDocument()
+  })
+
+  it('disables Pull & update until a version was deployed', async () => {
+    serve('OPERATOR', { [`GET ${BASE}/versions`]: () => [versions[0]] })
+    renderPage()
+    expect(await screen.findByRole('button', { name: 'Pull & update' })).toBeDisabled()
+  })
+
+  it('hides Pull & update from viewers and for Git deployments', async () => {
+    serve('VIEWER')
+    renderPage()
+    await screen.findByRole('heading', { name: 'shop' })
+    expect(screen.queryByRole('button', { name: 'Pull & update' })).not.toBeInTheDocument()
+    cleanup()
+    serve('OPERATOR', { [`GET ${BASE}`]: () => ({ ...deployment, source: 'GIT', git: { repoUrl: 'https://x/y.git', ref: 'main', composePath: 'compose.yaml', credentialId: null, lastCommitSha: null, autoUpdateEnabled: false, autoUpdateIntervalSeconds: 300, lastPolledAt: null, lastPollError: null } }) })
+    renderPage()
+    await screen.findByRole('button', { name: 'Pull & redeploy' })
+    expect(screen.queryByRole('button', { name: 'Pull & update' })).not.toBeInTheDocument()
+  })
+
+  it('maps NOT_DEPLOYED to a message', async () => {
+    serve('OPERATOR', { [`POST ${BASE}/pull-update`]: () => new ApiError(400, 'x', 'NOT_DEPLOYED') })
+    renderPage()
+    const button = await screen.findByRole('button', { name: 'Pull & update' })
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+    expect(await screen.findByRole('alert')).toHaveTextContent('Deploy this deployment once')
+  })
+
   it('maps DEPLOYMENT_IN_PROGRESS to a message', async () => {
     serve('OPERATOR', { [`POST ${BASE}/deploy`]: () => new ApiError(409, 'busy', 'DEPLOYMENT_IN_PROGRESS') })
     renderPage()

@@ -2,7 +2,7 @@ import { DeployOutput } from './deploy-output/DeployOutput.tsx'
 import type { RunResult } from './deploy-output/useRunStream.ts'
 
 export interface StartedRun {
-  kind: 'Deploy' | 'Rollback' | 'Pull & redeploy'
+  kind: 'Deploy' | 'Rollback' | 'Pull & redeploy' | 'Pull & update'
   runId: string
 }
 

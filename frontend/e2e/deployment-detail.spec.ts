@@ -70,6 +70,14 @@ test('operator creates, deploys, rolls back and deletes a deployment', async ({ 
   await expect(page).toHaveURL(/\/environments\/a\/deployments$/)
 })
 
+test('operator pulls and updates a deployed deployment', async ({ page, api }) => {
+  mockCommon(api, 'OPERATOR')
+  api.mock('POST', `${BASE}/s1/pull-update`, { status: 202, body: { runId: 'pu-1', versionId: 'v3' } })
+  await page.goto('/environments/a/deployments/s1')
+  await page.getByRole('button', { name: 'Pull & update' }).click()
+  await expect(page.getByLabel('Deployment output')).toContainText('pu-1')
+})
+
 test('viewer sees the deployment read-only', async ({ page, api }) => {
   mockCommon(api, 'VIEWER')
   await page.goto('/environments/a/deployments/s1')
