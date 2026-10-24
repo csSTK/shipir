@@ -10,6 +10,8 @@ import dev.bethge.shipir.docker.client.ContainerService;
 import dev.bethge.shipir.docker.client.ImageService;
 import dev.bethge.shipir.docker.client.NetworkService;
 import dev.bethge.shipir.docker.client.VolumeService;
+import dev.bethge.shipir.auth.Role;
+import dev.bethge.shipir.docker.dto.ContainerDetailsDto;
 import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.ImageDto;
 import dev.bethge.shipir.docker.dto.NetworkDto;
@@ -89,6 +91,25 @@ public class HostResourcesService {
                 .filter(c -> c.composeProject() != null && managed.get(c.composeProject()) != null
                         && visible.contains(managed.get(c.composeProject())))
                 .toList();
+    }
+
+    /**
+     * Inspect of one container. On a host visible only through deployment grants the container must belong to a
+     * visible managed deployment, otherwise 404 RESOURCE_NOT_FOUND. Env values only for ADMIN/OPERATOR (others get keys).
+     */
+    public ContainerDetailsDto container(UUID hostId, String containerId) {
+        requireView(hostId);
+        validateResourceId(containerId);
+        ContainerDetailsDto details = call(hostId, (id, endpoint) -> containers.inspect(id, endpoint, containerId));
+        if (!access.hostFullyVisible(hostId)) {
+            UUID managed = details.composeProject() == null ? null
+                    : managedDeployments.managedDeploymentIds(hostId).get(details.composeProject());
+            if (managed == null || !access.visibleDeploymentIds(hostId).orElseThrow().contains(managed)) {
+                throw new HostException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Resource not found");
+            }
+        }
+        boolean mayReadValues = access.subject().map(s -> s.role() != Role.VIEWER).orElse(true);
+        return mayReadValues ? details : details.withoutEnvValues();
     }
 
     /** Images, networks and volumes belong to the whole host: empty unless the host is fully visible. */

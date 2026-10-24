@@ -1,5 +1,6 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.docker.dto.ContainerDetailsDto;
 import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.ImageDto;
 import dev.bethge.shipir.docker.dto.NetworkDto;
@@ -37,6 +38,11 @@ class HostResourcesController {
     @GetMapping("/containers")
     List<ContainerDto> containers(@PathVariable UUID id) {
         return service.containers(id);
+    }
+
+    @GetMapping("/containers/{containerId}")
+    ContainerDetailsDto container(@PathVariable UUID id, @PathVariable String containerId) {
+        return service.container(id, containerId);
     }
 
     @GetMapping("/images")
