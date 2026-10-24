@@ -27,4 +27,6 @@ Turn every acceptance criterion of the bead into at least one test that **fails 
 - the new tests compile
 - running them (`next-task-test`) shows them **failing for the expected reason**: an assertion or a missing behavior, not a typo or a setup error
 
-List the criterion → test mapping in your report.
+**Red before green:** capture that failing run before coding: per new/changed test the test name and the failing assertion line (or error message). Only exception: pure refactor, docs-only or config-only beads, where the report states the exception and why no test can fail first. No silent skipping.
+
+List the criterion → test mapping and the red evidence in your report.
