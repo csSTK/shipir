@@ -87,4 +87,6 @@ test('sidebar section works on a narrow screen', async ({ page, api }) => {
   await page.getByRole('button', { name: 'Navigation' }).click()
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Images' }).click()
   await expect(page).toHaveURL(/\/environments\/a\/images$/)
+  // Wait for the page's own request to be answered so it cannot fire after the test ends.
+  await expect(page.getByRole('heading', { name: 'Images' })).toBeVisible()
 })

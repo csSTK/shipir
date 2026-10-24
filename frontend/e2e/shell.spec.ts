@@ -6,6 +6,7 @@ test('admin navigates via the sidebar and opens settings from the user menu', as
   api.mock('GET', '/api/auth/me', me('ADMIN'))
   api.mock('GET', '/api/hosts/overview', { body: [] })
   api.mock('GET', '/api/settings/retention', { body: { auditLogDays: 90, notificationDays: 30 } })
+  api.mock('GET', '/api/notifications/preferences', { body: [] })
   await page.goto('/')
 
   const nav = page.getByRole('navigation', { name: 'Main' })
@@ -17,6 +18,8 @@ test('admin navigates via the sidebar and opens settings from the user menu', as
   await page.getByRole('button', { name: /pat/ }).click()
   await page.getByRole('menuitem', { name: 'Settings' }).click()
   await expect(page).toHaveURL(/\/account$/)
+  // Wait for the page's own request to be answered so it cannot fire after the test ends.
+  await expect(page.getByRole('heading', { name: 'Change password' })).toBeVisible()
 })
 
 test('viewer has no settings group and is not allowed on /settings/*', async ({ page, api }) => {
