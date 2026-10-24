@@ -1,13 +1,15 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { ChevronLeft, Sparkles } from 'lucide-react'
+import { Badge, Button, Card, PageHeader, Skeleton } from '../../shared/ui/index.ts'
 import { useCurrentUser } from '../auth/index.ts'
 import { describeError, formatMemory, plural } from './format.ts'
 import { useHostsOverview, type HostOverview } from './api.ts'
 import { ENV_RESOURCES, type EnvResourceSlug } from './resources.ts'
+import { EnvironmentActions } from './EnvironmentActions.tsx'
 import { PruneDialog } from './PruneDialog.tsx'
 import './EnvironmentsOverview.css'
 import './EnvironmentDashboard.css'
-import { Button } from '../../shared/ui/index.ts'
 
 /** Count shown on a resource tile; null when the overview does not provide it. */
 function countFor(env: HostOverview, slug: EnvResourceSlug): number | null {
@@ -26,7 +28,7 @@ function countFor(env: HostOverview, slug: EnvResourceSlug): number | null {
 function Back() {
   return (
     <Link className="envs__back" to="/">
-      ‹ Environments
+      <ChevronLeft size={16} strokeWidth={1.75} aria-hidden="true" /> Environments
     </Link>
   )
 }
@@ -34,6 +36,7 @@ function Back() {
 /** `/environments/:id`: live status and resource counts of one environment. */
 export function EnvironmentDashboard() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const { data, isPending, isError } = useHostsOverview()
   const env = data?.find((e) => e.id === id)
   const { data: user } = useCurrentUser()
@@ -41,7 +44,16 @@ export function EnvironmentDashboard() {
   const [pruning, setPruning] = useState(false)
 
   if (isPending) {
-    return <section className="envs" role="status" aria-label="Loading environment" aria-busy="true" />
+    return (
+      <section className="envs" role="status" aria-label="Loading environment" aria-busy="true">
+        <Skeleton height="2rem" width="12rem" />
+        <div className="dash__tiles">
+          {ENV_RESOURCES.map(({ slug }) => (
+            <Skeleton key={slug} height="6rem" />
+          ))}
+        </div>
+      </section>
+    )
   }
   if (isError) {
     return (
@@ -57,54 +69,65 @@ export function EnvironmentDashboard() {
     return (
       <section className="envs">
         <Back />
-        <h2 className="envs__title">Environment not found</h2>
-        <p className="envs__message">This environment does not exist or was deleted.</p>
+        <PageHeader title="Environment not found" subtitle="This environment does not exist or was deleted." />
       </section>
     )
   }
 
   const up = env.status === 'UP'
+  const meta = [
+    env.dockerVersion && `Docker ${env.dockerVersion}`,
+    env.cpus !== null && plural(env.cpus, 'CPU'),
+    env.memoryBytes !== null && formatMemory(env.memoryBytes),
+  ]
+    .filter(Boolean)
+    .join(' · ')
   return (
     <section className="envs">
       <Back />
-      <header className="envs__bar">
-        <h2 className="envs__title">{env.name}</h2>
-        <span className={`env-badge env-badge--${up ? 'up' : 'down'}`}>{up ? 'Up' : 'Down'}</span>
-        {up && canClean && (
-          <Button variant="ghost" className="dash__clean" onClick={() => setPruning(true)}>
-            Clean up
-          </Button>
-        )}
-      </header>
-      {up ? (
-        <p className="dash__meta">
-          {[
-            env.dockerVersion && `Docker ${env.dockerVersion}`,
-            env.cpus !== null && plural(env.cpus, 'CPU'),
-            env.memoryBytes !== null && formatMemory(env.memoryBytes),
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </p>
-      ) : (
-        <p role="alert" className="env-row__error">
+      <PageHeader
+        title={env.name}
+        subtitle={
+          <span className="dash__subtitle">
+            <Badge tone={up ? 'ok' : 'bad'}>{up ? 'Up' : 'Down'}</Badge>
+            {up && meta && <span className="dash__meta">{meta}</span>}
+          </span>
+        }
+        actions={
+          <>
+            {up && canClean && (
+              <Button onClick={() => setPruning(true)}>
+                <Sparkles size={16} strokeWidth={1.75} aria-hidden="true" /> Clean up
+              </Button>
+            )}
+            {user?.role === 'ADMIN' && <EnvironmentActions env={env} onDeleted={() => navigate('/')} />}
+          </>
+        }
+      />
+      {!up && (
+        <p role="alert" className="env-card__error">
           {describeError(env.error)}
         </p>
       )}
       <ul className="dash__tiles">
-        {ENV_RESOURCES.map(({ slug, label }) => {
+        {ENV_RESOURCES.map(({ slug, label, icon: Icon, tone }) => {
           const count = up ? countFor(env, slug) : null
           return (
             <li key={slug}>
               <Link className="dash__tile" to={`/environments/${env.id}/${slug}`}>
-                <span className="dash__label">{label}</span>
-                <span className="dash__count">{count ?? '–'}</span>
+                <Card className="dash__card">
+                  <span className={`dash__icon dash__icon--${tone}`} aria-hidden="true">
+                    <Icon size={20} strokeWidth={1.75} />
+                  </span>
+                  <span className="dash__label">{label}</span>
+                  <span className="dash__count">{count ?? '–'}</span>
+                </Card>
               </Link>
             </li>
           )
         })}
       </ul>
-      {pruning && <PruneDialog hostId={env.id} onClose={() => setPruning(false)} />}
+      <PruneDialog hostId={env.id} open={pruning} onClose={() => setPruning(false)} />
     </section>
   )
 }

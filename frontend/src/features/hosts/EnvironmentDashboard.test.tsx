@@ -114,4 +114,15 @@ describe('EnvironmentDashboard', () => {
     renderAt('a')
     expect(await screen.findByRole('button', { name: 'Clean up' })).toBeInTheDocument()
   })
+
+  it('offers rename and delete in an overflow menu for admins only', async () => {
+    serve([up], 'OPERATOR')
+    renderAt('a')
+    await screen.findByRole('heading', { name: 'Local' })
+    expect(screen.queryByRole('button', { name: 'Actions for Local' })).not.toBeInTheDocument()
+    cleanup()
+    serve([up], 'ADMIN')
+    renderAt('a')
+    expect(await screen.findByRole('button', { name: 'Actions for Local' })).toBeInTheDocument()
+  })
 })

@@ -1,9 +1,8 @@
-import { useId, useState } from 'react'
-import { DeploymentDialog } from '../deployments/DeploymentDialog.tsx'
+import { useState } from 'react'
+import { Button, Dialog } from '../../shared/ui/index.ts'
 import { formatSize } from './format.ts'
 import { describePruneError, usePrune, usePrunePreview, type ImagePruneMode, type PruneGroup, type PruneResult } from './prune.ts'
 import './PruneDialog.css'
-import { Button } from '../../shared/ui/index.ts'
 
 function Summary({ label, group }: { label: string; group: PruneGroup }) {
   return (
@@ -23,7 +22,7 @@ function Result({ result }: { result: PruneResult }) {
   ]
   return (
     <div role="status">
-      <p className="sk-dialog__text">
+      <p className="prune__text">
         Cleanup finished. About <strong>{formatSize(result.reclaimedBytes)}</strong> reclaimed (estimate).
       </p>
       <ul className="prune__list">
@@ -37,9 +36,8 @@ function Result({ result }: { result: PruneResult }) {
   )
 }
 
-/** "Clean up" dialog: choose what to prune, see the preview, confirm. */
-export function PruneDialog({ hostId, onClose }: { hostId: string; onClose: () => void }) {
-  const titleId = useId()
+/** Choose what to prune, see the preview, confirm. */
+function PruneContent({ hostId, onClose }: { hostId: string; onClose: () => void }) {
   const [containers, setContainers] = useState(true)
   const [images, setImages] = useState<ImagePruneMode | 'NONE'>('DANGLING')
   const [volumes, setVolumes] = useState(false)
@@ -71,7 +69,7 @@ export function PruneDialog({ hostId, onClose }: { hostId: string; onClose: () =
 
   const data = preview.data
   return (
-    <DeploymentDialog title="Clean up unused resources" titleId={titleId} onClose={onClose}>
+    <>
       {result ? (
         <Result result={result} />
       ) : (
@@ -102,9 +100,9 @@ export function PruneDialog({ hostId, onClose }: { hostId: string; onClose: () =
               <input type="checkbox" checked={networks} onChange={(e) => setNetworks(e.target.checked)} /> Unused networks
             </label>
           </fieldset>
-          {preview.isPending && <p className="sk-dialog__text">Calculating preview…</p>}
+          {preview.isPending && <p className="prune__text">Calculating preview…</p>}
           {preview.isError && (
-            <p role="alert" className="sk-error">
+            <p role="alert" className="prune__error">
               {describePruneError(preview.error)}
             </p>
           )}
@@ -127,26 +125,31 @@ export function PruneDialog({ hostId, onClose }: { hostId: string; onClose: () =
             Removing containers can free more images and volumes than listed. Removed data cannot be restored.
           </p>
           {error && (
-            <p role="alert" className="sk-error">
+            <p role="alert" className="prune__error">
               {error}
             </p>
           )}
         </>
       )}
-      <div className="sk-dialog__actions">
+      <div className="prune__actions">
         <Button variant="ghost" onClick={onClose}>
           {result ? 'Close' : 'Cancel'}
         </Button>
         {!result && (
-          <Button variant="danger"
-            
-            onClick={() => void confirm()}
-            disabled={nothing || prune.isPending || preview.isPending}
->
+          <Button variant="danger" onClick={() => void confirm()} loading={prune.isPending} disabled={nothing || preview.isPending}>
             {prune.isPending ? 'Cleaning up…' : 'Clean up'}
           </Button>
         )}
       </div>
-    </DeploymentDialog>
+    </>
+  )
+}
+
+/** Dialog shell; the content (and its preview request) exists only while open, so a fresh one mounts per opening. */
+export function PruneDialog({ hostId, open = true, onClose }: { hostId: string; open?: boolean; onClose: () => void }) {
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()} title="Clean up unused resources">
+      <PruneContent hostId={hostId} onClose={onClose} />
+    </Dialog>
   )
 }

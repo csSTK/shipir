@@ -1,4 +1,10 @@
+import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures/api.ts'
+
+async function chooseAction(page: Page, env: string, item: 'Rename' | 'Delete') {
+  await page.getByRole('button', { name: `Actions for ${env}` }).click()
+  await page.getByRole('menuitem', { name: item }).click()
+}
 
 const local = {
   id: 'a',
@@ -85,7 +91,7 @@ test('opens the dashboard and navigates back', async ({ page, api }) => {
   await expect(page).toHaveURL(/\/environments\/a$/)
   await expect(page.getByRole('heading', { name: 'Local' })).toBeVisible()
 
-  await page.getByRole('link', { name: '‹ Environments' }).click()
+  await page.getByRole('main').getByRole('link', { name: 'Environments' }).click()
   await expect(page).toHaveURL(/\/$/)
   await expect(page.getByRole('link', { name: /Local/ })).toBeVisible()
 })
@@ -95,7 +101,7 @@ test('admin renames and deletes an environment', async ({ page, api }) => {
   api.mock('GET', '/api/hosts/overview', { body: [local] })
   await page.goto('/')
 
-  await page.getByRole('button', { name: 'Rename Local' }).click()
+  await chooseAction(page, 'Local', 'Rename')
   const rename = page.getByRole('dialog', { name: 'Rename environment' })
   await rename.getByLabel('Name').fill('Production')
   api.mock('PATCH', '/api/hosts/a', { body: { id: 'a', name: 'Production' } })
@@ -104,7 +110,7 @@ test('admin renames and deletes an environment', async ({ page, api }) => {
   await expect(rename).toHaveCount(0)
   await expect(page.getByRole('link', { name: /Production/ })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Delete Production' }).click()
+  await chooseAction(page, 'Production', 'Delete')
   const confirm = page.getByRole('dialog', { name: 'Delete environment' })
   await expect(confirm).toContainText('Production')
   await expect(confirm).toContainText('deployments')
@@ -120,7 +126,7 @@ test('rename shows a taken name inline', async ({ page, api }) => {
   api.mock('GET', '/api/hosts/overview', { body: [local] })
   await page.goto('/')
 
-  await page.getByRole('button', { name: 'Rename Local' }).click()
+  await chooseAction(page, 'Local', 'Rename')
   const rename = page.getByRole('dialog', { name: 'Rename environment' })
   await rename.getByLabel('Name').fill('Staging')
   api.mock('PATCH', '/api/hosts/a', { status: 409, body: { code: 'HOST_NAME_TAKEN' } })
@@ -134,5 +140,5 @@ test('operator sees no rename or delete actions', async ({ page, api }) => {
   await page.goto('/')
 
   await expect(page.getByRole('link', { name: /Local/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /Rename|Delete/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Actions for/ })).toHaveCount(0)
 })

@@ -1,36 +1,11 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useId, useState, type FormEvent } from 'react'
+import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import { ApiError } from '../../shared/api/client.ts'
+import { Button, ConfirmDialog, Dialog, IconButton, Menu } from '../../shared/ui/index.ts'
 import { useDeleteHost, useRenameHost, type HostOverview } from './api.ts'
 import './EnvironmentActions.css'
 
 const NAME_MAX = 100
-
-function Modal({ title, titleId, onClose, children }: { title: string; titleId: string; onClose: () => void; children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null
-    ref.current?.focus()
-    return () => previous?.focus()
-  }, [])
-  return (
-    <div className="env-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div
-        ref={ref}
-        className="env-dialog env-dialog--narrow"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={(e) => e.key === 'Escape' && onClose()}
-      >
-        <h2 id={titleId} className="env-dialog__title">
-          {title}
-        </h2>
-        {children}
-      </div>
-    </div>
-  )
-}
 
 function renameMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -41,8 +16,8 @@ function renameMessage(error: unknown): string {
   return 'Could not rename the environment. Try again.'
 }
 
-function RenameDialog({ env, onClose }: { env: HostOverview; onClose: () => void }) {
-  const titleId = useId()
+function RenameDialog({ env, open, onClose }: { env: HostOverview; open: boolean; onClose: () => void }) {
+  const formId = useId()
   const [name, setName] = useState(env.name)
   const [problem, setProblem] = useState<string | null>(null)
   const rename = useRenameHost()
@@ -59,39 +34,47 @@ function RenameDialog({ env, onClose }: { env: HostOverview; onClose: () => void
   }
 
   return (
-    <Modal title="Rename environment" titleId={titleId} onClose={onClose}>
-      <form onSubmit={submit} className="env-dialog__form">
-        <label className="env-field">
+    <Dialog
+      open={open}
+      onOpenChange={(next) => !next && onClose()}
+      title="Rename environment"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" type="submit" form={formId} loading={rename.isPending}>
+            Save
+          </Button>
+        </>
+      }
+    >
+      <form id={formId} onSubmit={submit} className="env-form-field">
+        <label className="env-form-field__label">
           <span>Name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
+          <input className="env-form-field__input" value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
         </label>
         {problem && (
-          <p role="alert" className="env-dialog__error">
+          <p role="alert" className="env-form-field__error">
             {problem}
           </p>
         )}
-        <div className="env-dialog__actions">
-          <button type="button" className="env-btn env-btn--plain" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="env-btn env-btn--primary" disabled={rename.isPending}>
-            Save
-          </button>
-        </div>
       </form>
-    </Modal>
+    </Dialog>
   )
 }
 
-function DeleteDialog({ env, onClose }: { env: HostOverview; onClose: () => void }) {
-  const titleId = useId()
+function DeleteDialog({ env, open, onClose, onDeleted }: { env: HostOverview; open: boolean; onClose: () => void; onDeleted?: () => void }) {
   const [problem, setProblem] = useState<string | null>(null)
   const remove = useDeleteHost()
 
   function confirm() {
     setProblem(null)
     remove.mutate(env.id, {
-      onSuccess: onClose,
+      onSuccess: () => {
+        onClose()
+        onDeleted?.()
+      },
       onError: (err) =>
         setProblem(
           err instanceof ApiError && err.code === 'HOST_NOT_FOUND'
@@ -102,41 +85,49 @@ function DeleteDialog({ env, onClose }: { env: HostOverview; onClose: () => void
   }
 
   return (
-    <Modal title="Delete environment" titleId={titleId} onClose={onClose}>
-      <p className="env-dialog__text">
-        Delete <strong>{env.name}</strong>? Its deployments are removed from Shipir as well. Containers already running on the Docker host are not touched.
-      </p>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={(next) => !next && onClose()}
+      title="Delete environment"
+      description={`Delete ${env.name}? Its deployments are removed from Shipir as well. Containers already running on the Docker host are not touched.`}
+      confirmLabel="Delete"
+      danger
+      loading={remove.isPending}
+      onConfirm={confirm}
+    >
       {problem && (
-        <p role="alert" className="env-dialog__error">
+        <p role="alert" className="env-form-field__error">
           {problem}
         </p>
       )}
-      <div className="env-dialog__actions">
-        <button type="button" className="env-btn env-btn--plain" onClick={onClose}>
-          Cancel
-        </button>
-        <button type="button" className="env-btn env-btn--danger" onClick={confirm} disabled={remove.isPending}>
-          Delete
-        </button>
-      </div>
-    </Modal>
+    </ConfirmDialog>
   )
 }
 
-/** Rename and delete buttons for one overview row (ADMIN only; the caller decides). */
-export function EnvironmentActions({ env }: { env: HostOverview }) {
+/**
+ * Overflow menu with Rename and Delete (ADMIN only; the caller decides). Dialogs stay mounted so
+ * they animate out; `session` gives every opening fresh form state.
+ */
+export function EnvironmentActions({ env, onDeleted }: { env: HostOverview; onDeleted?: () => void }) {
   const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null)
+  const [session, setSession] = useState(0)
+  const show = (which: 'rename' | 'delete') => {
+    setSession((s) => s + 1)
+    setDialog(which)
+  }
   const close = () => setDialog(null)
   return (
-    <div className="env-row__actions">
-      <button type="button" className="env-btn env-btn--plain" aria-label={`Rename ${env.name}`} onClick={() => setDialog('rename')}>
-        Rename
-      </button>
-      <button type="button" className="env-btn env-btn--plain env-btn--danger-text" aria-label={`Delete ${env.name}`} onClick={() => setDialog('delete')}>
-        Delete
-      </button>
-      {dialog === 'rename' && <RenameDialog env={env} onClose={close} />}
-      {dialog === 'delete' && <DeleteDialog env={env} onClose={close} />}
-    </div>
+    <>
+      <Menu
+        trigger={<IconButton icon={MoreHorizontal} aria-label={`Actions for ${env.name}`} />}
+        items={[
+          { label: 'Rename', icon: <Pencil size={16} strokeWidth={1.75} />, onSelect: () => show('rename') },
+          { type: 'separator' },
+          { label: 'Delete', icon: <Trash2 size={16} strokeWidth={1.75} />, danger: true, onSelect: () => show('delete') },
+        ]}
+      />
+      <RenameDialog key={`rename-${session}`} env={env} open={dialog === 'rename'} onClose={close} />
+      <DeleteDialog key={`delete-${session}`} env={env} open={dialog === 'delete'} onClose={close} onDeleted={onDeleted} />
+    </>
   )
 }

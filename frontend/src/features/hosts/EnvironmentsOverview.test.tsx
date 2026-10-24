@@ -104,7 +104,7 @@ describe('EnvironmentsOverview', () => {
     const dialog = screen.getByRole('dialog', { name: 'Add environment' })
     expect(within(dialog).getByRole('radio', { name: /local/i })).toBeInTheDocument()
     fireEvent.keyDown(dialog, { key: 'Escape' })
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
   it('empty state: admin can add, others are pointed to an admin', async () => {

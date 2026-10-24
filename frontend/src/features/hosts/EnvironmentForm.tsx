@@ -1,5 +1,7 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { ApiError } from '../../shared/api/client.ts'
+import { Check } from 'lucide-react'
+import { Button } from '../../shared/ui/index.ts'
 import {
   useCreateHost,
   useTestConnection,
@@ -198,7 +200,7 @@ export function EnvironmentForm({ onCreated, submitLabel = 'Add environment' }: 
               <span className="env-form__file-button">
                 {pems[key] ? (
                   <>
-                    <span aria-hidden="true">✓</span>
+                    <Check size={16} strokeWidth={1.75} aria-hidden="true" className="env-form__check" />
                     <span>{pems[key].name}</span>
                   </>
                 ) : (
@@ -232,17 +234,12 @@ export function EnvironmentForm({ onCreated, submitLabel = 'Add environment' }: 
       </div>
 
       <div className="env-form__actions">
-        <button
-          className="env-form__button env-form__button--secondary"
-          type="button"
-          disabled={!connectable || testConnection.isPending}
-          onClick={() => testConnection.mutate(buildRequest())}
-        >
+        <Button disabled={!connectable || testConnection.isPending} onClick={() => testConnection.mutate(buildRequest())}>
           Test connection
-        </button>
-        <button className="env-form__button" type="submit" disabled={!canSubmit}>
+        </Button>
+        <Button variant="primary" type="submit" disabled={!canSubmit} loading={createHost.isPending}>
           {createHost.isPending ? 'Adding…' : submitLabel}
-        </button>
+        </Button>
       </div>
     </form>
   )

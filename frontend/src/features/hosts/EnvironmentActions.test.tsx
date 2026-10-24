@@ -47,19 +47,27 @@ function renderOverview(role: 'ADMIN' | 'OPERATOR' | 'VIEWER', mutation?: (path:
   )
 }
 
+async function choose(item: 'Rename' | 'Delete') {
+  const trigger = await screen.findByRole('button', { name: 'Actions for Local' })
+  trigger.focus()
+  fireEvent.keyDown(trigger, { key: 'Enter' })
+  fireEvent.click(await screen.findByRole('menuitem', { name: item }))
+}
+
+const gone = () => waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+
 const mutationCalls = () => apiFetchMock.mock.calls.filter(([path]) => path !== '/hosts/overview')
 
 describe('environment row actions', () => {
   it.each(['OPERATOR', 'VIEWER'] as const)('are hidden for %s', async (role) => {
     renderOverview(role)
     await screen.findByText('Local')
-    expect(screen.queryByRole('button', { name: /rename/i })).toBeNull()
-    expect(screen.queryByRole('button', { name: /delete/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /actions for/i })).toBeNull()
   })
 
   it('rename PATCHes the trimmed name and closes the dialog', async () => {
     renderOverview('ADMIN')
-    fireEvent.click(await screen.findByRole('button', { name: 'Rename Local' }))
+    await choose('Rename')
     const dialog = screen.getByRole('dialog', { name: 'Rename environment' })
     const input = within(dialog).getByLabelText('Name')
     expect(input).toHaveValue('Local')
@@ -72,15 +80,15 @@ describe('environment row actions', () => {
 
   it('rename cancel sends nothing', async () => {
     renderOverview('ADMIN')
-    fireEvent.click(await screen.findByRole('button', { name: 'Rename Local' }))
+    await choose('Rename')
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.queryByRole('dialog')).toBeNull()
+    await gone()
     expect(mutationCalls()).toEqual([])
   })
 
   it('rename rejects an empty name without calling the API', async () => {
     renderOverview('ADMIN')
-    fireEvent.click(await screen.findByRole('button', { name: 'Rename Local' }))
+    await choose('Rename')
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: '   ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByRole('alert')).toHaveTextContent(/1 to 100/i)
@@ -89,7 +97,7 @@ describe('environment row actions', () => {
 
   it('shows HOST_NAME_TAKEN inline and keeps the dialog open', async () => {
     renderOverview('ADMIN', () => Promise.reject(new ApiError(409, '', 'HOST_NAME_TAKEN')))
-    fireEvent.click(await screen.findByRole('button', { name: 'Rename Local' }))
+    await choose('Rename')
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Taken' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByRole('alert')).toHaveTextContent(/name is already in use/i)
@@ -98,7 +106,7 @@ describe('environment row actions', () => {
 
   it('delete names the environment, warns about deployments and DELETEs on confirm', async () => {
     renderOverview('ADMIN')
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete Local' }))
+    await choose('Delete')
     const dialog = screen.getByRole('dialog', { name: 'Delete environment' })
     expect(dialog).toHaveTextContent('Local')
     expect(dialog).toHaveTextContent(/deployments/i)
@@ -111,18 +119,18 @@ describe('environment row actions', () => {
 
   it('delete cancel and Escape do nothing', async () => {
     renderOverview('ADMIN')
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete Local' }))
+    await choose('Delete')
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.queryByRole('dialog')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Delete Local' }))
+    await gone()
+    await choose('Delete')
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
-    expect(screen.queryByRole('dialog')).toBeNull()
+    await gone()
     expect(mutationCalls()).toEqual([])
   })
 
   it('delete failure (404) is shown in the dialog', async () => {
     renderOverview('ADMIN', () => Promise.reject(new ApiError(404, '', 'HOST_NOT_FOUND')))
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete Local' }))
+    await choose('Delete')
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
     expect(await screen.findByRole('alert')).toHaveTextContent(/no longer exists/i)
   })
