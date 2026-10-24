@@ -51,3 +51,24 @@ test('operator cannot reach the page', async ({ page, api }) => {
   await page.goto('/settings/users')
   await expect(page.getByText('You are not allowed to view this page.')).toBeVisible()
 })
+
+test('admin grants an operator access to an environment and a deployment', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', { body: me('ADMIN') })
+  api.mock('GET', '/api/users', { body: users })
+  api.mock('GET', '/api/hosts', {
+    body: [{ id: 'h1', name: 'prod', connectionType: 'LOCAL', host: null, port: null, tls: false, createdAt: '2026-10-01T10:00:00Z' }],
+  })
+  api.mock('GET', '/api/hosts/h1/managed-deployments', {
+    body: [{ id: 'd1', name: 'web', status: 'RUNNING', source: 'FILE', lastDeployedAt: null, createdAt: '2026-10-01T10:00:00Z' }],
+  })
+  api.mock('GET', '/api/users/u2/permissions', { body: { grants: [] } })
+  api.mock('PUT', '/api/users/u2/permissions', { body: { grants: [{ deploymentId: 'd1', deploymentHostId: 'h1', level: 'OPERATE' }] } })
+  await page.goto('/settings/users')
+  await expect(page.getByRole('button', { name: 'Access for u' })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Access for anna' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Access to web').selectOption('OPERATE')
+  await dialog.getByRole('button', { name: 'Save access' }).click()
+  await expect(dialog).toHaveCount(0)
+})

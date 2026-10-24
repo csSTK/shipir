@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import { ApiError } from '../../shared/api/client.ts'
 import {
   useChangeUserRole,
@@ -11,6 +11,8 @@ import {
   type OneTimePassword,
   type UserRole,
 } from './api.ts'
+import { Modal } from './UsersModal.tsx'
+import { UserAccessDialog } from './UserAccessDialog.tsx'
 import './UsersSettingsPage.css'
 
 const ROLES: UserRole[] = ['ADMIN', 'OPERATOR', 'VIEWER']
@@ -40,33 +42,6 @@ function errorMessage(error: unknown, fallback: string): string {
     if (error.status === 400) return 'Check the entered values.'
   }
   return fallback
-}
-
-function Modal({ title, titleId, onClose, children }: { title: string; titleId: string; onClose: () => void; children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null
-    ref.current?.focus()
-    return () => previous?.focus()
-  }, [])
-  return (
-    <div className="us-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div
-        ref={ref}
-        className="us-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={(e) => e.key === 'Escape' && onClose()}
-      >
-        <h2 id={titleId} className="us-dialog__title">
-          {title}
-        </h2>
-        {children}
-      </div>
-    </div>
-  )
 }
 
 /** Shown once after create or reset; the password cannot be retrieved afterwards. */
@@ -198,7 +173,7 @@ function ConfirmDialog(props: {
 
 type DialogState =
   | { kind: 'create' }
-  | { kind: 'reset' | 'delete'; user: ManagedUser }
+  | { kind: 'reset' | 'delete' | 'access'; user: ManagedUser }
   | { kind: 'password'; result: OneTimePassword }
   | null
 
@@ -288,6 +263,11 @@ export function UsersSettingsPage({ currentUsername }: { currentUsername: string
                       </option>
                     ))}
                   </select>
+                  {u.role !== 'ADMIN' && (
+                    <button type="button" className="us-btn" aria-label={`Access for ${u.username}`} onClick={() => open({ kind: 'access', user: u })}>
+                      Access
+                    </button>
+                  )}
                   {!self && (
                     <>
                       <button
@@ -314,6 +294,7 @@ export function UsersSettingsPage({ currentUsername }: { currentUsername: string
         </ul>
       )}
       {dialog?.kind === 'create' && <CreateDialog onClose={close} onCreated={(result) => open({ kind: 'password', result })} />}
+      {dialog?.kind === 'access' && <UserAccessDialog user={dialog.user} onClose={close} />}
       {dialog?.kind === 'password' && <PasswordDialog result={dialog.result} onClose={close} />}
       {dialog?.kind === 'reset' && (
         <ConfirmDialog

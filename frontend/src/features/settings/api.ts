@@ -353,6 +353,42 @@ export interface ManagedUser {
   disabledAt: string | null
 }
 
+export type PermissionLevel = 'VIEW' | 'OPERATE'
+
+/** Host grant: `hostId` only. Deployment grant: `deploymentId` + `deploymentHostId`. */
+export interface PermissionGrant {
+  hostId?: string | null
+  deploymentId?: string | null
+  deploymentHostId?: string | null
+  level: PermissionLevel
+}
+
+export interface PermissionGrantInput {
+  hostId?: string
+  deploymentId?: string
+  level: PermissionLevel
+}
+
+const permissionsPath = (userId: string) => `/users/${userId}/permissions`
+
+export function useUserPermissions(userId: string) {
+  return useQuery({
+    queryKey: [...USERS_KEY, userId, 'permissions'],
+    queryFn: () => apiFetch<{ grants: PermissionGrant[] }>(permissionsPath(userId)),
+    gcTime: 0,
+  })
+}
+
+/** Replaces the user's full grant set; an empty list revokes everything. */
+export function useSaveUserPermissions() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, grants }: { id: string; grants: PermissionGrantInput[] }) =>
+      apiFetch<{ grants: PermissionGrant[] }>(permissionsPath(id), { method: 'PUT', body: { grants } }),
+    onSuccess: (_data, { id }) => qc.invalidateQueries({ queryKey: [...USERS_KEY, id, 'permissions'] }),
+  })
+}
+
 /** Returned once on create and on password reset; never retrievable again. */
 export interface OneTimePassword {
   id: string

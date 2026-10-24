@@ -1,0 +1,36 @@
+.ua-hosts,
+.ua-deployments {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ua-hosts {
+  margin: 12px 0;
+  max-height: 50vh;
+  overflow: auto;
+}
+
+.ua-host {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border-radius: 12px;
+}
+
+.ua-deployments {
+  padding-left: 12px;
+}
+
+.ua-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}

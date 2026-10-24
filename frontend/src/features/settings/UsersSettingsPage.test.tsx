@@ -143,4 +143,79 @@ describe('UsersSettingsPage', () => {
     expect((await screen.findByRole('alert')).textContent).toMatch(/recorded activity/i)
     expect(calls('DELETE')[0][0]).toBe('/users/u2')
   })
+
+  describe('access', () => {
+    const host = { id: 'h1', name: 'prod', connectionType: 'LOCAL', host: null, port: null, tls: false, createdAt: '2026-10-01T10:00:00Z' }
+    const dep = { id: 'd1', name: 'web', status: 'RUNNING', source: 'FILE', lastDeployedAt: null, createdAt: '2026-10-01T10:00:00Z' }
+    function access(initial: unknown[]) {
+      renderPage((path, method) => {
+        if (path === '/users/u2/permissions') return method === 'PUT' ? { grants: [] } : { grants: initial }
+        if (path === '/hosts') return [host]
+        if (path === '/hosts/h1/managed-deployments') return [dep]
+        return undefined
+      })
+    }
+    const put = () => calls('PUT').find(([p]) => p === '/users/u2/permissions')
+
+    it('hides the Access action for admins', async () => {
+      access([])
+      await screen.findByText('anna')
+      expect(screen.queryByRole('button', { name: 'Access for root' })).toBeNull()
+      expect(screen.getByRole('button', { name: 'Access for anna' })).toBeTruthy()
+    })
+
+    it('grants host and deployment levels and saves them via PUT', async () => {
+      access([])
+      await screen.findByText('anna')
+      fireEvent.click(screen.getByRole('button', { name: 'Access for anna' }))
+      const dialog = await screen.findByRole('dialog')
+      fireEvent.change(await within(dialog).findByLabelText('Access to web'), { target: { value: 'OPERATE' } })
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Save access' }))
+      await waitFor(() => expect(put()).toBeTruthy())
+      expect(put()![1]).toMatchObject({ body: { grants: [{ deploymentId: 'd1', level: 'OPERATE' }] } })
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    })
+
+    it('shows existing grants, implies deployments under a host grant and revokes with an empty set', async () => {
+      access([{ hostId: 'h1', deploymentId: null, deploymentHostId: null, level: 'VIEW' }])
+      await screen.findByText('anna')
+      fireEvent.click(screen.getByRole('button', { name: 'Access for anna' }))
+      const dialog = await screen.findByRole('dialog')
+      const hostSelect = (await within(dialog).findByLabelText('Access to prod')) as HTMLSelectElement
+      expect(hostSelect.value).toBe('VIEW')
+      expect(((await within(dialog).findByLabelText('Access to web')) as HTMLSelectElement).disabled).toBe(true)
+      fireEvent.change(hostSelect, { target: { value: 'NONE' } })
+      expect((within(dialog).getByLabelText('Access to web') as HTMLSelectElement).disabled).toBe(false)
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Save access' }))
+      await waitFor(() => expect(put()).toBeTruthy())
+      expect(put()![1]).toMatchObject({ body: { grants: [] } })
+    })
+
+    it('saves a host grant', async () => {
+      access([])
+      await screen.findByText('anna')
+      fireEvent.click(screen.getByRole('button', { name: 'Access for anna' }))
+      const dialog = await screen.findByRole('dialog')
+      fireEvent.change(await within(dialog).findByLabelText('Access to prod'), { target: { value: 'OPERATE' } })
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Save access' }))
+      await waitFor(() => expect(put()).toBeTruthy())
+      expect(put()![1]).toMatchObject({ body: { grants: [{ hostId: 'h1', level: 'OPERATE' }] } })
+    })
+
+    it('mentions the view cap for viewers and shows server errors inline', async () => {
+      renderPage((path, method) => {
+        if (path === '/users/u3/permissions') return method === 'PUT' ? new ApiError(400, 'x', 'UNKNOWN_HOST') : { grants: [] }
+        if (path === '/hosts') return [host]
+        if (path === '/hosts/h1/managed-deployments') return []
+        return undefined
+      })
+      await screen.findByText('bob')
+      fireEvent.click(screen.getByRole('button', { name: 'Access for bob' }))
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getByText(/limited to view/i)).toBeTruthy()
+      fireEvent.change(await within(dialog).findByLabelText('Access to prod'), { target: { value: 'VIEW' } })
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Save access' }))
+      expect((await within(dialog).findByRole('alert')).textContent).toMatch(/no longer exists/i)
+    })
+  })
 })
