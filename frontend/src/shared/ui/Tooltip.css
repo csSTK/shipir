@@ -1,0 +1,17 @@
+.ui-tooltip {
+  z-index: var(--z-dropdown);
+  max-width: 18rem;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-leading);
+  box-shadow: var(--shadow-md);
+  animation: ui-tooltip-in var(--duration-fast) var(--ease-out);
+}
+@keyframes ui-tooltip-in {
+  from {
+    opacity: 0;
+  }
+}

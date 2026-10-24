@@ -1,0 +1,30 @@
+.ui-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-7) var(--space-5);
+  text-align: center;
+}
+.ui-empty__icon {
+  display: inline-flex;
+  padding: var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-text);
+}
+.ui-empty__title {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-title-size);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--text-title-tracking);
+}
+.ui-empty__desc {
+  margin: 0;
+  max-width: 28rem;
+  color: var(--color-text-muted);
+  font-size: var(--text-body-size);
+}
+.ui-empty__action {
+  margin-top: var(--space-3);
+}

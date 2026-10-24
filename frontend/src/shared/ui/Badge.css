@@ -1,0 +1,59 @@
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-leading);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+.ui-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-pill);
+  flex: none;
+}
+.ui-badge--ok {
+  background: var(--color-ok-soft);
+  color: var(--color-ok);
+}
+.ui-dot--ok {
+  background: var(--color-ok-solid);
+}
+.ui-badge--warn {
+  background: var(--color-warn-soft);
+  color: var(--color-warn);
+}
+.ui-dot--warn {
+  background: var(--color-warn-solid);
+}
+.ui-badge--bad {
+  background: var(--color-bad-soft);
+  color: var(--color-bad);
+}
+.ui-dot--bad {
+  background: var(--color-bad-solid);
+}
+.ui-badge--info {
+  background: var(--color-info-soft);
+  color: var(--color-info);
+}
+.ui-dot--info {
+  background: var(--color-info-solid);
+}
+.ui-badge--accent {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-text);
+}
+.ui-dot--accent {
+  background: var(--color-accent);
+}
+.ui-badge--muted {
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+}
+.ui-dot--muted {
+  background: var(--color-text-subtle);
+}
