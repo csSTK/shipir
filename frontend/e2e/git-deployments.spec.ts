@@ -48,6 +48,7 @@ function mockCommon(api: ApiMock, role: string) {
   api.mock('GET', BASE, { body: [] })
   api.mock('GET', `${BASE}/s1`, { body: deployment })
   api.mock('GET', `${BASE}/s1/versions`, { body: versions })
+  api.mock('GET', `${BASE}/s1/files`, { body: [] })
   api.mock('GET', '/api/git/credentials', {
     body: [{ id: 'c1', name: 'GitHub bot', username: 'bot', tokenHint: '…abcd', createdAt: '', updatedAt: '' }],
   })

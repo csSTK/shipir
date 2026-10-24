@@ -18,6 +18,7 @@ import {
 import { ConfirmDialog } from './ConfirmDialog.tsx'
 import { DeploymentRunPanel, type StartedRun } from './DeploymentRunPanel.tsx'
 import { GitSourcePanel } from './GitSourcePanel.tsx'
+import { ConfigFilesPanel } from './config-files/index.ts'
 import { DeploymentContentPanel } from './DeploymentContentPanel.tsx'
 import { describeDeploymentError } from './deploymentErrors.ts'
 import './DeploymentUi.css'
@@ -195,6 +196,8 @@ export function DeploymentDetailPage() {
       {data.git && <GitSourcePanel key={`${data.git.autoUpdateEnabled}-${data.git.autoUpdateIntervalSeconds}`} deploymentId={deploymentId} hostId={hostId} git={data.git} canWrite={canWrite} />}
 
       <DeploymentContentPanel deployment={data} hostId={hostId} canWrite={canWrite} />
+
+      <ConfigFilesPanel hostId={hostId} deploymentId={deploymentId} canWrite={canWrite} />
 
       <div className="sd-panel">
         <h3 className="sd-panel__title">Versions</h3>

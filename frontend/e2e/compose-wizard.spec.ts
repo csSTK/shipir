@@ -31,6 +31,7 @@ test('operator builds a two-service deployment in the wizard, previews it and cr
   api.mock('POST', BASE, { status: 201, body: created })
   api.mock('GET', `${BASE}/s1`, { body: created })
   api.mock('GET', `${BASE}/s1/versions`, { body: [] })
+  api.mock('GET', `${BASE}/s1/files`, { body: [] })
 
   await page.goto('/environments/a/deployments')
   await page.getByRole('button', { name: 'Add deployment' }).click()

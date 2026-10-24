@@ -62,6 +62,7 @@ function serve(role: string, overrides: Record<string, Handler> = {}, detail: un
     }
     if (path === `${BASE}/s1`) return Promise.resolve(detail)
     if (path === `${BASE}/s1/versions`) return Promise.resolve(versions)
+    if (path.startsWith(`${BASE}/s1/files`)) return Promise.resolve([])
     return Promise.reject(new ApiError(404, 'x', 'NOT_FOUND'))
   })
 }

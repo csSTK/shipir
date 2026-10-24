@@ -39,16 +39,20 @@ export interface MonacoYamlEditorProps {
   readOnly?: boolean
   label: string
   height: string
+  /** Monaco language id; default `yaml` (with the Compose schema). */
+  language?: string
+  /** Model path; default `compose.yaml`. */
+  path?: string
 }
 
-export default function MonacoYamlEditor({ value, onChange, readOnly, label, height }: MonacoYamlEditorProps) {
+export default function MonacoYamlEditor({ value, onChange, readOnly, label, height, language = 'yaml', path = 'compose.yaml' }: MonacoYamlEditorProps) {
   const dark = useSyncExternalStore(subscribeDark, () => darkQuery?.matches ?? false)
   const reducedMotion = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
   return (
     <Editor
       height={height}
-      language="yaml"
-      path="compose.yaml"
+      language={language}
+      path={path}
       theme={dark ? 'vs-dark' : 'light'}
       value={value}
       beforeMount={configureOnce}
