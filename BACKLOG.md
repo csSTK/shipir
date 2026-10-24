@@ -19,4 +19,4 @@ Features Portainer has that Shipir does not, and that are not planned as beads y
 
 ## Not planned (out of scope)
 
-Swarm and Kubernetes, edge/remote agent (SaaS control plane), OAuth/LDAP, teams, Docker secrets/configs.
+Swarm and Kubernetes, edge/remote agent (SaaS control plane), LDAP, SAML, Docker secrets/configs. (OIDC, teams and 2FA are planned: shipr-68v, shipr-b6r, shipr-6lk.)
