@@ -13,7 +13,7 @@ This is a learning and portfolio project focused on Java backend development. Th
 - **Containers:** list, start, stop, inspect and view stats, across one or more Docker hosts.
 - **Hosts:** manage multiple Docker hosts (local Unix socket or remote TCP with TLS), with health checks.
 - **Deployments (Compose projects):**
-  - Create deployments with a form wizard that generates the YAML, or write it yourself in an advanced editor with schema validation.
+  - Create deployments from a bundled app template (nginx, postgres, wordpress, ...), with a form wizard that generates the YAML, or write it yourself in an advanced editor with schema validation.
   - Deploy, stop and pull, with live output.
   - Every deploy is versioned, so you can see history and roll back.
   - Environment variables per deployment, stored encrypted.
