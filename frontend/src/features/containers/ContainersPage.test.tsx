@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../shared/api/client.ts'
@@ -12,8 +12,18 @@ vi.mock('../../shared/api/client.ts', async (importActual) => ({
   apiFetch: (...args: unknown[]) => apiFetch(...args),
 }))
 
+let statsHandlers: { onMessage: (body: string) => void } | null = null
+const statsUnsubscribe = vi.fn()
+vi.mock('../../shared/realtime/stomp.ts', () => ({
+  subscribeToTopic: (_dest: string, h: { onMessage: (body: string) => void }) => {
+    statsHandlers = h
+    return statsUnsubscribe
+  },
+}))
+
 afterEach(() => {
   cleanup()
+  statsUnsubscribe.mockReset()
   apiFetch.mockReset()
 })
 
@@ -33,7 +43,7 @@ const containers = [
 
 function renderAt(url: string, role = 'OPERATOR') {
   apiFetchRole = role
-  render(
+  return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={[url]}>
         <Routes>
@@ -173,5 +183,23 @@ describe('ContainersPage', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'Stop container web' }))
       expect(await screen.findByRole('alert')).toHaveTextContent('Could not reach the Docker host.')
     })
+  })
+
+  it('shows live CPU and memory with a sparkline for running containers and dashes otherwise', async () => {
+    apiFetch.mockResolvedValue(containers)
+    const { unmount } = renderAt('/environments/h1/containers')
+    await screen.findByText('nginx:1')
+    const sample = (cpu: number) => ({ containerId: '1', cpu, memUsed: 64 * 1024 * 1024, memLimit: 512 * 1024 * 1024, netRx: 0, netTx: 0, blkRead: 0, blkWrite: 0 })
+    act(() => statsHandlers!.onMessage(JSON.stringify({ seq: 1, samples: [sample(10)] })))
+    act(() => statsHandlers!.onMessage(JSON.stringify({ seq: 2, samples: [sample(12.34)] })))
+    const web = screen.getByRole('row', { name: /web/ })
+    expect(within(web).getByText('12.3%')).toBeInTheDocument()
+    expect(within(web).getByText('64 MiB')).toBeInTheDocument()
+    expect(within(web).getByRole('img', { name: 'CPU history of web' })).toBeInTheDocument()
+    const api = screen.getByRole('row', { name: /api/ })
+    expect(within(api).queryByRole('img')).not.toBeInTheDocument()
+    expect(within(api).getAllByText('–').length).toBeGreaterThanOrEqual(2)
+    unmount()
+    expect(statsUnsubscribe).toHaveBeenCalled()
   })
 })

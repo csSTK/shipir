@@ -4,8 +4,9 @@ import { useCurrentUser } from '../auth/index.ts'
 import { useDeployments } from '../deployments/api.ts'
 import { deleteColumn } from '../hosts/deleteColumn.tsx'
 import { DeleteResourceDialog } from '../hosts/DeleteResourceDialog.tsx'
-import { describeResourceError } from '../hosts/format.ts'
-import { Badge, ResourceTable, type ResourceColumn } from '../../shared/ui/index.ts'
+import { describeResourceError, formatSize } from '../hosts/format.ts'
+import { useContainerStats, type StatSample } from '../../shared/realtime/useContainerStats.ts'
+import { Badge, ResourceTable, Sparkline, type ResourceColumn } from '../../shared/ui/index.ts'
 import { ConfirmDialog } from '../deployments/ConfirmDialog.tsx'
 import { actionsFor, describeActionError, useContainerAction, useContainers, useDeleteContainer, type Container, type ContainerAction } from './api.ts'
 import './ContainersPage.css'
@@ -69,6 +70,45 @@ const baseColumns: ResourceColumn<Container>[] = [
     render: (c) => dateFormat.format(new Date(c.created)),
   },
 ]
+
+const last = (samples: StatSample[] | undefined) => samples?.[samples.length - 1]
+
+/** Live CPU and memory columns; only running containers have samples, everything else shows a dash. */
+function statsColumns(series: Record<string, StatSample[]>): ResourceColumn<Container>[] {
+  return [
+    {
+      id: 'cpu',
+      header: 'CPU',
+      sortValue: (c) => last(series[c.id])?.cpu ?? -1,
+      render: (c) => {
+        const samples = series[c.id]
+        if (!samples) return '–'
+        return (
+          <span className="containers__stat">
+            <span className="containers__stat-value">{last(samples)!.cpu.toFixed(1)}%</span>
+            <Sparkline values={samples.map((s) => s.cpu)} max={100} label={`CPU history of ${c.name}`} />
+          </span>
+        )
+      },
+    },
+    {
+      id: 'memory',
+      header: 'Memory',
+      sortValue: (c) => last(series[c.id])?.memUsed ?? -1,
+      render: (c) => {
+        const samples = series[c.id]
+        if (!samples) return '–'
+        const now = last(samples)!
+        return (
+          <span className="containers__stat" title={now.memLimit > 0 ? `of ${formatSize(now.memLimit)}` : undefined}>
+            <span className="containers__stat-value">{formatSize(now.memUsed)}</span>
+            <Sparkline values={samples.map((s) => s.memUsed)} max={now.memLimit} label={`Memory history of ${c.name}`} />
+          </span>
+        )
+      },
+    },
+  ]
+}
 
 /** Quick link to the live log, also reachable from the details page. */
 const logsColumn: ResourceColumn<Container> = {
@@ -173,9 +213,11 @@ export function ContainersPage() {
     )
   }
   const isAdmin = user?.role === 'ADMIN'
+  const { series } = useContainerStats(id)
+  const withStats = [...baseColumns.slice(0, 4), ...statsColumns(series), ...baseColumns.slice(4)]
   const tableColumns = canWrite
-    ? [...baseColumns, logsColumn, ...(isAdmin ? [consoleColumn] : []), actionColumn(pending, (c, a) => (a === 'kill' ? setKillTarget(c) : run(c, a))), deleteColumn<Container>('container', (c) => c.name, setTarget)]
-    : [...baseColumns, logsColumn]
+    ? [...withStats, logsColumn, ...(isAdmin ? [consoleColumn] : []), actionColumn(pending, (c, a) => (a === 'kill' ? setKillTarget(c) : run(c, a))), deleteColumn<Container>('container', (c) => c.name, setTarget)]
+    : [...withStats, logsColumn]
 
   const rows = deployment ? data?.filter((c) => c.composeProject === deployment) : data
 

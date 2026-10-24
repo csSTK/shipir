@@ -39,7 +39,7 @@ async function mockBroker(page: Page) {
       const text = String(raw)
       if (text.startsWith('CONNECT') || text.startsWith('STOMP')) {
         ws.send(stompFrame('CONNECTED', { version: '1.2', 'heart-beat': '0,0' }))
-      } else if (text.startsWith('SUBSCRIBE')) {
+      } else if (text.startsWith('SUBSCRIBE') && text.includes('/events')) {
         const id = /^id:(.*)$/m.exec(text)?.[1] ?? '0'
         push = (body) => ws.send(stompFrame('MESSAGE', { subscription: id, destination: '/topic/hosts/a/events', 'message-id': String(Math.random()) }, JSON.stringify(body)))
       }

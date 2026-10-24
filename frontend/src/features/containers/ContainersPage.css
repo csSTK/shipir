@@ -68,3 +68,12 @@
   outline-offset: 2px;
   border-radius: 4px;
 }
+.containers__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.containers__stat-value {
+  min-width: 4.5rem;
+  font-variant-numeric: tabular-nums;
+}

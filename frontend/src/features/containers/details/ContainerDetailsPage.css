@@ -129,6 +129,27 @@
   overflow-wrap: anywhere;
   font-size: 0.8125rem;
 }
+.cdetails__metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 16px 24px;
+}
+.cdetails__metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.cdetails__metric-name {
+  font-size: 0.75rem;
+  opacity: 0.65;
+}
+.cdetails__metric-value {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
 @media (prefers-reduced-motion: reduce) {
   .cdetails__back,
   .cdetails__btn {

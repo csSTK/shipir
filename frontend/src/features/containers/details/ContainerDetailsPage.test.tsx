@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../shared/api/client.ts'
@@ -12,8 +12,19 @@ vi.mock('../../../shared/api/client.ts', async (importActual) => ({
   apiFetch: (...args: unknown[]) => apiFetch(...args),
 }))
 
+let statsHandlers: { onMessage: (body: string) => void } | null = null
+const statsUnsubscribe = vi.fn()
+vi.mock('../../../shared/realtime/stomp.ts', () => ({
+  subscribeToTopic: (_dest: string, h: { onMessage: (body: string) => void }) => {
+    statsHandlers = h
+    return statsUnsubscribe
+  },
+}))
+
 afterEach(() => {
   cleanup()
+  statsUnsubscribe.mockReset()
+  statsHandlers = null
   apiFetch.mockReset()
 })
 
@@ -129,5 +140,31 @@ describe('ContainerDetailsPage', () => {
     fail = false
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     expect(await screen.findByRole('heading', { name: 'web' })).toBeInTheDocument()
+  })
+
+  it('shows live resource usage of a running container and unsubscribes on unmount', async () => {
+    role = 'ADMIN'
+    renderPage(() => details)
+    await screen.findByRole('heading', { name: 'web' })
+    expect(screen.getByText('Waiting for the first sample…')).toBeInTheDocument()
+    const MiB = 1024 * 1024
+    const frame = (seq: number, cpu: number, netRx: number) => ({
+      seq,
+      samples: [{ containerId: 'c1', cpu, memUsed: 100 * MiB, memLimit: 512 * MiB, netRx, netTx: 0, blkRead: 0, blkWrite: 0 }],
+    })
+    act(() => statsHandlers!.onMessage(JSON.stringify(frame(1, 5, 0))))
+    act(() => statsHandlers!.onMessage(JSON.stringify(frame(2, 25.5, 4 * MiB))))
+    expect(screen.getByText('25.5%')).toBeInTheDocument()
+    expect(screen.getByText('100 MiB / 512 MiB')).toBeInTheDocument()
+    expect(screen.getByText('2 MiB/s')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'CPU history' })).toBeInTheDocument()
+  })
+
+  it('does not subscribe to stats for a stopped container', async () => {
+    role = 'ADMIN'
+    renderPage(() => ({ ...details, state: 'exited' }))
+    await screen.findByRole('heading', { name: 'web' })
+    expect(statsHandlers).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Resource usage' })).not.toBeInTheDocument()
   })
 })

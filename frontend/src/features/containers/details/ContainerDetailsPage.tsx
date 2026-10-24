@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Badge } from '../../../shared/ui/index.ts'
+import { useContainerStats, type StatSample } from '../../../shared/realtime/useContainerStats.ts'
+import { Badge, Sparkline } from '../../../shared/ui/index.ts'
+import { formatSize } from '../../hosts/format.ts'
 import { useCurrentUser } from '../../auth/index.ts'
 import { describeDetailsError, isNotFound, useContainerDetails, type ContainerDetails, type ContainerPort } from './api.ts'
 import './ContainerDetailsPage.css'
@@ -70,6 +72,60 @@ function Overview({ c }: { c: ContainerDetails }) {
             <li key={`${p.protocol}${p.containerPort}${p.hostIp}${p.hostPort}`}>{formatPort(p)}</li>
           ))}
         </ul>
+      )}
+    </Section>
+  )
+}
+
+/** Nominal frame interval of the stats topic; counters are turned into per-second rates with it. */
+const STATS_INTERVAL_S = 2
+
+/** Per-second rate between consecutive cumulative counters; a counter reset counts as 0. */
+function rates(samples: StatSample[], pick: (s: StatSample) => number): number[] {
+  return samples.slice(1).map((s, i) => Math.max(0, pick(s) - pick(samples[i])) / STATS_INTERVAL_S)
+}
+
+function Metric({ name, value, values, max }: { name: string; value: string; values: number[]; max?: number }) {
+  return (
+    <div className="cdetails__metric">
+      <span className="cdetails__metric-name">{name}</span>
+      <span className="cdetails__metric-value">{value}</span>
+      <Sparkline values={values} max={max} width={160} height={36} label={`${name} history`} />
+    </div>
+  )
+}
+
+/** Live resource usage of a running container, fed by the host stats topic. */
+function Stats({ hostId, containerId }: { hostId: string; containerId: string }) {
+  const { series, code } = useContainerStats(hostId)
+  const samples = series[containerId]
+  const now = samples?.[samples.length - 1]
+  const rate = (pick: (s: StatSample) => number) => {
+    const r = samples ? rates(samples, pick) : []
+    return { values: r, text: `${formatSize(r[r.length - 1] ?? 0)}/s` }
+  }
+  const rx = rate((s) => s.netRx)
+  const tx = rate((s) => s.netTx)
+  const read = rate((s) => s.blkRead)
+  const write = rate((s) => s.blkWrite)
+  return (
+    <Section title="Resource usage">
+      {!now ? (
+        <Empty>{code ? 'Live stats are currently unavailable.' : 'Waiting for the first sample…'}</Empty>
+      ) : (
+        <div className="cdetails__metrics">
+          <Metric name="CPU" value={`${now.cpu.toFixed(1)}%`} values={samples.map((s) => s.cpu)} max={100} />
+          <Metric
+            name="Memory"
+            value={now.memLimit > 0 ? `${formatSize(now.memUsed)} / ${formatSize(now.memLimit)}` : formatSize(now.memUsed)}
+            values={samples.map((s) => s.memUsed)}
+            max={now.memLimit}
+          />
+          <Metric name="Network in" value={rx.text} values={rx.values} />
+          <Metric name="Network out" value={tx.text} values={tx.values} />
+          <Metric name="Disk read" value={read.text} values={read.values} />
+          <Metric name="Disk write" value={write.text} values={write.values} />
+        </div>
       )}
     </Section>
   )
@@ -246,6 +302,7 @@ export function ContainerDetailsPage() {
             </nav>
           </header>
           <Overview c={c} />
+          {c.state === 'running' && <Stats hostId={hostId} containerId={c.id} />}
           <Env env={c.env} />
           <Mounts mounts={c.mounts} />
           <Networks networks={c.networks} />

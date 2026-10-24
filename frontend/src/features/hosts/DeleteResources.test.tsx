@@ -15,6 +15,13 @@ vi.mock('../../shared/api/client.ts', async (importActual) => ({
   apiFetch: (...args: unknown[]) => apiFetch(...args),
 }))
 
+const statsUnsubscribe = vi.fn()
+vi.mock('../../shared/realtime/stomp.ts', () => ({
+  subscribeToTopic: () => {
+    return statsUnsubscribe
+  },
+}))
+
 afterEach(() => {
   cleanup()
   apiFetch.mockReset()
