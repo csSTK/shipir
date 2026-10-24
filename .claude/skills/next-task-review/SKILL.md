@@ -22,7 +22,7 @@ Give the agent: the input above and these instructions.
    - every acceptance criterion is met and covered by a meaningful test
    - would it pass on the old code: for every new or changed test, would it also pass against the pre-change code? Judge from the diff, don't run it. Examples: asserting thread state after termination, or asserting only on mocks (`verify(...)` with no real outcome). Such a test is must-fix.
    - CLAUDE.md Working Rules, Security, Architecture and Testing rules (and `apple-design` + tokens for frontend UI)
-   - Code Map entries in CLAUDE.md match the added, moved or removed files
+   - Code Map entries in `docs/CODE_MAP.md` match the added, moved or removed files
    - no scope creep, no secrets in code, logs or tests
 3. **Read-only:** no Edit/Write, no commits, no `git add`/`stash`/`checkout`, no `bd` writes, no test or build runs that change files. Re-checking with read-only commands is fine.
 
@@ -43,7 +43,7 @@ Out-of-scope:
 
 ## Branch review (only with `--branch-review`)
 
-Run by `next-task-finish` before the push, once per run. Same reviewer, but the input is the whole branch: diff `origin/dev..HEAD` in `<WT>`, checked against the epic's (or all given beads') description and acceptance criteria as a whole: gaps between children, inconsistent behaviour, missing wiring or Code Map lines. Same checklist (including the would-pass-on-old-code test check) and same output format. One fix round only, no 3-round loop (see `next-task-finish`).
+Run by `next-task-finish` before the push, once per run. Same reviewer, but the input is the whole branch: diff `origin/dev..HEAD` in `<WT>`, checked against the epic's (or all given beads') description and acceptance criteria as a whole: gaps between children, inconsistent behaviour, missing wiring or `docs/CODE_MAP.md` lines. Same checklist (including the would-pass-on-old-code test check) and same output format. One fix round only, no 3-round loop (see `next-task-finish`).
 
 ## Loop (the orchestrator's side)
 

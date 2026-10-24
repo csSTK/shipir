@@ -23,7 +23,7 @@ Docs and bead closing happen **before** the push, so they're included in it.
    - Epic runs only: `bd close <epic> "<one line summary>"`, but only once every child is closed.
    - Beads that aren't done stay open, and the epic stays open too. Say so in the report.
 5. **Write documentation.** Keep it short, following the CLAUDE.md rule:
-   - Code Map: check that every added, moved or removed file has a correct one-line entry.
+   - Code Map (`docs/CODE_MAP.md`): check that every added, moved or removed file has a correct one-line entry.
    - README.md: update only if setup, commands or features visible to users changed.
    - CLAUDE.md: update Build & Test or the rules only if they changed.
    - HANDOFF.md: tick any decisions this run settled. Remove items that are now fully covered.

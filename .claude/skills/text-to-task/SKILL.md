@@ -11,7 +11,7 @@ Input: the text after the command (`$ARGUMENTS`), or the user's latest message i
 
 ## 1. Gather context (cheap, targeted)
 
-- Read CLAUDE.md: **Code Map**, Working Rules, Model Policy, Architecture, Security, Database & Flyway. Use the Code Map to find affected files; only open code if the map isn't enough.
+- Read CLAUDE.md: Working Rules, Model Policy, Architecture, Security, Database & Flyway. Grep `docs/CODE_MAP.md` to find affected files; only open code if the map isn't enough.
 - Read the open decisions in HANDOFF.md.
 - Run `bd list --status open` and check for existing epics/tasks that already cover the request. Extend or reference them instead of creating duplicates.
 

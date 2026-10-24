@@ -22,12 +22,12 @@ The **work set** is either an epic's children (`/next-task`) or the beads passed
 
 ## Part 2: Plan the implementation
 
-Use the Code Map in CLAUDE.md, plus the paths named in each child, to work out the **file set** each child will touch. Only read code where the map isn't enough.
+Grep `docs/CODE_MAP.md` (read only the parts you need), plus the paths named in each child, to work out the **file set** each child will touch. Only read code where the map isn't enough.
 
 Build **waves**:
 - Wave 1 holds the children with no open dependencies inside the epic. The next wave holds the children whose dependencies are all in earlier waves. Continue the same way.
 - Children in the same wave run in parallel only if their file sets don't overlap. Shared files count as overlapping: `pom.xml`, `package.json`, `application.yml`, `CLAUDE.md`, `README.md`. If two overlap, move one into the next wave.
-  - Exception: Code Map lines in CLAUDE.md. Tell parallel agents to edit only their own lines; you resolve conflicts while committing.
+  - Exception: Code Map lines in `docs/CODE_MAP.md`. Tell parallel agents to edit only their own lines; you resolve conflicts while committing.
 
 Show the plan to the user as a short table: wave, child, model, file set, plus the worktree path. Then continue without waiting, unless the plan surfaced a problem.
 
