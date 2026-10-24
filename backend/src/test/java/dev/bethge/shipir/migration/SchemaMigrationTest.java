@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V25 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V26 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To25Successfully() {
+    void flywayAppliedVersions1To26Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26");
     }
 
     @Test
@@ -1659,6 +1659,114 @@ class SchemaMigrationTest {
         assertThat(row.get("updated_by")).isNull();
     }
 
+    @Test
+    void oidcSettingsHasExpectedColumnsAndTypes() {
+        List<Map<String, Object>> columns = jdbc.queryForList("""
+                SELECT column_name, data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'oidc_settings'
+                """);
+        Map<String, Map<String, Object>> byName = columns.stream()
+                .collect(java.util.stream.Collectors.toMap(c -> (String) c.get("column_name"), c -> c));
+        assertThat(byName.keySet()).containsExactlyInAnyOrder(
+                "id", "issuer_url", "client_id", "client_secret_ciphertext", "client_secret_hint",
+                "scopes", "groups_claim", "role_mapping", "auto_provision", "local_login_enabled",
+                "updated_at", "updated_by");
+        assertThat(byName.get("client_secret_ciphertext").get("data_type")).isEqualTo("bytea");
+        assertThat(byName.get("client_secret_hint").get("data_type")).isEqualTo("character varying");
+        assertThat(byName.get("role_mapping").get("data_type")).isEqualTo("jsonb");
+        assertThat(byName.get("role_mapping").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("auto_provision").get("data_type")).isEqualTo("boolean");
+        assertThat(byName.get("local_login_enabled").get("data_type")).isEqualTo("boolean");
+        assertThat(byName.get("updated_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("updated_by").get("is_nullable")).isEqualTo("YES");
+    }
+
+    @Test
+    void oidcSettingsHasExactlyOneSeededRowWithoutProviderAndWithLocalLoginEnabled() {
+        List<Map<String, Object>> rows = jdbc.queryForList("""
+                SELECT id, issuer_url, client_id, client_secret_ciphertext, client_secret_hint, scopes,
+                       groups_claim, role_mapping::text AS role_mapping, auto_provision, local_login_enabled, updated_by
+                FROM oidc_settings
+                """);
+        assertThat(rows).hasSize(1);
+        Map<String, Object> row = rows.get(0);
+        assertThat(((Number) row.get("id")).intValue()).isEqualTo(1);
+        assertThat(row.get("issuer_url")).isNull();
+        assertThat(row.get("client_id")).isNull();
+        assertThat(row.get("client_secret_ciphertext")).isNull();
+        assertThat(row.get("client_secret_hint")).isNull();
+        assertThat(row.get("scopes")).isEqualTo("openid email profile");
+        assertThat(row.get("groups_claim")).isNull();
+        assertThat(row.get("role_mapping")).isEqualTo("{}");
+        assertThat(row.get("auto_provision")).isEqualTo(false);
+        assertThat(row.get("local_login_enabled")).isEqualTo(true);
+        assertThat(row.get("updated_by")).isNull();
+    }
+
+    @Test
+    void oidcSettingsSecondRowIsRejected() {
+        assertThatThrownBy(() -> jdbc.update("INSERT INTO oidc_settings (id) VALUES (2)"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("oidc_settings_id_check");
+    }
+
+    @Test
+    void deletingUserWhoUpdatedOidcSettingsSetsUpdatedByNull() {
+        UUID user = insertUser("alice");
+        jdbc.update("UPDATE oidc_settings SET updated_by = ? WHERE id = 1", user);
+        jdbc.update("DELETE FROM users WHERE id = ?", user);
+        assertThat(jdbc.queryForObject("SELECT updated_by FROM oidc_settings WHERE id = 1", UUID.class)).isNull();
+    }
+
+    @Test
+    void usersExternalIdentityColumnsAreNullableText() {
+        Map<String, Object> issuer = jdbc.queryForMap("""
+                SELECT data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'external_issuer'
+                """);
+        Map<String, Object> subject = jdbc.queryForMap("""
+                SELECT data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'external_subject'
+                """);
+        assertThat(issuer.get("data_type")).isEqualTo("character varying");
+        assertThat(issuer.get("is_nullable")).isEqualTo("YES");
+        assertThat(subject.get("data_type")).isEqualTo("character varying");
+        assertThat(subject.get("is_nullable")).isEqualTo("YES");
+    }
+
+    @Test
+    void localUsersWithoutExternalIdentityDoNotConflictWithEachOther() {
+        UUID alice = insertUser("alice");
+        UUID bob = insertUser("bob");
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM users WHERE id IN (?, ?) AND external_issuer IS NULL AND external_subject IS NULL",
+                Integer.class, alice, bob)).isEqualTo(2);
+    }
+
+    @Test
+    void sameExternalSubjectFromSameIssuerIsRejected() {
+        insertExternalUser("alice", "https://idp.example.com", "sub-1");
+        assertThatThrownBy(() -> insertExternalUser("bob", "https://idp.example.com", "sub-1"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("users_external_identity_key");
+    }
+
+    @Test
+    void sameExternalSubjectFromDifferentIssuerIsAccepted() {
+        insertExternalUser("alice", "https://idp.example.com", "sub-1");
+        insertExternalUser("bob", "https://other.example.com", "sub-1");
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM users WHERE external_subject = 'sub-1'", Integer.class)).isEqualTo(2);
+    }
+
+    @Test
+    void externalSubjectWithoutIssuerIsRejected() {
+        UUID user = insertUser("alice");
+        assertThatThrownBy(() -> jdbc.update("UPDATE users SET external_subject = 'sub-1' WHERE id = ?", user))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("users_external_identity_check");
+    }
+
     private UUID insertChatSession(UUID user) {
         return jdbc.queryForObject(
                 "INSERT INTO chat_sessions (user_id, title) VALUES (?, 'chat') RETURNING id", UUID.class, user);
@@ -1741,6 +1849,13 @@ class SchemaMigrationTest {
     private void insertVersion(UUID deployment, UUID creator) {
         jdbc.update("INSERT INTO deployment_versions (deployment_id, yaml_content, created_by) VALUES (?, 'services: {}', ?)",
                 deployment, creator);
+    }
+
+    private void insertExternalUser(String username, String issuer, String subject) {
+        jdbc.update("""
+                INSERT INTO users (username, password_hash, role, external_issuer, external_subject)
+                VALUES (?, 'hash', 'VIEWER', ?, ?)
+                """, username, issuer, subject);
     }
 
     private void insertPermission(UUID user, UUID host, UUID deployment, String level) {
