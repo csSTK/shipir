@@ -1,0 +1,317 @@
+[
+  {
+    "id": "nginx",
+    "name": "Nginx",
+    "description": "Static web server. Serves the files in ./html on port 8080.",
+    "logo": "nginx",
+    "env": [],
+    "spec": {
+      "services": [
+        {
+          "name": "web",
+          "image": "nginx:1.27-alpine",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 8080,
+              "container": 80,
+              "protocol": "tcp"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "./html",
+              "target": "/usr/share/nginx/html",
+              "readOnly": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "postgres",
+    "name": "PostgreSQL",
+    "description": "PostgreSQL 16 database with a named volume. Not published on the host; reach it from other containers on the same network.",
+    "logo": "postgres",
+    "env": [
+      {
+        "key": "POSTGRES_PASSWORD",
+        "description": "Superuser password",
+        "secret": true
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "db",
+          "image": "postgres:16-alpine",
+          "restart": "unless-stopped",
+          "environment": [
+            {
+              "key": "POSTGRES_USER",
+              "value": "postgres"
+            },
+            {
+              "key": "POSTGRES_PASSWORD",
+              "ref": "POSTGRES_PASSWORD"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "pgdata",
+              "target": "/var/lib/postgresql/data",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "pgdata",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "redis",
+    "name": "Redis",
+    "description": "Redis 7 with append-only persistence. Not published on the host.",
+    "logo": "redis",
+    "env": [],
+    "spec": {
+      "services": [
+        {
+          "name": "cache",
+          "image": "redis:7-alpine",
+          "command": [
+            "redis-server",
+            "--appendonly",
+            "yes"
+          ],
+          "restart": "unless-stopped",
+          "volumes": [
+            {
+              "source": "redisdata",
+              "target": "/data",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "redisdata",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "mariadb",
+    "name": "MariaDB",
+    "description": "MariaDB 11 database with a named volume and an initial database. Not published on the host.",
+    "logo": "mariadb",
+    "env": [
+      {
+        "key": "MARIADB_ROOT_PASSWORD",
+        "description": "Root password",
+        "secret": true
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "db",
+          "image": "mariadb:11",
+          "restart": "unless-stopped",
+          "environment": [
+            {
+              "key": "MARIADB_ROOT_PASSWORD",
+              "ref": "MARIADB_ROOT_PASSWORD"
+            },
+            {
+              "key": "MARIADB_DATABASE",
+              "value": "app"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "dbdata",
+              "target": "/var/lib/mysql",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "dbdata",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "wordpress",
+    "name": "WordPress",
+    "description": "WordPress with its own MariaDB database. Open port 8081 after the first deploy to finish the setup.",
+    "logo": "wordpress",
+    "env": [
+      {
+        "key": "DB_ROOT_PASSWORD",
+        "description": "MariaDB root password",
+        "secret": true
+      },
+      {
+        "key": "DB_PASSWORD",
+        "description": "Password of the WordPress database user",
+        "secret": true
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "web",
+          "image": "wordpress:6-apache",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 8081,
+              "container": 80,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "WORDPRESS_DB_HOST",
+              "value": "db"
+            },
+            {
+              "key": "WORDPRESS_DB_NAME",
+              "value": "wordpress"
+            },
+            {
+              "key": "WORDPRESS_DB_USER",
+              "value": "wordpress"
+            },
+            {
+              "key": "WORDPRESS_DB_PASSWORD",
+              "ref": "DB_PASSWORD"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "wpdata",
+              "target": "/var/www/html",
+              "readOnly": false
+            }
+          ],
+          "dependsOn": [
+            "db"
+          ]
+        },
+        {
+          "name": "db",
+          "image": "mariadb:11",
+          "restart": "unless-stopped",
+          "environment": [
+            {
+              "key": "MARIADB_ROOT_PASSWORD",
+              "ref": "DB_ROOT_PASSWORD"
+            },
+            {
+              "key": "MARIADB_DATABASE",
+              "value": "wordpress"
+            },
+            {
+              "key": "MARIADB_USER",
+              "value": "wordpress"
+            },
+            {
+              "key": "MARIADB_PASSWORD",
+              "ref": "DB_PASSWORD"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "dbdata",
+              "target": "/var/lib/mysql",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "wpdata",
+          "external": false
+        },
+        {
+          "name": "dbdata",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "uptime-kuma",
+    "name": "Uptime Kuma",
+    "description": "Self-hosted uptime monitoring with a status page. Open port 3001 after the first deploy.",
+    "logo": "uptime-kuma",
+    "env": [],
+    "spec": {
+      "services": [
+        {
+          "name": "kuma",
+          "image": "louislam/uptime-kuma:1",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 3001,
+              "container": 3001,
+              "protocol": "tcp"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "kuma-data",
+              "target": "/app/data",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "kuma-data",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "adminer",
+    "name": "Adminer",
+    "description": "Lightweight web UI for SQL databases. Open port 8082 and connect to your database from there.",
+    "logo": "adminer",
+    "env": [],
+    "spec": {
+      "services": [
+        {
+          "name": "adminer",
+          "image": "adminer:4",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 8082,
+              "container": 8080,
+              "protocol": "tcp"
+            }
+          ]
+        }
+      ]
+    }
+  }
+]
