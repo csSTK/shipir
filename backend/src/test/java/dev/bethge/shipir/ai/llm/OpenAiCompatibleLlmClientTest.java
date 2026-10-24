@@ -109,6 +109,38 @@ class OpenAiCompatibleLlmClientTest {
     }
 
     @Test
+    void stripsFormatAndAdditionalPropertiesFromToolSchemasAtEveryDepth() {
+        sse(delta("{\"content\":\"ok\"}"), "[DONE]");
+        Map<String, Object> schema = Map.of(
+                "type", "object",
+                "additionalProperties", false,
+                "required", List.of("id"),
+                "properties", Map.of(
+                        "id", Map.of("type", "string", "format", "uuid", "description", "the id"),
+                        "n", Map.of("type", "integer", "minimum", 1, "maximum", 5),
+                        "mode", Map.of("type", "string", "enum", List.of("a", "b")),
+                        "items", Map.of("type", "array", "items", Map.of(
+                                "type", "object", "additionalProperties", false,
+                                "properties", Map.of("x", Map.of("type", "string", "format", "date-time"))))));
+
+        client.chat(baseUrl(), "m", KEY, List.of(LlmMessage.user("q")),
+                List.of(new LlmToolDefinition("t", "d", schema)), t -> { });
+
+        JsonNode params = MAPPER.readTree(requestBody.get()).path("tools").get(0).path("function").path("parameters");
+        assertThat(params.toString()).doesNotContain("\"format\"").doesNotContain("additionalProperties");
+        assertThat(params.path("type").asString()).isEqualTo("object");
+        assertThat(params.path("required").get(0).asString()).isEqualTo("id");
+        assertThat(params.path("properties").path("id").path("description").asString()).isEqualTo("the id");
+        assertThat(params.path("properties").path("n").path("minimum").asInt()).isEqualTo(1);
+        assertThat(params.path("properties").path("n").path("maximum").asInt()).isEqualTo(5);
+        assertThat(params.path("properties").path("mode").path("enum").size()).isEqualTo(2);
+        assertThat(params.path("properties").path("items").path("items").path("properties").path("x")
+                .path("type").asString()).isEqualTo("string");
+        // source definition is untouched
+        assertThat(schema).containsKey("additionalProperties");
+    }
+
+    @Test
     void assemblesToolCallFromSplitArgumentChunks() {
         sse(delta("{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"list_containers\",\"arguments\":\"\"}}]}"),
                 delta("{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"host\"}}]}"),

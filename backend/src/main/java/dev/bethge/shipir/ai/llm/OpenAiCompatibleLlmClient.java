@@ -103,7 +103,7 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         body.put("messages", messages.stream().map(this::toWire).toList());
         if (tools != null && !tools.isEmpty()) {
             body.put("tools", tools.stream().map(t -> Map.of("type", "function", "function", Map.of(
-                    "name", t.name(), "description", t.description(), "parameters", t.parameters()))).toList());
+                    "name", t.name(), "description", t.description(), "parameters", sanitizeSchema(t.parameters())))).toList());
         }
         String json = mapper.writeValueAsString(body);
         return HttpRequest.newBuilder(uri)
@@ -113,6 +113,26 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
                 .header("Authorization", "Bearer " + apiKey)
                 .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8))
                 .build();
+    }
+
+    /** Providers such as Gemini reject these JSON Schema keywords; the tool definitions keep them for server-side validation. */
+    private static final java.util.Set<String> UNSUPPORTED_SCHEMA_KEYWORDS = java.util.Set.of("format", "additionalProperties");
+
+    /** Deep copy for the wire without unsupported keywords; the source maps are not modified. */
+    private static Object sanitizeSchema(Object node) {
+        if (node instanceof Map<?, ?> map) {
+            Map<String, Object> copy = new LinkedHashMap<>();
+            map.forEach((k, v) -> {
+                if (!UNSUPPORTED_SCHEMA_KEYWORDS.contains(String.valueOf(k))) {
+                    copy.put(String.valueOf(k), sanitizeSchema(v));
+                }
+            });
+            return copy;
+        }
+        if (node instanceof List<?> list) {
+            return list.stream().map(OpenAiCompatibleLlmClient::sanitizeSchema).toList();
+        }
+        return node;
     }
 
     private Map<String, Object> toWire(LlmMessage m) {
