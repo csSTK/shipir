@@ -15,7 +15,7 @@ Orchestrates one epic from branch to push. You coordinate; the implementer sub-a
 
 Each step lives in its own skill under `.claude/skills/`. Read that skill's `SKILL.md` and follow it. Stop and report to the user whenever a step says to stop. Don't skip ahead.
 
-1. **Branch:** `next-task-branch`. Creates `epic/<epic-id>-<slug>` from an up-to-date `dev`.
+1. **Branch:** `next-task-branch`. Creates `epic/<epic-id>-<slug>` from `origin/dev`, never from the current branch.
 2. **Check beads:** `next-task-plan`, part 1. Validates the epic and its children.
 3. **Dependencies:** `next-task-deps`. Installs packages and applies safe updates as their own commit.
 4. **Plan implementation:** `next-task-plan`, part 2. Orders the children into waves, with the model and file set for each.
