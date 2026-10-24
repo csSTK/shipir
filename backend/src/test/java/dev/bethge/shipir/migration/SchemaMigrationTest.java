@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V19 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V20 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -761,68 +761,140 @@ class SchemaMigrationTest {
     }
 
     @Test
-    void aiSettingsHasExpectedColumnsAndTypes() {
+    void aiSettingsKeepsOnlyGlobalSwitchAndActiveProvider() {
         List<Map<String, Object>> columns = jdbc.queryForList("""
-                SELECT column_name, data_type, is_nullable FROM information_schema.columns
+                SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns
                 WHERE table_schema = 'public' AND table_name = 'ai_settings'
                 """);
         Map<String, Map<String, Object>> byName = columns.stream()
                 .collect(java.util.stream.Collectors.toMap(c -> (String) c.get("column_name"), c -> c));
         assertThat(byName.keySet()).containsExactlyInAnyOrder(
-                "id", "base_url", "model", "api_key_ciphertext", "api_key_hint", "enabled", "updated_at", "updated_by");
+                "id", "enabled", "active_provider", "updated_at", "updated_by");
         assertThat(byName.get("id").get("data_type")).isEqualTo("smallint");
-        assertThat(byName.get("base_url").get("is_nullable")).isEqualTo("NO");
-        assertThat(byName.get("model").get("is_nullable")).isEqualTo("NO");
-        assertThat(byName.get("api_key_ciphertext").get("data_type")).isEqualTo("bytea");
-        assertThat(byName.get("api_key_ciphertext").get("is_nullable")).isEqualTo("YES");
-        assertThat(byName.get("api_key_hint").get("is_nullable")).isEqualTo("YES");
         assertThat(byName.get("enabled").get("data_type")).isEqualTo("boolean");
         assertThat(byName.get("enabled").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("active_provider").get("is_nullable")).isEqualTo("NO");
+        assertThat(String.valueOf(byName.get("active_provider").get("column_default")))
+                .startsWith("'OPENAI_COMPATIBLE'");
         assertThat(byName.get("updated_at").get("data_type")).isEqualTo("timestamp with time zone");
         assertThat(byName.get("updated_by").get("is_nullable")).isEqualTo("YES");
     }
 
     @Test
-    void aiSettingsHasExactlyOneSeededRowDisabledWithNvidiaDefaults() {
+    void aiSettingsHasExactlyOneSeededRowDisabledWithOpenAiCompatibleActive() {
         List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT id, base_url, model, enabled, api_key_ciphertext, api_key_hint, updated_by FROM ai_settings");
+                "SELECT id, enabled, active_provider, updated_by FROM ai_settings");
         assertThat(rows).hasSize(1);
         Map<String, Object> row = rows.get(0);
         assertThat(((Number) row.get("id")).intValue()).isEqualTo(1);
-        assertThat(row.get("base_url")).isEqualTo("https://integrate.api.nvidia.com/v1");
-        assertThat(row.get("model")).isEqualTo("z-ai/glm-5.3-flash");
         assertThat(row.get("enabled")).isEqualTo(false);
-        assertThat(row.get("api_key_ciphertext")).isNull();
-        assertThat(row.get("api_key_hint")).isNull();
+        assertThat(row.get("active_provider")).isEqualTo("OPENAI_COMPATIBLE");
         assertThat(row.get("updated_by")).isNull();
     }
 
     @Test
     void aiSettingsSecondRowIsRejected() {
-        assertThatThrownBy(() -> jdbc.update(
-                "INSERT INTO ai_settings (id, base_url, model) VALUES (2, 'https://example.com/v1', 'm')"))
+        assertThatThrownBy(() -> jdbc.update("INSERT INTO ai_settings (id) VALUES (2)"))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("ai_settings_id_check");
     }
 
     @Test
-    void aiSettingsStoresApiKeyOnlyAsCiphertextAndHint() {
+    void aiSettingsActiveProviderMustBeAKnownProvider() {
+        assertThatThrownBy(() -> jdbc.update("UPDATE ai_settings SET active_provider = 'OTHER' WHERE id = 1"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        jdbc.update("UPDATE ai_settings SET active_provider = 'GEMINI' WHERE id = 1");
+        assertThat(jdbc.queryForObject("SELECT active_provider FROM ai_settings", String.class)).isEqualTo("GEMINI");
+    }
+
+    @Test
+    void aiSettingsActiveProviderIsBackedByAForeignKeyToTheConfigs() {
+        List<String> targets = jdbc.queryForList("""
+                SELECT ccu.table_name FROM information_schema.table_constraints tc
+                JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name
+                WHERE tc.table_name = 'ai_settings' AND tc.constraint_type = 'FOREIGN KEY'
+                  AND tc.constraint_name = 'ai_settings_active_provider_fkey'
+                """, String.class);
+        assertThat(targets).containsExactly("ai_provider_configs");
+    }
+
+    @Test
+    void aiProviderConfigsHasExpectedColumnsAndTypes() {
+        List<Map<String, Object>> columns = jdbc.queryForList("""
+                SELECT column_name, data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'ai_provider_configs'
+                """);
+        Map<String, Map<String, Object>> byName = columns.stream()
+                .collect(java.util.stream.Collectors.toMap(c -> (String) c.get("column_name"), c -> c));
+        assertThat(byName.keySet()).containsExactlyInAnyOrder(
+                "provider", "base_url", "model", "api_key_ciphertext", "api_key_hint", "updated_at", "updated_by");
+        assertThat(byName.get("provider").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("base_url").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("model").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("api_key_ciphertext").get("data_type")).isEqualTo("bytea");
+        assertThat(byName.get("api_key_ciphertext").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("api_key_hint").get("is_nullable")).isEqualTo("YES");
+        assertThat(byName.get("updated_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("updated_by").get("is_nullable")).isEqualTo("YES");
+    }
+
+    @Test
+    void aiProviderConfigsAreSeededForBothProvidersWithoutKeys() {
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT provider, base_url, model, api_key_ciphertext, api_key_hint, updated_by FROM ai_provider_configs");
+        assertThat(rows).hasSize(2);
+        Map<String, Map<String, Object>> byProvider = rows.stream()
+                .collect(java.util.stream.Collectors.toMap(r -> (String) r.get("provider"), r -> r));
+        Map<String, Object> openAi = byProvider.get("OPENAI_COMPATIBLE");
+        assertThat(openAi.get("base_url")).isEqualTo("https://integrate.api.nvidia.com/v1");
+        assertThat(openAi.get("model")).isEqualTo("z-ai/glm-5.3-flash");
+        Map<String, Object> gemini = byProvider.get("GEMINI");
+        assertThat(gemini.get("base_url")).isEqualTo("https://generativelanguage.googleapis.com/v1beta");
+        assertThat(gemini.get("model")).isEqualTo("gemini-flash-latest");
+        rows.forEach(r -> {
+            assertThat(r.get("api_key_ciphertext")).isNull();
+            assertThat(r.get("api_key_hint")).isNull();
+            assertThat(r.get("updated_by")).isNull();
+        });
+    }
+
+    @Test
+    void aiProviderConfigsRejectUnknownProvider() {
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO ai_provider_configs (provider, base_url, model) VALUES ('OTHER', 'https://x', 'm')"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ai_provider_configs_provider_check");
+    }
+
+    @Test
+    void aiProviderConfigsStoreApiKeyOnlyAsCiphertextAndHint() {
         // No plaintext column exists; the ciphertext is a BYTEA and the hint is the only readable form.
         List<String> columns = jdbc.queryForList("""
                 SELECT column_name FROM information_schema.columns
-                WHERE table_schema = 'public' AND table_name = 'ai_settings' AND column_name LIKE 'api_key%'
+                WHERE table_schema = 'public' AND table_name = 'ai_provider_configs' AND column_name LIKE 'api_key%'
                 """, String.class);
         assertThat(columns).containsExactlyInAnyOrder("api_key_ciphertext", "api_key_hint");
     }
 
     @Test
-    void deletingUserWhoUpdatedAiSettingsSetsUpdatedByNull() {
+    void deletingUserWhoUpdatedAiProviderConfigSetsUpdatedByNull() {
         UUID admin = insertUser("ai-editor");
+        jdbc.update("UPDATE ai_provider_configs SET updated_by = ? WHERE provider = 'GEMINI'", admin);
+        jdbc.update("DELETE FROM users WHERE id = ?", admin);
+        UUID updatedBy = jdbc.queryForObject(
+                "SELECT updated_by FROM ai_provider_configs WHERE provider = 'GEMINI'", UUID.class);
+        assertThat(updatedBy).isNull();
+    }
+
+    @Test
+    void deletingUserWhoUpdatedAiSettingsSetsUpdatedByNull() {
+        UUID admin = insertUser("ai-settings-editor");
         jdbc.update("UPDATE ai_settings SET updated_by = ? WHERE id = 1", admin);
         jdbc.update("DELETE FROM users WHERE id = ?", admin);
         UUID updatedBy = jdbc.queryForObject("SELECT updated_by FROM ai_settings WHERE id = 1", UUID.class);
         assertThat(updatedBy).isNull();
     }
+
 
     @Test
     void chatSessionsHasExpectedColumnsAndTypes() {
