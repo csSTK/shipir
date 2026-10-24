@@ -49,6 +49,22 @@ class ComposeExecutionIntegrationTest {
     }
 
     @Test
+    void composePluginStillFoundWithRegistryAuths_downOfUnknownProjectSucceeds() throws IOException, InterruptedException {
+        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(), "No Docker daemon available");
+        Process p = new ProcessBuilder("docker", "compose", "version").redirectErrorStream(true).start();
+        p.getInputStream().readAllBytes();
+        Assumptions.assumeTrue(p.waitFor() == 0, "docker compose CLI not available");
+
+        var files = new ComposeFileRepository(new DeploymentProperties(tmp.resolve("deployments3")));
+        RegistryAuthSource auths = () -> List.of(new RegistryAuthSource.Auth("registry.invalid", "u", "dummy"));
+        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(30)), auths);
+        List<String> out = new ArrayList<>();
+        ComposeProcessResult r = service.executeProject("shipir-plugin-check", ComposeCommand.DOWN,
+                new DockerEndpoint.Local("unix:///var/run/docker.sock"), out::add);
+        assertThat(r.exitCode()).as(String.join("\n", out)).isZero();
+    }
+
+    @Test
     void failingCommandMapsExitCode() {
         var files = new ComposeFileRepository(new DeploymentProperties(tmp.resolve("deployments2")));
         var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(30)), List::of);
@@ -62,6 +78,7 @@ class ComposeExecutionIntegrationTest {
 
     @Test
     void executeProjectRemovesContainersAndNetworkOfAProjectWithoutFiles() throws IOException, InterruptedException {
+        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(), "No Docker daemon available");
         Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(), "No Docker daemon available");
         Process p = new ProcessBuilder("docker", "compose", "version").redirectErrorStream(true).start();
         p.getInputStream().readAllBytes();

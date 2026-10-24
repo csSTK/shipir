@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 /**
@@ -46,6 +47,7 @@ public class ComposeExecutionService {
     private final ComposeProperties properties;
     private final RegistryAuthSource registryAuths;
     private final List<String> executable;
+    private final Supplier<List<String>> pluginDirs;
 
     @Autowired
     public ComposeExecutionService(ComposeFileRepository files, ComposeProperties properties,
@@ -56,6 +58,15 @@ public class ComposeExecutionService {
     /** Test seam: replaces {@code docker compose} with another executable. */
     ComposeExecutionService(ComposeFileRepository files, ComposeProperties properties,
                             RegistryAuthSource registryAuths, List<String> executable) {
+        this(files, properties, registryAuths, executable, () -> CliPluginDirs.resolve(
+                System.getenv(), Path.of(System.getProperty("user.home")), CliPluginDirs.SYSTEM_DIRS));
+    }
+
+    /** Test seam: also replaces the CLI plugin dir lookup. */
+    ComposeExecutionService(ComposeFileRepository files, ComposeProperties properties,
+                            RegistryAuthSource registryAuths, List<String> executable,
+                            Supplier<List<String>> pluginDirs) {
+        this.pluginDirs = pluginDirs;
         this.files = files;
         this.properties = properties;
         this.registryAuths = registryAuths;
@@ -251,7 +262,7 @@ public class ComposeExecutionService {
 
     /**
      * Writes a Docker {@code config.json} with all stored registry logins into a 0700 temp dir and points
-     * {@code DOCKER_CONFIG} at it; returns the dir, or null (environment untouched) when there are no logins.
+     * {@code DOCKER_CONFIG} at it (plus {@code cliPluginsExtraDirs} so the compose plugin stays findable); returns the dir, or null (environment untouched) when there are no logins.
      */
     private Path applyRegistryAuths(Map<String, String> env) {
         List<RegistryAuthSource.Auth> auths = registryAuths.auths();
@@ -261,7 +272,7 @@ public class ComposeExecutionService {
         Path configDir = null;
         try {
             configDir = Files.createTempDirectory("shipir-docker-config-", DIR_PERMISSIONS);
-            writeFile(configDir.resolve("config.json"), configJson(auths));
+            writeFile(configDir.resolve("config.json"), configJson(auths, pluginDirs.get()));
         } catch (IOException e) {
             deleteRecursively(configDir);
             throw new ComposeExecutionException("Could not prepare registry credentials", e);
@@ -270,7 +281,7 @@ public class ComposeExecutionService {
         return configDir;
     }
 
-    private static String configJson(List<RegistryAuthSource.Auth> auths) {
+    private static String configJson(List<RegistryAuthSource.Auth> auths, List<String> pluginDirs) {
         var entries = new java.util.LinkedHashMap<String, Object>();
         for (RegistryAuthSource.Auth a : auths) {
             String key = "docker.io".equals(a.registryHost()) ? DOCKER_HUB_CONFIG_KEY : a.registryHost();
@@ -278,8 +289,13 @@ public class ComposeExecutionService {
                     .encodeToString((a.username() + ":" + a.secret()).getBytes(StandardCharsets.UTF_8));
             entries.put(key, Map.of("auth", token));
         }
+        var config = new java.util.LinkedHashMap<String, Object>();
+        config.put("auths", entries);
+        if (!pluginDirs.isEmpty()) {
+            config.put("cliPluginsExtraDirs", pluginDirs);
+        }
         try {
-            return new tools.jackson.databind.json.JsonMapper().writeValueAsString(Map.of("auths", entries));
+            return new tools.jackson.databind.json.JsonMapper().writeValueAsString(config);
         } catch (RuntimeException e) {
             throw new ComposeExecutionException("Could not prepare registry credentials", null);
         }

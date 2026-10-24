@@ -278,6 +278,17 @@ class ComposeExecutionServiceTest {
     }
 
     @Test
+    void registryConfigKeepsComposePluginFindable() throws IOException {
+        withAuths(new RegistryAuthSource.Auth("ghcr.io", "robot", "s3cret"));
+        var service = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(20)), auths,
+                List.of(script.toString()), () -> List.of("/opt/plugins", "/usr/lib/docker/cli-plugins"));
+        List<String> lines = new ArrayList<>();
+        service.execute(hostId, "web", ComposeCommand.UP, local(), lines::add);
+        assertThat(line(lines, "JSON:").replace(" ", ""))
+                .contains("\"cliPluginsExtraDirs\":[\"/opt/plugins\",\"/usr/lib/docker/cli-plugins\"]");
+    }
+
+    @Test
     void registryConfigDirRemovedAfterFailureAndWhenProcessCannotStart() throws IOException {
         withAuths(new RegistryAuthSource.Auth("ghcr.io", "robot", "s3cret"));
         writeScript(CONFIG_SCRIPT.replace("exit ${FAKE_EXIT:-0}", "exit 3"));
