@@ -78,8 +78,39 @@ class AuditAspectTest {
         }
     }
 
+    /** Audited methods exercising the {@code before}/{@code details} attributes. */
+    static class DetailsProbe {
+        public int state = 1;
+
+        public void reset() {
+            state = 1;
+        }
+
+        @Auditable(action = "DETAILS_PROBE", targetType = "PROBE", before = "state",
+                details = "{'old': #before, 'new': #result, 'arg': #value}")
+        public int change(int value) {
+            int old = state;
+            state = value;
+            return state;
+        }
+
+        @Auditable(action = "DETAILS_FAIL_PROBE", before = "state", details = "{'old': #before}")
+        public void failing() {
+            throw new IllegalStateException("boom");
+        }
+
+        @Auditable(action = "NO_DETAILS_PROBE")
+        public void plain() {
+        }
+    }
+
     @TestConfiguration
     static class TestBeans {
+        @Bean
+        DetailsProbe detailsProbe() {
+            return new DetailsProbe();
+        }
+
         @Bean
         @Primary
         CapturingSender capturingSender() {
@@ -110,6 +141,8 @@ class AuditAspectTest {
     CapturingSender sender;
     @Autowired
     RollbackProbe probe;
+    @Autowired
+    DetailsProbe detailsProbe;
 
     @BeforeEach
     void setUp() {
@@ -269,6 +302,50 @@ class AuditAspectTest {
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0)).containsEntry("outcome", "FAILURE").containsEntry("username", "prober")
                 .containsEntry("target_id", "42");
+    }
+
+    private String detailsOf(String action) {
+        return jdbc.queryForObject("SELECT details::text FROM audit_log WHERE action = ?", String.class, action);
+    }
+
+    @Test
+    void detailsExpressionSeesPreviousStateAndResult() throws Exception {
+        detailsProbe.reset();
+        detailsProbe.change(5);
+
+        com.fasterxml.jackson.databind.JsonNode json = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(detailsOf("DETAILS_PROBE"));
+        assertThat(json.get("old").asInt()).isEqualTo(1);
+        assertThat(json.get("new").asInt()).isEqualTo(5);
+        assertThat(json.get("arg").asInt()).isEqualTo(5);
+    }
+
+    @Test
+    void actionsWithoutDetailsAttributeWriteNullDetails() {
+        detailsProbe.plain();
+
+        assertThat(detailsOf("NO_DETAILS_PROBE")).isNull();
+    }
+
+    @Test
+    void failedCallsWriteNoDeclaredDetails() {
+        assertThatThrownBy(detailsProbe::failing).isInstanceOf(IllegalStateException.class);
+
+        assertThat(detailsOf("DETAILS_FAIL_PROBE")).isNull();
+    }
+
+    @Test
+    void aiMarkerIsMergedIntoDeclaredDetails() throws Exception {
+        UUID chat = UUID.randomUUID();
+        detailsProbe.reset();
+        dev.bethge.shipir.common.security.AiInvocationContext.callAs(chat, () -> detailsProbe.change(9));
+
+        com.fasterxml.jackson.databind.JsonNode json = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(detailsOf("DETAILS_PROBE"));
+        assertThat(json.get("old").asInt()).isEqualTo(1);
+        assertThat(json.get("new").asInt()).isEqualTo(9);
+        assertThat(json.get("via").asText()).isEqualTo("AI");
+        assertThat(json.get("chatSessionId").asText()).isEqualTo(chat.toString());
     }
 
     private void assertNoSecrets(CapturedOutput output, String... secrets) {

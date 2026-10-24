@@ -8,9 +8,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Service
-class RetentionService {
+public class RetentionService {
 
     private final RetentionSettingsRepository settings;
     private final UserRepository users;
@@ -23,18 +25,28 @@ class RetentionService {
     }
 
     @Transactional(readOnly = true)
-    RetentionSettingsResponse get() {
+    public RetentionSettingsResponse get() {
         return toResponse(load());
     }
 
-    @Auditable(action = "RETENTION_UPDATE", targetType = "RETENTION_SETTINGS", targetId = "'1'")
+    @Auditable(action = "RETENTION_UPDATE", targetType = "RETENTION_SETTINGS", targetId = "'1'",
+            before = "auditValues(get())", details = "{'old': #before, 'new': auditValues(#result)}")
     @Transactional
-    RetentionSettingsResponse update(RetentionSettingsRequest request, String username) {
+    public RetentionSettingsResponse update(RetentionSettingsRequest request, String username) {
         RetentionSettings s = load();
         s.update(request.auditLogDays(), request.notificationDays(), request.chatSessionDays(), clock.instant(),
                 users.findByUsername(username).map(u -> u.getId()).orElse(null));
         settings.flush();
         return toResponse(s);
+    }
+
+    /** Audit details payload: the three retention periods only. */
+    public Map<String, Object> auditValues(RetentionSettingsResponse r) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("auditLogDays", r.auditLogDays());
+        m.put("notificationDays", r.notificationDays());
+        m.put("chatSessionDays", r.chatSessionDays());
+        return m;
     }
 
     RetentionSettings load() {

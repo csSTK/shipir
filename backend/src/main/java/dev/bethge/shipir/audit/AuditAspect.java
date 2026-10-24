@@ -47,25 +47,26 @@ class AuditAspect {
     @Around("@annotation(auditable)")
     Object audit(ProceedingJoinPoint pjp, Auditable auditable) throws Throwable {
         String before = authenticatedName();
+        Object beforeState = captureBefore(pjp, auditable);
         Object result;
         try {
             result = pjp.proceed();
         } catch (Throwable t) {
-            record(pjp, auditable, before, null, AuditLogEntry.Outcome.FAILURE);
+            record(pjp, auditable, before, null, beforeState, AuditLogEntry.Outcome.FAILURE);
             throw t;
         }
         boolean failed = result instanceof ResponseEntity<?> r && (r.getStatusCode().isError());
-        record(pjp, auditable, before, result,
+        record(pjp, auditable, before, result, beforeState,
                 failed ? AuditLogEntry.Outcome.FAILURE : AuditLogEntry.Outcome.SUCCESS);
         return result;
     }
 
     private void record(ProceedingJoinPoint pjp, Auditable a, String nameBefore, Object result,
-                        AuditLogEntry.Outcome outcome) {
+                        Object beforeState, AuditLogEntry.Outcome outcome) {
         try {
-            EvaluationContext ctx = new MethodBasedEvaluationContext(pjp.getTarget(),
-                    ((MethodSignature) pjp.getSignature()).getMethod(), pjp.getArgs(), names);
+            EvaluationContext ctx = context(pjp);
             ctx.setVariable("result", result);
+            ctx.setVariable("before", beforeState);
             // Failed attempts never carry a user id, even if the attempted username exists.
             String authName = outcome == AuditLogEntry.Outcome.SUCCESS && authenticatedName() != null
                     ? authenticatedName() : nameBefore;
@@ -80,10 +81,48 @@ class AuditAspect {
                     : users.findByUsername(authName).map(u -> u.getId()).orElse(null);
             String targetType = a.targetType().isEmpty() ? null : a.targetType();
             auditService.record(new AuditRecord(userId, truncate(username, 50), a.action(), outcome,
-                    targetType, eval(a.targetId(), ctx), aiDetails()));
+                    targetType, eval(a.targetId(), ctx), details(a, ctx, outcome)));
         } catch (RuntimeException e) {
             log.warn("Could not write audit entry for {}: {}", a.action(), e.toString());
         }
+    }
+
+    private EvaluationContext context(ProceedingJoinPoint pjp) {
+        return new MethodBasedEvaluationContext(pjp.getTarget(),
+                ((MethodSignature) pjp.getSignature()).getMethod(), pjp.getArgs(), names);
+    }
+
+    /** Previous state for {@code details}; a failing expression is logged and yields null. */
+    private Object captureBefore(ProceedingJoinPoint pjp, Auditable a) {
+        if (a.before().isEmpty()) {
+            return null;
+        }
+        try {
+            return parser.parseExpression(a.before()).getValue(context(pjp));
+        } catch (RuntimeException e) {
+            log.warn("Could not capture previous state for {}: {}", a.action(), e.toString());
+            return null;
+        }
+    }
+
+    /** Declared details (successful calls only) merged with the AI marker; null when both are empty. */
+    private Map<String, Object> details(Auditable a, EvaluationContext ctx, AuditLogEntry.Outcome outcome) {
+        Map<String, Object> details = new LinkedHashMap<>();
+        if (!a.details().isEmpty() && outcome == AuditLogEntry.Outcome.SUCCESS) {
+            try {
+                Object value = parser.parseExpression(a.details()).getValue(ctx);
+                if (value instanceof Map<?, ?> m) {
+                    m.forEach((k, v) -> details.put(String.valueOf(k), v));
+                }
+            } catch (RuntimeException e) {
+                log.warn("Could not evaluate audit details for {}: {}", a.action(), e.toString());
+            }
+        }
+        Map<String, Object> ai = aiDetails();
+        if (ai != null) {
+            details.putAll(ai);
+        }
+        return details.isEmpty() ? null : details;
     }
 
     /** {via: AI, chatSessionId} while the AI assistant acts for the user, null for normal requests. */

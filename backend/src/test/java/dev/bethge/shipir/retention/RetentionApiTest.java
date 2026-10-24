@@ -122,4 +122,27 @@ class RetentionApiTest extends RetentionTestBase {
                 + "AND username = 'admin' AND outcome = 'SUCCESS' AND target_type = 'RETENTION_SETTINGS'",
                 Integer.class)).isEqualTo(1);
     }
+
+    @Test
+    void putRecordsOldAndNewValuesInAuditDetails() throws Exception {
+        Login l = login("admin");
+        mvc.perform(l.write(put("/api/settings/retention")).contentType(APPLICATION_JSON)
+                .content("{\"auditLogDays\":100,\"notificationDays\":20,\"chatSessionDays\":30}"))
+                .andExpect(status().isOk());
+        jdbc.update("DELETE FROM audit_log WHERE action = 'RETENTION_UPDATE'");
+        mvc.perform(l.write(put("/api/settings/retention")).contentType(APPLICATION_JSON).content(body(90, 7)))
+                .andExpect(status().isOk());
+
+        String details = jdbc.queryForObject(
+                "SELECT details::text FROM audit_log WHERE action = 'RETENTION_UPDATE'", String.class);
+        com.fasterxml.jackson.databind.JsonNode json = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(details);
+        assertThat(json.at("/old/auditLogDays").asInt()).isEqualTo(100);
+        assertThat(json.at("/old/notificationDays").asInt()).isEqualTo(20);
+        assertThat(json.at("/old/chatSessionDays").asInt()).isEqualTo(30);
+        assertThat(json.at("/new/auditLogDays").asInt()).isEqualTo(90);
+        assertThat(json.at("/new/notificationDays").asInt()).isEqualTo(7);
+        assertThat(json.at("/new/chatSessionDays").asInt()).isEqualTo(30);
+        assertThat(json.has("via")).isFalse();
+    }
 }
