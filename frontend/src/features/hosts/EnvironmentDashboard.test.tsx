@@ -42,6 +42,14 @@ const down: HostOverview = {
   volumes: null,
 }
 
+function serve(overview: HostOverview[], role = 'VIEWER') {
+  apiFetch.mockImplementation((path: string) =>
+    path === '/auth/me'
+      ? Promise.resolve({ username: 'u', role, setupRequired: false })
+      : Promise.resolve(overview),
+  )
+}
+
 function renderAt(id: string) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -56,7 +64,7 @@ function renderAt(id: string) {
 
 describe('EnvironmentDashboard', () => {
   it('shows status, version and tiles linking to the resource pages', async () => {
-    apiFetch.mockResolvedValue([up, down])
+    serve([up, down])
     renderAt('a')
     expect(await screen.findByRole('heading', { name: 'Local' })).toBeInTheDocument()
     expect(screen.getByText('Up')).toBeInTheDocument()
@@ -75,22 +83,35 @@ describe('EnvironmentDashboard', () => {
   })
 
   it('shows the error message when the environment is DOWN', async () => {
-    apiFetch.mockResolvedValue([up, down])
+    serve([up, down])
     renderAt('b')
     expect(await screen.findByRole('alert')).toHaveTextContent('The connection timed out.')
     expect(screen.getByText('Down')).toBeInTheDocument()
   })
 
   it('renders a not-found state for an unknown id', async () => {
-    apiFetch.mockResolvedValue([up])
+    serve([up])
     renderAt('zzz')
     expect(await screen.findByRole('heading', { name: 'Environment not found' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /environments/i })).toHaveAttribute('href', '/')
   })
 
   it('shows an error when loading fails', async () => {
-    apiFetch.mockRejectedValue(new Error('boom'))
+    apiFetch.mockImplementation((path: string) =>
+      path === '/auth/me' ? Promise.resolve({ username: 'u', role: 'VIEWER', setupRequired: false }) : Promise.reject(new Error('boom')),
+    )
     renderAt('a')
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not load the environment.')
+  })
+
+  it('shows Clean up for operators only', async () => {
+    serve([up], 'VIEWER')
+    renderAt('a')
+    await screen.findByRole('heading', { name: 'Local' })
+    expect(screen.queryByRole('button', { name: 'Clean up' })).not.toBeInTheDocument()
+    cleanup()
+    serve([up], 'OPERATOR')
+    renderAt('a')
+    expect(await screen.findByRole('button', { name: 'Clean up' })).toBeInTheDocument()
   })
 })

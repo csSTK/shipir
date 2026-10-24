@@ -1,7 +1,10 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useCurrentUser } from '../auth/index.ts'
 import { describeError, formatMemory, plural } from './format.ts'
 import { useHostsOverview, type HostOverview } from './api.ts'
 import { ENV_RESOURCES, type EnvResourceSlug } from './resources.ts'
+import { PruneDialog } from './PruneDialog.tsx'
 import './EnvironmentsOverview.css'
 import './EnvironmentDashboard.css'
 
@@ -32,6 +35,9 @@ export function EnvironmentDashboard() {
   const { id } = useParams()
   const { data, isPending, isError } = useHostsOverview()
   const env = data?.find((e) => e.id === id)
+  const { data: user } = useCurrentUser()
+  const canClean = user?.role === 'ADMIN' || user?.role === 'OPERATOR'
+  const [pruning, setPruning] = useState(false)
 
   if (isPending) {
     return <section className="envs" role="status" aria-label="Loading environment" aria-busy="true" />
@@ -63,6 +69,11 @@ export function EnvironmentDashboard() {
       <header className="envs__bar">
         <h2 className="envs__title">{env.name}</h2>
         <span className={`env-badge env-badge--${up ? 'up' : 'down'}`}>{up ? 'Up' : 'Down'}</span>
+        {up && canClean && (
+          <button type="button" className="sk-btn sk-btn--plain dash__clean" onClick={() => setPruning(true)}>
+            Clean up
+          </button>
+        )}
       </header>
       {up ? (
         <p className="dash__meta">
@@ -92,6 +103,7 @@ export function EnvironmentDashboard() {
           )
         })}
       </ul>
+      {pruning && <PruneDialog hostId={env.id} onClose={() => setPruning(false)} />}
     </section>
   )
 }

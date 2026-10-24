@@ -260,7 +260,8 @@ Frontend (`frontend/`):
 - `src/features/hosts/EnvironmentForm.{tsx,css}`: Local / Remote (TCP+TLS) form, PEM file pickers (names only shown), connection test, inline server errors; props `onCreated`, `submitLabel`
 - `src/features/hosts/{EnvironmentsOverview.tsx,.css}`: home screen: environment rows (status, stats), search, refresh, skeleton/error/empty states, ADMIN add dialog, renders `EnvironmentActions` per row for ADMIN
 - `src/features/hosts/EnvironmentActions.{tsx,css}`: ADMIN row Rename/Delete buttons + dialogs (HOST_NAME_TAKEN inline, delete warns about deployments)
-- `src/features/hosts/EnvironmentDashboard.{tsx,css,test.tsx}`: `/environments/:id`: status, Docker version, resource tiles (counts from overview) linking to resource routes; DOWN error, not-found
+- `src/features/hosts/EnvironmentDashboard.{tsx,css,test.tsx}`: `/environments/:id`: status, Docker version, resource tiles (counts from overview) linking to resource routes; DOWN error, not-found; ADMIN/OPERATOR 'Clean up' button opens `PruneDialog`
+- `src/features/hosts/{PruneDialog.tsx,.css,.test.tsx,prune.ts}`, `e2e/prune.spec.ts`: prune dialog (stopped containers, images none/dangling/unused, volumes + managed toggle, networks; live preview via `usePrunePreview`, confirm -> `usePrune` POST `/hosts/{id}/prune`, result summary, 403 inline); invalidates `['hosts', id]` + overview
 - `src/features/hosts/resources.ts`: `ENV_RESOURCES` (deployments/containers/images/networks/volumes) for sidebar, tiles
 - `src/features/hosts/format.ts`: memory/plural formatting, overview error code to message, `describeResourceError(err)` for `/hosts/{id}/...` failures
 - `src/features/hosts/index.ts`: exports form, overview, dashboard, `ENV_RESOURCES`, hooks, types
