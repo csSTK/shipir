@@ -10,6 +10,7 @@ import { useContainerStats, type StatSample } from '../../shared/realtime/useCon
 import { Badge, ResourceTable, Sparkline, type ResourceColumn } from '../../shared/ui/index.ts'
 import { ConfirmDialog } from '../deployments/ConfirmDialog.tsx'
 import { actionsFor, describeActionError, useContainerAction, useContainers, useDeleteContainer, type Container, type ContainerAction } from './api.ts'
+import { CreateContainerDialog } from './CreateContainerDialog.tsx'
 import './ContainersPage.css'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -225,6 +226,7 @@ export function ContainersPage() {
   const canWrite = user?.role === 'ADMIN' || user?.role === 'OPERATOR'
   const { data, isPending, error, refetch } = useContainers(id)
   const [target, setTarget] = useState<Container | null>(null)
+  const [creating, setCreating] = useState(false)
   const act = useContainerAction(id)
   const [killTarget, setKillTarget] = useState<Container | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -264,7 +266,14 @@ export function ContainersPage() {
 
   return (
     <section className="containers">
-      <h2 className="containers__title">Containers</h2>
+      <div className="containers__bar">
+        <h2 className="containers__title">Containers</h2>
+        {canWrite && (
+          <button type="button" className="sk-btn sk-btn--primary" onClick={() => setCreating(true)}>
+            Create container
+          </button>
+        )}
+      </div>
       {actionError && (
         <p role="alert" className="sk-error">
           {actionError}
@@ -301,6 +310,7 @@ export function ContainersPage() {
           Kill {killTarget.name} immediately? The container is stopped without a graceful shutdown and unsaved data may be lost.
         </ConfirmDialog>
       )}
+      {creating && <CreateContainerDialog hostId={id} isAdmin={isAdmin} onClose={() => setCreating(false)} />}
       {target && <DeleteContainerDialog hostId={id} container={target} onClose={() => setTarget(null)} />}
     </section>
   )

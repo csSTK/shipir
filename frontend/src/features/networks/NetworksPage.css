@@ -12,3 +12,10 @@
   letter-spacing: -0.02em;
   font-weight: 700;
 }
+
+.networks__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}

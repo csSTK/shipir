@@ -6,6 +6,7 @@ import { useParams } from 'react-router-dom'
 import { describeResourceError } from '../hosts/format.ts'
 import { Badge, ResourceTable, type ResourceColumn } from '../../shared/ui/index.ts'
 import { useDeleteVolume, useVolumes, type Volume } from './api.ts'
+import { CreateVolumeDialog } from './CreateVolumeDialog.tsx'
 import './VolumesPage.css'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -35,11 +36,19 @@ export function VolumesPage() {
   const { data, isPending, error, refetch } = useVolumes(id)
   const del = useDeleteVolume(id)
   const [target, setTarget] = useState<Volume | null>(null)
+  const [creating, setCreating] = useState(false)
   const tableColumns = canWrite ? [...columns, deleteColumn<Volume>('volume', (v) => v.name, setTarget)] : columns
 
   return (
     <section className="volumes">
-      <h2 className="volumes__title">Volumes</h2>
+      <div className="volumes__bar">
+        <h2 className="volumes__title">Volumes</h2>
+        {canWrite && (
+          <button type="button" className="sk-btn sk-btn--primary" onClick={() => setCreating(true)}>
+            Create volume
+          </button>
+        )}
+      </div>
       <ResourceTable
         label="volumes"
         columns={tableColumns}
@@ -52,6 +61,7 @@ export function VolumesPage() {
         error={error ? describeResourceError(error) : null}
         onRetry={() => void refetch()}
       />
+      {creating && <CreateVolumeDialog hostId={id} onClose={() => setCreating(false)} />}
       {target && (
         <DeleteResourceDialog kind="volume" name={target.name} onDelete={() => del.mutateAsync(target.name)} onClose={() => setTarget(null)} />
       )}

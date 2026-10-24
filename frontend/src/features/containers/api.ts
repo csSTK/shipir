@@ -3,6 +3,7 @@ import { ApiError, apiFetch } from '../../shared/api/client.ts'
 import { HOSTS_OVERVIEW_KEY } from '../hosts/api.ts'
 import { describeResourceError } from '../hosts/format.ts'
 import { useDeleteResourceMutation } from '../hosts/deleteResource.ts'
+import { useCreateResourceMutation } from '../hosts/createResource.ts'
 
 /** One container of `GET /api/hosts/{id}/containers`; compose fields are null outside Compose. */
 export interface Container {
@@ -69,4 +70,53 @@ export function describeActionError(error: unknown): string {
     if (error.status === 502 || error.code === 'HOST_NOT_FOUND') return describeResourceError(error)
   }
   return 'The action failed. Try again.'
+}
+
+export interface PortSpec {
+  hostPort: number | null
+  containerPort: number
+  protocol: 'tcp' | 'udp'
+}
+
+export interface MountSpec {
+  type: 'VOLUME' | 'BIND'
+  source: string
+  target: string
+  readOnly: boolean
+}
+
+export type RestartPolicy = 'no' | 'always' | 'unless-stopped' | 'on-failure'
+
+export interface ContainerSpec {
+  name?: string
+  image: string
+  command?: string[]
+  env?: Record<string, string>
+  ports?: PortSpec[]
+  mounts?: MountSpec[]
+  network?: string
+  restartPolicy?: RestartPolicy
+  privileged?: boolean
+  hostNetwork?: boolean
+  start?: boolean
+}
+
+export function useCreateContainer(hostId: string) {
+  return useCreateResourceMutation<ContainerSpec>(hostId, 'containers')
+}
+
+export const CONTAINER_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/
+
+export function validatePort(value: string, optional: boolean): string | null {
+  if (!value.trim()) return optional ? null : 'Required.'
+  const n = Number(value)
+  return Number.isInteger(n) && n >= 1 && n <= 65535 ? null : 'Use 1-65535.'
+}
+
+/** Splits a command line on whitespace; double or single quotes group words. */
+export function splitCommand(text: string): string[] {
+  const out: string[] = []
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g
+  for (let m = re.exec(text); m; m = re.exec(text)) out.push(m[1] ?? m[2] ?? m[3])
+  return out
 }

@@ -1,0 +1,67 @@
+.ccd {
+  max-height: min(70vh, 48rem);
+  overflow-y: auto;
+}
+.ccd__group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.ccd__group legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.ccd__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+}
+.ccd__row--mount {
+  grid-template-columns: auto 1fr 1fr auto auto;
+}
+.ccd__row input,
+.ccd__row select {
+  font: inherit;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  color: inherit;
+  min-width: 0;
+}
+.ccd__row input:focus-visible,
+.ccd__row select:focus-visible {
+  outline: 2px solid AccentColor;
+  outline-offset: 2px;
+}
+.ccd__row-error {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.ccd__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+@media (max-width: 600px) {
+  .ccd__row,
+  .ccd__row--mount {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.ccd__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ccd__field .sk-error {
+  margin: 0;
+}

@@ -6,6 +6,7 @@ import { useParams } from 'react-router-dom'
 import { describeResourceError } from '../hosts/format.ts'
 import { Badge, ResourceTable, type ResourceColumn } from '../../shared/ui/index.ts'
 import { useDeleteNetwork, useNetworks, type Network } from './api.ts'
+import { CreateNetworkDialog } from './CreateNetworkDialog.tsx'
 import './NetworksPage.css'
 
 const columns: ResourceColumn<Network>[] = [
@@ -39,11 +40,19 @@ export function NetworksPage() {
   const { data, isPending, error, refetch } = useNetworks(id)
   const del = useDeleteNetwork(id)
   const [target, setTarget] = useState<Network | null>(null)
+  const [creating, setCreating] = useState(false)
   const tableColumns = canWrite ? [...columns, deleteColumn<Network>('network', (n) => n.name, setTarget)] : columns
 
   return (
     <section className="networks">
-      <h2 className="networks__title">Networks</h2>
+      <div className="networks__bar">
+        <h2 className="networks__title">Networks</h2>
+        {canWrite && (
+          <button type="button" className="sk-btn sk-btn--primary" onClick={() => setCreating(true)}>
+            Create network
+          </button>
+        )}
+      </div>
       <ResourceTable
         label="networks"
         columns={tableColumns}
@@ -56,6 +65,7 @@ export function NetworksPage() {
         error={error ? describeResourceError(error) : null}
         onRetry={() => void refetch()}
       />
+      {creating && <CreateNetworkDialog hostId={id} isAdmin={user?.role === 'ADMIN'} onClose={() => setCreating(false)} />}
       {target && (
         <DeleteResourceDialog kind="network" name={target.name} onDelete={() => del.mutateAsync(target.id)} onClose={() => setTarget(null)} />
       )}
