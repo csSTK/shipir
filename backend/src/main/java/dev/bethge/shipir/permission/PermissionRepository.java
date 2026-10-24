@@ -12,5 +12,7 @@ interface PermissionRepository extends JpaRepository<Permission, UUID> {
 
     Optional<Permission> findByUserIdAndHostId(UUID userId, UUID hostId);
 
+    void deleteByUserId(UUID userId);
+
     Optional<Permission> findByUserIdAndDeploymentId(UUID userId, UUID deploymentId);
 }
