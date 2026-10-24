@@ -18,5 +18,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("select u from User u where u.username = :username")
     Optional<User> findByUsernameForUpdate(@Param("username") String username);
 
+    Optional<User> findByExternalIssuerAndExternalSubject(String externalIssuer, String externalSubject);
+
     long countByRoleAndDisabledAtIsNullAndIdNot(Role role, UUID id);
 }

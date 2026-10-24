@@ -53,7 +53,28 @@ public class User {
     @Column(name = "totp_last_used_step")
     private Long totpLastUsedStep;
 
+    /** Issuer of the OIDC provider this user signs in through; NULL for local users (set together with the subject). */
+    @Column(name = "external_issuer", length = 2048)
+    private String externalIssuer;
+
+    /** The provider's {@code sub} claim; unique per issuer. */
+    @Column(name = "external_subject")
+    private String externalSubject;
+
     protected User() {
+    }
+
+    /**
+     * A user provisioned by single sign-on. The password hash is the hash of a random secret nobody ever sees,
+     * and {@code passwordChangedAt} is set so the first-start password step does not apply.
+     */
+    public static User external(String username, String unusablePasswordHash, Role role, String issuer, String subject,
+                                Instant now) {
+        User user = new User(username, unusablePasswordHash, role);
+        user.externalIssuer = issuer;
+        user.externalSubject = subject;
+        user.passwordChangedAt = now;
+        return user;
     }
 
     public User(String username, String passwordHash, Role role) {
@@ -127,6 +148,14 @@ public class User {
 
     public Long getTotpLastUsedStep() {
         return totpLastUsedStep;
+    }
+
+    public String getExternalIssuer() {
+        return externalIssuer;
+    }
+
+    public String getExternalSubject() {
+        return externalSubject;
     }
 
     public UUID getId() {

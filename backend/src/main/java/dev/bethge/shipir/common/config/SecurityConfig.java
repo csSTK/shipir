@@ -111,6 +111,8 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/logout",
                                 "/api/auth/password-reset/request", "/api/auth/password-reset/confirm",
                                 "/api/auth/2fa/verify").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/oidc/config", "/api/auth/oidc/authorize",
+                                "/api/auth/oidc/callback").permitAll()
                         // managed deployments: every role reads (env values only ADMIN/OPERATOR), ADMIN/OPERATOR write
                         .requestMatchers(HttpMethod.GET, "/api/hosts/*/managed-deployments/*/env").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.GET, "/api/hosts/*/managed-deployments", "/api/hosts/*/managed-deployments/*",
@@ -146,6 +148,7 @@ class SecurityConfig {
                         .requestMatchers("/api/settings/retention").hasRole("ADMIN")
                         .requestMatchers("/api/settings/security").hasRole("ADMIN")
                         .requestMatchers("/api/settings/ai", "/api/settings/ai/**").hasRole("ADMIN")
+                        .requestMatchers("/api/settings/oidc", "/api/settings/oidc/**").hasRole("ADMIN")
                         .requestMatchers("/api/ai/shared-sessions", "/api/ai/shared-sessions/**").hasRole("ADMIN")
                         .anyRequest().authenticated());
         return http.build();

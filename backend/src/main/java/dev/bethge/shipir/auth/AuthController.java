@@ -62,6 +62,7 @@ class AuthController {
     private final ClientAddressResolver clientAddress;
     private final AuditService auditService;
     private final TotpService totp;
+    private final LocalLoginPolicy localLoginPolicy;
 
     AuthController(AuthenticationManager authenticationManager,
                    SecurityContextRepository securityContextRepository,
@@ -75,6 +76,7 @@ class AuthController {
                    ClientAddressResolver clientAddress,
                    AuditService auditService,
                    TotpService totp) {
+                   LocalLoginPolicy localLoginPolicy) {
         this.authenticationManager = authenticationManager;
         this.securityContextRepository = securityContextRepository;
         this.sessionAuthenticationStrategy = sessionAuthenticationStrategy;
@@ -87,6 +89,7 @@ class AuthController {
         this.clientAddress = clientAddress;
         this.auditService = auditService;
         this.totp = totp;
+        this.localLoginPolicy = localLoginPolicy;
     }
 
     @PostMapping("/login")
@@ -108,11 +111,17 @@ class AuthController {
             recordFailure(LoginThrottle.Scope.LOGIN, body.username(), address);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(INVALID_CREDENTIALS);
         }
-        throttle.recordSuccess(LoginThrottle.Scope.LOGIN, body.username());
+        // Checked after the password: a wrong password stays an ordinary 401 whoever the user is. A refused local
+        // login is neither a failure nor a success for the throttle: the counter is left as it is.
         User user = users.findByUsername(authentication.getName()).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(INVALID_CREDENTIALS);
         }
+        if (!localLoginPolicy.allows(user.getRole())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse("LOCAL_LOGIN_DISABLED",
+                    "Password login is disabled; sign in with single sign-on"));
+        }
+        throttle.recordSuccess(LoginThrottle.Scope.LOGIN, body.username());
         if (user.isTwoFactorEnabled()) {
             // Password is right, second factor missing: nothing is authenticated yet, the session only remembers
             // who may submit a code to /api/auth/2fa/verify.
