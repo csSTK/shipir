@@ -98,8 +98,9 @@ public class ContainerLogServiceImpl implements ContainerLogService {
 
         @Override
         public void onError(Throwable throwable) {
-            super.onError(throwable);
+            // report first: super.onError closes the callback, whose close() would finish(null)
             finish(throwable);
+            super.onError(throwable);
         }
 
         @Override

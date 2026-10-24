@@ -72,6 +72,15 @@ class ContainerLogServiceTest {
     }
 
     @Test
+    void streamFailureIsReportedAsErrorNotAsNormalEnd() {
+        List<Throwable> ends = new ArrayList<>();
+        var cb = new ContainerLogServiceImpl.LineCallback(false, l -> { }, ends::add);
+        RuntimeException failure = new RuntimeException("broken");
+        cb.onError(failure);
+        assertThat(ends).containsExactly(failure);
+    }
+
+    @Test
     void unknownContainerIsNotFoundWithoutOpeningStream() {
         DockerHostConnectionManager manager = mock(DockerHostConnectionManager.class);
         DockerClient client = mock(DockerClient.class, Answers.RETURNS_DEEP_STUBS);
