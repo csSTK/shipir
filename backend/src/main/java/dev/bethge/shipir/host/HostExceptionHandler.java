@@ -5,7 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = {HostController.class, HostResourcesController.class})
+@RestControllerAdvice(assignableTypes = {HostController.class, HostResourcesController.class, SearchController.class})
 class HostExceptionHandler {
 
     @ExceptionHandler(HostException.class)
