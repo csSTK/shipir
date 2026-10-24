@@ -307,6 +307,7 @@ CI:
 - `.github/workflows/tag.yml`: on `v*` tag push, re-tags the existing `sha-<commit>` images with semver tags (`imagetools create`, no build); fails if the sha image is missing
 
 Repo tooling:
+- `docs/CODE_MAP.md`: this file, the per-file map; CLAUDE.md only points here
 - `.claude/agents/implementer-{sonnet,haiku}.md`: implementation subagents (see Model Policy); follow `next-task-implement`, never commit or close beads
 - `.claude/hooks/db-write-guard.py`: PreToolUse hook, forces a permission prompt for database writes
 - `.claude/skills/apple-design/SKILL.md`: design and motion guidelines every frontend UI change follows
