@@ -6,6 +6,7 @@ import dev.bethge.shipir.audit.AuditService;
 import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
+import dev.bethge.shipir.common.security.AiInvocationContext;
 import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
 import dev.bethge.shipir.common.security.SecretCipher;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
@@ -222,10 +223,12 @@ public class DeploymentRunService {
             files.write(hostId, deployment.getName(), version.getYamlContent(), envText);
 
             String runId = UUID.randomUUID().toString();
+            // The ScopedValue is not inherited by the worker thread: capture the AI marker now, write it into the result entry.
+            Map<String, Object> aiMarker = AiInvocationContext.active() ? aiMarker() : Map.of();
             Consumer<String> sink = streams.start(runId);
             Thread.ofVirtual().name("deploy-" + runId).start(
                     () -> run(deployment, version, endpoint, runId, sink, SYSTEM_USER.equals(username) ? null : userId,
-                            username, resultAction));
+                            username, resultAction, aiMarker));
             started = true;
             return new DeploymentRunResponse(runId, version.getId());
         } finally {
@@ -282,9 +285,10 @@ public class DeploymentRunService {
     }
 
     private void run(Deployment deployment, DeploymentVersion version, DockerEndpoint endpoint, String runId,
-                     Consumer<String> sink, UUID userId, String username, String resultAction) {
+                     Consumer<String> sink, UUID userId, String username, String resultAction,
+                     Map<String, Object> aiMarker) {
         boolean success = false;
-        Map<String, Object> details = new java.util.LinkedHashMap<>();
+        Map<String, Object> details = new java.util.LinkedHashMap<>(aiMarker);
         details.put("runId", runId);
         details.put("versionId", version.getId().toString());
         try {
@@ -320,6 +324,13 @@ public class DeploymentRunService {
         // Release before announcing the end so a client reacting to DONE/FAILED can start the next deployment.
         locks.release(deployment.getId());
         streams.complete(runId, success ? RunStatus.DONE : RunStatus.FAILED);
+    }
+
+    private static Map<String, Object> aiMarker() {
+        Map<String, Object> marker = new java.util.LinkedHashMap<>();
+        marker.put("via", "AI");
+        AiInvocationContext.chatSessionId().ifPresent(id -> marker.put("chatSessionId", id.toString()));
+        return marker;
     }
 
     private DeploymentVersion versionOf(Deployment deployment, UUID versionId) {
