@@ -7,7 +7,7 @@ description: Implement a whole beads epic end to end. Takes an epic ID, creates 
 
 Orchestrates one epic from branch to push. You coordinate; the implementer sub-agents write the code. Run this on Sonnet (Model Policy in CLAUDE.md); if the session isn't on Sonnet, say so and suggest `/model sonnet`.
 
-**Input:** an epic ID, optionally followed by `--watch-ci` (`$ARGUMENTS`). Remove the flag, then take the rest as the epic ID. If the ID is missing, or `bd show <id>` says it isn't an epic, stop and ask for one, whether or not `--watch-ci` was passed. Never pick an epic yourself.
+**Input:** an epic ID, optionally with the flags `--watch-ci` and `--branch-review` in any order (`$ARGUMENTS`). Remove the flags, then take the rest as the epic ID. If the ID is missing, or `bd show <id>` says it isn't an epic, stop and ask for one, whatever flags were passed. `--branch-review` adds a whole-branch review before the push (step 7); without it nothing changes. Never pick an epic yourself.
 
 **By invoking this skill the user authorizes** for this epic: creating and deleting its branch and worktree, committing, pushing the branch to `dev` (fast-forward only) and filing `finding` beads. Nothing else: never force-push, never rewrite pushed history, never add attribution lines (see CLAUDE.md).
 
@@ -36,7 +36,7 @@ Each step lives in its own skill under `.claude/skills/`. Read that skill's `SKI
    If **verification** fails or is incomplete (not review findings, which follow the review loop above), send the agent the concrete findings once (SendMessage). If it still isn't right, stop and report.
 
    **If the agent reports BLOCKED** (retry cap in `next-task-implement`): `bd update <child> --status blocked --append-notes "<reason + failing output tail>"`. Leave its changes uncommitted, keep worktree and branch, and don't start any child that depends on it, directly or transitively. Continue the independent children. Don't start the next wave until every child in the current wave is committed or blocked.
-7. **When all sub-agents are finished:** if any child is blocked, don't run `next-task-finish`: stop and report the blocked children, skipped dependents and the worktree path. Rerunning `/next-task <epic-id>` resumes in that worktree (`next-task-branch`), picks up blocked and open children, and finishes then. Otherwise `next-task-finish`. Rebase onto `origin/dev`, final full test run, remaining findings, close the beads, write the documentation, push to `dev`, then remove the worktree and branch.
+7. **When all sub-agents are finished:** if any child is blocked, don't run `next-task-finish`: stop and report the blocked children, skipped dependents and the worktree path. Rerunning `/next-task <epic-id>` resumes in that worktree (`next-task-branch`), picks up blocked and open children, and finishes then. Otherwise `next-task-finish` (pass `--branch-review` on if given). Rebase onto `origin/dev`, final full test run, remaining findings, close the beads, write the documentation, push to `dev`, then remove the worktree and branch.
 8. **Watch CI (optional):** only after step 7 has pushed `dev` successfully.
    - With `--watch-ci`: run the `watch-ci` skill for `dev` (branch argument `dev`) right away.
    - Without it: ask once with AskUserQuestion, "Skip" as the first and default option, and "Watch CI" second. On "Skip", don't watch.

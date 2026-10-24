@@ -339,12 +339,12 @@ Repo tooling:
 - `.claude/hooks/db-write-guard.py`: PreToolUse hook, forces a permission prompt for database writes
 - `.claude/skills/apple-design/SKILL.md`: design and motion guidelines every frontend UI change follows
 - `.claude/skills/text-to-task/SKILL.md`: `/text-to-task`, turns a text request into a beads epic + child tasks after a scope check
-- `.claude/skills/next-task/SKILL.md`: `/next-task <epic-id> [--watch-ci]`, orchestrates an epic in its own worktree: branch → deps → plan → sub-agents → findings → finish → optional CI watch
-- `.claude/skills/next-task-beads/SKILL.md`: `/next-task-beads <id>... [--watch-ci]`, same pipeline for individual non-epic beads (branch `task/...`)
-- `.claude/skills/next-task-batch/SKILL.md`: `/next-task-batch <epic-id>... [--watch-ci]`, runs several epics sequentially in dependency order, skips dependents of a stopped epic, CI watched once
-- `.claude/skills/next-task-{branch,deps,plan,finish}/SKILL.md`: orchestrator steps (branch = worktree `../shipir-<id>` from `origin/dev`, main checkout never switched; finish rebases, tests, pushes `HEAD:dev`, removes worktree; doesn't watch CI)
+- `.claude/skills/next-task/SKILL.md`: `/next-task <epic-id> [--watch-ci] [--branch-review]`, orchestrates an epic in its own worktree: branch → deps → plan → sub-agents → findings → finish → optional CI watch
+- `.claude/skills/next-task-beads/SKILL.md`: `/next-task-beads <id>... [--watch-ci] [--branch-review]`, same pipeline for individual non-epic beads (branch `task/...`)
+- `.claude/skills/next-task-batch/SKILL.md`: `/next-task-batch <epic-id>... [--watch-ci] [--branch-review]`, runs several epics sequentially in dependency order, skips dependents of a stopped epic, CI watched once
+- `.claude/skills/next-task-{branch,deps,plan,finish}/SKILL.md`: orchestrator steps (branch = worktree `../shipir-<id>` from `origin/dev`, main checkout never switched; finish rebases, tests, optional whole-branch review (`--branch-review`, one fix round, open must-fix = no push), pushes `HEAD:dev`, removes worktree; doesn't watch CI)
 - `.claude/skills/next-task-findings/SKILL.md`: out-of-scope bug/quality findings -> deduplicated beads labelled `finding` (`discovered-from` the source bead), the shared findings backlog
-- `.claude/skills/next-task-review/SKILL.md`: per-child review step: fresh read-only implementer-sonnet reviews the diff vs acceptance criteria/CLAUDE.md, returns must-fix vs out-of-scope; orchestrators loop fixes, max 3 rounds, then hand off
+- `.claude/skills/next-task-review/SKILL.md`: per-child review step: fresh read-only implementer-sonnet reviews the diff vs acceptance criteria/CLAUDE.md, returns must-fix vs out-of-scope; orchestrators loop fixes, max 3 rounds, then hand off; branch mode over `origin/dev..HEAD` for `--branch-review`
 - `.claude/skills/next-task-implement/SKILL.md`: sub-agent sequence (worktree/branch check first and last, retry cap 3 then BLOCKED report), calling `next-task-{write-tests,code,e2e,test}` (also usable on their own), reports findings
 - `.claude/skills/watch-ci/SKILL.md`: `/watch-ci [run-id|branch]`, read-only: watches GitHub Actions runs via `gh`, reports result, offers a bug bead on failure
 

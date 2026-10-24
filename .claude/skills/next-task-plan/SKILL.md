@@ -10,7 +10,7 @@ The **work set** is either an epic's children (`/next-task`) or the beads passed
 ## Part 1: Check the beads tasks
 
 1. Epic run: `bd show <epic>` must be an epic that's `open` or `in_progress`, and `bd list --parent <epic>` lists the children. Bead run: each given ID must exist and must not be an epic (point to `/next-task` for those).
-2. Ignore beads that are already `closed`.
+2. Ignore beads that are already `closed`. On a rerun, `blocked` children count as open: re-plan them and reclaim each with `bd update <id> --status in_progress` before handing it off.
 3. For each open child, `bd show <child>` must have:
    - a clear description and testable acceptance criteria
    - a `model:haiku` or `model:sonnet` label
