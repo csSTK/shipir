@@ -1,0 +1,101 @@
+.settings {
+  max-width: 44rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.settings--wide {
+  max-width: var(--content-max);
+}
+.settings__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.settings__group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.settings__legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
+  font-size: var(--text-small-size);
+  font-weight: var(--weight-medium);
+}
+.settings__check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--control-height);
+  font-size: var(--text-body-size);
+  cursor: pointer;
+}
+.settings__check input {
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  accent-color: var(--color-accent);
+}
+.settings__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.settings__error {
+  margin: 0;
+  font-size: var(--text-small-size);
+  color: var(--color-bad);
+}
+.settings__ok {
+  margin: 0;
+  font-size: var(--text-small-size);
+  color: var(--color-ok);
+}
+.settings__muted {
+  margin: 0;
+  font-size: var(--text-small-size);
+  color: var(--color-text-muted);
+}
+.settings__text {
+  margin: 0;
+  font-size: var(--text-body-size);
+}
+.settings__mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-small-size);
+}
+.settings__link {
+  color: var(--color-accent-text);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+.settings__link:hover {
+  text-decoration: underline;
+}
+.settings__link:focus-visible {
+  outline: none;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-focus);
+}
+.settings__pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+}
+.settings__filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--space-3);
+  align-items: end;
+}
+.settings__filters-actions {
+  display: flex;
+  gap: var(--space-2);
+}

@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react'
+import { Button, Card, Skeleton, TextField } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { useRetentionSettings, useSaveRetentionSettings, type RetentionSettings } from './api.ts'
-import './RetentionSettingsPage.css'
+import { SettingsPage } from './SettingsPage.tsx'
+import './SettingsPage.css'
 
 const MIN_DAYS = 1
 const MAX_DAYS = 3650
@@ -47,70 +49,46 @@ function RetentionForm({ initial }: { initial: RetentionSettings }) {
     )
   }
 
+  const field = (label: string, value: string, set: (v: string) => void) => (
+    <TextField
+      label={label}
+      type="number"
+      inputMode="numeric"
+      min={MIN_DAYS}
+      max={MAX_DAYS}
+      step={1}
+      value={value}
+      onChange={(e) => {
+        set(e.target.value)
+        setSaved(false)
+      }}
+    />
+  )
+
   return (
-    <form className="rt-form" onSubmit={submit} noValidate>
-      <label className="rt-field">
-        <span>Audit log retention (days)</span>
-        <input
-          type="number"
-          inputMode="numeric"
-          min={MIN_DAYS}
-          max={MAX_DAYS}
-          step={1}
-          value={audit}
-          onChange={(e) => {
-            setAudit(e.target.value)
-            setSaved(false)
-          }}
-        />
-      </label>
-      <label className="rt-field">
-        <span>Notification retention (days)</span>
-        <input
-          type="number"
-          inputMode="numeric"
-          min={MIN_DAYS}
-          max={MAX_DAYS}
-          step={1}
-          value={notification}
-          onChange={(e) => {
-            setNotification(e.target.value)
-            setSaved(false)
-          }}
-        />
-      </label>
-      <label className="rt-field">
-        <span>Chat session retention (days)</span>
-        <input
-          type="number"
-          inputMode="numeric"
-          min={MIN_DAYS}
-          max={MAX_DAYS}
-          step={1}
-          value={chat}
-          onChange={(e) => {
-            setChat(e.target.value)
-            setSaved(false)
-          }}
-        />
-      </label>
-      <p className="rt-muted">Older entries are removed once a day. Values from 1 to 3650 days.</p>
-      {problem && (
-        <p role="alert" className="rt-error">
-          {problem}
-        </p>
-      )}
-      {saved && (
-        <p role="status" className="rt-ok">
-          Retention settings saved.
-        </p>
-      )}
-      <div className="rt-actions">
-        <button type="submit" className="rt-btn rt-btn--primary" disabled={save.isPending}>
-          {save.isPending ? 'Saving…' : 'Save'}
-        </button>
-      </div>
-    </form>
+    <Card>
+      <form className="settings__form" onSubmit={submit} noValidate>
+        {field('Audit log retention (days)', audit, setAudit)}
+        {field('Notification retention (days)', notification, setNotification)}
+        {field('Chat session retention (days)', chat, setChat)}
+        <p className="settings__muted">Older entries are removed once a day. Values from 1 to 3650 days.</p>
+        {problem && (
+          <p role="alert" className="settings__error">
+            {problem}
+          </p>
+        )}
+        {saved && (
+          <p role="status" className="settings__ok">
+            Retention settings saved.
+          </p>
+        )}
+        <div className="settings__actions">
+          <Button variant="primary" type="submit" loading={save.isPending}>
+            Save
+          </Button>
+        </div>
+      </form>
+    </Card>
   )
 }
 
@@ -119,15 +97,14 @@ export function RetentionSettingsPage() {
   const { data, isPending, isError } = useRetentionSettings()
 
   return (
-    <section className="rt">
-      <h2 className="rt-title">Retention</h2>
-      {isPending && <div aria-busy="true" className="rt-muted">Loading…</div>}
+    <SettingsPage title="Retention" subtitle="How long audit log, notification and chat session entries are kept.">
+      {isPending && <Skeleton width="100%" height="var(--space-8)" />}
       {isError && (
-        <p role="alert" className="rt-error">
+        <p role="alert" className="settings__error">
           Could not load the retention settings.
         </p>
       )}
       {data && <RetentionForm initial={data} />}
-    </section>
+    </SettingsPage>
   )
 }

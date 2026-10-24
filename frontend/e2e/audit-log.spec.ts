@@ -35,7 +35,7 @@ test('admin filters by action and pages', async ({ page, api }) => {
   await expect(page.getByRole('cell', { name: 'Host deleted' })).toBeVisible()
   await expect(page).toHaveURL(/page=2/)
 
-  await page.getByLabel('Action').selectOption('LOGIN')
+  await page.getByLabel('Action', { exact: true }).selectOption('LOGIN')
   await page.getByRole('button', { name: 'Apply' }).click()
   await expect(page.getByText('mallory')).toBeVisible()
   await expect(page.getByText('Failure')).toBeVisible()

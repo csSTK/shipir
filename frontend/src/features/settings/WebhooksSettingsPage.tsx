@@ -1,5 +1,8 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { Pencil, Send, Trash2 } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
 import { ApiError } from '../../shared/api/client.ts'
+import { Badge, Button, ConfirmDialog, Dialog, ResourceTable, Switch, TextField, type ResourceColumn } from '../../shared/ui/index.ts'
+import type { RowActions } from '../../shared/ui/ResourceTable.tsx'
 import {
   WEBHOOK_EVENT_LABELS,
   useCreateWebhook,
@@ -10,7 +13,8 @@ import {
   type Webhook,
   type WebhookEventType,
 } from './api.ts'
-import './WebhooksSettingsPage.css'
+import { SettingsPage } from './SettingsPage.tsx'
+import './SettingsPage.css'
 
 const NAME_MAX = 100
 const EVENT_TYPES = Object.keys(WEBHOOK_EVENT_LABELS) as WebhookEventType[]
@@ -28,35 +32,7 @@ function errorMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
-function Modal({ title, titleId, onClose, children }: { title: string; titleId: string; onClose: () => void; children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null
-    ref.current?.focus()
-    return () => previous?.focus()
-  }, [])
-  return (
-    <div className="wh-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div
-        ref={ref}
-        className="wh-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={(e) => e.key === 'Escape' && onClose()}
-      >
-        <h2 id={titleId} className="wh-dialog__title">
-          {title}
-        </h2>
-        {children}
-      </div>
-    </div>
-  )
-}
-
 function WebhookDialog({ webhook, onClose }: { webhook: Webhook | null; onClose: () => void }) {
-  const titleId = useId()
   const [name, setName] = useState(webhook?.name ?? '')
   const [url, setUrl] = useState('')
   const [events, setEvents] = useState<WebhookEventType[]>(webhook?.eventTypes ?? [])
@@ -89,87 +65,49 @@ function WebhookDialog({ webhook, onClose }: { webhook: Webhook | null; onClose:
   }
 
   return (
-    <Modal title={webhook ? 'Edit webhook' : 'Add webhook'} titleId={titleId} onClose={onClose}>
-      <form onSubmit={submit} className="wh-form">
-        <label className="wh-field">
-          <span>Name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
-        </label>
-        <label className="wh-field">
-          <span>Webhook URL</span>
-          <input
-            type="password"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            autoComplete="off"
-            placeholder={webhook ? 'Leave empty to keep the current URL' : 'https://'}
-          />
-        </label>
-        {webhook && <small className="wh-muted">Current: {webhook.urlHint}</small>}
-        <fieldset className="wh-field wh-events">
-          <legend>Events</legend>
+    <Dialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={webhook ? 'Edit webhook' : 'Add webhook'}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" type="submit" form="webhook-form" loading={pending}>
+            Save
+          </Button>
+        </>
+      }
+    >
+      <form id="webhook-form" onSubmit={submit} className="settings__form">
+        <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
+        <TextField
+          label="Webhook URL"
+          type="password"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          autoComplete="off"
+          placeholder={webhook ? 'Leave empty to keep the current URL' : 'https://'}
+          help={webhook ? `Current: ${webhook.urlHint}` : undefined}
+        />
+        <fieldset className="settings__group">
+          <legend className="settings__legend">Events</legend>
           {EVENT_TYPES.map((type) => (
-            <label key={type} className="wh-check">
+            <label key={type} className="settings__check">
               <input type="checkbox" checked={events.includes(type)} onChange={() => toggle(type)} />
               {WEBHOOK_EVENT_LABELS[type]}
             </label>
           ))}
         </fieldset>
-        <label className="wh-check">
-          <input type="checkbox" role="switch" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-          Enabled
-        </label>
+        <Switch label="Enabled" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
         {problem && (
-          <p role="alert" className="wh-error">
+          <p role="alert" className="settings__error">
             {problem}
           </p>
         )}
-        <div className="wh-actions">
-          <button type="button" className="wh-btn" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="wh-btn wh-btn--primary" disabled={pending}>
-            Save
-          </button>
-        </div>
       </form>
-    </Modal>
-  )
-}
-
-function DeleteDialog({ webhook, onClose }: { webhook: Webhook; onClose: () => void }) {
-  const titleId = useId()
-  const [problem, setProblem] = useState<string | null>(null)
-  const remove = useDeleteWebhook()
-  return (
-    <Modal title="Delete webhook" titleId={titleId} onClose={onClose}>
-      <p className="wh-text">
-        Delete <strong>{webhook.name}</strong>? It will no longer receive notifications.
-      </p>
-      {problem && (
-        <p role="alert" className="wh-error">
-          {problem}
-        </p>
-      )}
-      <div className="wh-actions">
-        <button type="button" className="wh-btn" onClick={onClose}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          className="wh-btn wh-btn--danger"
-          disabled={remove.isPending}
-          onClick={() =>
-            remove.mutate(webhook.id, {
-              onSuccess: onClose,
-              onError: (err) => setProblem(errorMessage(err, 'Could not delete the webhook. Try again.')),
-            })
-          }
-        >
-          Delete
-        </button>
-      </div>
-    </Modal>
+    </Dialog>
   )
 }
 
@@ -186,77 +124,109 @@ function deliveryText(w: Webhook): string {
   return `${w.lastDeliveryStatus === 'SUCCESS' ? 'Delivered' : `Failed, ${statusText(w.lastDeliveryStatus)}`} · ${when}`
 }
 
-function WebhookRow({ webhook, onEdit, onDelete }: { webhook: Webhook; onEdit: () => void; onDelete: () => void }) {
-  const test = useTestWebhook()
-  const result = test.data
-  return (
-    <li className="wh-row">
-      <div className="wh-row__main">
-        <strong>{webhook.name}</strong>
-        <span className="wh-muted">{webhook.urlHint}</span>
-        <span className="wh-muted">
-          {webhook.eventTypes.map((t) => WEBHOOK_EVENT_LABELS[t]).join(', ')} · {webhook.enabled ? 'Enabled' : 'Disabled'}
-        </span>
-        <span className="wh-muted">{deliveryText(webhook)}</span>
-        {test.isPending && <span className="wh-muted">Sending test…</span>}
-        {!test.isPending && result && (
-          <span role="status" className={result.ok ? 'wh-ok' : 'wh-error'}>
-            {result.ok ? 'Test delivered.' : `Test failed: ${statusText(result.status)}.`}
-          </span>
-        )}
-        {!test.isPending && test.isError && (
-          <span role="status" className="wh-error">
-            {`Test failed: ${errorMessage(test.error, 'could not reach the server.')}`}
-          </span>
-        )}
-      </div>
-      <div className="wh-row__actions">
-        <button type="button" className="wh-btn" aria-label={`Send test to ${webhook.name}`} disabled={test.isPending} onClick={() => test.mutate(webhook.id)}>
-          Send test
-        </button>
-        <button type="button" className="wh-btn" aria-label={`Edit ${webhook.name}`} onClick={onEdit}>
-          Edit
-        </button>
-        <button type="button" className="wh-btn wh-btn--danger-text" aria-label={`Delete ${webhook.name}`} onClick={onDelete}>
-          Delete
-        </button>
-      </div>
-    </li>
-  )
-}
-
 /** Settings > Notifications: ADMIN webhook management. The caller restricts access to ADMIN. */
 export function WebhooksSettingsPage() {
-  const { data, isPending, isError } = useWebhooks()
+  const { data, isPending, isError, refetch } = useWebhooks()
   const [dialog, setDialog] = useState<{ kind: 'edit'; webhook: Webhook | null } | { kind: 'delete'; webhook: Webhook } | null>(null)
-  const close = () => setDialog(null)
+  const [deleteProblem, setDeleteProblem] = useState<string | null>(null)
+  const remove = useDeleteWebhook()
+  const test = useTestWebhook()
+  const close = () => {
+    setDialog(null)
+    setDeleteProblem(null)
+  }
+
+  const columns: ResourceColumn<Webhook>[] = [
+    { id: 'name', header: 'Name', sortValue: (w) => w.name, defaultWidth: 200, hideable: false, render: (w) => <strong>{w.name}</strong> },
+    { id: 'url', header: 'URL', defaultWidth: 240, render: (w) => <span className="settings__mono">{w.urlHint}</span> },
+    {
+      id: 'events',
+      header: 'Events',
+      defaultWidth: 240,
+      render: (w) => w.eventTypes.map((t) => WEBHOOK_EVENT_LABELS[t]).join(', '),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      sortValue: (w) => (w.enabled ? 0 : 1),
+      defaultWidth: 110,
+      render: (w) => <Badge tone={w.enabled ? 'ok' : 'muted'}>{w.enabled ? 'Enabled' : 'Disabled'}</Badge>,
+    },
+    { id: 'delivery', header: 'Last delivery', defaultWidth: 260, render: (w) => deliveryText(w) },
+  ]
+
+  function rowActions(w: Webhook): RowActions {
+    return {
+      primary: [
+        { label: 'Send test to', icon: Send, disabled: test.isPending, onSelect: () => test.mutate(w.id) },
+        { label: 'Edit', icon: Pencil, onSelect: () => setDialog({ kind: 'edit', webhook: w }) },
+        { label: 'Delete', icon: Trash2, danger: true, onSelect: () => setDialog({ kind: 'delete', webhook: w }) },
+      ],
+    }
+  }
 
   return (
-    <section className="wh">
-      <div className="wh-bar">
-        <h2 className="wh-title">Notification webhooks</h2>
-        <button type="button" className="wh-btn wh-btn--primary" onClick={() => setDialog({ kind: 'edit', webhook: null })}>
+    <SettingsPage
+      wide
+      title="Notification webhooks"
+      subtitle="Notifications are sent as JSON to each enabled webhook. Saved URLs are never shown again."
+      actions={
+        <Button variant="primary" onClick={() => setDialog({ kind: 'edit', webhook: null })}>
           Add webhook
-        </button>
-      </div>
-      <p className="wh-muted">Host status changes are sent as JSON to each enabled webhook. Saved URLs are never shown again.</p>
-      {isPending && <div aria-busy="true" className="wh-muted">Loading…</div>}
-      {isError && <p role="alert" className="wh-error">Could not load webhooks.</p>}
-      {data && data.length === 0 && <p className="wh-muted">No webhooks yet.</p>}
-      {data && data.length > 0 && (
-        <ul className="wh-list">
-          {data.map((w) => (
-            <WebhookRow
-              key={w.id}
-              webhook={w}
-              onEdit={() => setDialog({ kind: 'edit', webhook: w })}
-              onDelete={() => setDialog({ kind: 'delete', webhook: w })}
-            />
-          ))}
-        </ul>
+        </Button>
+      }
+    >
+      {test.isPending && <p className="settings__muted">Sending test…</p>}
+      {!test.isPending && test.data && (
+        <p role="status" className={test.data.ok ? 'settings__ok' : 'settings__error'}>
+          {test.data.ok ? 'Test delivered.' : `Test failed: ${statusText(test.data.status)}.`}
+        </p>
       )}
+      {!test.isPending && test.isError && (
+        <p role="status" className="settings__error">
+          {`Test failed: ${errorMessage(test.error, 'could not reach the server.')}`}
+        </p>
+      )}
+      <ResourceTable
+        label="webhooks"
+        columns={columns}
+        rows={data}
+        rowKey={(w) => w.id}
+        searchText={(w) => `${w.name} ${w.urlHint}`}
+        defaultSort="name"
+        emptyMessage="No webhooks yet."
+        isPending={isPending}
+        error={isError ? 'Could not load webhooks.' : null}
+        onRetry={() => void refetch()}
+        rowActions={rowActions}
+        rowLabel={(w) => w.name}
+      />
       {dialog?.kind === 'edit' && <WebhookDialog webhook={dialog.webhook} onClose={close} />}
-      {dialog?.kind === 'delete' && <DeleteDialog webhook={dialog.webhook} onClose={close} />}
-    </section>
+      {dialog?.kind === 'delete' && (
+        <ConfirmDialog
+          open
+          onOpenChange={(open) => !open && close()}
+          title="Delete webhook"
+          confirmLabel="Delete"
+          danger
+          loading={remove.isPending}
+          onConfirm={() =>
+            remove.mutate(dialog.webhook.id, {
+              onSuccess: close,
+              onError: (err) => setDeleteProblem(errorMessage(err, 'Could not delete the webhook. Try again.')),
+            })
+          }
+        >
+          <p className="settings__text">
+            Delete <strong>{dialog.webhook.name}</strong>? It will no longer receive notifications.
+          </p>
+          {deleteProblem && (
+            <p role="alert" className="settings__error">
+              {deleteProblem}
+            </p>
+          )}
+        </ConfirmDialog>
+      )}
+    </SettingsPage>
   )
 }

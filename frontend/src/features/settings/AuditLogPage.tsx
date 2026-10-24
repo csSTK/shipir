@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { Badge, Button, Card, ResourceTable, Select, TextField, type ResourceColumn } from '../../shared/ui/index.ts'
 import { AUDIT_ACTION_LABELS, useAuditLog, type AuditLogEntry } from './api.ts'
-import './AuditLogPage.css'
+import { Pager } from './Pager.tsx'
+import { SettingsPage } from './SettingsPage.tsx'
 
 const PAGE_SIZE = 20
 
@@ -34,7 +36,7 @@ export function AuditLogPage() {
   const to = params.get('to') ?? ''
   const pageNumber = Math.max(1, Number(params.get('page')) || 1)
 
-  const { data, isPending, isError } = useAuditLog({
+  const { data, isPending, isError, refetch } = useAuditLog({
     page: pageNumber - 1,
     size: PAGE_SIZE,
     action: action || undefined,
@@ -64,93 +66,56 @@ export function AuditLogPage() {
   const go = (p: number) => update({ action, username, from, to, page: p > 1 ? String(p) : '' })
   const pages = data ? Math.max(1, Math.ceil(data.totalElements / data.size)) : 1
 
+  const columns: ResourceColumn<AuditLogEntry>[] = [
+    { id: 'time', header: 'Time', defaultWidth: 200, hideable: false, render: (e) => formatTime(e.occurredAt) },
+    { id: 'user', header: 'User', defaultWidth: 140, render: (e) => e.username },
+    { id: 'action', header: 'Action', defaultWidth: 220, render: (e) => AUDIT_ACTION_LABELS[e.action] ?? e.action },
+    {
+      id: 'outcome',
+      header: 'Outcome',
+      defaultWidth: 110,
+      render: (e) => <Badge tone={e.outcome === 'FAILURE' ? 'bad' : 'ok'}>{e.outcome === 'FAILURE' ? 'Failure' : 'Success'}</Badge>,
+    },
+    { id: 'target', header: 'Target', defaultWidth: 280, render: (e) => <span className="settings__mono">{target(e)}</span> },
+  ]
+
   return (
-    <section className="al">
-      <h2 className="al-title">Audit log</h2>
-      <form className="al-filters" onSubmit={apply}>
-        <label className="al-field">
-          <span>Action</span>
-          <select value={draft.action} onChange={(e) => setDraft({ ...draft, action: e.target.value })}>
+    <SettingsPage wide title="Audit log" subtitle="Who did what, newest first.">
+      <Card>
+        <form className="settings__filters" onSubmit={apply}>
+          <Select label="Action" value={draft.action} onChange={(e) => setDraft({ ...draft, action: e.target.value })}>
             <option value="">All actions</option>
             {Object.entries(AUDIT_ACTION_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
-          </select>
-        </label>
-        <label className="al-field">
-          <span>User</span>
-          <input value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })} />
-        </label>
-        <label className="al-field">
-          <span>From</span>
-          <input type="date" value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })} />
-        </label>
-        <label className="al-field">
-          <span>To</span>
-          <input type="date" value={draft.to} onChange={(e) => setDraft({ ...draft, to: e.target.value })} />
-        </label>
-        <div className="al-actions">
-          <button type="submit" className="al-btn al-btn--primary">
-            Apply
-          </button>
-          <button type="button" className="al-btn" onClick={reset}>
-            Reset
-          </button>
-        </div>
-      </form>
-
-      {isPending && <div aria-busy="true" className="al-muted">Loading…</div>}
-      {isError && (
-        <p role="alert" className="al-error">
-          Could not load the audit log.
-        </p>
-      )}
-      {data && data.items.length === 0 && <p className="al-muted">No entries match.</p>}
-      {data && data.items.length > 0 && (
-        <>
-          <div className="al-scroll">
-            <table className="al-table">
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>User</th>
-                  <th>Action</th>
-                  <th>Outcome</th>
-                  <th>Target</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.items.map((entry) => (
-                  <tr key={entry.id}>
-                    <td>{formatTime(entry.occurredAt)}</td>
-                    <td>{entry.username}</td>
-                    <td>{AUDIT_ACTION_LABELS[entry.action] ?? entry.action}</td>
-                    <td>
-                      <span className={entry.outcome === 'FAILURE' ? 'al-outcome al-outcome--failure' : 'al-outcome'}>
-                        {entry.outcome === 'FAILURE' ? 'Failure' : 'Success'}
-                      </span>
-                    </td>
-                    <td>{target(entry)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          </Select>
+          <TextField label="User" value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })} />
+          <TextField label="From" type="date" value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })} />
+          <TextField label="To" type="date" value={draft.to} onChange={(e) => setDraft({ ...draft, to: e.target.value })} />
+          <div className="settings__filters-actions">
+            <Button variant="primary" type="submit">
+              Apply
+            </Button>
+            <Button onClick={reset}>Reset</Button>
           </div>
-          <nav className="al-pager" aria-label="Pagination">
-            <button className="al-btn" disabled={pageNumber <= 1} onClick={() => go(pageNumber - 1)}>
-              Previous
-            </button>
-            <span className="al-muted">
-              Page {pageNumber} of {pages}
-            </span>
-            <button className="al-btn" disabled={pageNumber >= pages} onClick={() => go(pageNumber + 1)}>
-              Next
-            </button>
-          </nav>
-        </>
-      )}
-    </section>
+        </form>
+      </Card>
+
+      <ResourceTable
+        label="audit log"
+        columns={columns}
+        rows={data?.items}
+        rowKey={(e) => e.id}
+        searchText={(e) => `${e.username} ${e.action} ${target(e)}`}
+        defaultSort="time"
+        emptyMessage="No entries match."
+        isPending={isPending}
+        error={isError ? 'Could not load the audit log.' : null}
+        onRetry={() => void refetch()}
+      />
+      {data && data.items.length > 0 && <Pager page={pageNumber} pages={pages} onPage={go} />}
+    </SettingsPage>
   )
 }

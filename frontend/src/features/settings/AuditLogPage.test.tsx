@@ -53,8 +53,8 @@ describe('AuditLogPage', () => {
     expect(await screen.findByRole('table')).toBeInTheDocument()
     expect(screen.getByText('HOST prod-1')).toBeInTheDocument()
     expect(screen.getByText('mallory')).toBeInTheDocument()
-    expect(screen.getByText('Failure')).toHaveClass('al-outcome--failure')
-    expect(screen.getByText('Success')).not.toHaveClass('al-outcome--failure')
+    expect(screen.getByText('Failure')).toBeInTheDocument()
+    expect(screen.getByText('Success')).toBeInTheDocument()
   })
 
   it('requests the first page with size 20', async () => {

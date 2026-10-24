@@ -66,7 +66,7 @@ describe('SharedChatSessionsPage', () => {
   it('lists shared sessions with owner and title', async () => {
     renderPage(() => Promise.resolve(page([shared(), shared({ id: 's2', title: 'Disk full', ownerUsername: 'carol' })])))
     expect(await screen.findByRole('button', { name: /Why is web down/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Disk full/ })).toHaveTextContent('carol')
+    expect(screen.getByRole('row', { name: /Disk full/ })).toHaveTextContent('carol')
   })
 
   it('opens a read-only transcript without action buttons', async () => {

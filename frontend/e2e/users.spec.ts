@@ -20,7 +20,7 @@ test('admin creates a user and sees the one-time password once', async ({ page, 
     body: { id: 'u3', username: 'carl', role: 'VIEWER', oneTimePassword: 'Secret-Pass-12345!' },
   })
   await page.goto('/settings/users')
-  await expect(page.getByText('anna')).toBeVisible()
+  await expect(page.getByText('anna', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Delete u' })).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Add user' }).click()

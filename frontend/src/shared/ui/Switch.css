@@ -1,0 +1,65 @@
+.ui-switch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.ui-switch__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--control-height);
+  cursor: pointer;
+}
+.ui-switch__label {
+  font-size: var(--text-body-size);
+}
+.ui-switch__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.ui-switch__track {
+  flex: none;
+  width: 2.75rem;
+  height: 1.625rem;
+  padding: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--color-border-strong);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    transform var(--duration-press) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+.ui-switch__thumb {
+  display: block;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--duration-base) var(--ease-out);
+}
+.ui-switch__input:checked + .ui-switch__track {
+  background: var(--color-accent);
+}
+.ui-switch__input:checked + .ui-switch__track .ui-switch__thumb {
+  transform: translateX(1.125rem);
+}
+.ui-switch__input:active:not(:disabled) + .ui-switch__track {
+  transform: scale(var(--press-scale));
+}
+.ui-switch__input:focus-visible + .ui-switch__track {
+  box-shadow: var(--shadow-focus);
+}
+.ui-switch__input:disabled {
+  cursor: not-allowed;
+}
+.ui-switch__input:disabled + .ui-switch__track {
+  opacity: 0.5;
+}

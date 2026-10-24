@@ -5,32 +5,30 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
-
 .ua-hosts {
-  margin: 12px 0;
-  max-height: 50vh;
-  overflow: auto;
+  margin: var(--space-3) 0 0;
 }
-
 .ua-host {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
-  border-radius: 12px;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
 }
-
 .ua-deployments {
-  padding-left: 12px;
+  padding-left: var(--space-3);
 }
-
 .ua-line {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
+}
+.ua-level {
+  flex: none;
+  width: 9rem;
 }

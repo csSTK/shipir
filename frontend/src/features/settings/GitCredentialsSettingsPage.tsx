@@ -1,5 +1,8 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { FlaskConical, Pencil, Trash2 } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
 import { ApiError } from '../../shared/api/client.ts'
+import { Button, ConfirmDialog, Dialog, ResourceTable, TextField, type ResourceColumn } from '../../shared/ui/index.ts'
+import type { RowActions } from '../../shared/ui/ResourceTable.tsx'
 import {
   useCreateGitCredential,
   useDeleteGitCredential,
@@ -9,7 +12,8 @@ import {
   type GitConnectionStatus,
   type GitCredential,
 } from './api.ts'
-import './GitCredentialsSettingsPage.css'
+import { SettingsPage } from './SettingsPage.tsx'
+import './SettingsPage.css'
 
 const FIELD_MAX = 255
 
@@ -37,35 +41,7 @@ const TEST_MESSAGES: Record<GitConnectionStatus, { ok: boolean; text: string }> 
   UNREACHABLE: { ok: false, text: 'The repository server could not be reached.' },
 }
 
-function Modal({ title, titleId, onClose, children }: { title: string; titleId: string; onClose: () => void; children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null
-    ref.current?.focus()
-    return () => previous?.focus()
-  }, [])
-  return (
-    <div className="gc-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div
-        ref={ref}
-        className="gc-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={(e) => e.key === 'Escape' && onClose()}
-      >
-        <h2 id={titleId} className="gc-dialog__title">
-          {title}
-        </h2>
-        {children}
-      </div>
-    </div>
-  )
-}
-
 function CredentialDialog({ credential, onClose }: { credential: GitCredential | null; onClose: () => void }) {
-  const titleId = useId()
   const [name, setName] = useState(credential?.name ?? '')
   const [username, setUsername] = useState(credential?.username ?? '')
   const [token, setToken] = useState('')
@@ -92,47 +68,44 @@ function CredentialDialog({ credential, onClose }: { credential: GitCredential |
   }
 
   return (
-    <Modal title={credential ? 'Edit credential' : 'Add credential'} titleId={titleId} onClose={onClose}>
-      <form onSubmit={submit} className="gc-form">
-        <label className="gc-field">
-          <span>Name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
-        </label>
-        <label className="gc-field">
-          <span>Username</span>
-          <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" />
-        </label>
-        <label className="gc-field">
-          <span>Access token</span>
-          <input
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            autoComplete="off"
-            placeholder={credential ? 'Leave empty to keep the current token' : ''}
-          />
-        </label>
-        {credential && <small className="gc-muted">Current: {credential.tokenHint}</small>}
+    <Dialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={credential ? 'Edit credential' : 'Add credential'}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" type="submit" form="git-credential-form" loading={pending}>
+            Save
+          </Button>
+        </>
+      }
+    >
+      <form id="git-credential-form" onSubmit={submit} className="settings__form">
+        <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
+        <TextField label="Username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" />
+        <TextField
+          label="Access token"
+          type="password"
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+          autoComplete="off"
+          placeholder={credential ? 'Leave empty to keep the current token' : ''}
+          help={credential ? `Current: ${credential.tokenHint}` : undefined}
+        />
         {problem && (
-          <p role="alert" className="gc-error">
+          <p role="alert" className="settings__error">
             {problem}
           </p>
         )}
-        <div className="gc-actions">
-          <button type="button" className="gc-btn" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="gc-btn gc-btn--primary" disabled={pending}>
-            Save
-          </button>
-        </div>
       </form>
-    </Modal>
+    </Dialog>
   )
 }
 
 function TestDialog({ credential, onClose }: { credential: GitCredential; onClose: () => void }) {
-  const titleId = useId()
   const [repoUrl, setRepoUrl] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
   const test = useTestGitCredential()
@@ -149,76 +122,74 @@ function TestDialog({ credential, onClose }: { credential: GitCredential; onClos
   }
 
   return (
-    <Modal title={`Test ${credential.name}`} titleId={titleId} onClose={onClose}>
-      <form onSubmit={run} className="gc-form">
-        <label className="gc-field">
-          <span>Repository URL</span>
-          <input
-            type="url"
-            value={repoUrl}
-            onChange={(e) => setRepoUrl(e.target.value)}
-            autoFocus
-            autoComplete="off"
-            placeholder="https://github.com/owner/repo.git"
-          />
-        </label>
-        {test.isPending && <p className="gc-muted">Testing…</p>}
+    <Dialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={`Test ${credential.name}`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Close
+          </Button>
+          <Button variant="primary" type="submit" form="git-test-form" loading={test.isPending}>
+            Run test
+          </Button>
+        </>
+      }
+    >
+      <form id="git-test-form" onSubmit={run} className="settings__form">
+        <TextField
+          label="Repository URL"
+          type="url"
+          value={repoUrl}
+          onChange={(e) => setRepoUrl(e.target.value)}
+          autoFocus
+          autoComplete="off"
+          placeholder="https://github.com/owner/repo.git"
+        />
+        {test.isPending && <p className="settings__muted">Testing…</p>}
         {result && (
-          <p role="status" className={result.ok ? 'gc-ok' : 'gc-error'}>
+          <p role="status" className={result.ok ? 'settings__ok' : 'settings__error'}>
             {result.text}
           </p>
         )}
         {problem && (
-          <p role="alert" className="gc-error">
+          <p role="alert" className="settings__error">
             {problem}
           </p>
         )}
-        <div className="gc-actions">
-          <button type="button" className="gc-btn" onClick={onClose}>
-            Close
-          </button>
-          <button type="submit" className="gc-btn gc-btn--primary" disabled={test.isPending}>
-            Run test
-          </button>
-        </div>
       </form>
-    </Modal>
+    </Dialog>
   )
 }
 
 function DeleteDialog({ credential, onClose }: { credential: GitCredential; onClose: () => void }) {
-  const titleId = useId()
   const [problem, setProblem] = useState<string | null>(null)
   const remove = useDeleteGitCredential()
   return (
-    <Modal title="Delete credential" titleId={titleId} onClose={onClose}>
-      <p className="gc-text">
+    <ConfirmDialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title="Delete credential"
+      confirmLabel="Delete"
+      danger
+      loading={remove.isPending}
+      onConfirm={() =>
+        remove.mutate(credential.id, {
+          onSuccess: onClose,
+          onError: (err) => setProblem(errorMessage(err, 'Could not delete the credential. Try again.')),
+        })
+      }
+    >
+      <p className="settings__text">
         Delete <strong>{credential.name}</strong>? The stored token is removed.
       </p>
       {problem && (
-        <p role="alert" className="gc-error">
+        <p role="alert" className="settings__error">
           {problem}
         </p>
       )}
-      <div className="gc-actions">
-        <button type="button" className="gc-btn" onClick={onClose}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          className="gc-btn gc-btn--danger"
-          disabled={remove.isPending}
-          onClick={() =>
-            remove.mutate(credential.id, {
-              onSuccess: onClose,
-              onError: (err) => setProblem(errorMessage(err, 'Could not delete the credential. Try again.')),
-            })
-          }
-        >
-          Delete
-        </button>
-      </div>
-    </Modal>
+    </ConfirmDialog>
   )
 }
 
@@ -229,49 +200,51 @@ type DialogState =
 
 /** Settings > Git credentials: ADMIN management of stored Git access tokens. The caller restricts access to ADMIN. */
 export function GitCredentialsSettingsPage() {
-  const { data, isPending, isError } = useGitCredentials()
+  const { data, isPending, isError, refetch } = useGitCredentials()
   const [dialog, setDialog] = useState<DialogState>(null)
   const close = () => setDialog(null)
 
+  const columns: ResourceColumn<GitCredential>[] = [
+    { id: 'name', header: 'Name', sortValue: (c) => c.name, defaultWidth: 220, hideable: false, render: (c) => <strong>{c.name}</strong> },
+    { id: 'username', header: 'Username', sortValue: (c) => c.username, defaultWidth: 200, render: (c) => c.username },
+    { id: 'token', header: 'Token', defaultWidth: 200, render: (c) => <span className="settings__mono">{c.tokenHint}</span> },
+  ]
+  const rowActions = (c: GitCredential): RowActions => ({
+    primary: [
+      { label: 'Test', icon: FlaskConical, onSelect: () => setDialog({ kind: 'test', credential: c }) },
+      { label: 'Edit', icon: Pencil, onSelect: () => setDialog({ kind: 'edit', credential: c }) },
+      { label: 'Delete', icon: Trash2, danger: true, onSelect: () => setDialog({ kind: 'delete', credential: c }) },
+    ],
+  })
+
   return (
-    <section className="gc">
-      <div className="gc-bar">
-        <h2 className="gc-title">Git credentials</h2>
-        <button type="button" className="gc-btn gc-btn--primary" onClick={() => setDialog({ kind: 'edit', credential: null })}>
+    <SettingsPage
+      wide
+      title="Git credentials"
+      subtitle="Access tokens for deployments deployed from private Git repositories. Saved tokens are never shown again."
+      actions={
+        <Button variant="primary" onClick={() => setDialog({ kind: 'edit', credential: null })}>
           Add credential
-        </button>
-      </div>
-      <p className="gc-muted">Access tokens for deployments deployed from private Git repositories. Saved tokens are never shown again.</p>
-      {isPending && <div aria-busy="true" className="gc-muted">Loading…</div>}
-      {isError && <p role="alert" className="gc-error">Could not load credentials.</p>}
-      {data && data.length === 0 && <p className="gc-muted">No credentials yet.</p>}
-      {data && data.length > 0 && (
-        <ul className="gc-list">
-          {data.map((c) => (
-            <li key={c.id} className="gc-row">
-              <div className="gc-row__main">
-                <strong>{c.name}</strong>
-                <span className="gc-muted">User {c.username}</span>
-                <span className="gc-muted">Token {c.tokenHint}</span>
-              </div>
-              <div className="gc-row__actions">
-                <button type="button" className="gc-btn" aria-label={`Test ${c.name}`} onClick={() => setDialog({ kind: 'test', credential: c })}>
-                  Test
-                </button>
-                <button type="button" className="gc-btn" aria-label={`Edit ${c.name}`} onClick={() => setDialog({ kind: 'edit', credential: c })}>
-                  Edit
-                </button>
-                <button type="button" className="gc-btn gc-btn--danger-text" aria-label={`Delete ${c.name}`} onClick={() => setDialog({ kind: 'delete', credential: c })}>
-                  Delete
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+        </Button>
+      }
+    >
+      <ResourceTable
+        label="credentials"
+        columns={columns}
+        rows={data}
+        rowKey={(c) => c.id}
+        searchText={(c) => `${c.name} ${c.username}`}
+        defaultSort="name"
+        emptyMessage="No credentials yet."
+        isPending={isPending}
+        error={isError ? 'Could not load credentials.' : null}
+        onRetry={() => void refetch()}
+        rowActions={rowActions}
+        rowLabel={(c) => c.name}
+      />
       {dialog?.kind === 'edit' && <CredentialDialog credential={dialog.credential} onClose={close} />}
       {dialog?.kind === 'test' && <TestDialog credential={dialog.credential} onClose={close} />}
       {dialog?.kind === 'delete' && <DeleteDialog credential={dialog.credential} onClose={close} />}
-    </section>
+    </SettingsPage>
   )
 }

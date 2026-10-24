@@ -20,7 +20,7 @@ test('admin creates a webhook and sends a test', async ({ page, api }) => {
 
   await expect(page.getByText('Ops chat')).toBeVisible()
   await page.getByRole('button', { name: 'Add webhook' }).click()
-  await page.getByLabel('Name').fill('Pager')
+  await page.getByLabel('Name', { exact: true }).fill('Pager')
   await page.getByLabel('Webhook URL').fill('https://pager.example/secret-token')
   await page.getByRole('checkbox', { name: 'Host down' }).check()
   await page.getByRole('button', { name: 'Save' }).click()

@@ -20,7 +20,7 @@ test('admin adds a credential and tests the connection', async ({ page, api }) =
   await expect(page.getByText('GitHub work')).toBeVisible()
   await page.getByRole('button', { name: 'Add credential' }).click()
   await page.getByLabel('Name', { exact: true }).fill('Gitea')
-  await page.getByLabel('Username').fill('me')
+  await page.getByLabel('Username', { exact: true }).fill('me')
   await page.getByLabel('Access token').fill('super-secret-pat')
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)

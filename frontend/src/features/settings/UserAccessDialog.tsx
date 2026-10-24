@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useId, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ApiError } from '../../shared/api/client.ts'
+import { Button, Dialog, Select } from '../../shared/ui/index.ts'
 import { useHosts, type Host } from '../hosts/api.ts'
 import { useManagedDeployments } from '../deployments/api.ts'
 import { useSaveUserPermissions, useUserPermissions, type ManagedUser, type PermissionGrant, type PermissionGrantInput } from './api.ts'
-import { Modal } from './UsersModal.tsx'
+import './SettingsPage.css'
 import './UserAccessDialog.css'
 
 type Level = 'NONE' | 'VIEW' | 'OPERATE'
@@ -54,13 +55,15 @@ function errorMessage(error: unknown): string {
 
 function LevelSelect({ label, value, disabled, onChange }: { label: string; value: Level; disabled?: boolean; onChange: (l: Level) => void }) {
   return (
-    <select className="us-select" aria-label={label} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value as Level)}>
-      {(Object.keys(LABELS) as Level[]).map((l) => (
-        <option key={l} value={l}>
-          {LABELS[l]}
-        </option>
-      ))}
-    </select>
+    <div className="ua-level">
+      <Select label={label} hideLabel value={value} disabled={disabled} onChange={(e) => onChange(e.target.value as Level)}>
+        {(Object.keys(LABELS) as Level[]).map((l) => (
+          <option key={l} value={l}>
+            {LABELS[l]}
+          </option>
+        ))}
+      </Select>
+    </div>
   )
 }
 
@@ -87,15 +90,15 @@ function HostAccess({
         <strong>{host.name}</strong>
         <LevelSelect label={`Access to ${host.name}`} value={hostLevel} onChange={(l) => setLevel(`h:${host.id}`, l)} />
       </div>
-      {isPending && <span className="us-muted">Loading deployments…</span>}
-      {isError && <span className="us-muted">Could not load deployments.</span>}
+      {isPending && <span className="settings__muted">Loading deployments…</span>}
+      {isError && <span className="settings__muted">Could not load deployments.</span>}
       {data && data.length > 0 && (
         <ul className="ua-deployments">
           {data.map((d) => (
             <li key={d.id} className="ua-line">
               <span>
                 {d.name}
-                {covered && <span className="us-muted"> · covered by environment access</span>}
+                {covered && <span className="settings__muted"> · covered by environment access</span>}
               </span>
               <LevelSelect
                 label={`Access to ${d.name}`}
@@ -113,7 +116,6 @@ function HostAccess({
 
 /** ADMIN dialog: per-host and per-managed-deployment access for one user, saved as a full replacement. */
 export function UserAccessDialog({ user, onClose }: { user: ManagedUser; onClose: () => void }) {
-  const titleId = useId()
   const hosts = useHosts()
   const perms = useUserPermissions(user.id)
   const save = useSaveUserPermissions()
@@ -144,40 +146,40 @@ export function UserAccessDialog({ user, onClose }: { user: ManagedUser; onClose
   }
 
   return (
-    <Modal title={`Access for ${user.username}`} titleId={titleId} onClose={onClose}>
-      <p className="us-muted">
+    <Dialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={`Access for ${user.username}`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" disabled={!ready} loading={save.isPending} onClick={submit}>
+            Save access
+          </Button>
+        </>
+      }
+    >
+      <p className="settings__muted">
         Choose what {user.username} can see and do per environment. Access to an environment covers all its deployments.
         {user.role === 'VIEWER' && ' Viewers are limited to view, even if Operate is selected.'}
       </p>
-      {!ready && !failed && <div aria-busy="true" className="us-muted">Loading…</div>}
-      {failed && <p role="alert" className="us-error">Could not load the access settings.</p>}
-      {ready && hosts.data.length === 0 && <p className="us-muted">There are no environments yet.</p>}
+      {!ready && !failed && <p className="settings__muted">Loading…</p>}
+      {failed && <p role="alert" className="settings__error">Could not load the access settings.</p>}
+      {ready && hosts.data.length === 0 && <p className="settings__muted">There are no environments yet.</p>}
       {ready && (
         <ul className="ua-hosts">
           {hosts.data.map((h) => (
-            <HostAccess
-              key={h.id}
-              host={h}
-              levels={levels}
-              setLevel={setLevel}
-              onDeployments={registerDeployments}
-            />
+            <HostAccess key={h.id} host={h} levels={levels} setLevel={setLevel} onDeployments={registerDeployments} />
           ))}
         </ul>
       )}
       {problem && (
-        <p role="alert" className="us-error">
+        <p role="alert" className="settings__error">
           {problem}
         </p>
       )}
-      <div className="us-actions">
-        <button type="button" className="us-btn" onClick={onClose}>
-          Cancel
-        </button>
-        <button type="button" className="us-btn us-btn--primary" disabled={!ready || save.isPending} onClick={submit}>
-          Save access
-        </button>
-      </div>
-    </Modal>
+    </Dialog>
   )
 }

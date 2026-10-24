@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Badge, Button, Card, Skeleton, Switch, TextField } from "../../shared/ui/index.ts";
 import { ApiError } from "../../shared/api/client.ts";
 import {
   useAiSettings,
@@ -9,6 +10,8 @@ import {
   type AiProviderConfig,
   type AiSettings,
 } from "./api.ts";
+import { SettingsPage } from "./SettingsPage.tsx";
+import "./SettingsPage.css";
 import "./AiSettingsPage.css";
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -139,161 +142,117 @@ function AiForm({ initial }: { initial: AiSettings }) {
     });
   }
 
+  const keyHelp = clearKey
+    ? 'The stored key is removed when you save.'
+    : config.keyConfigured
+      ? `Current key: ${config.apiKeyHint ?? 'stored'}`
+      : 'No key stored.'
+
   return (
-    <form className="ai-form" onSubmit={submit} noValidate>
-      <div role="radiogroup" aria-label="Provider" className="ai-segmented">
-        {initial.providers.map((p) => (
-          <button
-            key={p.provider}
-            type="button"
-            role="radio"
-            aria-checked={p.provider === selected}
-            className="ai-segment"
-            onClick={() => choose(p.provider)}
-          >
-            {PROVIDER_LABELS[p.provider]}
-            {p.provider === initial.activeProvider && (
-              <span className="ai-active">Active</span>
-            )}
-          </button>
-        ))}
-      </div>
-      <small className="ai-muted">
-        Saving makes {PROVIDER_LABELS[selected]} the active provider.
-      </small>
-      <label className="ai-field">
-        <span>Base URL</span>
-        <input
+    <Card>
+      <form className="settings__form" onSubmit={submit} noValidate>
+        <div className="ai-provider">
+          <div role="radiogroup" aria-label="Provider" className="ai-segmented">
+            {initial.providers.map((p) => (
+              <button
+                key={p.provider}
+                type="button"
+                role="radio"
+                aria-checked={p.provider === selected}
+                className="ai-segment"
+                onClick={() => choose(p.provider)}
+              >
+                {PROVIDER_LABELS[p.provider]}
+                {p.provider === initial.activeProvider && <Badge tone="ok">Active</Badge>}
+              </button>
+            ))}
+          </div>
+          <p className="settings__muted">Saving makes {PROVIDER_LABELS[selected]} the active provider.</p>
+        </div>
+        <TextField
+          label="Base URL"
           type="url"
           value={baseUrl}
           onChange={(e) => update({ baseUrl: e.target.value })}
           autoComplete="off"
-          placeholder={
-            selected === "GEMINI"
-              ? "https://generativelanguage.googleapis.com"
-              : "https://api.openai.com/v1"
-          }
+          placeholder={selected === 'GEMINI' ? 'https://generativelanguage.googleapis.com' : 'https://api.openai.com/v1'}
         />
-      </label>
-      <label className="ai-field">
-        <span>Model</span>
-        <input
-          value={model}
-          onChange={(e) => update({ model: e.target.value })}
-          autoComplete="off"
-        />
-      </label>
-      <label className="ai-field">
-        <span>API key</span>
-        <input
+        <TextField label="Model" value={model} onChange={(e) => update({ model: e.target.value })} autoComplete="off" />
+        <TextField
+          label="API key"
           type="password"
           value={apiKey}
           disabled={clearKey}
           onChange={(e) => update({ apiKey: e.target.value })}
           autoComplete="off"
-          placeholder={
-            config.keyConfigured ? "Leave empty to keep the current key" : ""
-          }
+          placeholder={config.keyConfigured ? 'Leave empty to keep the current key' : ''}
+          help={keyHelp}
         />
-      </label>
-      <div className="ai-keyline">
-        <small className="ai-muted">
-          {clearKey
-            ? "The stored key is removed when you save."
-            : config.keyConfigured
-              ? `Current key: ${config.apiKeyHint ?? "stored"}`
-              : "No key stored."}
-        </small>
         {(config.keyConfigured || clearKey) && (
-          <button
-            type="button"
-            className="ai-btn ai-btn--text"
-            onClick={() => update({ clearKey: !clearKey, apiKey: "" })}
-          >
-            {clearKey ? "Keep stored key" : "Remove stored key"}
-          </button>
+          <div>
+            <Button size="sm" variant="ghost" onClick={() => update({ clearKey: !clearKey, apiKey: '' })}>
+              {clearKey ? 'Keep stored key' : 'Remove stored key'}
+            </Button>
+          </div>
         )}
-      </div>
-      <label className="ai-toggle">
-        <span>Enable assistant</span>
-        <input
-          type="checkbox"
-          role="switch"
+        <Switch
+          label="Enable assistant"
           checked={enabled}
           onChange={(e) => {
-            setEnabled(e.target.checked);
-            setSaved(false);
+            setEnabled(e.target.checked)
+            setSaved(false)
           }}
-          aria-label="Enable assistant"
         />
-      </label>
-      {problem && (
-        <p role="alert" className="ai-error">
-          {problem}
-        </p>
-      )}
-      {saved && (
-        <p role="status" className="ai-ok">
-          AI settings saved.
-        </p>
-      )}
-      <div className="ai-actions">
-        <button
-          type="button"
-          className="ai-btn"
-          onClick={runTest}
-          disabled={test.isPending}
-        >
-          {test.isPending ? "Testing…" : "Test connection"}
-        </button>
-        <button
-          type="submit"
-          className="ai-btn ai-btn--primary"
-          disabled={save.isPending}
-        >
-          {save.isPending ? "Saving…" : "Save"}
-        </button>
-      </div>
-      <small className="ai-muted">
-        The test uses the saved settings of the selected provider. Save changes
-        first.
-      </small>
-      {testResult && (
-        <p role="status" className={testResult.ok ? "ai-ok" : "ai-error"}>
-          {testResult.text}
-        </p>
-      )}
-      {testProblem && (
-        <p role="alert" className="ai-error">
-          {testProblem}
-        </p>
-      )}
-    </form>
-  );
+        {problem && (
+          <p role="alert" className="settings__error">
+            {problem}
+          </p>
+        )}
+        {saved && (
+          <p role="status" className="settings__ok">
+            AI settings saved.
+          </p>
+        )}
+        <div className="settings__actions">
+          <Button onClick={runTest} loading={test.isPending}>
+            Test connection
+          </Button>
+          <Button variant="primary" type="submit" loading={save.isPending}>
+            Save
+          </Button>
+        </div>
+        <p className="settings__muted">The test uses the saved settings of the selected provider. Save changes first.</p>
+        {testResult && (
+          <p role="status" className={testResult.ok ? 'settings__ok' : 'settings__error'}>
+            {testResult.text}
+          </p>
+        )}
+        {testProblem && (
+          <p role="alert" className="settings__error">
+            {testProblem}
+          </p>
+        )}
+      </form>
+    </Card>
+  )
 }
 
 /** Settings > AI assistant: ADMIN configures the AI providers. The caller restricts access to ADMIN. */
 export function AiSettingsPage() {
-  const { data, isPending, isError } = useAiSettings();
+  const { data, isPending, isError } = useAiSettings()
 
   return (
-    <section className="ai">
-      <h2 className="ai-title">AI assistant</h2>
-      <p className="ai-muted">
-        Connect an OpenAI-compatible provider or Google Gemini. The API key is
-        stored encrypted and never shown again.
-      </p>
-      {isPending && (
-        <div aria-busy="true" className="ai-muted">
-          Loading…
-        </div>
-      )}
+    <SettingsPage
+      title="AI assistant"
+      subtitle="Connect an OpenAI-compatible provider or Google Gemini. The API key is stored encrypted and never shown again."
+    >
+      {isPending && <Skeleton width="100%" height="var(--space-8)" />}
       {isError && (
-        <p role="alert" className="ai-error">
+        <p role="alert" className="settings__error">
           Could not load the AI settings.
         </p>
       )}
       {data && <AiForm initial={data} />}
-    </section>
-  );
+    </SettingsPage>
+  )
 }

@@ -1,5 +1,8 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { FlaskConical, Pencil, Trash2 } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
 import { ApiError } from '../../shared/api/client.ts'
+import { Button, ConfirmDialog, Dialog, ResourceTable, TextField, type ResourceColumn } from '../../shared/ui/index.ts'
+import type { RowActions } from '../../shared/ui/ResourceTable.tsx'
 import {
   useCreateRegistry,
   useDeleteRegistry,
@@ -9,7 +12,8 @@ import {
   type RegistryCredential,
   type RegistryTestStatus,
 } from './api.ts'
-import './RegistriesSettingsPage.css'
+import { SettingsPage } from './SettingsPage.tsx'
+import './SettingsPage.css'
 
 const FIELD_MAX = 255
 
@@ -34,35 +38,7 @@ const TEST_MESSAGES: Record<RegistryTestStatus, { ok: boolean; text: string }> =
   UNREACHABLE: { ok: false, text: 'The registry could not be reached.' },
 }
 
-function Modal({ title, titleId, onClose, children }: { title: string; titleId: string; onClose: () => void; children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null
-    ref.current?.focus()
-    return () => previous?.focus()
-  }, [])
-  return (
-    <div className="rg-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div
-        ref={ref}
-        className="rg-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={(e) => e.key === 'Escape' && onClose()}
-      >
-        <h2 id={titleId} className="rg-dialog__title">
-          {title}
-        </h2>
-        {children}
-      </div>
-    </div>
-  )
-}
-
 function CredentialDialog({ credential, onClose }: { credential: RegistryCredential | null; onClose: () => void }) {
-  const titleId = useId()
   const [name, setName] = useState(credential?.name ?? '')
   const [registryHost, setRegistryHost] = useState(credential?.registryHost ?? '')
   const [username, setUsername] = useState(credential?.username ?? '')
@@ -92,56 +68,45 @@ function CredentialDialog({ credential, onClose }: { credential: RegistryCredent
   }
 
   return (
-    <Modal title={credential ? 'Edit registry' : 'Add registry'} titleId={titleId} onClose={onClose}>
-      <form onSubmit={submit} className="rg-form">
-        <label className="rg-field">
-          <span>Name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
-        </label>
-        <label className="rg-field">
-          <span>Registry host</span>
-          <input
-            value={registryHost}
-            onChange={(e) => setRegistryHost(e.target.value)}
-            autoComplete="off"
-            placeholder="ghcr.io"
-          />
-        </label>
-        <label className="rg-field">
-          <span>Username</span>
-          <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" />
-        </label>
-        <label className="rg-field">
-          <span>Password or token</span>
-          <input
-            type="password"
-            value={secret}
-            onChange={(e) => setSecret(e.target.value)}
-            autoComplete="off"
-            placeholder={credential ? 'Leave empty to keep the current secret' : ''}
-          />
-        </label>
-        {credential && <small className="rg-muted">Current: {credential.secretHint}</small>}
+    <Dialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={credential ? 'Edit registry' : 'Add registry'}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" type="submit" form="registry-form" loading={pending}>
+            Save
+          </Button>
+        </>
+      }
+    >
+      <form id="registry-form" onSubmit={submit} className="settings__form">
+        <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
+        <TextField label="Registry host" value={registryHost} onChange={(e) => setRegistryHost(e.target.value)} autoComplete="off" placeholder="ghcr.io" />
+        <TextField label="Username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" />
+        <TextField
+          label="Password or token"
+          type="password"
+          value={secret}
+          onChange={(e) => setSecret(e.target.value)}
+          autoComplete="off"
+          placeholder={credential ? 'Leave empty to keep the current secret' : ''}
+          help={credential ? `Current: ${credential.secretHint}` : undefined}
+        />
         {problem && (
-          <p role="alert" className="rg-error">
+          <p role="alert" className="settings__error">
             {problem}
           </p>
         )}
-        <div className="rg-actions">
-          <button type="button" className="rg-btn" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="rg-btn rg-btn--primary" disabled={pending}>
-            Save
-          </button>
-        </div>
       </form>
-    </Modal>
+    </Dialog>
   )
 }
 
 function TestDialog({ credential, onClose }: { credential: RegistryCredential; onClose: () => void }) {
-  const titleId = useId()
   const [problem, setProblem] = useState<string | null>(null)
   const test = useTestRegistry()
   const result = test.isPending ? null : test.data ? TEST_MESSAGES[test.data.status] : null
@@ -153,68 +118,68 @@ function TestDialog({ credential, onClose }: { credential: RegistryCredential; o
   }
 
   return (
-    <Modal title={`Test ${credential.name}`} titleId={titleId} onClose={onClose}>
-      <form onSubmit={run} className="rg-form">
-        <p className="rg-text">
+    <Dialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={`Test ${credential.name}`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Close
+          </Button>
+          <Button variant="primary" type="submit" form="registry-test-form" loading={test.isPending}>
+            Run test
+          </Button>
+        </>
+      }
+    >
+      <form id="registry-test-form" onSubmit={run} className="settings__form">
+        <p className="settings__text">
           Logs in to <strong>{credential.registryHost}</strong> as {credential.username}.
         </p>
-        {test.isPending && <p className="rg-muted">Testing…</p>}
+        {test.isPending && <p className="settings__muted">Testing…</p>}
         {result && (
-          <p role="status" className={result.ok ? 'rg-ok' : 'rg-error'}>
+          <p role="status" className={result.ok ? 'settings__ok' : 'settings__error'}>
             {result.text}
           </p>
         )}
         {problem && (
-          <p role="alert" className="rg-error">
+          <p role="alert" className="settings__error">
             {problem}
           </p>
         )}
-        <div className="rg-actions">
-          <button type="button" className="rg-btn" onClick={onClose}>
-            Close
-          </button>
-          <button type="submit" className="rg-btn rg-btn--primary" disabled={test.isPending}>
-            Run test
-          </button>
-        </div>
       </form>
-    </Modal>
+    </Dialog>
   )
 }
 
 function DeleteDialog({ credential, onClose }: { credential: RegistryCredential; onClose: () => void }) {
-  const titleId = useId()
   const [problem, setProblem] = useState<string | null>(null)
   const remove = useDeleteRegistry()
   return (
-    <Modal title="Delete registry" titleId={titleId} onClose={onClose}>
-      <p className="rg-text">
+    <ConfirmDialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title="Delete registry"
+      confirmLabel="Delete"
+      danger
+      loading={remove.isPending}
+      onConfirm={() =>
+        remove.mutate(credential.id, {
+          onSuccess: onClose,
+          onError: (err) => setProblem(errorMessage(err, 'Could not delete the credential. Try again.')),
+        })
+      }
+    >
+      <p className="settings__text">
         Delete <strong>{credential.name}</strong>? The stored secret is removed and pulls from this registry stop using it.
       </p>
       {problem && (
-        <p role="alert" className="rg-error">
+        <p role="alert" className="settings__error">
           {problem}
         </p>
       )}
-      <div className="rg-actions">
-        <button type="button" className="rg-btn" onClick={onClose}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          className="rg-btn rg-btn--danger"
-          disabled={remove.isPending}
-          onClick={() =>
-            remove.mutate(credential.id, {
-              onSuccess: onClose,
-              onError: (err) => setProblem(errorMessage(err, 'Could not delete the credential. Try again.')),
-            })
-          }
-        >
-          Delete
-        </button>
-      </div>
-    </Modal>
+    </ConfirmDialog>
   )
 }
 
@@ -225,50 +190,52 @@ type DialogState =
 
 /** Settings > Registries: ADMIN management of private registry logins. The caller restricts access to ADMIN. */
 export function RegistriesSettingsPage() {
-  const { data, isPending, isError } = useRegistries()
+  const { data, isPending, isError, refetch } = useRegistries()
   const [dialog, setDialog] = useState<DialogState>(null)
   const close = () => setDialog(null)
 
+  const columns: ResourceColumn<RegistryCredential>[] = [
+    { id: 'name', header: 'Name', sortValue: (c) => c.name, defaultWidth: 200, hideable: false, render: (c) => <strong>{c.name}</strong> },
+    { id: 'host', header: 'Host', sortValue: (c) => c.registryHost, defaultWidth: 220, render: (c) => <span className="settings__mono">{c.registryHost}</span> },
+    { id: 'username', header: 'Username', sortValue: (c) => c.username, defaultWidth: 180, render: (c) => c.username },
+    { id: 'secret', header: 'Secret', defaultWidth: 180, render: (c) => <span className="settings__mono">{c.secretHint}</span> },
+  ]
+  const rowActions = (c: RegistryCredential): RowActions => ({
+    primary: [
+      { label: 'Test', icon: FlaskConical, onSelect: () => setDialog({ kind: 'test', credential: c }) },
+      { label: 'Edit', icon: Pencil, onSelect: () => setDialog({ kind: 'edit', credential: c }) },
+      { label: 'Delete', icon: Trash2, danger: true, onSelect: () => setDialog({ kind: 'delete', credential: c }) },
+    ],
+  })
+
   return (
-    <section className="rg">
-      <div className="rg-bar">
-        <h2 className="rg-title">Registries</h2>
-        <button type="button" className="rg-btn rg-btn--primary" onClick={() => setDialog({ kind: 'edit', credential: null })}>
+    <SettingsPage
+      wide
+      title="Registries"
+      subtitle="Logins for pulling images from private registries. Saved secrets are never shown again."
+      actions={
+        <Button variant="primary" onClick={() => setDialog({ kind: 'edit', credential: null })}>
           Add registry
-        </button>
-      </div>
-      <p className="rg-muted">Logins for pulling images from private registries. Saved secrets are never shown again.</p>
-      {isPending && <div aria-busy="true" className="rg-muted">Loading…</div>}
-      {isError && <p role="alert" className="rg-error">Could not load registries.</p>}
-      {data && data.length === 0 && <p className="rg-muted">No registries yet.</p>}
-      {data && data.length > 0 && (
-        <ul className="rg-list">
-          {data.map((c) => (
-            <li key={c.id} className="rg-row">
-              <div className="rg-row__main">
-                <strong>{c.name}</strong>
-                <span className="rg-muted">Host {c.registryHost}</span>
-                <span className="rg-muted">User {c.username}</span>
-                <span className="rg-muted">Secret {c.secretHint}</span>
-              </div>
-              <div className="rg-row__actions">
-                <button type="button" className="rg-btn" aria-label={`Test ${c.name}`} onClick={() => setDialog({ kind: 'test', credential: c })}>
-                  Test
-                </button>
-                <button type="button" className="rg-btn" aria-label={`Edit ${c.name}`} onClick={() => setDialog({ kind: 'edit', credential: c })}>
-                  Edit
-                </button>
-                <button type="button" className="rg-btn rg-btn--danger-text" aria-label={`Delete ${c.name}`} onClick={() => setDialog({ kind: 'delete', credential: c })}>
-                  Delete
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+        </Button>
+      }
+    >
+      <ResourceTable
+        label="registries"
+        columns={columns}
+        rows={data}
+        rowKey={(c) => c.id}
+        searchText={(c) => `${c.name} ${c.registryHost} ${c.username}`}
+        defaultSort="name"
+        emptyMessage="No registries yet."
+        isPending={isPending}
+        error={isError ? 'Could not load registries.' : null}
+        onRetry={() => void refetch()}
+        rowActions={rowActions}
+        rowLabel={(c) => c.name}
+      />
       {dialog?.kind === 'edit' && <CredentialDialog credential={dialog.credential} onClose={close} />}
       {dialog?.kind === 'test' && <TestDialog credential={dialog.credential} onClose={close} />}
       {dialog?.kind === 'delete' && <DeleteDialog credential={dialog.credential} onClose={close} />}
-    </section>
+    </SettingsPage>
   )
 }

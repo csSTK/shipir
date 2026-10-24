@@ -1,0 +1,25 @@
+.ui-select {
+  position: relative;
+  display: block;
+}
+.ui-select__input {
+  appearance: none;
+  padding-right: var(--space-6);
+  cursor: pointer;
+}
+.ui-select__chevron {
+  position: absolute;
+  right: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+.ui-select--bare .ui-field__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
