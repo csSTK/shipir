@@ -19,7 +19,7 @@ This is a learning and portfolio project focused on Java backend development. Th
   - Environment variables per deployment, stored encrypted.
   - Deployments from a (private) Git repository with an access token: Pull & redeploy, and optional polling that redeploys on new commits.
 - **Config editor:** edit a deployment's config files in the browser, with protection against path traversal and an automatic backup before every write.
-- **Live streaming:** container logs, Docker events, Compose output and an exec terminal over WebSocket.
+- **Live streaming:** container logs, container stats (CPU, memory, network, disk I/O with sparklines), Docker events, Compose output and an exec terminal over WebSocket.
 - **Access control:** users with roles (Admin, Operator, Viewer) plus fine-grained permissions per host and deployment.
 - **Audit log:** a record of who did what, and when.
 - **AI assistant:** an in-app chat (any OpenAI-compatible API, NVIDIA build by default; an admin sets the key at Settings > AI assistant) that answers from live data and acts as the signed-in user with their role. Every change waits for an explicit Confirm. Chats are saved, can be reopened, and can be shared read-only with admins for debugging.
