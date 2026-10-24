@@ -187,13 +187,9 @@ public class ContainerStatsStreamService {
     }
 
     private void stop(HostStream stream) {
-        Thread worker;
         synchronized (stream) {
             stream.closed = true;
-            worker = stream.worker;
-        }
-        if (worker != null) {
-            worker.interrupt();
+            stream.notifyAll(); // wakes a sleeping worker; never interrupt, it could be inside a DB call
         }
     }
 
@@ -218,10 +214,21 @@ public class ContainerStatsStreamService {
                     log.warn("Container stats of host {} failed: {}", stream.hostId, e.getClass().getSimpleName());
                     broadcast(stream, List.of(), "UNAVAILABLE");
                 }
-                Thread.sleep(properties.interval());
+                pause(stream);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    /** Sleeps one interval; woken early (without interrupt) when the stream is closed. */
+    private void pause(HostStream stream) throws InterruptedException {
+        long deadline = System.nanoTime() + properties.interval().toNanos();
+        synchronized (stream) {
+            long remaining;
+            while (!stream.closed && (remaining = deadline - System.nanoTime()) > 0) {
+                java.util.concurrent.TimeUnit.NANOSECONDS.timedWait(stream, remaining);
+            }
         }
     }
 
@@ -268,6 +275,7 @@ public class ContainerStatsStreamService {
         }
         synchronized (stream) {
             stream.closed = true;
+            stream.notifyAll();
         }
     }
 
