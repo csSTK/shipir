@@ -279,4 +279,47 @@ class GeminiLlmClientTest {
         assertThat(ex.getMessage()).doesNotContain(KEY);
         assertThat(output.getAll()).doesNotContain(KEY);
     }
+
+    @Test
+    void providerErrorBodyIsLoggedAtDebugWithKeyRedactedAndCapped(CapturedOutput output) {
+        respond(400, "application/json", "{\"error\":{\"message\":\"Invalid value at contents key " + KEY
+                + " HEAD-MARK " + "x".repeat(5000) + " TAIL-MARK\"}}");
+
+        LlmException ex = catchLlm();
+
+        assertThat(ex.code()).isEqualTo(LlmException.Code.BAD_RESPONSE);
+        assertThat(ex.getMessage()).isEqualTo("LLM provider answered HTTP 400");
+        assertThat(output.getAll())
+                .contains("Gemini provider answered HTTP 400")
+                .contains("Invalid value at contents key ***")
+                .contains("HEAD-MARK")
+                .doesNotContain(KEY)
+                .doesNotContain("x".repeat(2001))
+                .doesNotContain("TAIL-MARK");
+    }
+
+    @Test
+    void errorBodyLogIsSkippedBelowDebug(CapturedOutput output) {
+        logger.setLevel(ch.qos.logback.classic.Level.INFO);
+        respond(400, "application/json", "{\"error\":\"quiet-body-marker\"}");
+
+        catchLlm();
+
+        assertThat(output.getAll()).doesNotContain("quiet-body-marker");
+    }
+
+    private ch.qos.logback.classic.Logger logger;
+    private ch.qos.logback.classic.Level previousLevel;
+
+    @BeforeEach
+    void enableDebugLogging() {
+        logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(GeminiLlmClient.class);
+        previousLevel = logger.getLevel();
+        logger.setLevel(ch.qos.logback.classic.Level.DEBUG);
+    }
+
+    @AfterEach
+    void restoreLogLevel() {
+        logger.setLevel(previousLevel);
+    }
 }

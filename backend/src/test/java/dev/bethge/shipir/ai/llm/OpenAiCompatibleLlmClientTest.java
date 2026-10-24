@@ -276,6 +276,37 @@ class OpenAiCompatibleLlmClientTest {
         assertThat(output.getAll()).doesNotContain(KEY).doesNotContain("Bearer");
     }
 
+    @Test
+    void providerErrorBodyIsLoggedAtDebugWithKeyRedactedAndCapped(CapturedOutput output) {
+        respond(429, "application/json", "{\"error\":\"rate detail " + KEY + " HEAD-MARK "
+                + "x".repeat(5000) + " TAIL-MARK\"}");
+
+        assertThatThrownBy(() -> call(new ArrayList<>())).isInstanceOfSatisfying(LlmException.class,
+                e -> assertThat(e.getMessage()).isEqualTo("LLM provider rate limit reached"));
+        assertThat(output.getAll())
+                .contains("LLM provider answered HTTP 429")
+                .contains("rate detail ***")
+                .contains("HEAD-MARK")
+                .doesNotContain(KEY)
+                .doesNotContain("x".repeat(2001))
+                .doesNotContain("TAIL-MARK");
+    }
+
+    private ch.qos.logback.classic.Logger logger;
+    private ch.qos.logback.classic.Level previousLevel;
+
+    @BeforeEach
+    void enableDebugLogging() {
+        logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(OpenAiCompatibleLlmClient.class);
+        previousLevel = logger.getLevel();
+        logger.setLevel(ch.qos.logback.classic.Level.DEBUG);
+    }
+
+    @AfterEach
+    void restoreLogLevel() {
+        logger.setLevel(previousLevel);
+    }
+
     private static void sleep(long ms) {
         try {
             Thread.sleep(ms);

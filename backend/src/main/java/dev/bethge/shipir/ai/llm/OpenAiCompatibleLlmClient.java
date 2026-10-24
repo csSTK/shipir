@@ -79,7 +79,7 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
         try (InputStream body = response.body()) {
             int status = response.statusCode();
             if (status < 200 || status >= 300) {
-                log.debug("LLM provider answered HTTP {}", status);
+                logErrorBody(status, body, apiKey);
                 throw statusError(status);
             }
             return readStream(body, onToken, timedOut);
@@ -88,6 +88,19 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
                 throw new LlmException(LlmException.Code.TIMEOUT, "LLM stream stalled");
             }
             throw new LlmException(LlmException.Code.UNREACHABLE, "LLM stream was interrupted");
+        }
+    }
+
+    /** Debug only: the body is read under the idle watchdog so a stalled error response cannot hang the call. */
+    private void logErrorBody(int status, InputStream body, String apiKey) {
+        if (!log.isDebugEnabled()) {
+            return;
+        }
+        ScheduledFuture<?> watchdog = arm(body, new AtomicBoolean());
+        try {
+            log.debug("LLM provider answered HTTP {}: {}", status, ProviderErrorBody.read(body, apiKey));
+        } finally {
+            watchdog.cancel(false);
         }
     }
 
