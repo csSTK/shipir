@@ -132,7 +132,7 @@ class ChatOrchestratorTest {
 
     @BeforeEach
     void reset() {
-        Mockito.when(settings.activeConfig()).thenReturn(Optional.of(new AiConfig("https://llm.test/v1", "m", "k")));
+        Mockito.when(settings.activeConfig()).thenReturn(Optional.of(new AiConfig(dev.bethge.shipir.ai.settings.AiProvider.OPENAI_COMPATIBLE, "https://llm.test/v1", "m", "k")));
         llm.reset();
         jdbc.update("DELETE FROM audit_log");
         jdbc.update("DELETE FROM chat_sessions");

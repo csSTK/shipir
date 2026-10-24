@@ -1,5 +1,6 @@
 package dev.bethge.shipir.ai.settings;
 
+import dev.bethge.shipir.ai.settings.dto.AiConnectionTestRequest;
 import dev.bethge.shipir.ai.settings.dto.AiConnectionTestResponse;
 import dev.bethge.shipir.ai.settings.dto.AiSettingsRequest;
 import dev.bethge.shipir.ai.settings.dto.AiSettingsResponse;
@@ -37,8 +38,8 @@ class AiSettingsController {
     }
 
     @PostMapping("/test")
-    AiConnectionTestResponse test() {
-        return service.test();
+    AiConnectionTestResponse test(@RequestBody(required = false) AiConnectionTestRequest request) {
+        return service.test(request == null ? null : request.provider());
     }
 
     @ExceptionHandler(AiSettingsException.class)

@@ -61,11 +61,18 @@ class AiSettingsApiTest extends AiSettingsTestBase {
         Login l = login("admin");
         mvc.perform(get("/api/settings/ai").session(l.session()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.baseUrl").value("https://integrate.api.nvidia.com/v1"))
-                .andExpect(jsonPath("$.model").value("z-ai/glm-5.3-flash"))
+                .andExpect(jsonPath("$.activeProvider").value("OPENAI_COMPATIBLE"))
                 .andExpect(jsonPath("$.enabled").value(false))
-                .andExpect(jsonPath("$.keyConfigured").value(false))
-                .andExpect(jsonPath("$.apiKeyHint").doesNotExist());
+                .andExpect(jsonPath("$.providers.length()").value(2))
+                .andExpect(jsonPath("$.providers[0].provider").value("OPENAI_COMPATIBLE"))
+                .andExpect(jsonPath("$.providers[0].baseUrl").value("https://integrate.api.nvidia.com/v1"))
+                .andExpect(jsonPath("$.providers[0].model").value("z-ai/glm-5.3-flash"))
+                .andExpect(jsonPath("$.providers[0].keyConfigured").value(false))
+                .andExpect(jsonPath("$.providers[0].apiKeyHint").doesNotExist())
+                .andExpect(jsonPath("$.providers[1].provider").value("GEMINI"))
+                .andExpect(jsonPath("$.providers[1].baseUrl").value("https://generativelanguage.googleapis.com/v1beta"))
+                .andExpect(jsonPath("$.providers[1].model").value("gemini-flash-latest"))
+                .andExpect(jsonPath("$.providers[1].keyConfigured").value(false));
     }
 
     @Test
@@ -74,10 +81,10 @@ class AiSettingsApiTest extends AiSettingsTestBase {
         String body = mvc.perform(l.write(put("/api/settings/ai")).contentType(APPLICATION_JSON)
                         .content(json("https://llm.example.com/v1", "my-model", true, KEY)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.model").value("my-model"))
+                .andExpect(jsonPath("$.providers[0].model").value("my-model"))
                 .andExpect(jsonPath("$.enabled").value(true))
-                .andExpect(jsonPath("$.keyConfigured").value(true))
-                .andExpect(jsonPath("$.apiKeyHint").isNotEmpty())
+                .andExpect(jsonPath("$.providers[0].keyConfigured").value(true))
+                .andExpect(jsonPath("$.providers[0].apiKeyHint").isNotEmpty())
                 .andExpect(jsonPath("$.apiKey").doesNotExist())
                 .andReturn().getResponse().getContentAsString();
         assertThat(body).doesNotContain("SECRETKEY");
@@ -86,11 +93,11 @@ class AiSettingsApiTest extends AiSettingsTestBase {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(read).doesNotContain("SECRETKEY");
 
-        byte[] stored = jdbc.queryForObject("SELECT api_key_ciphertext FROM ai_settings", byte[].class);
+        byte[] stored = jdbc.queryForObject("SELECT api_key_ciphertext FROM ai_provider_configs WHERE provider = 'OPENAI_COMPATIBLE'", byte[].class);
         assertThat(new String(stored, StandardCharsets.ISO_8859_1)).doesNotContain("SECRETKEY");
-        assertThat(jdbc.queryForObject("SELECT api_key_hint FROM ai_settings", String.class))
+        assertThat(jdbc.queryForObject("SELECT api_key_hint FROM ai_provider_configs WHERE provider = 'OPENAI_COMPATIBLE'", String.class))
                 .doesNotContain("SECRETKEY").hasSizeLessThanOrEqualTo(32);
-        assertThat(jdbc.queryForObject("SELECT updated_by FROM ai_settings", Object.class)).isNotNull();
+        assertThat(jdbc.queryForObject("SELECT updated_by FROM ai_provider_configs WHERE provider = 'OPENAI_COMPATIBLE'", Object.class)).isNotNull();
         assertThat(output.getAll()).doesNotContain("SECRETKEY");
     }
 
@@ -99,22 +106,22 @@ class AiSettingsApiTest extends AiSettingsTestBase {
         Login l = login("admin");
         mvc.perform(l.write(put("/api/settings/ai")).contentType(APPLICATION_JSON)
                 .content(json("https://llm.example.com/v1", "m", true, KEY))).andExpect(status().isOk());
-        byte[] before = jdbc.queryForObject("SELECT api_key_ciphertext FROM ai_settings", byte[].class);
+        byte[] before = jdbc.queryForObject("SELECT api_key_ciphertext FROM ai_provider_configs WHERE provider = 'OPENAI_COMPATIBLE'", byte[].class);
 
         mvc.perform(l.write(put("/api/settings/ai")).contentType(APPLICATION_JSON)
                         .content(json("https://llm.example.com/v1", "m2", false, null)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.model").value("m2"))
-                .andExpect(jsonPath("$.keyConfigured").value(true));
-        assertThat(jdbc.queryForObject("SELECT api_key_ciphertext FROM ai_settings", byte[].class)).isEqualTo(before);
+                .andExpect(jsonPath("$.providers[0].model").value("m2"))
+                .andExpect(jsonPath("$.providers[0].keyConfigured").value(true));
+        assertThat(jdbc.queryForObject("SELECT api_key_ciphertext FROM ai_provider_configs WHERE provider = 'OPENAI_COMPATIBLE'", byte[].class)).isEqualTo(before);
 
         mvc.perform(l.write(put("/api/settings/ai")).contentType(APPLICATION_JSON)
                         .content(json("https://llm.example.com/v1", "m2", false, "")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.keyConfigured").value(false))
-                .andExpect(jsonPath("$.apiKeyHint").doesNotExist());
-        assertThat(jdbc.queryForObject("SELECT api_key_ciphertext FROM ai_settings", byte[].class)).isNull();
-        assertThat(jdbc.queryForObject("SELECT api_key_hint FROM ai_settings", String.class)).isNull();
+                .andExpect(jsonPath("$.providers[0].keyConfigured").value(false))
+                .andExpect(jsonPath("$.providers[0].apiKeyHint").doesNotExist());
+        assertThat(jdbc.queryForObject("SELECT api_key_ciphertext FROM ai_provider_configs WHERE provider = 'OPENAI_COMPATIBLE'", byte[].class)).isNull();
+        assertThat(jdbc.queryForObject("SELECT api_key_hint FROM ai_provider_configs WHERE provider = 'OPENAI_COMPATIBLE'", String.class)).isNull();
     }
 
     @Test
@@ -126,11 +133,12 @@ class AiSettingsApiTest extends AiSettingsTestBase {
                 json("ftp://llm.example.com/v1", "m", true, null),
                 json("not a url", "m", true, null),
                 json("https://user:pw@llm.example.com/v1", "m", true, null),
-                "{\"baseUrl\":\"https://llm.example.com/v1\",\"model\":\"m\"}")) {
+                "{\"baseUrl\":\"https://llm.example.com/v1\",\"model\":\"m\",\"activeProvider\":\"GEMINI\"}",
+                "{\"baseUrl\":\"https://llm.example.com/v1\",\"model\":\"m\",\"enabled\":true,\"activeProvider\":\"BOGUS\"}")) {
             mvc.perform(l.write(put("/api/settings/ai")).contentType(APPLICATION_JSON).content(bad))
                     .andExpect(status().isBadRequest());
         }
-        assertThat(jdbc.queryForObject("SELECT model FROM ai_settings", String.class)).isEqualTo("z-ai/glm-5.3-flash");
+        assertThat(jdbc.queryForObject("SELECT model FROM ai_provider_configs WHERE provider = 'OPENAI_COMPATIBLE'", String.class)).isEqualTo("z-ai/glm-5.3-flash");
     }
 
     @Test
@@ -231,6 +239,7 @@ class AiSettingsApiTest extends AiSettingsTestBase {
         mvc.perform(l.write(put("/api/settings/ai")).contentType(APPLICATION_JSON)
                 .content(json("https://llm.example.com/v1", "m", true, null))).andExpect(status().isOk());
         AiConfig config = service.activeConfig().orElseThrow();
+        assertThat(config.provider()).isEqualTo(AiProvider.OPENAI_COMPATIBLE);
         assertThat(config.apiKey()).isEqualTo(KEY);
         assertThat(config.baseUrl()).isEqualTo("https://llm.example.com/v1");
         assertThat(config.model()).isEqualTo("m");
@@ -238,7 +247,91 @@ class AiSettingsApiTest extends AiSettingsTestBase {
     }
 
     @Test
+    void switchingProviderKeepsBothKeysAndConfigs() throws Exception {
+        Login l = login("admin");
+        mvc.perform(l.write(put("/api/settings/ai")).contentType(APPLICATION_JSON)
+                .content(json("https://llm.example.com/v1", "oa-model", true, KEY))).andExpect(status().isOk());
+        String body = mvc.perform(l.write(put("/api/settings/ai")).contentType(APPLICATION_JSON)
+                        .content(json("GEMINI", "GEMINI", "https://gem.example.com/v1beta", "gem-model", true,
+                                "AIzaGEMKEY1234567890abcd")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activeProvider").value("GEMINI"))
+                .andExpect(jsonPath("$.providers[0].keyConfigured").value(true))
+                .andExpect(jsonPath("$.providers[0].model").value("oa-model"))
+                .andExpect(jsonPath("$.providers[1].keyConfigured").value(true))
+                .andExpect(jsonPath("$.providers[1].model").value("gem-model"))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(body).doesNotContain("SECRETKEY").doesNotContain("GEMKEY");
+
+        AiConfig gemini = service.activeConfig().orElseThrow();
+        assertThat(gemini.provider()).isEqualTo(AiProvider.GEMINI);
+        assertThat(gemini.apiKey()).isEqualTo("AIzaGEMKEY1234567890abcd");
+        assertThat(gemini.model()).isEqualTo("gem-model");
+
+        // switch back without touching any key: the first provider's key is still there
+        mvc.perform(l.write(put("/api/settings/ai")).contentType(APPLICATION_JSON)
+                        .content(json("OPENAI_COMPATIBLE", "OPENAI_COMPATIBLE", "https://llm.example.com/v1",
+                                "oa-model", true, null)))
+                .andExpect(status().isOk());
+        AiConfig back = service.activeConfig().orElseThrow();
+        assertThat(back.provider()).isEqualTo(AiProvider.OPENAI_COMPATIBLE);
+        assertThat(back.apiKey()).isEqualTo(KEY);
+    }
+
+    @Test
+    void providerFieldEditsAnotherProviderWithoutChangingKeysOfTheActiveOne() throws Exception {
+        Login l = login("admin");
+        mvc.perform(l.write(put("/api/settings/ai")).contentType(APPLICATION_JSON)
+                .content(json("https://llm.example.com/v1", "m", true, KEY))).andExpect(status().isOk());
+        mvc.perform(l.write(put("/api/settings/ai")).contentType(APPLICATION_JSON)
+                        .content(json("OPENAI_COMPATIBLE", "GEMINI", "https://gem.example.com/v1beta", "g2", true,
+                                "")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activeProvider").value("OPENAI_COMPATIBLE"))
+                .andExpect(jsonPath("$.providers[0].keyConfigured").value(true))
+                .andExpect(jsonPath("$.providers[1].model").value("g2"))
+                .andExpect(jsonPath("$.providers[1].keyConfigured").value(false));
+    }
+
+    @Test
+    void activeConfigIsEmptyWhenOnlyTheInactiveProviderHasAKey() throws Exception {
+        Login l = login("admin");
+        mvc.perform(l.write(put("/api/settings/ai")).contentType(APPLICATION_JSON)
+                .content(json("https://llm.example.com/v1", "m", true, KEY))).andExpect(status().isOk());
+        mvc.perform(l.write(put("/api/settings/ai")).contentType(APPLICATION_JSON)
+                .content(json("GEMINI", "GEMINI", "https://gem.example.com/v1beta", "g", true, null)))
+                .andExpect(status().isOk());
+        assertThat(service.activeConfig()).isEmpty();
+    }
+
+    @Test
+    void testOfProviderWithoutKeyIsRejectedAndGeminiTestIsNotYetSupported() throws Exception {
+        Login l = login("admin");
+        mvc.perform(l.write(put("/api/settings/ai")).contentType(APPLICATION_JSON)
+                .content(json("OPENAI_COMPATIBLE", "GEMINI", "https://gem.example.com/v1beta", "g", true,
+                        "AIzaGEMKEY1234567890abcd"))).andExpect(status().isOk());
+        mvc.perform(l.write(post("/api/settings/ai/test")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("API_KEY_REQUIRED"));
+        mvc.perform(l.write(post("/api/settings/ai/test")).contentType(APPLICATION_JSON)
+                        .content("{\"provider\":\"GEMINI\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PROVIDER_TEST_UNSUPPORTED"));
+    }
+
+    @Test
+    void testWithProviderBodyTestsThatProvider() throws Exception {
+        Login l = login("admin");
+        mvc.perform(l.write(put("/api/settings/ai")).contentType(APPLICATION_JSON)
+                .content(json("GEMINI", "OPENAI_COMPATIBLE", stubUrl, "m", true, KEY))).andExpect(status().isOk());
+        mvc.perform(l.write(post("/api/settings/ai/test")).contentType(APPLICATION_JSON)
+                        .content("{\"provider\":\"OPENAI_COMPATIBLE\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("OK"));
+    }
+
+    @Test
     void requestToStringHidesKey() {
-        assertThat(new AiSettingsRequest("https://x/v1", "m", true, KEY).toString()).doesNotContain("SECRETKEY");
+        assertThat(new AiSettingsRequest(true, AiProvider.GEMINI, null, "https://x/v1", "m", KEY).toString()).doesNotContain("SECRETKEY");
     }
 }

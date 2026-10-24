@@ -1,6 +1,13 @@
 package dev.bethge.shipir.ai.settings.dto;
 
-/** The key itself is never returned, only a masked hint. */
-public record AiSettingsResponse(String baseUrl, String model, boolean enabled, boolean keyConfigured,
-                                 String apiKeyHint) {
+import dev.bethge.shipir.ai.settings.AiProvider;
+
+import java.util.List;
+
+/** Keys are never returned, only a masked hint per provider. */
+public record AiSettingsResponse(AiProvider activeProvider, boolean enabled, List<ProviderSettings> providers) {
+
+    public record ProviderSettings(AiProvider provider, String baseUrl, String model, boolean keyConfigured,
+                                   String apiKeyHint) {
+    }
 }

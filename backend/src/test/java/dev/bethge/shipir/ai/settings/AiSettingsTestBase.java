@@ -49,8 +49,13 @@ abstract class AiSettingsTestBase {
     @BeforeEach
     void resetState() {
         jdbc.update("DELETE FROM audit_log");
-        jdbc.update("UPDATE ai_settings SET base_url = 'https://integrate.api.nvidia.com/v1', "
-                + "model = 'z-ai/glm-5.3-flash', api_key_ciphertext = NULL, api_key_hint = NULL, enabled = FALSE");
+        jdbc.update("UPDATE ai_settings SET active_provider = 'OPENAI_COMPATIBLE', enabled = FALSE");
+        jdbc.update("UPDATE ai_provider_configs SET base_url = 'https://integrate.api.nvidia.com/v1', "
+                + "model = 'z-ai/glm-5.3-flash', api_key_ciphertext = NULL, api_key_hint = NULL "
+                + "WHERE provider = 'OPENAI_COMPATIBLE'");
+        jdbc.update("UPDATE ai_provider_configs SET base_url = 'https://generativelanguage.googleapis.com/v1beta', "
+                + "model = 'gemini-flash-latest', api_key_ciphertext = NULL, api_key_hint = NULL "
+                + "WHERE provider = 'GEMINI'");
         for (Role role : Role.values()) {
             String name = role.name().toLowerCase();
             User u = users.findByUsername(name).orElseGet(() -> new User(name, "x", role));
@@ -79,8 +84,15 @@ abstract class AiSettingsTestBase {
         return new Login((MockHttpSession) r.getRequest().getSession(false), anon);
     }
 
+    /** Edits the OPENAI_COMPATIBLE config with it as the active provider. */
     static String json(String baseUrl, String model, boolean enabled, String apiKey) {
+        return json("OPENAI_COMPATIBLE", "OPENAI_COMPATIBLE", baseUrl, model, enabled, apiKey);
+    }
+
+    static String json(String activeProvider, String provider, String baseUrl, String model, boolean enabled,
+                       String apiKey) {
         String keyPart = apiKey == null ? "" : ",\"apiKey\":\"%s\"".formatted(apiKey);
-        return "{\"baseUrl\":\"%s\",\"model\":\"%s\",\"enabled\":%s%s}".formatted(baseUrl, model, enabled, keyPart);
+        return "{\"enabled\":%s,\"activeProvider\":\"%s\",\"provider\":\"%s\",\"baseUrl\":\"%s\",\"model\":\"%s\"%s}"
+                .formatted(enabled, activeProvider, provider, baseUrl, model, keyPart);
     }
 }

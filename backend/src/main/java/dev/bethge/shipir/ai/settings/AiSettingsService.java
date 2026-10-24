@@ -3,6 +3,7 @@ package dev.bethge.shipir.ai.settings;
 import dev.bethge.shipir.ai.settings.dto.AiConnectionTestResponse;
 import dev.bethge.shipir.ai.settings.dto.AiSettingsRequest;
 import dev.bethge.shipir.ai.settings.dto.AiSettingsResponse;
+import dev.bethge.shipir.ai.settings.dto.AiSettingsResponse.ProviderSettings;
 import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
@@ -15,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Clock;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -23,15 +26,17 @@ import java.util.UUID;
 public class AiSettingsService {
 
     private final AiSettingsRepository settings;
+    private final AiProviderConfigRepository configs;
     private final UserRepository users;
     private final SecretCipher cipher;
     private final AiConnectionChecker checker;
     private final AiSettingsProperties properties;
     private final Clock clock;
 
-    AiSettingsService(AiSettingsRepository settings, UserRepository users, SecretCipher cipher,
+    AiSettingsService(AiSettingsRepository settings, AiProviderConfigRepository configs, UserRepository users, SecretCipher cipher,
                       AiConnectionChecker checker, AiSettingsProperties properties, Clock clock) {
         this.settings = settings;
+        this.configs = configs;
         this.users = users;
         this.cipher = cipher;
         this.checker = checker;
@@ -48,45 +53,65 @@ public class AiSettingsService {
     @Transactional
     AiSettingsResponse update(AiSettingsRequest request, String username) {
         validateUrl(request.baseUrl());
-        AiSettings s = load();
+        AiProvider target = request.provider() != null ? request.provider() : request.activeProvider();
+        AiProviderConfig c = loadConfig(target);
         if (request.apiKey() != null && !request.apiKey().isBlank()) {
             requireKey();
-            s.replaceKey(cipher.encrypt(request.apiKey()), hint(request.apiKey()));
+            c.replaceKey(cipher.encrypt(request.apiKey()), hint(request.apiKey()));
         } else if (request.apiKey() != null && request.apiKey().isEmpty()) {
-            s.clearKey();
+            c.clearKey();
         }
         UUID by = users.findByUsername(username).map(User::getId).orElse(null);
-        s.update(request.baseUrl().trim(), request.model().trim(), request.enabled(), clock.instant(), by);
-        return toResponse(settings.saveAndFlush(s));
+        c.update(request.baseUrl().trim(), request.model().trim(), clock.instant(), by);
+        configs.save(c);
+        AiSettings s = load();
+        s.update(request.activeProvider(), request.enabled(), clock.instant(), by);
+        settings.saveAndFlush(s);
+        return toResponse(s);
     }
 
     /** Not transactional: the network call must not hold a database connection. */
-    AiConnectionTestResponse test() {
-        AiSettings s = load();
-        if (!s.hasKey()) {
+    AiConnectionTestResponse test(AiProvider requested) {
+        AiProvider provider = requested != null ? requested : load().getActiveProvider();
+        AiProviderConfig c = loadConfig(provider);
+        if (!c.hasKey()) {
             throw new AiSettingsException(HttpStatus.BAD_REQUEST, "API_KEY_REQUIRED",
                     "Save an API key before testing the connection");
         }
         requireKey();
-        validateUrl(s.getBaseUrl());
-        return new AiConnectionTestResponse(checker.check(s.getBaseUrl(), cipher.decrypt(s.getApiKeyCiphertext())));
+        validateUrl(c.getBaseUrl());
+        if (provider != AiProvider.OPENAI_COMPATIBLE) {
+            // The Gemini probe is added with the provider routing (shipr-f8k.4).
+            throw new AiSettingsException(HttpStatus.BAD_REQUEST, "PROVIDER_TEST_UNSUPPORTED",
+                    "Connection test is not available for this provider yet");
+        }
+        return new AiConnectionTestResponse(checker.check(c.getBaseUrl(), cipher.decrypt(c.getApiKeyCiphertext())));
     }
 
     /**
-     * The decrypted configuration for the chat orchestration, or empty when the assistant is not usable:
-     * disabled, no key stored, or the encryption key is not configured.
+     * The decrypted configuration of the active provider for the chat orchestration, or empty when the assistant is
+     * not usable: disabled, no key stored for the active provider, or the encryption key is not configured.
      */
     @Transactional(readOnly = true)
     public Optional<AiConfig> activeConfig() {
         AiSettings s = load();
-        if (!s.isEnabled() || !s.hasKey() || !cipher.isConfigured()) {
+        if (!s.isEnabled() || !cipher.isConfigured()) {
             return Optional.empty();
         }
-        return Optional.of(new AiConfig(s.getBaseUrl(), s.getModel(), cipher.decrypt(s.getApiKeyCiphertext())));
+        AiProviderConfig c = loadConfig(s.getActiveProvider());
+        if (!c.hasKey()) {
+            return Optional.empty();
+        }
+        return Optional.of(new AiConfig(c.getProvider(), c.getBaseUrl(), c.getModel(),
+                cipher.decrypt(c.getApiKeyCiphertext())));
     }
 
     private AiSettings load() {
         return settings.findById(AiSettings.SINGLETON_ID).orElseThrow();
+    }
+
+    private AiProviderConfig loadConfig(AiProvider provider) {
+        return configs.findById(provider).orElseThrow();
     }
 
     private void requireKey() {
@@ -122,7 +147,12 @@ public class AiSettingsService {
         return k.length() >= 12 ? "••••" + k.substring(k.length() - 4) : "••••";
     }
 
-    private static AiSettingsResponse toResponse(AiSettings s) {
-        return new AiSettingsResponse(s.getBaseUrl(), s.getModel(), s.isEnabled(), s.hasKey(), s.getApiKeyHint());
+    private AiSettingsResponse toResponse(AiSettings s) {
+        List<ProviderSettings> providers = configs.findAll().stream()
+                .sorted(Comparator.comparing(AiProviderConfig::getProvider))
+                .map(c -> new ProviderSettings(c.getProvider(), c.getBaseUrl(), c.getModel(), c.hasKey(),
+                        c.getApiKeyHint()))
+                .toList();
+        return new AiSettingsResponse(s.getActiveProvider(), s.isEnabled(), providers);
     }
 }

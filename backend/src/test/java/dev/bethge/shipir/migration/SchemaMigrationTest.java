@@ -35,7 +35,7 @@ class SchemaMigrationTest {
     void flywayAppliedVersions1To19Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20");
     }
 
     @Test
@@ -801,10 +801,11 @@ class SchemaMigrationTest {
 
     @Test
     void aiSettingsActiveProviderMustBeAKnownProvider() {
-        assertThatThrownBy(() -> jdbc.update("UPDATE ai_settings SET active_provider = 'OTHER' WHERE id = 1"))
-                .isInstanceOf(DataIntegrityViolationException.class);
         jdbc.update("UPDATE ai_settings SET active_provider = 'GEMINI' WHERE id = 1");
         assertThat(jdbc.queryForObject("SELECT active_provider FROM ai_settings", String.class)).isEqualTo("GEMINI");
+        // last: a failed statement aborts the surrounding transaction
+        assertThatThrownBy(() -> jdbc.update("UPDATE ai_settings SET active_provider = 'OTHER' WHERE id = 1"))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test

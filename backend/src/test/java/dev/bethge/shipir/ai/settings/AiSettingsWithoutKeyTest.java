@@ -24,7 +24,7 @@ class AiSettingsWithoutKeyTest extends AiSettingsTestBase {
                         .content(json("https://llm.example.com/v1", "m", true, KEY)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ENCRYPTION_KEY_MISSING"));
-        assertThat(jdbc.queryForObject("SELECT api_key_ciphertext FROM ai_settings", byte[].class)).isNull();
+        assertThat(jdbc.queryForObject("SELECT api_key_ciphertext FROM ai_provider_configs WHERE provider = 'OPENAI_COMPATIBLE'", byte[].class)).isNull();
         assertThat(service.activeConfig()).isEmpty();
     }
 
@@ -35,6 +35,6 @@ class AiSettingsWithoutKeyTest extends AiSettingsTestBase {
         mvc.perform(l.write(put("/api/settings/ai")).contentType(APPLICATION_JSON)
                         .content(json("https://llm.example.com/v1", "other", false, null)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.model").value("other"));
+                .andExpect(jsonPath("$.providers[0].model").value("other"));
     }
 }
