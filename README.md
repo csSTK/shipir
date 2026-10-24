@@ -24,6 +24,10 @@ This is a learning and portfolio project focused on Java backend development. Th
 - **Audit log:** a record of who did what, and when.
 - **AI assistant:** an in-app chat (any OpenAI-compatible API, NVIDIA build by default; an admin sets the key at Settings > AI assistant) that answers from live data and acts as the signed-in user with their role. Every change waits for an explicit Confirm. Chats are saved, can be reopened, and can be shared read-only with admins for debugging.
 
+## Upgrade notes
+
+- **Permissions (shipr-cbw):** OPERATOR and VIEWER users only see the environments and deployments an ADMIN grants them (Settings > Users > Access). After upgrading, existing non-admin users see nothing until they are granted access.
+
 ## Tech stack
 
 | Area | Choice |

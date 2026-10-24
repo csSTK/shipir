@@ -29,10 +29,10 @@ This file holds the parts of the original planning handoff that aren't permanent
 1. ~~**Project setup:**~~ **done** (epic shipr-yy7): build tool, Spring Boot skeleton, package structure, `docker-compose.dev.yml`, Flyway V1–V4, Testcontainers baseline.
 2. **`docker/` module + simple REST endpoints** (list, start, stop containers) against the local socket. A quick win that tests the basic connection. The `docker/` abstraction (per-host clients, LOCAL socket + TCP/TLS, system info) is **done** (epic shipr-406); read-only lists of containers, Compose stacks, images, networks and volumes are **done** (epic shipr-zlq); container lifecycle actions (start/stop/restart/pause/unpause/kill) are **done** (epic shipr-wju).
 3. **`auth` + `host`:** basic protection and host management before things get complex. Login, session auth and the first-start setup are **done** (epic shipr-a1h); `host` (environments CRUD, live overview, environment setup step) is **done** (epic shipr-406); user management is **done** (epic shipr-9uk).
-4. **`streaming`:** live logs over WebSocket early. Retrofitting it is painful. Compose output streaming is **done** (deploy epics); live container logs are **done** (epic shipr-9gf); the exec terminal is **done** (epic shipr-cql); Docker events remain.
+4. **`streaming`:** live logs over WebSocket early. Retrofitting it is painful. Compose output streaming is **done** (deploy epics); live container logs are **done** (epic shipr-9gf); the exec terminal is **done** (epic shipr-cql); Docker events are **done** (epic shipr-7ww).
 5. **`compose`, incrementally:** first raw YAML upload + deploy (+ validation), then the form wizard on top, then versioning and rollback.
 6. **`config_editor`** with `PathValidationUtil` and a backup before every write.
-7. **`audit` + fine-grained `permission`.** `audit` (log, `@Auditable`, ADMIN page) is **done** (epic shipr-46j), together with in-app notifications, webhooks and retention rules; `permission` remains.
+7. **`audit` + fine-grained `permission`.** `audit` (log, `@Auditable`, ADMIN page) is **done** (epic shipr-46j), together with in-app notifications, webhooks and retention rules; per-host/per-deployment `permission` is **done** (epic shipr-cbw).
 8. **Frontend** in parallel, feature by feature (`features/containers`, `features/deployments`, `features/hosts`, ...).
 
 ## Task for the first pass
@@ -46,11 +46,7 @@ This file holds the parts of the original planning handoff that aren't permanent
 
 Implemented in `backend/src/main/resources/db/migration/`: `V1__create_users`, `V2__create_docker_hosts`, `V3__create_stacks`, `V4__create_stack_versions`, `V5__add_users_password_changed_at`, `V6__add_docker_hosts_tls_columns`, `V7__create_password_reset_codes`, `V8__create_audit_log`, `V9__create_notifications`, `V10__create_notification_webhooks`, `V11__create_retention_settings`, `V12__create_git_credentials`, `V13__extend_stacks_for_deploy`, `V14__add_stack_versions_deployed_at`, `V15__add_stacks_git_poll_state`, `V16__rename_stacks_to_deployments` `V17__create_ai_chat` `V18__add_users_disabled_at` (drafts removed; see the decided review notes below).
 
-Still planned, numbered from V19 on: `create_permissions`.
-
-### Rough model for the remaining tables
-
-- `Permission (id, userId, hostId nullable, stackId nullable, permissionLevel)`
+Also implemented: `V19__create_registry_credentials`, `V20__create_ai_provider_configs`, `V21__create_permissions`. No further migrations planned.
 
 ## Review notes (decided)
 
