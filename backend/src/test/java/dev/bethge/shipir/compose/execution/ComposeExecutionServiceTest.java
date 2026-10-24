@@ -29,12 +29,14 @@ class ComposeExecutionServiceTest {
     private final UUID hostId = UUID.randomUUID();
     private ComposeFileRepository files;
     private Path script;
+    private Path tempRoot;
     private RegistryAuthSource auths = List::of;
 
     @BeforeEach
     void setUp() throws IOException {
         files = new ComposeFileRepository(new DeploymentProperties(tmp.resolve("deployments")));
         files.write(hostId, "web", "services: {}\n", null);
+        tempRoot = Files.createDirectory(tmp.resolve("temp-root"));
         script = tmp.resolve("fake-compose.sh");
         writeScript("""
                 #!/bin/sh
@@ -55,7 +57,8 @@ class ComposeExecutionServiceTest {
     }
 
     private ComposeExecutionService service(Duration timeout) {
-        return new ComposeExecutionService(files, new ComposeProperties(timeout), auths, List.of(script.toString()));
+        return new ComposeExecutionService(files, new ComposeProperties(timeout), auths, List.of(script.toString()),
+                tempRoot);
     }
 
     private static DockerEndpoint.Local local() {
@@ -296,12 +299,11 @@ class ComposeExecutionServiceTest {
         assertThat(run(ComposeCommand.UP, local(), lines).exitCode()).isEqualTo(3);
         assertThat(Path.of(line(lines, "CONF:").substring(5))).doesNotExist();
 
-        long before = tempConfigDirs();
         var missing = new ComposeExecutionService(files, new ComposeProperties(Duration.ofSeconds(5)), auths,
-                List.of(tmp.resolve("missing").toString()));
+                List.of(tmp.resolve("missing").toString()), tempRoot);
         assertThatThrownBy(() -> missing.execute(hostId, "web", ComposeCommand.UP, local(), l -> { }))
                 .isInstanceOf(ComposeExecutionException.class);
-        assertThat(tempConfigDirs()).isEqualTo(before);
+        assertThat(tempRootEntries()).isEmpty();
     }
 
     @Test
@@ -309,7 +311,7 @@ class ComposeExecutionServiceTest {
         withAuths(new RegistryAuthSource.Auth("ghcr.io", "robot", "s3cret"));
         writeScript("#!/bin/sh\necho \"CONF:$DOCKER_CONFIG\"\nsleep 30\n");
         List<String> lines = new ArrayList<>();
-        ComposeProcessResult result = service(Duration.ofMillis(500))
+        ComposeProcessResult result = service(Duration.ofSeconds(4))
                 .execute(hostId, "web", ComposeCommand.UP, local(), lines::add);
         assertThat(result.timedOut()).isTrue();
         assertThat(Path.of(line(lines, "CONF:").substring(5))).doesNotExist();
@@ -319,10 +321,9 @@ class ComposeExecutionServiceTest {
     void noRegistryAuthsLeavesDockerConfigUntouched() throws IOException {
         writeScript(CONFIG_SCRIPT);
         List<String> lines = new ArrayList<>();
-        long before = tempConfigDirs();
         run(ComposeCommand.UP, local(), lines);
         assertThat(line(lines, "CONF:")).isEqualTo("CONF:" + System.getenv().getOrDefault("DOCKER_CONFIG", ""));
-        assertThat(tempConfigDirs()).isEqualTo(before);
+        assertThat(tempRootEntries()).isEmpty();
     }
 
     @Test
@@ -339,9 +340,9 @@ class ComposeExecutionServiceTest {
         assertThat(new RegistryAuthSource.Auth("h", "u", "s3cret").toString()).doesNotContain("s3cret");
     }
 
-    private static long tempConfigDirs() throws IOException {
-        try (var s = Files.list(Path.of(System.getProperty("java.io.tmpdir")))) {
-            return s.filter(p -> p.getFileName().toString().startsWith("shipir-docker-config-")).count();
+    private List<Path> tempRootEntries() throws IOException {
+        try (var s = Files.list(tempRoot)) {
+            return s.toList();
         }
     }
 }

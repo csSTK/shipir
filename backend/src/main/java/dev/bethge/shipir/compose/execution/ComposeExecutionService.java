@@ -48,6 +48,7 @@ public class ComposeExecutionService {
     private final RegistryAuthSource registryAuths;
     private final List<String> executable;
     private final Supplier<List<String>> pluginDirs;
+    private final Path tempRoot;
 
     @Autowired
     public ComposeExecutionService(ComposeFileRepository files, ComposeProperties properties,
@@ -58,15 +59,27 @@ public class ComposeExecutionService {
     /** Test seam: replaces {@code docker compose} with another executable. */
     ComposeExecutionService(ComposeFileRepository files, ComposeProperties properties,
                             RegistryAuthSource registryAuths, List<String> executable) {
-        this(files, properties, registryAuths, executable, () -> CliPluginDirs.resolve(
-                System.getenv(), Path.of(System.getProperty("user.home")), CliPluginDirs.SYSTEM_DIRS));
+        this(files, properties, registryAuths, executable, defaultPluginDirs(), null);
     }
 
     /** Test seam: also replaces the CLI plugin dir lookup. */
     ComposeExecutionService(ComposeFileRepository files, ComposeProperties properties,
                             RegistryAuthSource registryAuths, List<String> executable,
                             Supplier<List<String>> pluginDirs) {
+        this(files, properties, registryAuths, executable, pluginDirs, null);
+    }
+
+    /** Test seam: also places the temporary TLS/registry-config dirs under {@code tempRoot} (null = system temp). */
+    ComposeExecutionService(ComposeFileRepository files, ComposeProperties properties,
+                            RegistryAuthSource registryAuths, List<String> executable, Path tempRoot) {
+        this(files, properties, registryAuths, executable, defaultPluginDirs(), tempRoot);
+    }
+
+    private ComposeExecutionService(ComposeFileRepository files, ComposeProperties properties,
+                                    RegistryAuthSource registryAuths, List<String> executable,
+                                    Supplier<List<String>> pluginDirs, Path tempRoot) {
         this.pluginDirs = pluginDirs;
+        this.tempRoot = tempRoot;
         this.files = files;
         this.properties = properties;
         this.registryAuths = registryAuths;
@@ -231,7 +244,7 @@ public class ComposeExecutionService {
     }
 
     /** Sets the DOCKER_* variables; returns the cert temp dir if one was created. */
-    private static Path applyEndpoint(Map<String, String> env, DockerEndpoint endpoint) {
+    private Path applyEndpoint(Map<String, String> env, DockerEndpoint endpoint) {
         switch (endpoint) {
             case DockerEndpoint.Local local -> {
                 String socket = local.socketPath();
@@ -245,7 +258,7 @@ public class ComposeExecutionService {
                 }
                 Path certDir = null;
                 try {
-                    certDir = Files.createTempDirectory("shipir-tls-", DIR_PERMISSIONS);
+                    certDir = createTempDir("shipir-tls-");
                     writeFile(certDir.resolve("ca.pem"), tcp.tls().caPem());
                     writeFile(certDir.resolve("cert.pem"), tcp.tls().certPem());
                     writeFile(certDir.resolve("key.pem"), tcp.tls().keyPem());
@@ -260,6 +273,17 @@ public class ComposeExecutionService {
         }
     }
 
+    private static Supplier<List<String>> defaultPluginDirs() {
+        return () -> CliPluginDirs.resolve(
+                System.getenv(), Path.of(System.getProperty("user.home")), CliPluginDirs.SYSTEM_DIRS);
+    }
+
+    private Path createTempDir(String prefix) throws IOException {
+        return tempRoot == null
+                ? Files.createTempDirectory(prefix, DIR_PERMISSIONS)
+                : Files.createTempDirectory(tempRoot, prefix, DIR_PERMISSIONS);
+    }
+
     /**
      * Writes a Docker {@code config.json} with all stored registry logins into a 0700 temp dir and points
      * {@code DOCKER_CONFIG} at it (plus {@code cliPluginsExtraDirs} so the compose plugin stays findable); returns the dir, or null (environment untouched) when there are no logins.
@@ -271,7 +295,7 @@ public class ComposeExecutionService {
         }
         Path configDir = null;
         try {
-            configDir = Files.createTempDirectory("shipir-docker-config-", DIR_PERMISSIONS);
+            configDir = createTempDir("shipir-docker-config-");
             writeFile(configDir.resolve("config.json"), configJson(auths, pluginDirs.get()));
         } catch (IOException e) {
             deleteRecursively(configDir);
