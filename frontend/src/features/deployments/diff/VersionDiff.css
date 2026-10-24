@@ -1,0 +1,74 @@
+/* Version diff: restrained, tone via text label plus colour (never colour alone). */
+.vd {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.vd-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.vd-heading {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  opacity: 0.7;
+}
+.vd-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+.vd-note {
+  margin: 0 0 16px;
+  font-size: 0.875rem;
+  opacity: 0.7;
+}
+.vd .vd-note {
+  margin: 0;
+}
+.vd-note--error {
+  color: #d92d20;
+  opacity: 1;
+}
+.vd-env {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.vd-env__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.875rem;
+}
+.vd-env__tag {
+  min-width: 4.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.vd-env__item--added .vd-env__tag {
+  color: #067647;
+}
+.vd-env__item--changed .vd-env__tag {
+  color: #b54708;
+}
+.vd-env__item--removed .vd-env__tag {
+  color: #d92d20;
+}
+.sk-dialog:has(.vd) {
+  width: min(60rem, 100%);
+}
+@media (max-width: 720px) {
+  .vd-legend {
+    display: none;
+  }
+}

@@ -11,14 +11,17 @@ interface Props {
   onConfirm: () => void
   onClose: () => void
   children: ReactNode
+  /** Rendered below the text (e.g. a diff); kept out of the paragraph. */
+  details?: ReactNode
 }
 
 /** Confirmation for rollback, delete and stop. */
-export function ConfirmDialog({ title, confirmLabel, danger = false, pending = false, error = null, onConfirm, onClose, children }: Props) {
+export function ConfirmDialog({ title, confirmLabel, danger = false, pending = false, error = null, onConfirm, onClose, children, details }: Props) {
   const titleId = useId()
   return (
     <DeploymentDialog title={title} titleId={titleId} onClose={onClose}>
       <p className="sk-dialog__text">{children}</p>
+      {details}
       {error && (
         <p role="alert" className="sk-error">
           {error}

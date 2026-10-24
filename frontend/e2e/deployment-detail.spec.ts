@@ -38,6 +38,9 @@ function mockCommon(api: import('./fixtures/api.ts').ApiMock, role: string) {
   api.mock('GET', `${BASE}/s1`, { body: deployment })
   api.mock('GET', `${BASE}/s1/versions`, { body: versions })
   api.mock('GET', `${BASE}/s1/files`, { body: [] })
+  for (const v of versions) {
+    api.mock('GET', `${BASE}/s1/versions/${v.id}`, { body: { ...v, yaml: deployment.yaml, baselineVersionId: 'v2', env: [], removedKeys: [] } })
+  }
 }
 
 test('operator creates, deploys, rolls back and deletes a deployment', async ({ page, api }) => {

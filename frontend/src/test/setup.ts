@@ -12,3 +12,14 @@ vi.mock('../features/deployments/editor/MonacoYamlEditor.tsx', () => ({
       onChange: (e: { target: { value: string } }) => onChange(e.target.value),
     }),
 }))
+
+// Same for the diff view: two read-only panes keep the contents assertable.
+vi.mock('../features/deployments/editor/MonacoDiffEditor.tsx', () => ({
+  default: ({ original, modified, label, sideBySide }: { original: string; modified: string; label: string; sideBySide: boolean }) =>
+    createElement(
+      'div',
+      { role: 'group', 'aria-label': label, 'data-mode': sideBySide ? 'side-by-side' : 'inline' },
+      createElement('pre', { 'data-testid': 'diff-original' }, original),
+      createElement('pre', { 'data-testid': 'diff-modified' }, modified),
+    ),
+}))

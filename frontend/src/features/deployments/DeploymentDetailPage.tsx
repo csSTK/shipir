@@ -16,6 +16,7 @@ import {
   type ManagedDeploymentStatus,
   type DeploymentVersion,
 } from './api.ts'
+import { VersionDiff } from './diff/index.ts'
 import { ConfirmDialog } from './ConfirmDialog.tsx'
 import { DeploymentRunPanel, type StartedRun } from './DeploymentRunPanel.tsx'
 import { GitSourcePanel } from './GitSourcePanel.tsx'
@@ -37,7 +38,7 @@ function formatDate(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString() : 'Never'
 }
 
-type Dialog = { kind: 'delete' } | { kind: 'stop' } | { kind: 'rollback'; version: DeploymentVersion } | null
+type Dialog = { kind: 'delete' } | { kind: 'stop' } | { kind: 'deploy'; draftId: string } | { kind: 'rollback'; version: DeploymentVersion } | null
 
 /** `/environments/:id/deployments/:deploymentId`: status, actions, content and version history of a managed deployment. */
 export function DeploymentDetailPage() {
@@ -98,6 +99,7 @@ export function DeploymentDetailPage() {
   }
 
   const data = deployment.data
+  const hasDeployed = versions.data?.some((v) => v.deployed) ?? false
   const busy = deploy.isPending || redeploy.isPending || pullUpdate.isPending || stop.isPending || rollback.isPending
 
   function startDeploy() {
@@ -106,6 +108,18 @@ export function DeploymentDetailPage() {
       onSuccess: (d) => setStarted({ kind: 'Deploy', runId: d.runId }),
       onError: (err) => setActionError(describeDeploymentError(err, 'Could not start the deployment. Try again.')),
     })
+  }
+
+  function onDeployClick() {
+    // A draft that will be snapshotted and a deployed version to compare with: confirm with the diff first.
+    const draft = versions.data?.find((v) => !v.deployed)
+    if (draft && hasDeployed) setDialog({ kind: 'deploy', draftId: draft.id })
+    else startDeploy()
+  }
+
+  function confirmDeploy() {
+    closeDialog()
+    startDeploy()
   }
 
   function startRedeploy() {
@@ -155,7 +169,6 @@ export function DeploymentDetailPage() {
   }
 
   const status = STATUS[data.status]
-  const hasDeployed = versions.data?.some((v) => v.deployed) ?? false
 
   return (
     <section className="sd">
@@ -173,7 +186,7 @@ export function DeploymentDetailPage() {
         </div>
         {canWrite && (
           <div className="sd-actions">
-            <button type="button" className="sk-btn sk-btn--primary" onClick={startDeploy} disabled={busy}>
+            <button type="button" className="sk-btn sk-btn--primary" onClick={onDeployClick} disabled={busy || versions.isPending}>
               Deploy
             </button>
             {data.source === 'GIT' && (
@@ -265,6 +278,18 @@ export function DeploymentDetailPage() {
           Stop <strong>{data.name}</strong>? Its containers are stopped and removed. The deployment and its versions stay in Shipir.
         </ConfirmDialog>
       )}
+      {dialog?.kind === 'deploy' && (
+        <ConfirmDialog
+          title="Deploy changes"
+          confirmLabel="Deploy"
+          error={dialogError}
+          onConfirm={confirmDeploy}
+          onClose={closeDialog}
+          details={<VersionDiff hostId={hostId} deploymentId={deploymentId} versionId={dialog.draftId} />}
+        >
+          Deploy <strong>{data.name}</strong> with these changes? The running containers are replaced.
+        </ConfirmDialog>
+      )}
       {dialog?.kind === 'delete' && (
         <ConfirmDialog title="Delete deployment" confirmLabel="Delete" danger pending={remove.isPending} error={dialogError} onConfirm={confirmDelete} onClose={closeDialog}>
           Delete <strong>{data.name}</strong>? Its containers are stopped and the deployment with all its versions is removed from Shipir. This cannot be undone.
@@ -278,6 +303,7 @@ export function DeploymentDetailPage() {
           error={dialogError}
           onConfirm={() => confirmRollback(dialog.version)}
           onClose={closeDialog}
+          details={<VersionDiff hostId={hostId} deploymentId={deploymentId} versionId={dialog.version.id} />}
         >
           Redeploy <strong>{data.name}</strong> with the version from {formatDate(dialog.version.createdAt)}? The running containers are replaced.
         </ConfirmDialog>

@@ -35,6 +35,20 @@ const versions = [
   { id: 'v1', source: 'GIT', commitSha: 'abcdef1234', createdBy: null, createdAt: '2026-10-01T10:00:00Z', current: false, deployed: true },
 ]
 
+// Detail of each version; flags are relative to the baseline (newest deployed = v2).
+const detail = (id: string, yaml: string, env: { key: string; changed: boolean }[], removedKeys: string[] = []) => ({
+  ...versions.find((v) => v.id === id)!,
+  yaml,
+  baselineVersionId: 'v2',
+  env,
+  removedKeys,
+})
+const details: Record<string, unknown> = {
+  v2: detail('v2', 'services:\n  web:\n    image: nginx:1', [{ key: 'KEEP', changed: false }, { key: 'GONE', changed: false }]),
+  v3: detail('v3', 'services:\n  web:\n    image: nginx:2', [{ key: 'KEEP', changed: true }, { key: 'NEW', changed: true }], ['GONE']),
+  v1: detail('v1', 'services:\n  web:\n    image: nginx:0', [{ key: 'KEEP', changed: false }], ['GONE']),
+}
+
 type Handler = (init?: { method?: string }) => unknown
 function serve(role: string, overrides: Record<string, Handler> = {}) {
   apiFetch.mockImplementation((path: string, init?: { method?: string }) => {
@@ -46,6 +60,8 @@ function serve(role: string, overrides: Record<string, Handler> = {}) {
     if (path === '/auth/me') return Promise.resolve({ username: 'u', role, setupRequired: false })
     if (path === BASE) return Promise.resolve(deployment)
     if (path === `${BASE}/versions`) return Promise.resolve(versions)
+    const m = /\/versions\/([^/]+)$/.exec(path)
+    if (m && details[m[1]]) return Promise.resolve(details[m[1]])
     if (path.startsWith(`${BASE}/files`)) return Promise.resolve([])
     return Promise.reject(new ApiError(404, 'x', 'NOT_FOUND'))
   })
@@ -66,6 +82,12 @@ function renderPage() {
       </MemoryRouter>
     </QueryClientProvider>,
   )
+}
+
+async function deployButton() {
+  const button = await screen.findByRole('button', { name: 'Deploy' })
+  await waitFor(() => expect(button).toBeEnabled())
+  return button
 }
 
 describe('DeploymentDetailPage', () => {
@@ -110,9 +132,55 @@ describe('DeploymentDetailPage', () => {
   it('deploys and shows the started deployment', async () => {
     serve('OPERATOR', { [`POST ${BASE}/deploy`]: () => ({ runId: 'd-42', versionId: 'v3' }) })
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Deploy' }))
+    fireEvent.click(await deployButton())
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Deploy changes' })).getByRole('button', { name: 'Deploy' }))
     expect(await screen.findByLabelText('Deployment output')).toBeInTheDocument()
     expect(screen.getByText('d-42')).toBeInTheDocument()
+  })
+
+  it('shows the draft diff against the running version before deploying', async () => {
+    const deploy = vi.fn(() => ({ runId: 'd-1', versionId: 'v3' }))
+    serve('OPERATOR', { [`POST ${BASE}/deploy`]: deploy })
+    renderPage()
+    fireEvent.click(await deployButton())
+    const dialog = await screen.findByRole('dialog', { name: 'Deploy changes' })
+    expect(deploy).not.toHaveBeenCalled()
+    expect(await within(dialog).findByTestId('diff-original')).toHaveTextContent('nginx:1')
+    expect(within(dialog).getByTestId('diff-modified')).toHaveTextContent('nginx:2')
+    const item = (tag: string) => within(dialog).getByText(tag).closest('li')
+    expect(item('Added')).toHaveTextContent('NEW')
+    expect(item('Changed')).toHaveTextContent('KEEP')
+    expect(item('Removed')).toHaveTextContent('GONE')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(deploy).not.toHaveBeenCalled()
+  })
+
+  it('deploys at once when nothing was deployed yet', async () => {
+    serve('OPERATOR', { [`GET ${BASE}/versions`]: () => [versions[0]], [`POST ${BASE}/deploy`]: () => ({ runId: 'd-5', versionId: 'v3' }) })
+    renderPage()
+    fireEvent.click(await deployButton())
+    expect(await screen.findByText('d-5')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('deploys at once when there is no draft', async () => {
+    serve('OPERATOR', { [`GET ${BASE}/versions`]: () => versions.slice(1), [`POST ${BASE}/deploy`]: () => ({ runId: 'd-6', versionId: 'v2' }) })
+    renderPage()
+    fireEvent.click(await deployButton())
+    expect(await screen.findByText('d-6')).toBeInTheDocument()
+  })
+
+  it('lets the user continue when the diff cannot be loaded', async () => {
+    serve('OPERATOR', {
+      [`GET ${BASE}/versions/v3`]: () => new ApiError(500, 'boom', 'INTERNAL'),
+      [`POST ${BASE}/deploy`]: () => ({ runId: 'd-7', versionId: 'v3' }),
+    })
+    renderPage()
+    fireEvent.click(await deployButton())
+    const dialog = await screen.findByRole('dialog', { name: 'Deploy changes' })
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('You can still continue')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Deploy' }))
+    expect(await screen.findByText('d-7')).toBeInTheDocument()
   })
 
   it('pulls and updates a deployed FILE deployment and shows the run', async () => {
@@ -155,7 +223,8 @@ describe('DeploymentDetailPage', () => {
   it('maps DEPLOYMENT_IN_PROGRESS to a message', async () => {
     serve('OPERATOR', { [`POST ${BASE}/deploy`]: () => new ApiError(409, 'busy', 'DEPLOYMENT_IN_PROGRESS') })
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Deploy' }))
+    fireEvent.click(await deployButton())
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Deploy changes' })).getByRole('button', { name: 'Deploy' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('already in progress')
   })
 
@@ -168,6 +237,10 @@ describe('DeploymentDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Roll back to/ }))
     expect(rollback).not.toHaveBeenCalled()
     const dialog = screen.getByRole('dialog', { name: 'Roll back deployment' })
+    expect(await within(dialog).findByTestId('diff-original')).toHaveTextContent('nginx:1')
+    expect(within(dialog).getByTestId('diff-modified')).toHaveTextContent('nginx:0')
+    expect(within(dialog).getByText('Removed').closest('li')).toHaveTextContent('GONE')
+    expect(within(dialog).queryByText('Added')).not.toBeInTheDocument()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Roll back' }))
     expect(await screen.findByLabelText('Deployment output')).toBeInTheDocument()
     expect(rollback).toHaveBeenCalled()

@@ -76,6 +76,16 @@ export interface DeploymentVersion {
   deployed: boolean
 }
 
+/** `GET .../versions/{versionId}`: YAML plus env key flags (never values). */
+export interface DeploymentVersionDetail extends DeploymentVersion {
+  yaml: string
+  /** Newest deployed version: what the diff compares against; null when nothing was deployed. */
+  baselineVersionId: string | null
+  /** `changed` is relative to the baseline. */
+  env: { key: string; changed: boolean }[]
+  removedKeys: string[]
+}
+
 /** Deploy and rollback answer 202; output streams on `/topic/deployments/{runId}`. */
 export interface DeploymentRun {
   runId: string
@@ -116,6 +126,14 @@ export function useDeploymentVersions(hostId: string, deploymentId: string) {
   return useQuery({
     queryKey: [...managedKey(hostId), deploymentId, 'versions'],
     queryFn: () => apiFetch<DeploymentVersion[]>(`${managedBase(hostId)}/${deploymentId}/versions`),
+  })
+}
+
+export function useDeploymentVersionDetail(hostId: string, deploymentId: string, versionId: string | null) {
+  return useQuery({
+    queryKey: [...managedKey(hostId), deploymentId, 'versions', versionId],
+    queryFn: () => apiFetch<DeploymentVersionDetail>(`${managedBase(hostId)}/${deploymentId}/versions/${versionId}`),
+    enabled: versionId !== null,
   })
 }
 
