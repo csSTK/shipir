@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V18 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V19 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To18Successfully() {
+    void flywayAppliedVersions1To19Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19");
     }
 
     @Test
@@ -981,6 +981,94 @@ class SchemaMigrationTest {
     }
 
     @Test
+    void registryCredentialsHasExpectedColumnsAndTypes() {
+        List<Map<String, Object>> columns = jdbc.queryForList("""
+                SELECT column_name, data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'registry_credentials'
+                """);
+        Map<String, Map<String, Object>> byName = columns.stream()
+                .collect(java.util.stream.Collectors.toMap(c -> (String) c.get("column_name"), c -> c));
+        assertThat(byName.keySet()).containsExactlyInAnyOrder(
+                "id", "name", "registry_host", "username", "secret_ciphertext", "secret_hint",
+                "created_by", "created_at", "updated_at");
+
+        assertThat(byName.get("id").get("data_type")).isEqualTo("uuid");
+        assertThat(byName.get("name").get("data_type")).isEqualTo("character varying");
+        assertThat(byName.get("name").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("registry_host").get("data_type")).isEqualTo("character varying");
+        assertThat(byName.get("registry_host").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("username").get("data_type")).isEqualTo("character varying");
+        assertThat(byName.get("username").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("secret_ciphertext").get("data_type")).isEqualTo("bytea");
+        assertThat(byName.get("secret_ciphertext").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("secret_hint").get("data_type")).isEqualTo("character varying");
+        assertThat(byName.get("secret_hint").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("created_by").get("data_type")).isEqualTo("uuid");
+        assertThat(byName.get("created_by").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("created_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("created_at").get("is_nullable")).isEqualTo("NO");
+        assertThat(byName.get("updated_at").get("data_type")).isEqualTo("timestamp with time zone");
+        assertThat(byName.get("updated_at").get("is_nullable")).isEqualTo("NO");
+    }
+
+    @Test
+    void registryCredentialsHasNoPlaintextSecretColumn() {
+        List<String> columnNames = jdbc.queryForList("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'registry_credentials'
+                """, String.class);
+        assertThat(columnNames).filteredOn(c -> c.contains("password") || c.contains("secret") || c.contains("token"))
+                .containsExactlyInAnyOrder("secret_ciphertext", "secret_hint");
+    }
+
+    @Test
+    void registryCredentialIdAndTimestampsHaveDefaults() {
+        UUID user = insertUser("alice");
+        insertRegistryCredential("ghcr", "ghcr.io", user);
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT id, created_at, updated_at FROM registry_credentials WHERE name = 'ghcr'");
+        assertThat(row.get("id")).isNotNull();
+        assertThat(row.get("created_at")).isNotNull();
+        assertThat(row.get("updated_at")).isNotNull();
+    }
+
+    @Test
+    void duplicateRegistryCredentialNameIsRejected() {
+        UUID user = insertUser("alice");
+        insertRegistryCredential("ghcr", "ghcr.io", user);
+        assertThatThrownBy(() -> insertRegistryCredential("ghcr", "other.example.com", user))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("registry_credentials_name_key");
+    }
+
+    @Test
+    void duplicateRegistryHostIsRejected() {
+        UUID user = insertUser("alice");
+        insertRegistryCredential("ghcr", "ghcr.io", user);
+        assertThatThrownBy(() -> insertRegistryCredential("ghcr-2", "ghcr.io", user))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("registry_credentials_registry_host_key");
+    }
+
+    @Test
+    void registryCredentialWithoutSecretCiphertextIsRejected() {
+        UUID user = insertUser("alice");
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO registry_credentials (name, registry_host, username, secret_ciphertext, secret_hint, created_by)
+                VALUES ('ghcr', 'ghcr.io', 'octocat', NULL, '...abcd', ?)
+                """, user))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void deletingUserWhoCreatedRegistryCredentialFails() {
+        UUID creator = insertUser("creator");
+        insertRegistryCredential("ghcr", "ghcr.io", creator);
+        assertThatThrownBy(() -> jdbc.update("DELETE FROM users WHERE id = ?", creator))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void gitCredentialsHasNoPlaintextTokenColumn() {
         List<Map<String, Object>> cols = jdbc.queryForList("""
                 SELECT column_name, data_type, is_nullable FROM information_schema.columns
@@ -1176,6 +1264,13 @@ class SchemaMigrationTest {
     private void insertChatMessage(UUID session, int seq, String role, String status) {
         jdbc.update("INSERT INTO chat_messages (session_id, seq, role, content, status) VALUES (?, ?, ?, 'text', ?)",
                 session, seq, role, status);
+    }
+
+    private void insertRegistryCredential(String name, String registryHost, UUID creator) {
+        jdbc.update("""
+                INSERT INTO registry_credentials (name, registry_host, username, secret_ciphertext, secret_hint, created_by)
+                VALUES (?, ?, 'octocat', ?, '...abcd', ?)
+                """, name, registryHost, new byte[] {1, 2, 3}, creator);
     }
 
     private UUID insertCredential(String name, UUID creator) {
