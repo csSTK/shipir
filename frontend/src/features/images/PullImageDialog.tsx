@@ -1,9 +1,8 @@
-import { useId, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { DeployOutput } from '../deployments/deploy-output/DeployOutput.tsx'
-import { DeploymentDialog } from '../deployments/DeploymentDialog.tsx'
 import { describePullError, usePullImage, useRefreshAfterPull } from './api.ts'
 import './ImagesPage.css'
-import { Button } from '../../shared/ui/index.ts'
+import { Button, Dialog } from '../../shared/ui/index.ts'
 
 interface Props {
   hostId: string
@@ -14,7 +13,6 @@ interface Props {
 
 /** Pulls an image by reference and shows the streamed progress in place of the form. */
 export function PullImageDialog({ hostId, initialReference = '', onClose }: Props) {
-  const titleId = useId()
   const [reference, setReference] = useState(initialReference)
   const [runId, setRunId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -33,19 +31,19 @@ export function PullImageDialog({ hostId, initialReference = '', onClose }: Prop
   }
 
   return (
-    <DeploymentDialog title="Pull image" titleId={titleId} onClose={onClose}>
+    <Dialog open onOpenChange={(open) => !open && onClose()} title="Pull image">
       {runId ? (
         <>
           <DeployOutput title={`Pulling ${reference.trim()}`} runId={runId} onFinished={() => void refresh()} />
-          <div className="sk-dialog__actions">
+          <div className="ui-dialog-actions">
             <Button variant="primary" onClick={onClose}>
               Close
             </Button>
           </div>
         </>
       ) : (
-        <form className="sk-form" onSubmit={submit}>
-          <label className="sk-field">
+        <form className="ui-form" onSubmit={submit}>
+          <label className="ui-form-field">
             Image reference
             <input
               value={reference}
@@ -58,11 +56,11 @@ export function PullImageDialog({ hostId, initialReference = '', onClose }: Prop
             />
           </label>
           {error && (
-            <p role="alert" className="sk-error">
+            <p role="alert" className="ui-error">
               {error}
             </p>
           )}
-          <div className="sk-dialog__actions">
+          <div className="ui-dialog-actions">
             <Button variant="ghost" onClick={onClose}>
               Cancel
             </Button>
@@ -72,6 +70,6 @@ export function PullImageDialog({ hostId, initialReference = '', onClose }: Prop
           </div>
         </form>
       )}
-    </DeploymentDialog>
+    </Dialog>
   )
 }

@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ApiError } from '../../shared/api/client.ts'
 import { useCurrentUser } from '../auth/index.ts'
@@ -6,12 +6,11 @@ import { useCreateDeployment, type EnvEntry } from './api.ts'
 import { EnvEditor, toPayload, validateEnv, YamlEditor } from './editor/index.ts'
 import { describeDeploymentError } from './deploymentErrors.ts'
 import { GitSourceFields, type GitFormValue } from './GitSourceFields.tsx'
-import { DeploymentDialog } from './DeploymentDialog.tsx'
 import { ComposeWizard, referencedEnvKeys, specToState, type WizardState } from './wizard/index.ts'
 import { TemplatePicker, type AppTemplate } from './templates/index.ts'
 import './wizard/wizard.css'
 import './templates/templates.css'
-import { Button } from '../../shared/ui/index.ts'
+import { Button, Dialog } from '../../shared/ui/index.ts'
 
 const EMPTY_GIT_FORM: GitFormValue = { repoUrl: '', ref: 'main', composePath: 'compose.yaml', credentialId: '' }
 const NAME_PATTERN = /^[a-z0-9][a-z0-9_-]*$/
@@ -21,7 +20,6 @@ const NAME_PATTERN = /^[a-z0-9][a-z0-9_-]*$/
  * The wizard hands its generated YAML to the editor ("Continue in editor"); it is one-way.
  */
 export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClose: () => void }) {
-  const titleId = useId()
   const navigate = useNavigate()
   const create = useCreateDeployment(hostId)
   const [name, setName] = useState('')
@@ -111,9 +109,9 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
   }
 
   return (
-    <DeploymentDialog title="Add deployment" titleId={titleId} onClose={onClose}>
-      <form onSubmit={submit} className="sk-form">
-        <label className="sk-field">
+    <Dialog open onOpenChange={(open) => !open && onClose()} title="Add deployment">
+      <form onSubmit={submit} className="ui-form">
+        <label className="ui-form-field">
           <span>Name</span>
           <input value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" spellCheck={false} />
         </label>
@@ -157,19 +155,19 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
           )}
           <ComposeWizard key={seed.key} initial={seed.state} onContinue={continueInEditor} />
         </div>
-        <div className="sk-form" hidden={source !== 'file' || mode !== 'yaml'}>
-          <div className="sk-field">
+        <div className="ui-form" hidden={source !== 'file' || mode !== 'yaml'}>
+          <div className="ui-form-field">
             <span>Compose file</span>
             <YamlEditor label="Compose file" value={yaml} onChange={setYaml} height="260px" error={yamlError} />
           </div>
           <EnvEditor value={env} onChange={setEnv} />
         </div>
         {problem && (
-          <p role="alert" className="sk-error">
+          <p role="alert" className="ui-error">
             {problem}
           </p>
         )}
-        <div className="sk-dialog__actions">
+        <div className="ui-dialog-actions">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
@@ -178,6 +176,6 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
           </Button>
         </div>
       </form>
-    </DeploymentDialog>
+    </Dialog>
   )
 }

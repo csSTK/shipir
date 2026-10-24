@@ -13,7 +13,7 @@
 }
 .vd-heading {
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: var(--text-small-size);
   font-weight: 600;
   letter-spacing: 0.01em;
   opacity: 0.7;
@@ -21,12 +21,12 @@
 .vd-legend {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  font-size: 0.75rem;
+  font-size: var(--text-caption-size);
   opacity: 0.6;
 }
 .vd-note {
   margin: 0 0 16px;
-  font-size: 0.875rem;
+  font-size: var(--text-small-size);
   opacity: 0.7;
 }
 .vd .vd-note {
@@ -48,11 +48,11 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 0.875rem;
+  font-size: var(--text-small-size);
 }
 .vd-env__tag {
   min-width: 4.5rem;
-  font-size: 0.75rem;
+  font-size: var(--text-caption-size);
   font-weight: 600;
 }
 .vd-env__item--added .vd-env__tag {

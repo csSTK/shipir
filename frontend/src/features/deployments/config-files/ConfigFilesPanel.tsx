@@ -106,7 +106,7 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
             Cancel
           </Button>
           {createError && (
-            <p role="alert" className="sk-error cf-new__error">
+            <p role="alert" className="ui-error cf-new__error">
               {createError}
             </p>
           )}
@@ -117,7 +117,7 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
         <p className="sd-muted">Loading files…</p>
       ) : tree.error ? (
         <div>
-          <p role="alert" className="sk-error">
+          <p role="alert" className="ui-error">
             {describeConfigError(tree.error, 'Could not load the files.')}
           </p>
           <Button variant="secondary" onClick={() => void tree.refetch()}>
@@ -206,7 +206,7 @@ function FileView({
   if (file.error)
     return (
       <div>
-        <p role="alert" className="sk-error">
+        <p role="alert" className="ui-error">
           {describeConfigError(file.error, 'Could not load the file.')}
         </p>
         <Button variant="secondary" onClick={() => void file.refetch()}>
@@ -303,7 +303,7 @@ function FileEditor({
         )}
       </div>
       {problem && (
-        <p role="alert" className="sk-error">
+        <p role="alert" className="ui-error">
           {problem}
         </p>
       )}
@@ -325,7 +325,7 @@ function FileEditor({
       {backups.isPending ? (
         <p className="sd-muted">Loading backups…</p>
       ) : backups.error ? (
-        <p role="alert" className="sk-error">
+        <p role="alert" className="ui-error">
           {describeConfigError(backups.error, 'Could not load the backups.')}
         </p>
       ) : backups.data.length === 0 ? (

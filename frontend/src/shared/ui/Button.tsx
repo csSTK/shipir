@@ -6,7 +6,7 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
   size?: 'md' | 'sm'
-  /** Shows a spinner, sets aria-busy and blocks activation. */
+  /** Shows a spinner, sets aria-busy and disables the button. */
   loading?: boolean
 }
 
@@ -19,8 +19,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       type={type}
       className={['ui-btn', `ui-btn--${variant}`, `ui-btn--${size}`, className].filter(Boolean).join(' ')}
-      disabled={disabled}
-      aria-disabled={loading || undefined}
+      disabled={disabled || loading}
       aria-busy={loading || undefined}
       onClick={loading ? undefined : onClick}
       {...rest}

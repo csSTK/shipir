@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 import { Button, Dialog } from '../../shared/ui/index.ts'
-import './DeploymentUi.css'
 
 interface Props {
   title: string
@@ -34,10 +33,10 @@ export function ConfirmDialog({ title, confirmLabel, danger = false, pending = f
         </>
       }
     >
-      <p className="sk-dialog__text">{children}</p>
+      <p className="ui-dialog-text">{children}</p>
       {details}
       {error && (
-        <p role="alert" className="sk-error">
+        <p role="alert" className="ui-error">
           {error}
         </p>
       )}

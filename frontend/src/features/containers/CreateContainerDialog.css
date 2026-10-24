@@ -13,7 +13,7 @@
 .ccd__group legend {
   padding: 0;
   margin-bottom: 4px;
-  font-size: 0.875rem;
+  font-size: var(--text-small-size);
   font-weight: 600;
 }
 .ccd__row {
@@ -48,7 +48,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.9375rem;
+  font-size: var(--text-body-size);
   cursor: pointer;
 }
 @media (max-width: 600px) {
@@ -62,6 +62,6 @@
   flex-direction: column;
   gap: 6px;
 }
-.ccd__field .sk-error {
+.ccd__field .ui-error {
   margin: 0;
 }

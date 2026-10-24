@@ -283,7 +283,7 @@ export function ContainersPage() {
         }
       />
       {actionError && (
-        <p role="alert" className="sk-error">
+        <p role="alert" className="ui-error">
           {actionError}
         </p>
       )}

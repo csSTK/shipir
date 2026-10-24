@@ -20,11 +20,11 @@
   display: grid;
   place-items: center;
   height: 100%;
-  font-size: 0.875rem;
+  font-size: var(--text-small-size);
   opacity: 0.6;
 }
 .ed-yaml__error {
-  font-size: 0.875rem;
+  font-size: var(--text-small-size);
   color: var(--color-bad);
 }
 .ed-yaml__error p {
@@ -36,7 +36,7 @@
 }
 .ed-yaml__error code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.8125rem;
+  font-size: var(--text-small-size);
 }
 
 .ed-env {
@@ -47,7 +47,7 @@
   margin: 0;
   padding: 0;
   border: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-small-size);
 }
 .ed-env legend {
   padding: 0;
@@ -66,7 +66,7 @@
 .ed-env__row input,
 .ed-env__paste textarea {
   font: inherit;
-  font-size: 1rem;
+  font-size: var(--text-body-size);
   padding: 8px 12px;
   border: 1px solid var(--color-border);
   border-radius: 10px;
@@ -84,7 +84,7 @@
 }
 .ed-env__issue {
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: var(--text-small-size);
   color: var(--color-bad);
 }
 .ed-env__tools {
@@ -99,7 +99,7 @@
 }
 .ed-hint {
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: var(--text-small-size);
   opacity: 0.7;
 }
 @media (max-width: 600px) {

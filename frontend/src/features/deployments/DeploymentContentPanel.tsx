@@ -107,7 +107,7 @@ export function DeploymentContentPanel({ deployment, hostId, canWrite }: { deplo
             <>
               <p className="sd-muted">Stored values stay unchanged unless you edit the variables.</p>
               {loadEnv.isError && (
-                <p role="alert" className="sk-error">
+                <p role="alert" className="ui-error">
                   {describeDeploymentError(loadEnv.error, 'Could not load the variables. Try again.')}
                 </p>
               )}
@@ -124,7 +124,7 @@ export function DeploymentContentPanel({ deployment, hostId, canWrite }: { deplo
       {editing && (
         <>
           {error && !error.details && (
-            <p role="alert" className="sk-error">
+            <p role="alert" className="ui-error">
               {error.message}
             </p>
           )}

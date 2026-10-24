@@ -1,12 +1,10 @@
-import { useId, useState, type FormEvent } from 'react'
-import { DeploymentDialog } from '../deployments/DeploymentDialog.tsx'
+import { useState, type FormEvent } from 'react'
 import { describeCreateError } from '../hosts/createResource.ts'
 import { useCreateVolume, validateVolumeName } from './api.ts'
-import { Button } from '../../shared/ui/index.ts'
+import { Button, Dialog } from '../../shared/ui/index.ts'
 
 /** Creates a local volume. Client checks mirror the server; server errors stay inline. */
 export function CreateVolumeDialog({ hostId, onClose }: { hostId: string; onClose: () => void }) {
-  const titleId = useId()
   const [name, setName] = useState('')
   const [touched, setTouched] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -22,9 +20,9 @@ export function CreateVolumeDialog({ hostId, onClose }: { hostId: string; onClos
   }
 
   return (
-    <DeploymentDialog title="Create volume" titleId={titleId} onClose={onClose}>
-      <form className="sk-form" onSubmit={submit} noValidate>
-        <label className="sk-field">
+    <Dialog open onOpenChange={(open) => !open && onClose()} title="Create volume">
+      <form className="ui-form" onSubmit={submit} noValidate>
+        <label className="ui-form-field">
           Name
           <input
             value={name}
@@ -37,18 +35,18 @@ export function CreateVolumeDialog({ hostId, onClose }: { hostId: string; onClos
           />
         </label>
         {touched && nameError && (
-          <span role="alert" className="sk-error">
+          <span role="alert" className="ui-error">
             {nameError}
           </span>
         )}
 
-        <p className="sk-hint">Driver: local</p>
+        <p className="ui-hint">Driver: local</p>
         {error && (
-          <p role="alert" className="sk-error">
+          <p role="alert" className="ui-error">
             {error}
           </p>
         )}
-        <div className="sk-dialog__actions">
+        <div className="ui-dialog-actions">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
@@ -57,6 +55,6 @@ export function CreateVolumeDialog({ hostId, onClose }: { hostId: string; onClos
           </Button>
         </div>
       </form>
-    </DeploymentDialog>
+    </Dialog>
   )
 }

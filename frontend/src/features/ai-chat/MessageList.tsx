@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { Check } from 'lucide-react'
+import './MessageList.css'
 import { ActionConfirmCard } from './ActionConfirmCard.tsx'
 import type { ChatMessage } from './api.ts'
 import { toolLabel } from './toolLabel.ts'

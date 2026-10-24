@@ -287,17 +287,17 @@ export function ComposeWizard({ onContinue, initial }: { onContinue: (yaml: stri
       <ResourceList kind="volumes" title="Volumes" rows={state.volumes} fields={fields} onChange={(volumes) => change({ ...state, volumes })} />
 
       {shown && validation.general.length > 0 && (
-        <p role="alert" className="sk-error">
+        <p role="alert" className="ui-error">
           {validation.general.join(' ')}
         </p>
       )}
       {shown && validation.fields.size > 0 && (
-        <p role="alert" className="sk-error">
+        <p role="alert" className="ui-error">
           Fix the highlighted fields first.
         </p>
       )}
       {problems.length > 0 && (
-        <div role="alert" className="sk-error">
+        <div role="alert" className="ui-error">
           <p>The deployment is not valid.</p>
           <ul className="wz-list">
             {problems.map((m, i) => (

@@ -213,7 +213,7 @@ export function ContainerConsolePage() {
         </div>
       </Toolbar>
       {note && (
-        <p role={note.tone === 'error' ? 'alert' : undefined} className={note.tone === 'error' ? 'sk-error' : 'cconsole__note'}>
+        <p role={note.tone === 'error' ? 'alert' : undefined} className={note.tone === 'error' ? 'ui-error' : 'cconsole__note'}>
           {note.text}
         </p>
       )}

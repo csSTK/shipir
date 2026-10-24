@@ -1,15 +1,13 @@
-import { useId, useState, type FormEvent } from 'react'
-import { DeploymentDialog } from '../deployments/DeploymentDialog.tsx'
+import { useState, type FormEvent } from 'react'
 import { EnvEditor } from '../deployments/editor/EnvEditor.tsx'
 import { describeCreateError } from '../hosts/createResource.ts'
 import { useCreateContainer, type RestartPolicy } from './api.ts'
 import { buildContainerSpec, INITIAL_CONTAINER_FORM, validateContainerForm, type FormState, type MountRow, type PortRow } from './containerForm.ts'
 import './CreateContainerDialog.css'
-import { Button } from '../../shared/ui/index.ts'
+import { Button, Dialog } from '../../shared/ui/index.ts'
 
 /** Creates a container (optionally started). ADMIN-only options are not rendered for others. */
 export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: string; isAdmin: boolean; onClose: () => void }) {
-  const titleId = useId()
   const [form, setForm] = useState<FormState>(INITIAL_CONTAINER_FORM)
   const [touched, setTouched] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -33,17 +31,17 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
 
   const fieldError = (key: string) =>
     show(key) && (
-      <span role="alert" className="sk-error">
+      <span role="alert" className="ui-error">
         {problems[key]}
       </span>
     )
 
   return (
-    <DeploymentDialog title="Create container" titleId={titleId} onClose={onClose}>
-      <form className="sk-form ccd" onSubmit={submit} noValidate>
-        <div className="sk-row">
+    <Dialog open onOpenChange={(open) => !open && onClose()} title="Create container">
+      <form className="ui-form ccd" onSubmit={submit} noValidate>
+        <div className="ui-form-row">
           <div className="ccd__field">
-            <label className="sk-field">
+            <label className="ui-form-field">
             Image
             <input
               value={form.image}
@@ -59,7 +57,7 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
             {fieldError('image')}
           </div>
           <div className="ccd__field">
-            <label className="sk-field">
+            <label className="ui-form-field">
             Name (optional)
             <input
               value={form.name}
@@ -73,7 +71,7 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
             {fieldError('name')}
           </div>
         </div>
-        <label className="sk-field">
+        <label className="ui-form-field">
           Command (optional)
           <input value={form.command} onChange={(e) => set('command', e.target.value)} placeholder="sleep 3600" autoComplete="off" spellCheck={false} />
         </label>
@@ -106,7 +104,7 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
                 Remove
               </Button>
               {(show(`port${i}host`) || show(`port${i}container`)) && (
-                <span role="alert" className="sk-error ccd__row-error">
+                <span role="alert" className="ui-error ccd__row-error">
                   {problems[`port${i}host`] ?? problems[`port${i}container`]}
                 </span>
               )}
@@ -130,7 +128,7 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
                   <option value="BIND">Bind path</option>
                 </select>
               ) : (
-                <span className="sk-hint">Volume</span>
+                <span className="ui-hint">Volume</span>
               )}
               <input
                 aria-label={`Mount ${i + 1} source`}
@@ -157,7 +155,7 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
                 Remove
               </Button>
               {(show(`mount${i}source`) || show(`mount${i}target`)) && (
-                <span role="alert" className="sk-error ccd__row-error">
+                <span role="alert" className="ui-error ccd__row-error">
                   {problems[`mount${i}source`] ?? problems[`mount${i}target`]}
                 </span>
               )}
@@ -173,9 +171,9 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
         <EnvEditor value={form.env} onChange={(env) => set('env', env)} />
         {fieldError('env')}
 
-        <div className="sk-row">
+        <div className="ui-form-row">
           <div className="ccd__field">
-            <label className="sk-field">
+            <label className="ui-form-field">
             Network (optional)
             <input
               value={form.network}
@@ -188,7 +186,7 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
             </label>
             {fieldError('network')}
           </div>
-          <label className="sk-field">
+          <label className="ui-form-field">
             Restart policy
             <select value={form.restartPolicy} onChange={(e) => set('restartPolicy', e.target.value as RestartPolicy)}>
               <option value="no">no</option>
@@ -214,11 +212,11 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
         )}
 
         {error && (
-          <p role="alert" className="sk-error">
+          <p role="alert" className="ui-error">
             {error}
           </p>
         )}
-        <div className="sk-dialog__actions">
+        <div className="ui-dialog-actions">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
@@ -227,6 +225,6 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
           </Button>
         </div>
       </form>
-    </DeploymentDialog>
+    </Dialog>
   )
 }

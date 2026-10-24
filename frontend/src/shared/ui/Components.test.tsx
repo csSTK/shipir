@@ -35,6 +35,7 @@ describe('Button', () => {
     render(<Button loading onClick={onClick}>Save</Button>)
     const button = screen.getByRole('button', { name: 'Save' })
     expect(button).toHaveAttribute('aria-busy', 'true')
+    expect(button).toBeDisabled()
     fireEvent.click(button)
     expect(onClick).not.toHaveBeenCalled()
   })

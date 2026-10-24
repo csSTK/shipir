@@ -55,7 +55,7 @@ export function ActionConfirmCard({ call, status, readOnly = false, busy = false
         </dl>
       )}
       {error && (
-        <p role="alert" className="chat-error">
+        <p role="alert" className="ui-error">
           {error}
         </p>
       )}

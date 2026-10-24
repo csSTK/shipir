@@ -9,7 +9,7 @@
   align-self: flex-start;
   color: inherit;
   opacity: 0.7;
-  font-size: 0.875rem;
+  font-size: var(--text-small-size);
   text-decoration: none;
 }
 .sd-back:hover {
@@ -28,7 +28,7 @@
 }
 .sd-title {
   margin: 0;
-  font-size: 1.75rem;
+  font-size: var(--text-heading-size);
   line-height: 1.1;
   letter-spacing: -0.02em;
   font-weight: 700;
@@ -42,7 +42,7 @@
 }
 .sd-muted {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-small-size);
   opacity: 0.7;
 }
 .sd-actions {
@@ -60,19 +60,8 @@
 }
 .sd-panel__title {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--text-body-size);
   letter-spacing: -0.01em;
-}
-.sd-yaml {
-  margin: 0;
-  padding: 12px;
-  max-height: 24rem;
-  overflow: auto;
-  border-radius: 10px;
-  background: color-mix(in srgb, currentColor 6%, transparent);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.8125rem;
-  line-height: 1.5;
 }
 .sd-keys {
   list-style: none;
@@ -178,7 +167,7 @@
   grid-template-columns: max-content 1fr;
   gap: 6px 16px;
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-small-size);
 }
 .sd-git dt {
   opacity: 0.7;
@@ -194,19 +183,6 @@
   gap: 8px;
   padding-top: 8px;
   border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
-}
-.sd-auto__toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 0.9375rem;
-  font-weight: 600;
-}
-.sd-auto__toggle input {
-  width: 1.25rem;
-  height: 1.25rem;
-  accent-color: AccentColor;
 }
 .sd-auto__interval {
   max-width: 14rem;

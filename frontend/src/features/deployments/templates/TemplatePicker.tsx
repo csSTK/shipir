@@ -14,7 +14,7 @@ export function TemplatePicker({ onSelect, selectedId }: { onSelect: (template: 
 
   return (
     <div className="tp">
-      <label className="sk-field" htmlFor={searchId}>
+      <label className="ui-form-field" htmlFor={searchId}>
         <span>Search templates</span>
         <input id={searchId} type="search" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" spellCheck={false} />
       </label>
@@ -24,7 +24,7 @@ export function TemplatePicker({ onSelect, selectedId }: { onSelect: (template: 
         </p>
       )}
       {error && (
-        <div role="alert" className="sk-error">
+        <div role="alert" className="ui-error">
           <p>{describeDeploymentError(error, 'Could not load the templates.')}</p>
           <Button variant="secondary" onClick={() => void refetch()}>
             Retry

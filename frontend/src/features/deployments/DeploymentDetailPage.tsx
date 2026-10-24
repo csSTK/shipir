@@ -23,7 +23,6 @@ import { GitSourcePanel } from './GitSourcePanel.tsx'
 import { ConfigFilesPanel } from './config-files/index.ts'
 import { DeploymentContentPanel } from './DeploymentContentPanel.tsx'
 import { describeDeploymentError } from './deploymentErrors.ts'
-import './DeploymentUi.css'
 import './DeploymentDetailPage.css'
 
 const STATUS: Record<ManagedDeploymentStatus, { label: string; tone: 'ok' | 'bad' | 'muted' }> = {
@@ -220,7 +219,7 @@ export function DeploymentDetailPage() {
       />
 
       {actionError && (
-        <p role="alert" className="sk-error">
+        <p role="alert" className="ui-error">
           {actionError}
         </p>
       )}
@@ -243,7 +242,7 @@ export function DeploymentDetailPage() {
         {versions.isPending ? (
           <p className="sd-muted">Loading versions…</p>
         ) : versions.error ? (
-          <p role="alert" className="sk-error">
+          <p role="alert" className="ui-error">
             {describeDeploymentError(versions.error, 'Could not load the versions.')}
           </p>
         ) : versions.data.length === 0 ? (

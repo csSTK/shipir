@@ -1,36 +1,36 @@
-/* Shared deployment UI: dialog content, form fields. Buttons, dialogs and menus come from shared/ui. */
-.sk-dialog__text {
+/* Shared form and dialog layout: stacked forms, plain fields, env rows, inline errors, dialog text and actions. */
+.ui-dialog-text {
   margin: 0 0 var(--space-4);
   line-height: var(--text-body-leading);
 }
-.sk-dialog__actions {
+.ui-dialog-actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);
 }
-.sk-error {
+.ui-error {
   margin: 0 0 var(--space-3);
   font-size: var(--text-small-size);
   color: var(--color-bad);
 }
-.sk-form {
+.ui-form {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
-.sk-form .sk-error {
+.ui-form .ui-error {
   margin: 0;
 }
-.sk-field {
+.ui-form-field {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   font-size: var(--text-small-size);
 }
-.sk-field input,
-.sk-field select,
-.sk-yaml-input,
-.sk-env__row input {
+.ui-form-field input,
+.ui-form-field select,
+.ui-yaml-input,
+.ui-env__row input {
   font: inherit;
   font-size: var(--text-body-size);
   padding: var(--space-2) var(--space-3);
@@ -40,21 +40,21 @@
   color: var(--color-text);
   min-width: 0;
 }
-.sk-yaml-input {
+.ui-yaml-input {
   font-family: var(--font-mono);
   font-size: var(--text-small-size);
   line-height: 1.5;
   resize: vertical;
 }
-.sk-field input:focus-visible,
-.sk-field select:focus-visible,
-.sk-yaml-input:focus-visible,
-.sk-env__row input:focus-visible {
+.ui-form-field input:focus-visible,
+.ui-form-field select:focus-visible,
+.ui-yaml-input:focus-visible,
+.ui-env__row input:focus-visible {
   outline: none;
   border-color: var(--color-focus);
   box-shadow: var(--shadow-focus);
 }
-.sk-env {
+.ui-env {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -64,33 +64,33 @@
   padding: 0;
   font-size: var(--text-small-size);
 }
-.sk-env legend {
+.ui-env legend {
   padding: 0;
   margin-bottom: var(--space-2);
 }
-.sk-env__row {
+.ui-env__row {
   display: grid;
   grid-template-columns: 1fr 1fr auto;
   gap: var(--space-2);
   width: 100%;
 }
 /* Form dialogs are wider than confirmations. */
-.ui-dialog:has(.sk-form) {
+.ui-dialog:has(.ui-form) {
   width: min(44rem, 100%);
 }
-.sk-hint {
+.ui-hint {
   margin: 0;
   font-size: var(--text-caption-size);
   color: var(--color-text-muted);
 }
-.sk-row {
+.ui-form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-3);
 }
 @media (max-width: 600px) {
-  .sk-env__row,
-  .sk-row {
+  .ui-env__row,
+  .ui-form-row {
     grid-template-columns: 1fr;
   }
 }

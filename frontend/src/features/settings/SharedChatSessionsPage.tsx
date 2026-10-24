@@ -1,6 +1,5 @@
 import { useSearchParams } from 'react-router-dom'
 import { MessageList } from '../ai-chat/index.ts'
-import '../ai-chat/ChatPage.css'
 import { Card, ResourceTable, Skeleton, type ResourceColumn } from '../../shared/ui/index.ts'
 import { useSharedChatSession, useSharedChatSessions, type SharedChatSessionPage } from './api.ts'
 import { Pager } from './Pager.tsx'

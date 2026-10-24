@@ -309,7 +309,7 @@ export function ContainerDetailsPage() {
       </Link>
       {isPending && <p role="status">Loading…</p>}
       {error && (
-        <div role="alert" className="sk-error">
+        <div role="alert" className="ui-error">
           <p>{isNotFound(error) ? 'This container no longer exists.' : describeDetailsError(error)}</p>
           {!isNotFound(error) && (
             <Button variant="ghost" size="sm" onClick={() => void refetch()}>

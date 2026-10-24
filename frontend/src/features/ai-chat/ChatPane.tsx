@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Check, Pencil, Send, Trash2, Wrench, X } from 'lucide-react'
-import { Button, ConfirmDialog, EmptyState, Skeleton } from '../../shared/ui/index.ts'
+import { Button, ConfirmDialog, EmptyState, Skeleton, Switch } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import {
   useChatSession,
@@ -69,17 +69,12 @@ function Header({ session }: { session: ChatSession }) {
           </>
         )}
       </div>
-      <label className="chat-share">
-        <span>Share with admins</span>
-        <input
-          type="checkbox"
-          role="switch"
-          aria-label="Share with admins"
-          checked={session.sharedWithAdmin}
-          disabled={update.isPending}
-          onChange={() => update.mutate({ sharedWithAdmin: !session.sharedWithAdmin })}
-        />
-      </label>
+      <Switch
+        label="Share with admins"
+        checked={session.sharedWithAdmin}
+        disabled={update.isPending}
+        onChange={() => update.mutate({ sharedWithAdmin: !session.sharedWithAdmin })}
+      />
       <p className="chat-muted">Admins can read a shared chat, read-only, to help debug problems. Turn it off at any time.</p>
       {(update.isError || remove.isError) && (
         <p role="alert" className="chat-error">

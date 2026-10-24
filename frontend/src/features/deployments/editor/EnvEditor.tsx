@@ -96,7 +96,7 @@ export function EnvEditor({ value, onChange }: { value: EnvEntry[]; onChange: (n
           <label htmlFor={pasteId} className="ed-hint">
             Paste the contents of a .env file
           </label>
-          <textarea id={pasteId} className="sk-yaml-input" rows={5} value={pasteText} onChange={(e) => setPasteText(e.target.value)} spellCheck={false} autoComplete="off" />
+          <textarea id={pasteId} className="ui-yaml-input" rows={5} value={pasteText} onChange={(e) => setPasteText(e.target.value)} spellCheck={false} autoComplete="off" />
           <div>
             <Button variant="secondary" onClick={applyPaste}>
               Add variables

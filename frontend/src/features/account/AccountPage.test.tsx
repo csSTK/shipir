@@ -117,17 +117,17 @@ describe('AccountPage', () => {
   it('offers a switch for every notification type', async () => {
     route()
     renderPage()
-    expect(await screen.findByRole('switch', { name: 'Deployment failed in-app notifications' })).toBeChecked()
-    expect(screen.getByRole('switch', { name: 'Container crashed in-app notifications' })).toBeChecked()
-    expect(screen.getByRole('switch', { name: 'Container unhealthy in-app notifications' })).toBeChecked()
-    expect(screen.getByRole('switch', { name: 'Git auto-update failed in-app notifications' })).toBeChecked()
+    expect(await screen.findByRole('switch', { name: 'Deployment failed' })).toBeChecked()
+    expect(screen.getByRole('switch', { name: 'Container crashed' })).toBeChecked()
+    expect(screen.getByRole('switch', { name: 'Container unhealthy' })).toBeChecked()
+    expect(screen.getByRole('switch', { name: 'Git auto-update failed' })).toBeChecked()
     expect(screen.getAllByRole('switch')).toHaveLength(6)
   })
 
   it('saves a switch for a newly added type', async () => {
     route()
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: 'Container unhealthy in-app notifications' }))
+    fireEvent.click(await screen.findByRole('switch', { name: 'Container unhealthy' }))
     await waitFor(() =>
       expect(apiFetchMock).toHaveBeenCalledWith('/notifications/preferences', {
         method: 'PUT',

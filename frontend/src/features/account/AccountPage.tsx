@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Button, Card, PageHeader, Skeleton } from '../../shared/ui/index.ts'
+import { Button, Card, PageHeader, Skeleton, Switch } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { useChangePassword, type CurrentUser } from '../auth/index.ts'
 import { checkPassword, isPasswordValid, violationMessage } from '../auth/passwordPolicy.ts'
@@ -121,16 +121,12 @@ function PreferencesSection() {
       )}
       {preferences.isError && <p role="alert" className="account__error">Could not load notification preferences.</p>}
       {preferences.data?.map((p) => (
-        <label key={p.type} className="account__toggle">
-          <span>{NOTIFICATION_TYPE_LABELS[p.type]}</span>
-          <input
-            type="checkbox"
-            role="switch"
-            checked={p.inAppEnabled}
-            onChange={() => toggle(p.type)}
-            aria-label={`${NOTIFICATION_TYPE_LABELS[p.type]} in-app notifications`}
-          />
-        </label>
+        <Switch
+          key={p.type}
+          label={NOTIFICATION_TYPE_LABELS[p.type]}
+          checked={p.inAppEnabled}
+          onChange={() => toggle(p.type)}
+        />
       ))}
       <div className="account__error" role="alert">
         {save.isError && 'Could not save your preference. Please try again.'}

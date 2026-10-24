@@ -18,7 +18,6 @@ import { AddDeploymentDialog } from './AddDeploymentDialog.tsx'
 import { ConfirmDialog } from './ConfirmDialog.tsx'
 import type { RowActions } from '../../shared/ui/ResourceTable.tsx'
 import { describeDeploymentError } from './deploymentErrors.ts'
-import './DeploymentUi.css'
 import './DeploymentsPage.css'
 
 const STATUS: Record<DeploymentStatus, { label: string; tone: 'ok' | 'warn' | 'muted' }> = {
@@ -225,7 +224,7 @@ export function DeploymentsPage() {
         }
       />
       {notice && (
-        <p role={notice.tone === 'error' ? 'alert' : 'status'} className={notice.tone === 'error' ? 'sk-error' : 'deployments__notice'}>
+        <p role={notice.tone === 'error' ? 'alert' : 'status'} className={notice.tone === 'error' ? 'ui-error' : 'deployments__notice'}>
           {notice.text}
         </p>
       )}

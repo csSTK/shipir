@@ -1,13 +1,11 @@
-import { useId, useState, type FormEvent } from 'react'
-import { DeploymentDialog } from '../deployments/DeploymentDialog.tsx'
+import { useState, type FormEvent } from 'react'
 import { describeCreateError } from '../hosts/createResource.ts'
 import { validateVolumeName as validateName } from '../volumes/api.ts'
 import { useCreateNetwork, validateSubnet, type NetworkDriver } from './api.ts'
-import { Button } from '../../shared/ui/index.ts'
+import { Button, Dialog } from '../../shared/ui/index.ts'
 
 /** Creates a network. Drivers other than bridge are offered to ADMIN only (the server enforces it too). */
 export function CreateNetworkDialog({ hostId, isAdmin, onClose }: { hostId: string; isAdmin: boolean; onClose: () => void }) {
-  const titleId = useId()
   const [name, setName] = useState('')
   const [driver, setDriver] = useState<NetworkDriver>('bridge')
   const [internal, setInternal] = useState(false)
@@ -30,9 +28,9 @@ export function CreateNetworkDialog({ hostId, isAdmin, onClose }: { hostId: stri
   }
 
   return (
-    <DeploymentDialog title="Create network" titleId={titleId} onClose={onClose}>
-      <form className="sk-form" onSubmit={submit} noValidate>
-        <label className="sk-field">
+    <Dialog open onOpenChange={(open) => !open && onClose()} title="Create network">
+      <form className="ui-form" onSubmit={submit} noValidate>
+        <label className="ui-form-field">
           Name
           <input
             value={name}
@@ -45,13 +43,13 @@ export function CreateNetworkDialog({ hostId, isAdmin, onClose }: { hostId: stri
           />
         </label>
         {touched && nameError && (
-          <span role="alert" className="sk-error">
+          <span role="alert" className="ui-error">
             {nameError}
           </span>
         )}
 
         {isAdmin ? (
-          <label className="sk-field">
+          <label className="ui-form-field">
             Driver
             <select value={driver} onChange={(e) => setDriver(e.target.value as NetworkDriver)}>
               <option value="bridge">bridge</option>
@@ -61,9 +59,9 @@ export function CreateNetworkDialog({ hostId, isAdmin, onClose }: { hostId: stri
             </select>
           </label>
         ) : (
-          <p className="sk-hint">Driver: bridge</p>
+          <p className="ui-hint">Driver: bridge</p>
         )}
-        <label className="sk-field">
+        <label className="ui-form-field">
           Subnet (optional)
           <input
             value={subnet}
@@ -75,7 +73,7 @@ export function CreateNetworkDialog({ hostId, isAdmin, onClose }: { hostId: stri
           />
         </label>
         {touched && subnetError && (
-          <span role="alert" className="sk-error">
+          <span role="alert" className="ui-error">
             {subnetError}
           </span>
         )}
@@ -84,11 +82,11 @@ export function CreateNetworkDialog({ hostId, isAdmin, onClose }: { hostId: stri
           <input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} /> Internal (no outside access)
         </label>
         {error && (
-          <p role="alert" className="sk-error">
+          <p role="alert" className="ui-error">
             {error}
           </p>
         )}
-        <div className="sk-dialog__actions">
+        <div className="ui-dialog-actions">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
@@ -97,6 +95,6 @@ export function CreateNetworkDialog({ hostId, isAdmin, onClose }: { hostId: stri
           </Button>
         </div>
       </form>
-    </DeploymentDialog>
+    </Dialog>
   )
 }

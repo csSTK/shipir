@@ -92,7 +92,7 @@ export function ContainerLogsPage() {
         </div>
       </Toolbar>
       {end && (
-        <p role={end.status === 'ERROR' ? 'alert' : undefined} className={end.status === 'ERROR' ? 'sk-error' : 'clogs__note'}>
+        <p role={end.status === 'ERROR' ? 'alert' : undefined} className={end.status === 'ERROR' ? 'ui-error' : 'clogs__note'}>
           {endText(end)}
         </p>
       )}

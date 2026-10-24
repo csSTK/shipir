@@ -9,7 +9,7 @@
 }
 .images__id {
   font-family: var(--font-mono);
-  font-size: 0.875em;
+  font-size: var(--text-small-size);
 }
 .images__update {
   display: inline-flex;

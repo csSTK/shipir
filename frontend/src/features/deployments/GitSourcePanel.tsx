@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSetAutoUpdate, type GitInfo } from './api.ts'
 import { describePollError, describeDeploymentError } from './deploymentErrors.ts'
-import { Button, Card } from '../../shared/ui/index.ts'
+import { Button, Card, Switch } from '../../shared/ui/index.ts'
 
 const DEFAULT_INTERVAL_MINUTES = 5
 
@@ -49,22 +49,17 @@ export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploy
       </dl>
 
       <div className="sd-auto">
-        <label className="sd-auto__toggle">
-          <span>Auto-update</span>
-          <input
-            type="checkbox"
-            role="switch"
-            checked={enabled}
-            disabled={!canWrite}
-            onChange={(e) => {
-              setEnabled(e.target.checked)
-              setSaved(false)
-            }}
-            aria-label="Auto-update"
-          />
-        </label>
+        <Switch
+          label="Auto-update"
+          checked={enabled}
+          disabled={!canWrite}
+          onChange={(e) => {
+            setEnabled(e.target.checked)
+            setSaved(false)
+          }}
+        />
         <p className="sd-muted">Checks the repository regularly and redeploys when the branch has a new commit.</p>
-        <label className="sk-field sd-auto__interval">
+        <label className="ui-form-field sd-auto__interval">
           <span>Check every (minutes)</span>
           <input
             type="number"
@@ -92,13 +87,13 @@ export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploy
           </p>
         )}
         {problem && (
-          <p role="alert" className="sk-error">
+          <p role="alert" className="ui-error">
             {problem}
           </p>
         )}
         {git.lastPolledAt && <p className="sd-muted">Last checked: {new Date(git.lastPolledAt).toLocaleString()}</p>}
         {git.lastPollError && (
-          <p role="alert" className="sk-error">
+          <p role="alert" className="ui-error">
             Last check failed: {describePollError(git.lastPollError)}
           </p>
         )}
