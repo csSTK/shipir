@@ -17,10 +17,6 @@ Features Portainer has that Shipir does not, and that are not planned as beads y
 - **Pull & update for FILE deployments:** re-pull images and recreate (`docker compose pull` + `up`). Git deployments can already be redeployed.
 - **App templates:** one-click deployments from a template catalog.
 
-## Registries
-
-- **Private registries:** stored registry credentials (encrypted via `SecretCipher`) used for pulls and deploys.
-
 ## Not planned (out of scope)
 
 Swarm and Kubernetes, edge/remote agent (SaaS control plane), OAuth/LDAP, teams, Docker secrets/configs.
