@@ -16,12 +16,26 @@ afterEach(() => {
 })
 
 const current = {
-  baseUrl: 'https://api.example.com/v1',
-  model: 'gpt-x',
+  activeProvider: 'OPENAI_COMPATIBLE',
   enabled: true,
-  keyConfigured: true,
-  apiKeyHint: '…9f2c',
+  providers: [
+    {
+      provider: 'OPENAI_COMPATIBLE',
+      baseUrl: 'https://api.example.com/v1',
+      model: 'gpt-x',
+      keyConfigured: true,
+      apiKeyHint: '…9f2c',
+    },
+    {
+      provider: 'GEMINI',
+      baseUrl: 'https://generativelanguage.googleapis.com',
+      model: 'gemini-x',
+      keyConfigured: true,
+      apiKeyHint: '…gem1',
+    },
+  ],
 }
+const openai = current.providers[0]
 
 function renderPage(handler?: (path: string, method: string, body: unknown) => unknown, settings = current) {
   apiFetchMock.mockImplementation((path: string, options?: { method?: string; body?: unknown }) => {
@@ -58,7 +72,16 @@ describe('AiSettingsPage', () => {
     expect(await screen.findByText('AI settings saved.')).toBeInTheDocument()
     expect(calls('PUT')[0]).toEqual([
       '/settings/ai',
-      { method: 'PUT', body: { baseUrl: current.baseUrl, model: 'gpt-y', enabled: true } },
+      {
+        method: 'PUT',
+        body: {
+          enabled: true,
+          activeProvider: 'OPENAI_COMPATIBLE',
+          provider: 'OPENAI_COMPATIBLE',
+          baseUrl: openai.baseUrl,
+          model: 'gpt-y',
+        },
+      },
     ])
   })
 
@@ -73,7 +96,7 @@ describe('AiSettingsPage', () => {
   })
 
   it('clears the key with an empty string after the toggle', async () => {
-    renderPage(() => ({ ...current, keyConfigured: false, apiKeyHint: null }))
+    renderPage(() => current)
     await screen.findByLabelText('Base URL')
     fireEvent.click(screen.getByRole('button', { name: 'Remove stored key' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -89,7 +112,7 @@ describe('AiSettingsPage', () => {
     renderPage(() => ({ status }))
     fireEvent.click(await screen.findByRole('button', { name: 'Test connection' }))
     expect(await screen.findByText(text)).toBeInTheDocument()
-    await waitFor(() => expect(calls('POST')[0]).toEqual(['/settings/ai/test', { method: 'POST' }]))
+    await waitFor(() => expect(calls('POST')[0]).toEqual(['/settings/ai/test', { method: 'POST', body: { provider: 'OPENAI_COMPATIBLE' } }]))
   })
 
   it('maps API_KEY_REQUIRED on test', async () => {
@@ -115,5 +138,43 @@ describe('AiSettingsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     expect(calls('PUT')).toHaveLength(0)
+  })
+
+  it('switches provider, keeps drafts and shows each key hint', async () => {
+    renderPage()
+    await screen.findByLabelText('Base URL')
+    expect(screen.getByRole('radio', { name: /OpenAI-compatible/ })).toBeChecked()
+    fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'gpt-draft' } })
+    fireEvent.click(screen.getByRole('radio', { name: /Google Gemini/ }))
+    expect(screen.getByLabelText('Base URL')).toHaveValue('https://generativelanguage.googleapis.com')
+    expect(screen.getByLabelText('Model')).toHaveValue('gemini-x')
+    expect(screen.getByText(/gem1/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('radio', { name: /OpenAI-compatible/ }))
+    expect(screen.getByLabelText('Model')).toHaveValue('gpt-draft')
+    expect(screen.getByText(/9f2c/)).toBeInTheDocument()
+  })
+
+  it('saves the selected provider as the edited and active one', async () => {
+    renderPage(() => current)
+    fireEvent.click(await screen.findByRole('radio', { name: /Google Gemini/ }))
+    fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'g-key' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByText('AI settings saved.')
+    expect((calls('PUT')[0][1] as { body: unknown }).body).toEqual({
+      enabled: true,
+      activeProvider: 'GEMINI',
+      provider: 'GEMINI',
+      baseUrl: 'https://generativelanguage.googleapis.com',
+      model: 'gemini-x',
+      apiKey: 'g-key',
+    })
+  })
+
+  it('tests the selected provider', async () => {
+    renderPage(() => ({ status: 'OK' }))
+    fireEvent.click(await screen.findByRole('radio', { name: /Google Gemini/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Test connection' }))
+    await screen.findByText('Connection successful.')
+    expect(calls('POST')[0]).toEqual(['/settings/ai/test', { method: 'POST', body: { provider: 'GEMINI' } }])
   })
 })

@@ -164,7 +164,60 @@
   color: var(--ai-down);
 }
 
+.ai-segmented {
+  display: flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 12px;
+  background: var(--ai-surface);
+  border: 1px solid var(--ai-border);
+}
+
+.ai-segment {
+  flex: 1;
+  font: inherit;
+  font-size: 0.9375rem;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform 100ms ease-out, background-color 150ms ease-out;
+}
+
+.ai-segment[aria-checked='true'] {
+  background: Canvas;
+  box-shadow: 0 1px 3px color-mix(in srgb, currentColor 22%, transparent);
+  font-weight: 600;
+}
+
+.ai-segment:active {
+  transform: scale(0.97);
+}
+
+.ai-segment:focus-visible {
+  outline: 2px solid AccentColor;
+  outline-offset: 2px;
+}
+
+.ai-active {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ai-ok);
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .ai-segment {
+    transition: none;
+  }
+  .ai-segment:active {
+    transform: none;
+  }
   .ai-btn,
   .ai-toggle input,
   .ai-toggle input::after {

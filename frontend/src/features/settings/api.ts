@@ -103,20 +103,31 @@ export function useSaveRetentionSettings() {
   })
 }
 
+export type AiProvider = 'OPENAI_COMPATIBLE' | 'GEMINI'
+
 /** The API key is never returned, only whether one is stored and a hint. */
-export interface AiSettings {
+export interface AiProviderConfig {
+  provider: AiProvider
   baseUrl: string
   model: string
-  enabled: boolean
   keyConfigured: boolean
   apiKeyHint: string | null
 }
 
-/** `apiKey` omitted keeps the stored key, an empty string clears it. */
+/** `providers` always lists both providers, OpenAI-compatible first. */
+export interface AiSettings {
+  activeProvider: AiProvider
+  enabled: boolean
+  providers: AiProviderConfig[]
+}
+
+/** `provider` is the config being edited; `apiKey` omitted keeps its stored key, an empty string clears it. */
 export interface AiSettingsInput {
+  enabled: boolean
+  activeProvider: AiProvider
+  provider: AiProvider
   baseUrl: string
   model: string
-  enabled: boolean
   apiKey?: string
 }
 
@@ -137,10 +148,11 @@ export function useSaveAiSettings() {
   })
 }
 
-/** Tests the stored settings, not unsaved form values. */
+/** Tests the stored settings of one provider, not unsaved form values. */
 export function useTestAiConnection() {
   return useMutation({
-    mutationFn: () => apiFetch<{ status: AiConnectionStatus }>(`${AI_PATH}/test`, { method: 'POST' }),
+    mutationFn: (provider: AiProvider) =>
+      apiFetch<{ status: AiConnectionStatus }>(`${AI_PATH}/test`, { method: 'POST', body: { provider } }),
   })
 }
 
