@@ -1,4 +1,21 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import {
+  type ColumnDef,
+  type ColumnSizingState,
+  type SortingState,
+  type VisibilityState,
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from '@tanstack/react-table'
+import { ArrowDown, ArrowUp, Check, Columns3, Ellipsis, Rows3, Rows4, type LucideIcon } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
+import { Button } from './Button.tsx'
+import { EmptyState } from './EmptyState.tsx'
+import { IconButton } from './IconButton.tsx'
+import { Menu, type MenuEntry } from './Menu.tsx'
+import { SearchField } from './SearchField.tsx'
+import { Skeleton } from './Skeleton.tsx'
 import './ResourceTable.css'
 
 export interface ResourceColumn<T> {
@@ -7,11 +24,37 @@ export interface ResourceColumn<T> {
   render: (row: T) => ReactNode
   /** Makes the column sortable by this value (strings compare case-insensitively, null sorts last). */
   sortValue?: (row: T) => string | number | null
+  /** Initial width in px (default 160). */
+  defaultWidth?: number
+  /** Smallest width in px the column can be resized to (default 64). */
+  minWidth?: number
+  /** Set false to keep the column out of the visibility menu (always shown). */
+  hideable?: boolean
+  /** Hidden initially until the user turns it on. */
+  defaultHidden?: boolean
+}
+
+/** One icon button in the pinned actions column. */
+export interface RowAction {
+  label: string
+  icon: LucideIcon
+  onSelect: () => void
+  disabled?: boolean
+  danger?: boolean
+}
+
+export interface RowActions {
+  /** Shown as icon buttons. */
+  primary?: RowAction[]
+  /** Shown in the overflow menu. */
+  menu?: MenuEntry[]
 }
 
 interface Props<T> {
   /** Plural noun, used in labels and messages: "containers". */
   label: string
+  /** Key for the saved column widths, hidden columns and density (default: `label`). */
+  id?: string
   columns: ResourceColumn<T>[]
   rows: T[] | undefined
   rowKey: (row: T) => string
@@ -26,24 +69,71 @@ interface Props<T> {
   onRetry?: () => void
   /** Extra controls next to the search box (e.g. a filter chip). */
   toolbar?: ReactNode
+  /** Actions per row, pinned to the right edge of the table. */
+  rowActions?: (row: T) => RowActions
+  /** Names a row for the accessible labels of its actions. */
+  rowLabel?: (row: T) => string
 }
 
-type Sort = { id: string; dir: 'asc' | 'desc' }
+type Density = 'comfortable' | 'compact'
+interface Prefs {
+  widths: ColumnSizingState
+  hidden: string[]
+  density: Density
+}
 
-function compare(a: string | number | null, b: string | number | null): number {
+const DEFAULT_WIDTH = 160
+const MIN_WIDTH = 64
+const MAX_WIDTH = 900
+const KEY_STEP = 16
+const KEY_STEP_LARGE = 64
+
+function storageKey(id: string) {
+  return `shipir.table.${id}`
+}
+
+function loadPrefs(id: string): Partial<Prefs> {
+  try {
+    const raw = window.localStorage.getItem(storageKey(id))
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Partial<Prefs>
+    const out: Partial<Prefs> = {}
+    if (parsed.widths && typeof parsed.widths === 'object') {
+      out.widths = Object.fromEntries(Object.entries(parsed.widths).filter(([, v]) => typeof v === 'number' && Number.isFinite(v)))
+    }
+    if (Array.isArray(parsed.hidden)) out.hidden = parsed.hidden.filter((h): h is string => typeof h === 'string')
+    if (parsed.density === 'compact' || parsed.density === 'comfortable') out.density = parsed.density
+    return out
+  } catch {
+    return {}
+  }
+}
+
+function savePrefs(id: string, prefs: Prefs) {
+  try {
+    window.localStorage.setItem(storageKey(id), JSON.stringify(prefs))
+  } catch {
+    // storage unavailable or full: preferences just don't persist
+  }
+}
+
+function compare(a: unknown, b: unknown): number {
   if (a === b) return 0
-  if (a === null) return 1
-  if (b === null) return -1
+  if (a === null || a === undefined) return 1
+  if (b === null || b === undefined) return -1
   if (typeof a === 'number' && typeof b === 'number') return a - b
   return String(a).localeCompare(String(b), undefined, { sensitivity: 'base' })
 }
 
 /**
- * Shared list table for environment resources: search, sortable headers, loading skeleton,
- * error state with retry, empty state. Features supply columns and rows only.
+ * Shared list table for environment resources, built on TanStack Table: search, sortable headers,
+ * resizable columns (drag or arrow keys, double-click fits the content), column visibility, density,
+ * a pinned actions column and loading/error/empty states. Widths, hidden columns and density are
+ * remembered per table `id` in localStorage.
  */
 export function ResourceTable<T>({
   label,
+  id,
   columns,
   rows,
   rowKey,
@@ -54,33 +144,101 @@ export function ResourceTable<T>({
   error = null,
   onRetry,
   toolbar,
+  rowActions,
+  rowLabel,
 }: Props<T>) {
+  const tableId = id ?? label
   const [query, setQuery] = useState('')
-  const [sort, setSort] = useState<Sort>({ id: defaultSort, dir: 'asc' })
+  const [sorting, setSorting] = useState<SortingState>([{ id: defaultSort, desc: false }])
+  const [initial] = useState(() => loadPrefs(tableId))
+  const [sizing, setSizing] = useState<ColumnSizingState>(initial.widths ?? {})
+  const [visibility, setVisibility] = useState<VisibilityState>(() => {
+    const hidden = initial.hidden ?? columns.filter((c) => c.defaultHidden).map((c) => c.id)
+    return Object.fromEntries(hidden.map((h) => [h, false]))
+  })
+  const [density, setDensity] = useState<Density>(initial.density ?? 'comfortable')
+  const tableRef = useRef<HTMLTableElement>(null)
 
-  const visible = useMemo(() => {
+  useEffect(() => {
+    const hidden = Object.entries(visibility)
+      .filter(([, v]) => v === false)
+      .map(([k]) => k)
+    savePrefs(tableId, { widths: sizing, hidden, density })
+  }, [tableId, sizing, visibility, density])
+
+  const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    const filtered = (rows ?? []).filter((r) => !needle || searchText(r).toLowerCase().includes(needle))
-    const column = columns.find((c) => c.id === sort.id)
-    if (!column?.sortValue) return filtered
-    const value = column.sortValue
-    const factor = sort.dir === 'asc' ? 1 : -1
-    return [...filtered].sort((a, b) => factor * compare(value(a), value(b)))
-  }, [rows, query, sort, columns, searchText])
+    return (rows ?? []).filter((r) => !needle || searchText(r).toLowerCase().includes(needle))
+  }, [rows, query, searchText])
 
-  function toggleSort(id: string) {
-    setSort((s) => (s.id === id ? { id, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { id, dir: 'asc' }))
-  }
+  const columnDefs = useMemo<ColumnDef<T>[]>(
+    () =>
+      columns.map((c) => ({
+        id: c.id,
+        header: c.header,
+        accessorFn: (row: T) => (c.sortValue ? c.sortValue(row) : null),
+        cell: (info) => c.render(info.row.original),
+        enableSorting: !!c.sortValue,
+        sortDescFirst: false,
+        enableHiding: c.hideable !== false,
+        sortingFn: (a, b, columnId) => compare(a.getValue(columnId), b.getValue(columnId)),
+        size: c.defaultWidth ?? DEFAULT_WIDTH,
+        minSize: c.minWidth ?? MIN_WIDTH,
+        maxSize: MAX_WIDTH,
+      })),
+    [columns],
+  )
+
+  const table = useReactTable({
+    data: filtered,
+    columns: columnDefs,
+    state: { sorting, columnSizing: sizing, columnVisibility: visibility },
+    onSortingChange: setSorting,
+    onColumnSizingChange: setSizing,
+    onColumnVisibilityChange: setVisibility,
+    enableSortingRemoval: false,
+    enableMultiSort: false,
+    getRowId: (row) => rowKey(row),
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  })
+
+  const setWidth = useCallback((columnId: string, width: number) => {
+    setSizing((s) => ({ ...s, [columnId]: Math.round(width) }))
+  }, [])
+
+  /** Widest natural content of the column (header and cells) plus the cell padding. */
+  const autofit = useCallback(
+    (columnId: string) => {
+      const root = tableRef.current
+      if (!root) return
+      let widest = 0
+      root.querySelectorAll<HTMLElement>(`[data-col="${columnId}"]`).forEach((cell) => {
+        const inner = cell.querySelector<HTMLElement>('.rtable__cell')
+        if (!inner) return
+        widest = Math.max(widest, inner.scrollWidth + (cell.offsetWidth - inner.clientWidth))
+      })
+      if (widest > 0) setWidth(columnId, widest)
+    },
+    [setWidth],
+  )
+
+  const hideableColumns = table.getAllLeafColumns().filter((c) => c.getCanHide())
+  const visibleColumns = table.getVisibleLeafColumns()
+  const hasActions = !!rowActions
+  const sizeSum = visibleColumns.reduce((sum, c) => sum + c.getSize(), 0)
 
   let body: ReactNode
   if (error) {
     body = (
-      <div className="rtable__state">
-        <p role="alert">{error}</p>
+      <div className="rtable__error">
+        <div role="alert">
+          <EmptyState title={error} />
+        </div>
         {onRetry && (
-          <button type="button" className="rtable__btn" onClick={onRetry}>
+          <Button variant="secondary" onClick={onRetry}>
             Retry
-          </button>
+          </Button>
         )}
       </div>
     )
@@ -88,53 +246,108 @@ export function ResourceTable<T>({
     body = (
       <div className="rtable__skeleton" role="status" aria-label={`Loading ${label}`} aria-busy="true">
         {[0, 1, 2, 3].map((i) => (
-          <span key={i} className="rtable__skeleton-row" />
+          <Skeleton key={i} height="2.5rem" />
         ))}
       </div>
     )
   } else if ((rows ?? []).length === 0) {
-    body = <p className="rtable__state">{emptyMessage}</p>
-  } else if (visible.length === 0) {
-    body = <p className="rtable__state">No matches for "{query.trim()}".</p>
+    body = <EmptyState title={emptyMessage} />
+  } else if (filtered.length === 0) {
+    body = <EmptyState title={`No matches for "${query.trim()}".`} />
   } else {
     body = (
       <div className="rtable__scroll">
-        <table className="rtable__table" aria-label={label}>
+        <table ref={tableRef} className="rtable__table" aria-label={label} style={{ minWidth: sizeSum }}>
+          <colgroup>
+            {visibleColumns.map((c) => (
+              <col key={c.id} style={{ width: c.getSize() }} />
+            ))}
+            <col />
+            {hasActions && <col className="rtable__col-actions" />}
+          </colgroup>
           <thead>
-            <tr>
-              {columns.map((c) => {
-                const active = sort.id === c.id
-                return (
-                  <th
-                    key={c.id}
-                    scope="col"
-                    aria-sort={
-                      c.sortValue ? (active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none') : undefined
-                    }
-                  >
-                    {c.sortValue ? (
-                      <button type="button" className="rtable__sort" onClick={() => toggleSort(c.id)}>
-                        {c.header}
-                        <span aria-hidden="true" className="rtable__arrow">
-                          {active ? (sort.dir === 'asc' ? '↑' : '↓') : ''}
-                        </span>
-                      </button>
-                    ) : (
-                      c.header
-                    )}
+            {table.getHeaderGroups().map((group) => (
+              <tr key={group.id}>
+                {group.headers.map((header) => {
+                  const column = header.column
+                  const sorted = column.getIsSorted()
+                  const text = String(column.columnDef.header)
+                  return (
+                    <th
+                      key={header.id}
+                      scope="col"
+                      data-col={column.id}
+                      aria-sort={column.getCanSort() ? (sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none') : undefined}
+                    >
+                      <div className="rtable__cell">
+                        {column.getCanSort() ? (
+                          <button type="button" className="rtable__sort" onClick={column.getToggleSortingHandler()}>
+                            {text}
+                            <span aria-hidden="true" className="rtable__arrow">
+                              {sorted === 'asc' ? <ArrowUp size={14} /> : sorted === 'desc' ? <ArrowDown size={14} /> : null}
+                            </span>
+                          </button>
+                        ) : (
+                          text
+                        )}
+                      </div>
+                      <ResizeHandle
+                        name={text}
+                        width={column.getSize()}
+                        min={column.columnDef.minSize ?? MIN_WIDTH}
+                        max={column.columnDef.maxSize ?? MAX_WIDTH}
+                        onResize={(w) => setWidth(column.id, w)}
+                        onAutofit={() => autofit(column.id)}
+                      />
+                    </th>
+                  )
+                })}
+                <th className="rtable__filler" aria-hidden="true" />
+                {hasActions && (
+                  <th scope="col" className="rtable__actions-cell">
+                    <span className="rtable__sr">Actions</span>
                   </th>
-                )
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {visible.map((row) => (
-              <tr key={rowKey(row)}>
-                {columns.map((c) => (
-                  <td key={c.id}>{c.render(row)}</td>
-                ))}
+                )}
               </tr>
             ))}
+          </thead>
+          <tbody>
+            {table.getRowModel().rows.map((row) => {
+              const actions = rowActions?.(row.original)
+              const name = rowLabel?.(row.original)
+              return (
+                <tr key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <td key={cell.id} data-col={cell.column.id}>
+                      <div className="rtable__cell">{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
+                    </td>
+                  ))}
+                  <td className="rtable__filler" aria-hidden="true" />
+                  {hasActions && (
+                    <td className="rtable__actions-cell">
+                      <div className="rtable__actions">
+                        {actions?.primary?.map((a) => (
+                          <IconButton
+                            key={a.label}
+                            icon={a.icon}
+                            variant={a.danger ? 'danger' : 'ghost'}
+                            aria-label={name ? `${a.label} ${name}` : a.label}
+                            disabled={a.disabled}
+                            onClick={a.onSelect}
+                          />
+                        ))}
+                        {actions?.menu && actions.menu.length > 0 && (
+                          <Menu
+                            trigger={<IconButton icon={Ellipsis} aria-label={name ? `More actions for ${name}` : 'More actions'} />}
+                            items={actions.menu}
+                          />
+                        )}
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -142,24 +355,91 @@ export function ResourceTable<T>({
   }
 
   return (
-    <div className="rtable">
+    <div className="rtable" data-density={density}>
       <div className="rtable__toolbar">
-        <input
-          type="search"
-          className="rtable__search"
+        <SearchField
           aria-label={`Search ${label}`}
           placeholder={`Search ${label}`}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         {toolbar}
+        <span className="rtable__spacer" />
+        {hideableColumns.length > 0 && (
+          <Menu
+            trigger={<IconButton icon={Columns3} aria-label="Columns" />}
+            items={hideableColumns.map((c) => ({
+              label: String(c.columnDef.header),
+              icon: c.getIsVisible() ? <Check size={16} strokeWidth={2} /> : <span className="rtable__nocheck" />,
+              onSelect: () => c.toggleVisibility(!c.getIsVisible()),
+              // the last visible column stays
+              disabled: c.getIsVisible() && visibleColumns.length === 1,
+            }))}
+          />
+        )}
+        <IconButton
+          icon={density === 'compact' ? Rows4 : Rows3}
+          aria-label={density === 'compact' ? 'Use comfortable density' : 'Use compact density'}
+          onClick={() => setDensity((d) => (d === 'compact' ? 'comfortable' : 'compact'))}
+        />
       </div>
       {body}
     </div>
   )
 }
 
-/** Colored status pill; `tone` picks the color, the text always carries the meaning. */
-export function Badge({ tone, children }: { tone: 'ok' | 'warn' | 'bad' | 'muted'; children: ReactNode }) {
-  return <span className={`rbadge rbadge--${tone}`}>{children}</span>
+interface HandleProps {
+  name: string
+  width: number
+  min: number
+  max: number
+  onResize: (width: number) => void
+  onAutofit: () => void
+}
+
+/** Drag/keyboard handle on a column's right edge. Pointer capture keeps the edge under the cursor 1:1. */
+function ResizeHandle({ name, width, min, max, onResize, onAutofit }: HandleProps) {
+  const drag = useRef<{ x: number; width: number } | null>(null)
+
+  function down(e: PointerEvent<HTMLDivElement>) {
+    if (e.button !== 0) return
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+    drag.current = { x: e.clientX, width }
+  }
+  function move(e: PointerEvent<HTMLDivElement>) {
+    if (!drag.current) return
+    onResize(drag.current.width + (e.clientX - drag.current.x))
+  }
+  function up(e: PointerEvent<HTMLDivElement>) {
+    drag.current = null
+    if (e.currentTarget.hasPointerCapture?.(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
+  }
+  function key(e: KeyboardEvent<HTMLDivElement>) {
+    const step = e.shiftKey ? KEY_STEP_LARGE : KEY_STEP
+    if (e.key === 'ArrowRight') onResize(width + step)
+    else if (e.key === 'ArrowLeft') onResize(width - step)
+    else if (e.key === 'Enter') onAutofit()
+    else return
+    e.preventDefault()
+  }
+
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`Resize ${name} column`}
+      aria-valuenow={width}
+      aria-valuemin={min}
+      aria-valuemax={max}
+      tabIndex={0}
+      className="rtable__resize"
+      onPointerDown={down}
+      onPointerMove={move}
+      onPointerUp={up}
+      onPointerCancel={up}
+      onLostPointerCapture={() => (drag.current = null)}
+      onDoubleClick={onAutofit}
+      onKeyDown={key}
+    />
+  )
 }
