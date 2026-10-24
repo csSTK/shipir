@@ -8,7 +8,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
-/** Probes {@code GET {baseUrl}/models} with the key. No redirects; the response body is never read. */
+/** Probes {@code GET {baseUrl}/models} with the key (Bearer, or {@code x-goog-api-key} for Gemini). No redirects; the response body is never read. */
 @Component
 class AiConnectionChecker {
 
@@ -22,16 +22,20 @@ class AiConnectionChecker {
         this.properties = properties;
     }
 
-    String check(String baseUrl, String apiKey) {
+    String check(AiProvider provider, String baseUrl, String apiKey) {
         try (HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(properties.testTimeout())
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .build()) {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(modelsUrl(baseUrl)))
+            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(modelsUrl(baseUrl)))
                     .timeout(properties.testTimeout())
-                    .header("Authorization", "Bearer " + apiKey)
-                    .header("Accept", "application/json")
-                    .GET().build();
+                    .header("Accept", "application/json");
+            if (provider == AiProvider.GEMINI) {
+                builder.header("x-goog-api-key", apiKey);
+            } else {
+                builder.header("Authorization", "Bearer " + apiKey);
+            }
+            HttpRequest request = builder.GET().build();
             int status = client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
             if (status == 401 || status == 403) {
                 return AUTH_FAILED;

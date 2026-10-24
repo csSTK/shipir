@@ -80,12 +80,7 @@ public class AiSettingsService {
         }
         requireKey();
         validateUrl(c.getBaseUrl());
-        if (provider != AiProvider.OPENAI_COMPATIBLE) {
-            // The Gemini probe is added with the provider routing (shipr-f8k.4).
-            throw new AiSettingsException(HttpStatus.BAD_REQUEST, "PROVIDER_TEST_UNSUPPORTED",
-                    "Connection test is not available for this provider yet");
-        }
-        return new AiConnectionTestResponse(checker.check(c.getBaseUrl(), cipher.decrypt(c.getApiKeyCiphertext())));
+        return new AiConnectionTestResponse(checker.check(provider, c.getBaseUrl(), cipher.decrypt(c.getApiKeyCiphertext())));
     }
 
     /**

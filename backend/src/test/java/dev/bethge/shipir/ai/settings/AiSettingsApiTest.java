@@ -37,6 +37,7 @@ class AiSettingsApiTest extends AiSettingsTestBase {
     private HttpServer server;
     private final AtomicInteger modelsStatus = new AtomicInteger(200);
     private final AtomicReference<String> seenAuth = new AtomicReference<>();
+    private final AtomicReference<String> seenGoogleKey = new AtomicReference<>();
     private String stubUrl;
 
     @BeforeEach
@@ -44,6 +45,7 @@ class AiSettingsApiTest extends AiSettingsTestBase {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/v1/models", ex -> {
             seenAuth.set(ex.getRequestHeaders().getFirst("Authorization"));
+            seenGoogleKey.set(ex.getRequestHeaders().getFirst("x-goog-api-key"));
             ex.sendResponseHeaders(modelsStatus.get(), -1);
             ex.close();
         });
@@ -305,7 +307,7 @@ class AiSettingsApiTest extends AiSettingsTestBase {
     }
 
     @Test
-    void testOfProviderWithoutKeyIsRejectedAndGeminiTestIsNotYetSupported() throws Exception {
+    void testOfProviderWithoutKeyIsRejected() throws Exception {
         Login l = login("admin");
         mvc.perform(l.write(put("/api/settings/ai")).contentType(APPLICATION_JSON)
                 .content(json("OPENAI_COMPATIBLE", "GEMINI", "https://gem.example.com/v1beta", "g", true,
@@ -313,10 +315,24 @@ class AiSettingsApiTest extends AiSettingsTestBase {
         mvc.perform(l.write(post("/api/settings/ai/test")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("API_KEY_REQUIRED"));
-        mvc.perform(l.write(post("/api/settings/ai/test")).contentType(APPLICATION_JSON)
-                        .content("{\"provider\":\"GEMINI\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("PROVIDER_TEST_UNSUPPORTED"));
+    }
+
+    @Test
+    void geminiTestSendsGoogleKeyHeaderAndMapsStatuses() throws Exception {
+        Login l = login("admin");
+        mvc.perform(l.write(put("/api/settings/ai")).contentType(APPLICATION_JSON)
+                .content(json("OPENAI_COMPATIBLE", "GEMINI", stubUrl, "g", true, KEY))).andExpect(status().isOk());
+        String body = "{\"provider\":\"GEMINI\"}";
+        mvc.perform(l.write(post("/api/settings/ai/test")).contentType(APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("OK"));
+        assertThat(seenGoogleKey.get()).isEqualTo(KEY);
+        assertThat(seenAuth.get()).isNull();
+        modelsStatus.set(403);
+        mvc.perform(l.write(post("/api/settings/ai/test")).contentType(APPLICATION_JSON).content(body))
+                .andExpect(jsonPath("$.status").value("AUTH_FAILED"));
+        modelsStatus.set(500);
+        mvc.perform(l.write(post("/api/settings/ai/test")).contentType(APPLICATION_JSON).content(body))
+                .andExpect(jsonPath("$.status").value("UNREACHABLE"));
     }
 
     @Test

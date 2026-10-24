@@ -2,6 +2,7 @@ package dev.bethge.shipir.ai.llm;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -31,8 +32,9 @@ import java.util.function.Consumer;
 
 /**
  * Native Gemini API: {@code POST {baseUrl}/models/{model}:streamGenerateContent?alt=sse}. The key travels only in the
- * {@code x-goog-api-key} header. Not a Spring bean; the provider router (a later bead) instantiates it.
+ * {@code x-goog-api-key} header.
  */
+@Component
 public class GeminiLlmClient implements LlmClient {
 
     private static final Logger log = LoggerFactory.getLogger(GeminiLlmClient.class);

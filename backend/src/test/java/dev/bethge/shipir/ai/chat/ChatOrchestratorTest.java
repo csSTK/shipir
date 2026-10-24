@@ -2,6 +2,7 @@ package dev.bethge.shipir.ai.chat;
 
 import dev.bethge.shipir.PostgresTestConfiguration;
 import dev.bethge.shipir.ai.llm.LlmClient;
+import dev.bethge.shipir.ai.llm.LlmClients;
 import dev.bethge.shipir.ai.llm.LlmException;
 import dev.bethge.shipir.ai.llm.LlmMessage;
 import dev.bethge.shipir.ai.llm.LlmResponse;
@@ -110,9 +111,20 @@ class ChatOrchestratorTest {
     @TestConfiguration
     static class StubConfig {
         @Bean
-        @Primary
         StubLlm stubLlm() {
             return new StubLlm();
+        }
+
+        @Bean
+        StubLlm geminiStubLlm() {
+            return new StubLlm();
+        }
+
+        @Bean
+        @Primary
+        LlmClients stubLlmClients(@org.springframework.beans.factory.annotation.Qualifier("stubLlm") StubLlm openAi,
+                                  @org.springframework.beans.factory.annotation.Qualifier("geminiStubLlm") StubLlm gemini) {
+            return new LlmClients(openAi, gemini);
         }
     }
 
@@ -121,7 +133,8 @@ class ChatOrchestratorTest {
     @Autowired UserRepository users;
     @Autowired PasswordEncoder encoder;
     @Autowired ObjectMapper mapper;
-    @Autowired StubLlm llm;
+    @Autowired @org.springframework.beans.factory.annotation.Qualifier("stubLlm") StubLlm llm;
+    @Autowired @org.springframework.beans.factory.annotation.Qualifier("geminiStubLlm") StubLlm geminiLlm;
     @Autowired ChatOrchestrator orchestrator;
     @Autowired AiToolRegistry registry;
     @MockitoBean AiSettingsService settings;
@@ -134,6 +147,7 @@ class ChatOrchestratorTest {
     void reset() {
         Mockito.when(settings.activeConfig()).thenReturn(Optional.of(new AiConfig(dev.bethge.shipir.ai.settings.AiProvider.OPENAI_COMPATIBLE, "https://llm.test/v1", "m", "k")));
         llm.reset();
+        geminiLlm.reset();
         jdbc.update("DELETE FROM audit_log");
         jdbc.update("DELETE FROM chat_sessions");
         for (Role role : Role.values()) {
@@ -233,6 +247,31 @@ class ChatOrchestratorTest {
         assertThat(sent.get(0).content()).contains("confirm").containsIgnoringCase("secrets");
         mvc.perform(get("/api/ai/sessions/" + id).session(l.session()))
                 .andExpect(jsonPath("$.session.title").value("Hi, who are you?"));
+    }
+
+    @Test
+    void geminiProviderRoutesToTheGeminiClient() throws Exception {
+        Mockito.when(settings.activeConfig()).thenReturn(Optional.of(new AiConfig(
+                dev.bethge.shipir.ai.settings.AiProvider.GEMINI, "https://gem.test/v1beta", "g", "k")));
+        Login l = login("viewer");
+        String id = newSession(l);
+        geminiLlm.answer("From Gemini");
+        say(l, id, "Hi");
+
+        assertThat(messages(l, id).get(1).get("content").asString()).isEqualTo("From Gemini");
+        assertThat(geminiLlm.conversations).hasSize(1);
+        assertThat(llm.conversations).isEmpty();
+    }
+
+    @Test
+    void openAiProviderDoesNotUseTheGeminiClient() throws Exception {
+        Login l = login("viewer");
+        String id = newSession(l);
+        llm.answer("From OpenAI");
+        say(l, id, "Hi");
+
+        assertThat(llm.conversations).hasSize(1);
+        assertThat(geminiLlm.conversations).isEmpty();
     }
 
     @Test

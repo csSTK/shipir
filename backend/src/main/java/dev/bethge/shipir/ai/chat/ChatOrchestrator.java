@@ -1,6 +1,6 @@
 package dev.bethge.shipir.ai.chat;
 
-import dev.bethge.shipir.ai.llm.LlmClient;
+import dev.bethge.shipir.ai.llm.LlmClients;
 import dev.bethge.shipir.ai.llm.LlmException;
 import dev.bethge.shipir.ai.llm.LlmMessage;
 import dev.bethge.shipir.ai.llm.LlmResponse;
@@ -69,7 +69,7 @@ public class ChatOrchestrator {
     private final ChatSessionService sessions;
     private final AiSettingsService settings;
     private final AiToolRegistry tools;
-    private final LlmClient llm;
+    private final LlmClients llm;
     private final ChatEventPublisher events;
     private final ObjectMapper mapper;
     private final ChatProperties properties;
@@ -77,7 +77,7 @@ public class ChatOrchestrator {
     private final Set<UUID> running = ConcurrentHashMap.newKeySet();
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
-    ChatOrchestrator(ChatSessionService sessions, AiSettingsService settings, AiToolRegistry tools, LlmClient llm,
+    ChatOrchestrator(ChatSessionService sessions, AiSettingsService settings, AiToolRegistry tools, LlmClients llm,
                      ChatEventPublisher events, ObjectMapper mapper, ChatProperties properties,
                      SecretCipher cipher) {
         this.sessions = sessions;
@@ -247,7 +247,7 @@ public class ChatOrchestrator {
             }
             LlmResponse response;
             try {
-                response = llm.chat(config.baseUrl(), config.model(), config.apiKey(), llmHistory(sessionId),
+                response = llm.forProvider(config.provider()).chat(config.baseUrl(), config.model(), config.apiKey(), llmHistory(sessionId),
                         tools.definitionsFor(ctx.role()), token -> events.publish(sessionId,
                                 ChatStreamEvent.token(runId, token)));
             } catch (LlmException e) {
