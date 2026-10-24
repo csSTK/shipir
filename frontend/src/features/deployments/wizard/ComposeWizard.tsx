@@ -233,12 +233,13 @@ function ServiceCard({
 
 /**
  * Form wizard for a Compose file. One-way: the form generates YAML on the server, it never reads YAML back.
+ * `initial` seeds the form once (remount with a new `key` to reseed, e.g. from a template).
  * `onContinue` receives the YAML and the deployment variables the form references (to be filled in the env editor).
  */
-export function ComposeWizard({ onContinue }: { onContinue: (yaml: string, envKeys: string[]) => void }) {
+export function ComposeWizard({ onContinue, initial }: { onContinue: (yaml: string, envKeys: string[]) => void; initial?: WizardState }) {
   const previewId = useId()
   const generate = useGenerateCompose()
-  const [state, setState] = useState<WizardState>(initialState)
+  const [state, setState] = useState<WizardState>(() => initial ?? initialState())
   const [yaml, setYaml] = useState<string | null>(null)
   const [shown, setShown] = useState(false)
   const [problems, setProblems] = useState<string[]>([])

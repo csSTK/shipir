@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildSpec, emptyService, referencedEnvKeys, splitCommand, validatePort, validateWizard, type ServiceForm, type WizardState } from './model.ts'
+import { buildSpec, emptyService, referencedEnvKeys, specToState, splitCommand, validatePort, validateWizard, type ServiceForm, type WizardState } from './model.ts'
 
 function service(patch: Partial<ServiceForm>): ServiceForm {
   return { ...emptyService(), name: 'web', image: 'nginx:1.27', ...patch }
@@ -130,5 +130,36 @@ describe('buildSpec', () => {
   it('lists referenced env keys once', () => {
     const s = state([service({ env: [{ key: 'A', value: 'K', ref: true }, { key: 'B', value: 'K', ref: true }, { key: 'C', value: 'lit', ref: false }] })])
     expect(referencedEnvKeys(s)).toEqual(['K'])
+  })
+})
+
+describe('specToState', () => {
+  it('is the inverse of buildSpec for a full spec', () => {
+    const original = state(
+      [
+        service({
+          name: 'web',
+          command: 'sh -c "echo hi"',
+          restart: 'always',
+          ports: [{ host: '8080', container: '80', protocol: 'udp' }, { host: '', container: '443', protocol: 'tcp' }],
+          env: [{ key: 'A', value: 'x', ref: false }, { key: 'B', value: 'DB_PASSWORD', ref: true }],
+          volumes: [{ source: 'data', target: '/data', readOnly: true }],
+          networks: ['front'],
+          dependsOn: ['db'],
+        }),
+        service({ name: 'db', image: 'postgres:16' }),
+      ],
+      { networks: [{ name: 'front', driver: 'bridge', external: false }], volumes: [{ name: 'data', driver: '', external: true }] },
+    )
+    const spec = buildSpec(original)
+    const back = specToState(spec)
+    expect(buildSpec(back)).toEqual(spec)
+    expect(validateWizard(back).fields.size).toBe(0)
+    expect(referencedEnvKeys(back)).toEqual(['DB_PASSWORD'])
+  })
+  it('tolerates missing optional fields and keeps an empty form usable', () => {
+    const s = specToState({ services: [{ name: 'a', image: 'x' }] })
+    expect(s.services[0]).toMatchObject({ command: '', restart: '', ports: [], env: [], networks: [] })
+    expect(specToState({}).services).toHaveLength(1)
   })
 })

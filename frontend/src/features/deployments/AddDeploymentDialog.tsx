@@ -7,8 +7,10 @@ import { EnvEditor, toPayload, validateEnv, YamlEditor } from './editor/index.ts
 import { describeDeploymentError } from './deploymentErrors.ts'
 import { GitSourceFields, type GitFormValue } from './GitSourceFields.tsx'
 import { DeploymentDialog } from './DeploymentDialog.tsx'
-import { ComposeWizard } from './wizard/index.ts'
+import { ComposeWizard, referencedEnvKeys, specToState, type WizardState } from './wizard/index.ts'
+import { TemplatePicker, type AppTemplate } from './templates/index.ts'
 import './wizard/wizard.css'
+import './templates/templates.css'
 
 const EMPTY_GIT_FORM: GitFormValue = { repoUrl: '', ref: 'main', composePath: 'compose.yaml', credentialId: '' }
 const NAME_PATTERN = /^[a-z0-9][a-z0-9_-]*$/
@@ -27,16 +29,32 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
   const { data: user } = useCurrentUser()
   const [source, setSource] = useState<'file' | 'git'>('file')
   const [git, setGit] = useState<GitFormValue>(EMPTY_GIT_FORM)
-  const [mode, setMode] = useState<'yaml' | 'wizard'>('yaml')
+  const [mode, setMode] = useState<'template' | 'yaml' | 'wizard'>('yaml')
+  const [template, setTemplate] = useState<AppTemplate | null>(null)
+  const [seed, setSeed] = useState<{ key: number; state?: WizardState }>({ key: 0 })
   const [problem, setProblem] = useState<string | null>(null)
   const [yamlError, setYamlError] = useState<{ message: string; details?: string[] } | null>(null)
+
+  /** Adds an empty row per key that has none yet; existing values stay. */
+  function addEnvKeys(keys: string[]) {
+    setEnv((current) => [...current, ...keys.filter((k, i) => keys.indexOf(k) === i && !current.some((r) => r.key === k)).map((key) => ({ key, value: '' }))])
+  }
 
   function continueInEditor(generated: string, envKeys: string[]) {
     setYaml(generated)
     setYamlError(null)
-    // Referenced variables get an empty row to fill in; existing values stay.
-    setEnv((current) => [...current, ...envKeys.filter((k) => !current.some((r) => r.key === k)).map((key) => ({ key, value: '' }))])
+    addEnvKeys(envKeys)
     setMode('yaml')
+  }
+
+  /** Fills the wizard from the template and pre-creates the env rows it needs; the wizard then works as usual. */
+  function pickTemplate(t: AppTemplate) {
+    const state = specToState(t.spec)
+    setTemplate(t)
+    setSeed((current) => ({ key: current.key + 1, state }))
+    addEnvKeys([...t.env.map((h) => h.key), ...referencedEnvKeys(state)])
+    setName((current) => (current.trim() === '' ? t.id : current))
+    setMode('wizard')
   }
 
   function submit(e: FormEvent) {
@@ -113,15 +131,30 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
           </>
         )}
         <div className="wz-modes" role="radiogroup" aria-label="Editing mode" hidden={source !== 'file'}>
-          {([['wizard', 'Form wizard'], ['yaml', 'YAML']] as const).map(([value, label]) => (
+          {([['template', 'From template'], ['wizard', 'Form wizard'], ['yaml', 'YAML']] as const).map(([value, label]) => (
             <label key={value} className="wz-mode">
               <input type="radio" name="compose-mode" checked={mode === value} onChange={() => setMode(value)} />
               {label}
             </label>
           ))}
         </div>
+        {source === 'file' && mode === 'template' && <TemplatePicker onSelect={pickTemplate} selectedId={template?.id} />}
         <div hidden={source !== 'file' || mode !== 'wizard'}>
-          <ComposeWizard onContinue={continueInEditor} />
+          {template && template.env.length > 0 && (
+            <div className="tp-vars">
+              <p className="tp-vars__title">Variables for {template.name}</p>
+              <ul className="tp-vars__list">
+                {template.env.map((h) => (
+                  <li key={h.key}>
+                    <code>{h.key}</code>: {h.description}
+                    {h.secret ? ' (secret)' : ''}
+                  </li>
+                ))}
+              </ul>
+              <p className="tp-vars__note">Fill in their values after Continue in editor.</p>
+            </div>
+          )}
+          <ComposeWizard key={seed.key} initial={seed.state} onContinue={continueInEditor} />
         </div>
         <div className="sk-form" hidden={source !== 'file' || mode !== 'yaml'}>
           <div className="sk-field">

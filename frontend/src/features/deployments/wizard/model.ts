@@ -230,3 +230,54 @@ export function referencedEnvKeys(state: WizardState): string[] {
   }
   return keys
 }
+
+/** Loose shape of a bundled template spec (`GET /api/templates`); every field except names/image may be missing or null. */
+export interface TemplateSpecInput {
+  services?: {
+    name: string
+    image: string
+    command?: string[] | null
+    restart?: string | null
+    ports?: { host?: number | null; container: number; protocol?: string | null }[] | null
+    environment?: { key: string; value?: string | null; ref?: string | null }[] | null
+    volumes?: { source: string; target: string; readOnly?: boolean | null }[] | null
+    networks?: string[] | null
+    dependsOn?: string[] | null
+  }[] | null
+  networks?: { name: string; driver?: string | null; external?: boolean | null }[] | null
+  volumes?: { name: string; driver?: string | null; external?: boolean | null }[] | null
+}
+
+/** Quotes an argument that `splitCommand` would otherwise break apart. */
+function quoteArg(arg: string): string {
+  if (arg !== '' && !/[\s'"]/.test(arg)) return arg
+  return arg.includes('"') ? `'${arg}'` : `"${arg}"`
+}
+
+/** Inverse of `buildSpec`: fills the wizard form from a spec (used by templates). */
+export function specToState(spec: TemplateSpecInput): WizardState {
+  const services = (spec.services ?? []).map((s) => ({
+    ...emptyService(),
+    name: s.name,
+    image: s.image,
+    command: (s.command ?? []).map(quoteArg).join(' '),
+    restart: s.restart ?? '',
+    ports: (s.ports ?? []).map((p) => ({
+      host: p.host == null ? '' : String(p.host),
+      container: String(p.container),
+      protocol: p.protocol === 'udp' ? ('udp' as const) : ('tcp' as const),
+    })),
+    env: (s.environment ?? []).map((e) =>
+      e.ref ? { key: e.key, value: e.ref, ref: true } : { key: e.key, value: e.value ?? '', ref: false },
+    ),
+    volumes: (s.volumes ?? []).map((v) => ({ source: v.source, target: v.target, readOnly: v.readOnly === true })),
+    networks: s.networks ?? [],
+    dependsOn: s.dependsOn ?? [],
+  }))
+  const resource = (r: { name: string; driver?: string | null; external?: boolean | null }): ResourceForm => ({
+    name: r.name,
+    driver: r.driver ?? '',
+    external: r.external === true,
+  })
+  return { services: services.length > 0 ? services : [emptyService()], networks: (spec.networks ?? []).map(resource), volumes: (spec.volumes ?? []).map(resource) }
+}
