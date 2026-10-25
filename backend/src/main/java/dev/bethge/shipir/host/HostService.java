@@ -2,6 +2,8 @@ package dev.bethge.shipir.host;
 
 import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.auth.UserRepository;
+import dev.bethge.shipir.common.net.EgressDeniedException;
+import dev.bethge.shipir.common.net.EgressPolicy;
 import dev.bethge.shipir.common.security.SecretCipher;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
@@ -36,15 +38,18 @@ public class HostService {
     private final DockerSystemService docker;
     private final DockerHostConnectionManager connections;
     private final CurrentAccess access;
+    private final EgressPolicy egress;
 
     HostService(DockerHostRepository hosts, UserRepository users, SecretCipher cipher,
-                DockerSystemService docker, DockerHostConnectionManager connections, CurrentAccess access) {
+                DockerSystemService docker, DockerHostConnectionManager connections, CurrentAccess access,
+                EgressPolicy egress) {
         this.hosts = hosts;
         this.users = users;
         this.cipher = cipher;
         this.docker = docker;
         this.connections = connections;
         this.access = access;
+        this.egress = egress;
     }
 
     /** Hosts the signed-in user may see (all for ADMIN and system callers). */
@@ -62,7 +67,28 @@ public class HostService {
     ConnectionTestResult testConnection(ConnectionTestRequest request) {
         DockerEndpoint endpoint = toEndpoint(request.connectionType(), request.host(), request.port(),
                 request.tlsCaPem(), request.tlsCertPem(), request.tlsKeyPem());
-        return docker.ping(endpoint);
+        return ping(endpoint);
+    }
+
+    /**
+     * Ping for a connection test or create. A TCP target is checked against the egress policy first (the daemon is never
+     * contacted when denied), and denied, refused and timed-out targets all report UNREACHABLE, so the test cannot be used
+     * to map internal ports. docker-java resolves the host itself, so a DNS rebind after the check is not excluded.
+     */
+    private ConnectionTestResult ping(DockerEndpoint endpoint) {
+        if (endpoint instanceof DockerEndpoint.Tcp tcp) {
+            try {
+                egress.check(tcp.host());
+            } catch (EgressDeniedException e) {
+                return unreachable();
+            }
+        }
+        ConnectionTestResult result = docker.ping(endpoint);
+        return !result.ok() && result.errorCode() == DockerErrorCode.TIMEOUT ? unreachable() : result;
+    }
+
+    private static ConnectionTestResult unreachable() {
+        return new ConnectionTestResult(false, null, DockerErrorCode.UNREACHABLE, "The Docker daemon is not reachable.");
     }
 
     /** Not transactional: the (slow) connection test must not hold a database connection. */
@@ -80,7 +106,7 @@ public class HostService {
         if (request.connectionType() == ConnectionType.LOCAL && hosts.existsByConnectionType(ConnectionType.LOCAL)) {
             throw localExists();
         }
-        ConnectionTestResult result = docker.ping(endpoint);
+        ConnectionTestResult result = ping(endpoint);
         if (!result.ok()) {
             throw new HostException(HttpStatus.UNPROCESSABLE_ENTITY, "CONNECTION_FAILED",
                     "Could not connect to the Docker daemon",

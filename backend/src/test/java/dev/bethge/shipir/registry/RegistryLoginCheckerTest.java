@@ -1,6 +1,9 @@
 package dev.bethge.shipir.registry;
 
 import com.sun.net.httpserver.HttpServer;
+import dev.bethge.shipir.common.net.EgressHttpClient;
+import dev.bethge.shipir.common.net.EgressPolicy;
+import dev.bethge.shipir.common.net.EgressProperties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -35,7 +38,12 @@ class RegistryLoginCheckerTest {
     }
 
     private static RegistryLoginChecker checker(boolean insecure) {
-        return new RegistryLoginChecker(new RegistryProperties(insecure, Duration.ofSeconds(2)));
+        return checker(insecure, true);
+    }
+
+    private static RegistryLoginChecker checker(boolean insecure, boolean allowPrivate) {
+        return new RegistryLoginChecker(new RegistryProperties(insecure, Duration.ofSeconds(2)),
+                new EgressHttpClient(new EgressPolicy(new EgressProperties(allowPrivate)), Duration.ofSeconds(2)));
     }
 
     private void start() throws IOException {
@@ -131,5 +139,31 @@ class RegistryLoginCheckerTest {
             port = s.getLocalPort();
         }
         assertThat(checker(true).check("127.0.0.1:" + port, "robot", "s3cret")).isEqualTo("UNREACHABLE");
+    }
+
+    @Test
+    void loopbackRegistryIsRefusedByDefaultAndGetsNoCredentials() throws Exception {
+        start();
+        server.createContext("/", ex -> {
+            requests.add(String.valueOf(ex.getRequestHeaders().getFirst("Authorization")));
+            ex.sendResponseHeaders(200, -1);
+            ex.close();
+        });
+        server.start();
+        assertThat(checker(true, false).check(host(), "robot", "s3cret")).isEqualTo("UNREACHABLE");
+        assertThat(requests).isEmpty();
+    }
+
+    @Test
+    void bearerRealmOnAnInternalHostIsRefusedAndNoCredentialsAreSentThere() throws Exception {
+        start();
+        server.createContext("/v2/", ex -> {
+            ex.getResponseHeaders().add("WWW-Authenticate", "Bearer realm=\"http://169.254.169.254/token\",service=\"x\"");
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+        });
+        server.start();
+        // even with private ranges allowed (registry on loopback), the metadata realm stays denied
+        assertThat(checker(true, true).check(host(), "robot", "s3cret")).isEqualTo("UNREACHABLE");
     }
 }

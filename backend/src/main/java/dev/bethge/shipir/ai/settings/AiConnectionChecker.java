@@ -1,14 +1,18 @@
 package dev.bethge.shipir.ai.settings;
 
+import dev.bethge.shipir.common.net.EgressHttpClient;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-/** Probes {@code GET {baseUrl}/models} with the key (Bearer, or {@code x-goog-api-key} for Gemini). No redirects; the response body is never read. */
+/**
+ * Probes {@code GET {baseUrl}/models} with the key (Bearer, or {@code x-goog-api-key} for Gemini). No redirects; the
+ * response body is ignored. Goes through the egress policy: an internal base URL is refused before any connection, so the
+ * key is never sent there, and the result is the same {@code UNREACHABLE} as for a host that is down.
+ */
 @Component
 class AiConnectionChecker {
 
@@ -17,34 +21,28 @@ class AiConnectionChecker {
     static final String UNREACHABLE = "UNREACHABLE";
 
     private final AiSettingsProperties properties;
+    private final EgressHttpClient egress;
 
-    AiConnectionChecker(AiSettingsProperties properties) {
+    AiConnectionChecker(AiSettingsProperties properties, EgressHttpClient egress) {
         this.properties = properties;
+        this.egress = egress;
     }
 
     String check(AiProvider provider, String baseUrl, String apiKey) {
-        try (HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(properties.testTimeout())
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .build()) {
-            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(modelsUrl(baseUrl)))
-                    .timeout(properties.testTimeout())
-                    .header("Accept", "application/json");
+        try {
+            Map<String, String> headers = new LinkedHashMap<>();
+            headers.put("Accept", "application/json");
             if (provider == AiProvider.GEMINI) {
-                builder.header("x-goog-api-key", apiKey);
+                headers.put("x-goog-api-key", apiKey);
             } else {
-                builder.header("Authorization", "Bearer " + apiKey);
+                headers.put("Authorization", "Bearer " + apiKey);
             }
-            HttpRequest request = builder.GET().build();
-            int status = client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
+            int status = egress.send("GET", URI.create(modelsUrl(baseUrl)), headers, properties.testTimeout()).status();
             if (status == 401 || status == 403) {
                 return AUTH_FAILED;
             }
             return status >= 200 && status < 300 ? OK : UNREACHABLE;
-        } catch (IOException | IllegalArgumentException e) {
-            return UNREACHABLE;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        } catch (IOException | RuntimeException e) {
             return UNREACHABLE;
         }
     }

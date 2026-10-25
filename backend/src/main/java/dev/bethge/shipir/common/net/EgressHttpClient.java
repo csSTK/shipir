@@ -8,6 +8,7 @@ import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
 import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.apache.hc.core5.util.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -63,8 +64,17 @@ public class EgressHttpClient implements AutoCloseable {
     }
 
     public Response send(String method, URI uri, Map<String, String> headers, Duration timeout) throws IOException {
+        return send(method, uri, headers, null, timeout);
+    }
+
+    /** Same, with a UTF-8 text body (null = none); set the Content-Type via {@code headers}. */
+    public Response send(String method, URI uri, Map<String, String> headers, String requestBody, Duration timeout)
+            throws IOException {
         HttpUriRequestBase request = new HttpUriRequestBase(method, uri);
         headers.forEach(request::addHeader);
+        if (requestBody != null) {
+            request.setEntity(new StringEntity(requestBody, StandardCharsets.UTF_8));
+        }
         Timeout t = Timeout.ofMilliseconds(timeout.toMillis());
         request.setConfig(RequestConfig.custom().setResponseTimeout(t).setConnectionRequestTimeout(t).build());
         return client.execute(request, response -> {

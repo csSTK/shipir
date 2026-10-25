@@ -1,5 +1,6 @@
 package dev.bethge.shipir.notification;
 
+import dev.bethge.shipir.common.net.EgressHttpClient;
 import dev.bethge.shipir.common.security.SecretCipher;
 import dev.bethge.shipir.compose.DeploymentRunFailedEvent;
 import dev.bethge.shipir.compose.GitAutoUpdateFailedEvent;
@@ -18,11 +19,8 @@ import tools.jackson.databind.ObjectMapper;
 
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.net.http.HttpTimeoutException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -32,7 +30,8 @@ import java.util.concurrent.Executors;
 
 /**
  * Posts host status and deployment/container events as generic JSON to the subscribed, enabled webhooks. Each delivery runs on its own
- * virtual thread, so a slow receiver blocks neither the publisher nor other webhooks. No redirects, no retries.
+ * virtual thread, so a slow receiver blocks neither the publisher nor other webhooks. No redirects, no retries. Every connection goes through the egress policy (internal targets are refused unless
+ * {@code shipir.egress.allow-private-ranges}; a refused target fails like an unreachable one).
  * The URL and the response are never logged.
  */
 @Service
@@ -49,22 +48,18 @@ class WebhookDeliveryService {
     private final SecretCipher cipher;
     private final ObjectMapper mapper;
     private final Clock clock;
-    private final HttpClient client;
+    private final EgressHttpClient client;
     private final WebhookProperties properties;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     WebhookDeliveryService(NotificationWebhookRepository webhooks, SecretCipher cipher, ObjectMapper mapper,
-                           Clock clock, WebhookProperties properties) {
+                           Clock clock, WebhookProperties properties, EgressHttpClient client) {
         this.webhooks = webhooks;
         this.cipher = cipher;
         this.mapper = mapper;
         this.clock = clock;
         this.properties = properties;
-        this.client = HttpClient.newBuilder()
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .connectTimeout(properties.webhookTimeout())
-                .executor(Executors.newVirtualThreadPerTaskExecutor())
-                .build();
+        this.client = client;
     }
 
     @EventListener
@@ -137,7 +132,7 @@ class WebhookDeliveryService {
     private void dispatch(NotificationType type, Map<String, Object> payload) {
         for (NotificationWebhook w : webhooks.findByEnabledTrue()) {
             if (w.subscribedTo(type)) {
-                executor.submit(() -> deliverAndRecord(w, payload));
+                executor.submit(() -> deliverAndRecord(w, payload, false));
             }
         }
     }
@@ -154,11 +149,16 @@ class WebhookDeliveryService {
         payload.put("status", null);
         payload.put("errorCode", null);
         payload.put("occurredAt", clock.instant());
-        return deliverAndRecord(webhook, payload);
+        return deliverAndRecord(webhook, payload, true);
     }
 
-    private String deliverAndRecord(NotificationWebhook webhook, Map<String, Object> payload) {
-        String status = deliver(webhook, payload);
+    /**
+     * @param generic true for test deliveries: only SUCCESS or FAILED is recorded and returned, because the list endpoint
+     *                exposes the recorded status and a test to an arbitrary URL must not reveal what the receiver answered
+     */
+    private String deliverAndRecord(NotificationWebhook webhook, Map<String, Object> payload, boolean generic) {
+        String detailed = deliver(webhook, payload);
+        String status = generic && !SUCCESS.equals(detailed) ? FAILED : detailed;
         try {
             webhooks.recordDelivery(webhook.getId(), clock.instant(), status);
         } catch (RuntimeException e) {
@@ -171,18 +171,11 @@ class WebhookDeliveryService {
     private String deliver(NotificationWebhook webhook, Map<String, Object> payload) {
         try {
             URI uri = URI.create(cipher.decrypt(webhook.getUrlEncrypted()));
-            HttpRequest request = HttpRequest.newBuilder(uri)
-                    .timeout(properties.webhookTimeout())
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(payload)))
-                    .build();
-            int code = client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
+            int code = client.send("POST", uri, Map.of("Content-Type", "application/json"),
+                    mapper.writeValueAsString(payload), properties.webhookTimeout()).status();
             return code >= 200 && code < 300 ? SUCCESS : "HTTP_" + code;
-        } catch (HttpTimeoutException e) {
+        } catch (InterruptedIOException e) {
             return TIMEOUT;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return FAILED;
         } catch (IOException | RuntimeException e) {
             // exception messages can contain the URL, so only the type is logged
             log.warn("Webhook delivery failed ({})", e.getClass().getSimpleName());

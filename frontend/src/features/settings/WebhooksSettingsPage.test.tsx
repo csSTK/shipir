@@ -137,14 +137,14 @@ describe('WebhooksSettingsPage', () => {
   it('shows test success and failure inline', async () => {
     let ok = true
     renderPage((path) =>
-      path.endsWith('/test') ? (ok ? { ok: true, status: 'SUCCESS' } : { ok: false, status: 'HTTP_500' }) : undefined,
+      path.endsWith('/test') ? (ok ? { ok: true, status: 'SUCCESS' } : { ok: false, status: 'FAILED' }) : undefined,
     )
     await screen.findByText('Ops chat')
     fireEvent.click(screen.getByRole('button', { name: 'Send test to Ops chat' }))
     expect(await screen.findByText('Test delivered.')).toBeInTheDocument()
     ok = false
     fireEvent.click(screen.getByRole('button', { name: 'Send test to Ops chat' }))
-    expect(await screen.findByText(/Test failed: the receiver answered HTTP 500/)).toBeInTheDocument()
+    expect(await screen.findByText(/Test failed: the receiver could not be reached/)).toBeInTheDocument()
   })
 
   it('shows a taken name inline', async () => {

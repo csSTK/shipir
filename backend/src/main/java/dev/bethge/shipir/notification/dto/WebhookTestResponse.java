@@ -1,5 +1,5 @@
 package dev.bethge.shipir.notification.dto;
 
-/** {@code status}: SUCCESS, HTTP_&lt;code&gt;, TIMEOUT or FAILED. */
+/** {@code status}: SUCCESS or FAILED, nothing finer (the test must not reveal what an arbitrary target answered). */
 public record WebhookTestResponse(boolean ok, String status) {
 }

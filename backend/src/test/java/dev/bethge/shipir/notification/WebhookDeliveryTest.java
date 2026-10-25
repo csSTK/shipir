@@ -16,7 +16,9 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -186,9 +188,25 @@ class WebhookDeliveryTest extends WebhookTestBase {
         assertThat(mapper.readTree(ok.bodies.get(0)).get("event").asText()).isEqualTo("TEST");
         mvc.perform(l.write(post("/api/notifications/webhooks/" + badId + "/test")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.ok").value(false))
-                .andExpect(jsonPath("$.status").value("HTTP_503"));
-        assertThat(lastStatus(badId)).isEqualTo("HTTP_503");
+                .andExpect(jsonPath("$.status").value("FAILED"));
+        // a test delivery records no receiver detail either: the list must not become the oracle
+        assertThat(lastStatus(badId)).isEqualTo("FAILED");
+        mvc.perform(get("/api/notifications/webhooks").session(l.session()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("HTTP_"))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("TIMEOUT"))));
         mvc.perform(l.write(post("/api/notifications/webhooks/" + UUID.randomUUID() + "/test")))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void testEndpointReportsTimeoutAsPlainFailureToo() throws Exception {
+        Stub slow = stub(200, 4000);
+        Login l = login("admin");
+        String id = add(l, "S", slow.url("/"), "[\"HOST_UP\"]", true);
+        mvc.perform(l.write(post("/api/notifications/webhooks/" + id + "/test")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.status").value("FAILED"));
+        assertThat(lastStatus(id)).isEqualTo("FAILED");
     }
 }

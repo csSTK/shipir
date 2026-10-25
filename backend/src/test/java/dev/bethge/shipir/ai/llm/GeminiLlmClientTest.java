@@ -3,6 +3,8 @@ package dev.bethge.shipir.ai.llm;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import dev.bethge.shipir.common.net.EgressPolicy;
+import dev.bethge.shipir.common.net.EgressProperties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,7 +51,7 @@ class GeminiLlmClientTest {
             handler.handle(ex);
         });
         server.start();
-        client = new GeminiLlmClient(new LlmProperties(Duration.ofSeconds(2), Duration.ofMillis(500)), MAPPER);
+        client = new GeminiLlmClient(new LlmProperties(Duration.ofSeconds(2), Duration.ofMillis(500)), MAPPER, policy(true));
     }
 
     @AfterEach
@@ -374,5 +376,29 @@ class GeminiLlmClientTest {
     @AfterEach
     void restoreLogLevel() {
         logger.setLevel(previousLevel);
+    }
+
+    private static EgressPolicy policy(boolean allowPrivate) {
+        return new EgressPolicy(new EgressProperties(allowPrivate));
+    }
+
+    @Test
+    void internalBaseUrlIsRefusedByDefaultAndTheKeyIsNeverSent() {
+        respond(200, "text/event-stream", "data: [DONE]\n\n");
+        GeminiLlmClient denying = new GeminiLlmClient(
+                new LlmProperties(Duration.ofSeconds(2), Duration.ofMillis(500)), MAPPER, policy(false));
+
+        assertThatThrownBy(() -> denying.chat(baseUrl(), "m", KEY, List.of(LlmMessage.user("hi")), List.of(), t -> { }))
+                .isInstanceOfSatisfying(LlmException.class,
+                        e -> assertThat(e.code()).isEqualTo(LlmException.Code.UNREACHABLE));
+        assertThat(requestBody.get()).isNull();
+    }
+
+    @Test
+    void metadataBaseUrlIsRefusedEvenWhenPrivateRangesAreAllowed() {
+        assertThatThrownBy(() -> client.chat("http://169.254.169.254/v1", "m", KEY, List.of(LlmMessage.user("hi")),
+                List.of(), t -> { }))
+                .isInstanceOfSatisfying(LlmException.class,
+                        e -> assertThat(e.code()).isEqualTo(LlmException.Code.UNREACHABLE));
     }
 }

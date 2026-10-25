@@ -96,7 +96,9 @@ public class WebhookService {
     WebhookTestResponse test(UUID id) {
         NotificationWebhook w = webhooks.findById(id).orElseThrow(WebhookService::notFound);
         String status = delivery.sendTest(w, "Shipir test");
-        return new WebhookTestResponse(WebhookDeliveryService.SUCCESS.equals(status), status);
+        // only success or failure: the HTTP status/timeout of an arbitrary target would make this an internal port scanner
+        boolean ok = WebhookDeliveryService.SUCCESS.equals(status);
+        return new WebhookTestResponse(ok, ok ? WebhookDeliveryService.SUCCESS : WebhookDeliveryService.FAILED);
     }
 
     private NotificationWebhook find(UUID id) {

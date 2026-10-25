@@ -1,5 +1,7 @@
 package dev.bethge.shipir.ai.llm;
 
+import dev.bethge.shipir.common.net.EgressDeniedException;
+import dev.bethge.shipir.common.net.EgressPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -29,7 +31,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-/** {@code POST {baseUrl}/chat/completions} with {@code stream=true}, parsed from server-sent events. */
+/**
+ * {@code POST {baseUrl}/chat/completions} with {@code stream=true}, parsed from server-sent events. The base URL is
+ * checked against the egress policy before the request (JDK HttpClient cannot pin the resolved address, so a DNS rebind
+ * between check and connect is not excluded; the sink is ADMIN-configured).
+ */
 @Component
 @EnableConfigurationProperties(LlmProperties.class)
 public class OpenAiCompatibleLlmClient implements LlmClient {
@@ -43,10 +49,12 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
 
     private final LlmProperties properties;
     private final ObjectMapper mapper;
+    private final EgressPolicy egress;
     private final HttpClient http;
 
-    public OpenAiCompatibleLlmClient(LlmProperties properties, ObjectMapper mapper) {
+    public OpenAiCompatibleLlmClient(LlmProperties properties, ObjectMapper mapper, EgressPolicy egress) {
         this.properties = properties;
+        this.egress = egress;
         this.mapper = mapper;
         this.http = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
@@ -64,6 +72,12 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
     public LlmResponse chat(String baseUrl, String model, String apiKey, List<LlmMessage> messages,
                             List<LlmToolDefinition> tools, Consumer<String> onToken) {
         HttpRequest request = buildRequest(baseUrl, model, apiKey, messages, tools);
+        try {
+            // before any connection: the API key must never reach a denied (internal) host
+            egress.check(request.uri());
+        } catch (EgressDeniedException e) {
+            throw new LlmException(LlmException.Code.UNREACHABLE, "LLM provider is unreachable");
+        }
         AtomicBoolean timedOut = new AtomicBoolean();
         HttpResponse<InputStream> response;
         try {

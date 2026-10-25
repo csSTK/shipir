@@ -1,5 +1,7 @@
 package dev.bethge.shipir.ai.llm;
 
+import dev.bethge.shipir.common.net.EgressDeniedException;
+import dev.bethge.shipir.common.net.EgressPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -32,7 +34,8 @@ import java.util.function.Consumer;
 
 /**
  * Native Gemini API: {@code POST {baseUrl}/models/{model}:streamGenerateContent?alt=sse}. The key travels only in the
- * {@code x-goog-api-key} header.
+ * {@code x-goog-api-key} header, and never to a host the egress policy denies (checked before the request; JDK HttpClient
+ * cannot pin the resolved address, so a DNS rebind between check and connect is not excluded).
  */
 @Component
 public class GeminiLlmClient implements LlmClient {
@@ -49,10 +52,12 @@ public class GeminiLlmClient implements LlmClient {
 
     private final LlmProperties properties;
     private final ObjectMapper mapper;
+    private final EgressPolicy egress;
     private final HttpClient http;
 
-    public GeminiLlmClient(LlmProperties properties, ObjectMapper mapper) {
+    public GeminiLlmClient(LlmProperties properties, ObjectMapper mapper, EgressPolicy egress) {
         this.properties = properties;
+        this.egress = egress;
         this.mapper = mapper;
         this.http = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
@@ -70,6 +75,12 @@ public class GeminiLlmClient implements LlmClient {
     public LlmResponse chat(String baseUrl, String model, String apiKey, List<LlmMessage> messages,
                             List<LlmToolDefinition> tools, Consumer<String> onToken) {
         HttpRequest request = buildRequest(baseUrl, model, apiKey, messages, tools);
+        try {
+            // before any connection: the API key must never reach a denied (internal) host
+            egress.check(request.uri());
+        } catch (EgressDeniedException e) {
+            throw new LlmException(LlmException.Code.UNREACHABLE, "LLM provider is unreachable");
+        }
         AtomicBoolean timedOut = new AtomicBoolean();
         HttpResponse<InputStream> response;
         try {
