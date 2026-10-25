@@ -97,4 +97,44 @@ class ComposeGeneratorApiTest {
     void missingSpecIs400() throws Exception {
         mvc.perform(generate("operator", "{}")).andExpect(status().isBadRequest());
     }
+
+    /** Every key the wizard's buildSpec (frontend/src/features/deployments/wizard/model.ts) sends must be accepted. */
+    @Test
+    void fullWizardPayloadWithNullOptionalsIsAccepted() throws Exception {
+        String body = """
+                {"spec":{
+                  "services":[{"name":"web","image":"nginx","command":null,"restart":null,
+                    "ports":[{"host":null,"container":80,"protocol":"tcp"}],
+                    "environment":[{"key":"A","value":"x","ref":null},{"key":"B","value":null,"ref":"DB_PASS"}],
+                    "volumes":[{"source":"data","target":"/data","readOnly":false}],
+                    "networks":["front"],"labels":null,"dependsOn":[]}],
+                  "networks":[{"name":"front","driver":null,"external":false}],
+                  "volumes":[{"name":"data","driver":null,"external":false}]}}""";
+        mvc.perform(generate("operator", body)).andExpect(status().isOk());
+    }
+
+    @Test
+    void unknownTopLevelFieldIs400() throws Exception {
+        mvc.perform(generate("operator", VALID.replace("}}", "}, \"volums\": []}")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
+    }
+
+    @Test
+    void misspelledServiceFieldIs400() throws Exception {
+        String body = """
+                {"spec":{"services":[{"name":"web","imag":"nginx"}]}}""";
+        mvc.perform(generate("operator", body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
+    }
+
+    @Test
+    void unknownFieldInNestedWizardObjectIs400() throws Exception {
+        String body = """
+                {"spec":{"services":[{"name":"web","image":"nginx","ports":[{"host":8080,"container":80,"protoco":"tcp"}]}]}}""";
+        mvc.perform(generate("operator", body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
+    }
 }
