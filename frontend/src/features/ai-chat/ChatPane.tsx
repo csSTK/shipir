@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Check, Pencil, Send, Trash2, Wrench, X } from 'lucide-react'
+import { Check, Clock, Pencil, Send, Trash2, Wrench, X } from 'lucide-react'
 import { Button, ConfirmDialog, EmptyState, Skeleton, Switch } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import {
@@ -180,7 +180,15 @@ export function ChatPane({ sessionId, isAdmin }: { sessionId: string; isAdmin: b
         </p>
       ))}
       {stream.text && <p className="chat-bubble chat-bubble--assistant">{stream.text}</p>}
-      {stream.running && !stream.text && <p className="chat-thinking" role="status">Thinking…</p>}
+      {stream.rateLimitWait !== null && (
+        <p className="chat-thinking chat-thinking--wait" role="status">
+          <Clock size={16} strokeWidth={1.75} aria-hidden="true" />
+          <span>Rate limit reached</span>
+          {/* Only the static part is announced; the ticking countdown is visual. */}
+          <span aria-hidden="true">{stream.rateLimitWait > 0 ? `, retrying in ${stream.rateLimitWait}s` : ', retrying…'}</span>
+        </p>
+      )}
+      {stream.running && !stream.text && stream.rateLimitWait === null && <p className="chat-thinking" role="status">Thinking…</p>}
     </>
   )
 

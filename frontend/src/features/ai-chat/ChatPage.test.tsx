@@ -110,6 +110,68 @@ describe('ChatPage', () => {
     expect(screen.queryByText('Hi there')).not.toBeInTheDocument()
   })
 
+  async function startRun() {
+    renderAt('/assistant/s1')
+    fireEvent.change(await screen.findByLabelText('Message'), { target: { value: 'hello' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(calls('POST')).toHaveLength(1))
+  }
+
+  it('shows a rate limit countdown and clears it when the run continues', async () => {
+    await startRun()
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    try {
+      frame({ runId: RUN, type: 'RATE_LIMIT_WAIT', seconds: 3 })
+      expect(screen.getByRole('status')).toHaveTextContent('Rate limit reached, retrying in 3s')
+      expect(screen.queryByText('Thinking…')).not.toBeInTheDocument()
+      act(() => void vi.advanceTimersByTime(1000))
+      expect(screen.getByText(/retrying in 2s/)).toBeInTheDocument()
+      frame({ runId: RUN, type: 'TOKEN', text: 'Back' })
+      expect(screen.queryByText(/Rate limit reached/)).not.toBeInTheDocument()
+      expect(screen.getByText('Back')).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('restarts the countdown on a new wait frame and stops at zero', async () => {
+    await startRun()
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    try {
+      frame({ runId: RUN, type: 'RATE_LIMIT_WAIT', seconds: 5 })
+      act(() => void vi.advanceTimersByTime(500))
+      expect(screen.getByRole('status')).toHaveTextContent('retrying in 5s')
+      frame({ runId: RUN, type: 'RATE_LIMIT_WAIT', seconds: 2 })
+      act(() => void vi.advanceTimersByTime(500))
+      expect(screen.getByRole('status')).toHaveTextContent('retrying in 2s')
+      act(() => void vi.advanceTimersByTime(500))
+      expect(screen.getByRole('status')).toHaveTextContent('retrying in 1s')
+      act(() => void vi.advanceTimersByTime(5000))
+      expect(screen.getByRole('status')).toHaveTextContent('Rate limit reached, retrying…')
+      expect(screen.getByRole('status')).not.toHaveTextContent('-')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('announces only the static rate limit text to assistive tech', async () => {
+    await startRun()
+    frame({ runId: RUN, type: 'RATE_LIMIT_WAIT', seconds: 9 })
+    const status = screen.getByRole('status')
+    expect(status.querySelector('[aria-hidden="true"]:not(svg)')).toHaveTextContent('retrying in 9s')
+    expect(status).not.toHaveAttribute('aria-label')
+  })
+
+  it('clears the rate limit status on DONE with an unknown error code', async () => {
+    await startRun()
+    frame({ runId: RUN, type: 'RATE_LIMIT_WAIT', seconds: 30 })
+    expect(screen.getByText(/retrying in 30s/)).toBeInTheDocument()
+    env.messages = [user('m1', 1, 'hello')]
+    frame({ runId: RUN, type: 'DONE', outcome: 'ERROR', error: 'INTERRUPTED' })
+    await waitFor(() => expect(screen.queryByText(/Rate limit reached/)).not.toBeInTheDocument())
+    expect(screen.getByLabelText('Message')).toBeEnabled()
+  })
+
   it('shows the not-configured state when the assistant has no provider', async () => {
     env.send = () => new ApiError(409, 'x', 'AI_NOT_CONFIGURED')
     renderAt('/assistant/s1', 'ADMIN')

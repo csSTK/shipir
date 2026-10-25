@@ -7,10 +7,11 @@ export interface Activity {
 }
 
 interface Frame {
-  type: 'TOKEN' | 'TOOL_CALL' | 'TOOL_RESULT' | 'PENDING_ACTION' | 'DONE'
+  type: 'TOKEN' | 'TOOL_CALL' | 'TOOL_RESULT' | 'PENDING_ACTION' | 'RATE_LIMIT_WAIT' | 'DONE'
   text?: string
   toolName?: string
   outcome?: string
+  seconds?: number
 }
 
 function parseFrame(body: string): Frame | null {
@@ -31,6 +32,8 @@ export function useChatStream(sessionId: string, onDone: () => Promise<unknown> 
   const [text, setText] = useState('')
   const [activity, setActivity] = useState<Activity[]>([])
   const [running, setRunning] = useState(false)
+  const [rateLimitWait, setRateLimitWait] = useState<number | null>(null)
+  const [waitFrames, setWaitFrames] = useState(0)
   const [connection, setConnection] = useState<ConnectionState>('connecting')
   const doneRef = useRef(onDone)
   useEffect(() => {
@@ -41,7 +44,16 @@ export function useChatStream(sessionId: string, onDone: () => Promise<unknown> 
     setText('')
     setActivity([])
     setRunning(false)
+    setRateLimitWait(null)
   }, [])
+
+  // Local countdown while the backend waits out a provider rate limit; it stays at 0 until the run continues.
+  const waiting = rateLimitWait !== null
+  useEffect(() => {
+    if (!waiting) return
+    const timer = setInterval(() => setRateLimitWait((s) => (s === null ? s : Math.max(0, s - 1))), 1000)
+    return () => clearInterval(timer)
+  }, [waiting, waitFrames])
 
   useEffect(() => {
     const unsubscribe = subscribeToTopic(`/topic/chat/${sessionId}`, {
@@ -54,6 +66,13 @@ export function useChatStream(sessionId: string, onDone: () => Promise<unknown> 
           return
         }
         setRunning(true)
+        if (frame.type === 'RATE_LIMIT_WAIT') {
+          const seconds = Number(frame.seconds)
+          setWaitFrames((n) => n + 1)
+          setRateLimitWait(Number.isFinite(seconds) ? Math.max(1, Math.ceil(seconds)) : 1)
+          return
+        }
+        setRateLimitWait(null)
         if (frame.type === 'TOKEN') setText((prev) => prev + (frame.text ?? ''))
         else if (frame.type === 'TOOL_CALL') setActivity((prev) => [...prev, { tool: frame.toolName ?? '', state: 'running' }])
         else if (frame.type === 'TOOL_RESULT') {
@@ -68,5 +87,5 @@ export function useChatStream(sessionId: string, onDone: () => Promise<unknown> 
     return unsubscribe
   }, [sessionId, clear])
 
-  return { text, activity, running, connection, start: () => setRunning(true), stop: clear }
+  return { text, activity, running, rateLimitWait, connection, start: () => setRunning(true), stop: clear }
 }

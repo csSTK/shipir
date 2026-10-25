@@ -65,7 +65,10 @@ test('new chat: ask a question and read the streamed answer', async ({ page, api
 
   await broker.emit({ runId: RUN, type: 'TOOL_CALL', toolName: 'list_deployments' })
   await expect(page.getByText('Using list deployments')).toBeVisible()
+  await broker.emit({ runId: RUN, type: 'RATE_LIMIT_WAIT', seconds: 20 })
+  await expect(page.getByText(/Rate limit reached, retrying in \d+s/)).toBeVisible()
   await broker.emit({ runId: RUN, type: 'TOKEN', text: 'Two deployments ' })
+  await expect(page.getByText(/Rate limit reached/)).toBeHidden()
   await broker.emit({ runId: RUN, type: 'TOKEN', text: 'are running.' })
   await expect(page.getByText('Two deployments are running.')).toBeVisible()
 

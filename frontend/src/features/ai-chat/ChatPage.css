@@ -178,6 +178,15 @@
   animation: chat-pulse 1.4s ease-in-out infinite;
 }
 
+/* Waiting out a rate limit is a calm, steady state: no pulsing, tinted as a notice. */
+.chat-thinking--wait {
+  animation: none;
+  background: var(--color-warn-soft);
+  border-color: transparent;
+  color: var(--color-warn);
+  font-variant-numeric: tabular-nums;
+}
+
 @keyframes chat-pulse {
   50% {
     opacity: 0.4;
