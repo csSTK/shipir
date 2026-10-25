@@ -99,6 +99,11 @@ class AuditAspectTest {
             throw new IllegalStateException("boom");
         }
 
+        @Auditable(action = "BAD_TARGET_PROBE", targetType = "PROBE", targetId = "#result.length()")
+        public String failingWithResultTarget() {
+            throw new IllegalStateException("boom");
+        }
+
         @Auditable(action = "NO_DETAILS_PROBE")
         public void plain() {
         }
@@ -332,6 +337,17 @@ class AuditAspectTest {
         assertThatThrownBy(detailsProbe::failing).isInstanceOf(IllegalStateException.class);
 
         assertThat(detailsOf("DETAILS_FAIL_PROBE")).isNull();
+    }
+
+    @Test
+    void failedCallStillWritesFailureEntryWhenTargetIdCannotBeEvaluated() {
+        assertThatThrownBy(detailsProbe::failingWithResultTarget).isInstanceOf(IllegalStateException.class);
+
+        assertThat(jdbc.queryForObject(
+                "SELECT outcome FROM audit_log WHERE action = 'BAD_TARGET_PROBE'", String.class))
+                .isEqualTo("FAILURE");
+        assertThat(jdbc.queryForObject(
+                "SELECT target_id FROM audit_log WHERE action = 'BAD_TARGET_PROBE'", String.class)).isNull();
     }
 
     @Test

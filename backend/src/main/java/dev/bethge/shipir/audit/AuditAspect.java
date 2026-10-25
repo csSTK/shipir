@@ -147,8 +147,14 @@ class AuditAspect {
         if (expression.isEmpty()) {
             return null;
         }
-        Object value = parser.parseExpression(expression).getValue(ctx);
-        return value == null ? null : value.toString();
+        try {
+            Object value = parser.parseExpression(expression).getValue(ctx);
+            return value == null ? null : value.toString();
+        } catch (RuntimeException e) {
+            // E.g. "#result.id()" after a failed call: keep the entry, leave the field empty.
+            log.warn("Could not evaluate audit expression '{}': {}", expression, e.toString());
+            return null;
+        }
     }
 
     private static String authenticatedName() {
