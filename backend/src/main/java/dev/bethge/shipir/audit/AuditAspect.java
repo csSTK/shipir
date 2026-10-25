@@ -13,6 +13,7 @@ import org.springframework.core.DefaultParameterNameDiscoverer;
 import org.springframework.expression.EvaluationContext;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -25,7 +26,8 @@ import java.util.UUID;
 
 /**
  * Writes one audit entry per {@link Auditable} call: SUCCESS after a normal return (a ResponseEntity with an
- * error status counts as FAILURE), FAILURE when an exception is thrown, which is rethrown unchanged.
+ * error status counts as FAILURE, except 429 which is not recorded), FAILURE when an exception is thrown, which
+ * is rethrown unchanged.
  * Recording problems are logged and swallowed so auditing can never break the audited action.
  */
 @Aspect
@@ -54,6 +56,11 @@ class AuditAspect {
         } catch (Throwable t) {
             record(pjp, auditable, before, null, beforeState, AuditLogEntry.Outcome.FAILURE);
             throw t;
+        }
+        if (result instanceof ResponseEntity<?> r && r.getStatusCode().value() == HttpStatus.TOO_MANY_REQUESTS.value()) {
+            // Throttled: no per-request row, or a flood would become a flood of DB writes. The start of a lockout
+            // is audited once by the throttle itself (LOGIN_THROTTLED).
+            return result;
         }
         boolean failed = result instanceof ResponseEntity<?> r && (r.getStatusCode().isError());
         record(pjp, auditable, before, result, beforeState,

@@ -256,4 +256,21 @@ class LoginThrottleApiTest {
         assertThat(rows).isEqualTo(1);
         assertThat(details).doesNotContain("wrong-secret-xyz");
     }
+
+    @Test
+    void throttledRequestsWriteNoLoginAuditRows() throws Exception {
+        String ip = peer();
+        for (int i = 0; i < 5; i++) {
+            login(username, "wrong-secret-xyz", ip);
+        }
+        Integer before = jdbc.queryForObject(
+                "SELECT count(*) FROM audit_log WHERE action = 'LOGIN' AND username = ?", Integer.class, username);
+        for (int i = 0; i < 10; i++) {
+            assertThat(login(username, "wrong-secret-xyz", ip).getResponse().getStatus()).isEqualTo(429);
+        }
+        Integer after = jdbc.queryForObject(
+                "SELECT count(*) FROM audit_log WHERE action = 'LOGIN' AND username = ?", Integer.class, username);
+        assertThat(before).isEqualTo(5);
+        assertThat(after).isEqualTo(before);
+    }
 }
