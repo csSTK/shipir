@@ -39,6 +39,7 @@ class PermissionServiceTest {
     @BeforeEach
     void data() {
         jdbc.update("DELETE FROM permissions");
+        jdbc.update("DELETE FROM teams");
         jdbc.update("DELETE FROM deployments");
         jdbc.update("DELETE FROM docker_hosts");
         adminId = users.findByUsername("admin").orElseThrow().getId();
@@ -53,6 +54,7 @@ class PermissionServiceTest {
     void cleanUp() {
         jdbc.update("DELETE FROM audit_log");
         jdbc.update("DELETE FROM permissions");
+        jdbc.update("DELETE FROM teams");
         jdbc.update("DELETE FROM deployments");
         jdbc.update("DELETE FROM docker_hosts");
         jdbc.update("DELETE FROM users WHERE username <> 'admin'");
@@ -74,6 +76,29 @@ class PermissionServiceTest {
 
     private void grantDeployment(UUID user, UUID dep, PermissionLevel level) {
         jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) VALUES (?, ?, ?)", user, dep, level.name());
+    }
+
+    private UUID team(String name, UUID... memberIds) {
+        UUID id = jdbc.queryForObject("INSERT INTO teams (name) VALUES (?) RETURNING id", UUID.class, name);
+        for (UUID m : memberIds) {
+            jdbc.update("INSERT INTO team_members (team_id, user_id) VALUES (?, ?)", id, m);
+        }
+        return id;
+    }
+
+    private PermissionSubject persisted(Role role, String name) {
+        PermissionSubject s = subject(role);
+        jdbc.update("INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, 'x', ?)",
+                s.userId(), name, role.name());
+        return s;
+    }
+
+    private void teamGrantHost(UUID team, UUID host, PermissionLevel level) {
+        jdbc.update("INSERT INTO permissions (team_id, host_id, level) VALUES (?, ?, ?)", team, host, level.name());
+    }
+
+    private void teamGrantDeployment(UUID team, UUID dep, PermissionLevel level) {
+        jdbc.update("INSERT INTO permissions (team_id, deployment_id, level) VALUES (?, ?, ?)", team, dep, level.name());
     }
 
     private PermissionSubject subject(Role role) {
@@ -202,6 +227,110 @@ class PermissionServiceTest {
             org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
                     new org.springframework.security.authentication.TestingAuthenticationToken("ghost", "x", "ROLE_ADMIN"));
             assertThat(evaluator.canView(hostA)).isFalse();
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    void teamHostGrantLevelAndRoleCapMatrix() {
+        record Case(Role role, PermissionLevel level, boolean operate) {
+        }
+        int n = 0;
+        for (Case c : new Case[]{
+                new Case(Role.OPERATOR, PermissionLevel.VIEW, false),
+                new Case(Role.OPERATOR, PermissionLevel.OPERATE, true),
+                new Case(Role.VIEWER, PermissionLevel.VIEW, false),
+                new Case(Role.VIEWER, PermissionLevel.OPERATE, false)}) {
+            jdbc.update("DELETE FROM permissions");
+            jdbc.update("DELETE FROM teams");
+            PermissionSubject s = persisted(c.role(), "tm" + n++);
+            UUID t = team("t" + n, s.userId());
+            teamGrantHost(t, hostA, c.level());
+            String label = c.toString();
+            assertThat(service.canView(s, hostA)).as(label).isTrue();
+            assertThat(service.canOperate(s, hostA)).as(label).isEqualTo(c.operate());
+            assertThat(service.canView(s, hostA, depA1)).as(label).isTrue();
+            assertThat(service.canOperate(s, hostA, depA2)).as(label).isEqualTo(c.operate());
+            assertThat(service.hostFullyVisible(s, hostA)).isTrue();
+            assertThat(service.visibleHostIds(s)).containsExactly(hostA);
+            assertThat(service.visibleDeploymentIds(s, hostA)).containsExactlyInAnyOrder(depA1, depA2);
+            assertThat(service.canView(s, hostB)).as(label).isFalse();
+        }
+    }
+
+    @Test
+    void teamDeploymentGrantLimitsToThatDeployment() {
+        PermissionSubject s = persisted(Role.OPERATOR, "tmd");
+        teamGrantDeployment(team("dev", s.userId()), depA1, PermissionLevel.OPERATE);
+        assertThat(service.canView(s, hostA)).isTrue();
+        assertThat(service.hostFullyVisible(s, hostA)).isFalse();
+        assertThat(service.canOperate(s, hostA, depA1)).isTrue();
+        assertThat(service.canView(s, hostA, depA2)).isFalse();
+        assertThat(service.visibleHostIds(s)).containsExactly(hostA);
+        assertThat(service.visibleDeploymentIds(s, hostA)).containsExactly(depA1);
+    }
+
+    @Test
+    void bestLevelOverUserGrantAndSeveralTeamsApplies() {
+        PermissionSubject s = persisted(Role.OPERATOR, "tmb");
+        grantHost(s.userId(), hostA, PermissionLevel.VIEW);
+        teamGrantHost(team("viewers", s.userId()), hostA, PermissionLevel.VIEW);
+        assertThat(service.canOperate(s, hostA)).isFalse();
+        teamGrantHost(team("operators", s.userId()), hostA, PermissionLevel.OPERATE);
+        assertThat(service.canOperate(s, hostA)).isTrue();
+        assertThat(service.canOperate(s, hostA, depA1)).isTrue();
+        // a team VIEW host grant plus a deployment OPERATE grant of another team: best of both on that deployment
+        PermissionSubject s2 = persisted(Role.OPERATOR, "tmb2");
+        teamGrantHost(team("hv", s2.userId()), hostA, PermissionLevel.VIEW);
+        teamGrantDeployment(team("do", s2.userId()), depA1, PermissionLevel.OPERATE);
+        assertThat(service.canOperate(s2, hostA, depA1)).isTrue();
+        assertThat(service.canOperate(s2, hostA, depA2)).isFalse();
+    }
+
+    @Test
+    void teamGrantDoesNotReachNonMembersOrOtherTeams() {
+        PermissionSubject member = persisted(Role.OPERATOR, "in");
+        PermissionSubject outsider = persisted(Role.OPERATOR, "out");
+        UUID granted = team("granted", member.userId());
+        team("other", outsider.userId());
+        teamGrantHost(granted, hostA, PermissionLevel.OPERATE);
+        assertThat(service.canOperate(member, hostA)).isTrue();
+        assertThat(service.canView(outsider, hostA)).isFalse();
+        assertThat(service.visibleHostIds(outsider)).isEmpty();
+    }
+
+    @Test
+    void removingTheMemberRevokesAccessImmediately() {
+        PermissionSubject s = persisted(Role.OPERATOR, "rev");
+        UUID t = team("crew", s.userId());
+        teamGrantHost(t, hostA, PermissionLevel.OPERATE);
+        assertThat(service.canOperate(s, hostA)).isTrue();
+        jdbc.update("DELETE FROM team_members WHERE team_id = ? AND user_id = ?", t, s.userId());
+        assertThat(service.canView(s, hostA)).isFalse();
+        assertThat(service.canOperate(s, hostA, depA1)).isFalse();
+        assertThat(service.visibleHostIds(s)).isEmpty();
+    }
+
+    @Test
+    void deletingTheTeamRevokesAccessAndRemovesItsGrants() {
+        PermissionSubject s = persisted(Role.VIEWER, "gone");
+        UUID t = team("temp", s.userId());
+        teamGrantHost(t, hostA, PermissionLevel.VIEW);
+        jdbc.update("DELETE FROM teams WHERE id = ?", t);
+        assertThat(service.canView(s, hostA)).isFalse();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM permissions WHERE team_id IS NOT NULL", Long.class)).isZero();
+    }
+
+    @Test
+    void evaluatorHonoursTeamGrants() {
+        PermissionSubject s = persisted(Role.OPERATOR, "evalteam");
+        teamGrantHost(team("evalt", s.userId()), hostA, PermissionLevel.OPERATE);
+        try {
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                    new org.springframework.security.authentication.TestingAuthenticationToken("evalteam", "x", "ROLE_OPERATOR"));
+            assertThat(evaluator.canOperate(hostA)).isTrue();
+            assertThat(evaluator.canView(hostB)).isFalse();
         } finally {
             org.springframework.security.core.context.SecurityContextHolder.clearContext();
         }

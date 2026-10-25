@@ -20,6 +20,7 @@ import java.util.UUID;
  *       only that deployment (the host is then visible, but only with {@link #visibleDeploymentIds}).</li>
  *   <li>A grant allows at most what the global role allows: VIEWER never operates, even with an OPERATE grant.</li>
  *   <li>For a deployment the better of its host grant and its own grant applies.</li>
+ *   <li>Grants of the user's teams count like own grants; the best level over all of them applies.</li>
  * </ul>
  * Unmanaged (discovered) deployments have no id; they are visible exactly when {@link #hostFullyVisible}.
  */
@@ -77,7 +78,7 @@ public class PermissionService {
             return new HashSet<>(hosts.findAll().stream().map(DockerHost::getId).toList());
         }
         Set<UUID> ids = new HashSet<>();
-        for (Permission p : grants.findByUserId(subject.userId())) {
+        for (Permission p : grants.findEffectiveByUser(subject.userId())) {
             if (p.getHostId() != null) {
                 ids.add(p.getHostId());
             } else {
@@ -95,7 +96,7 @@ public class PermissionService {
         }
         Set<UUID> onHost = deployments.deploymentIdsOf(hostId);
         Set<UUID> ids = new HashSet<>();
-        for (Permission p : grants.findByUserId(subject.userId())) {
+        for (Permission p : grants.findEffectiveByUser(subject.userId())) {
             if (p.getDeploymentId() != null && onHost.contains(p.getDeploymentId())) {
                 ids.add(p.getDeploymentId());
             }
@@ -108,11 +109,11 @@ public class PermissionService {
     }
 
     private Optional<PermissionLevel> hostLevel(PermissionSubject subject, UUID hostId) {
-        return grants.findByUserIdAndHostId(subject.userId(), hostId).map(Permission::getLevel);
+        return best(grants.findEffectiveByUserAndHost(subject.userId(), hostId));
     }
 
     private boolean hasDeploymentGrantOn(PermissionSubject subject, UUID hostId) {
-        List<Permission> mine = grants.findByUserId(subject.userId());
+        List<Permission> mine = grants.findEffectiveByUser(subject.userId());
         Set<UUID> onHost = null;
         for (Permission p : mine) {
             if (p.getDeploymentId() != null) {
@@ -134,8 +135,7 @@ public class PermissionService {
             return Optional.empty();
         }
         Optional<PermissionLevel> host = hostLevel(subject, hostId);
-        Optional<PermissionLevel> own = grants.findByUserIdAndDeploymentId(subject.userId(), deploymentId)
-                .map(Permission::getLevel);
+        Optional<PermissionLevel> own = best(grants.findEffectiveByUserAndDeployment(subject.userId(), deploymentId));
         if (host.isEmpty()) {
             return own;
         }
@@ -144,6 +144,13 @@ public class PermissionService {
         }
         return Optional.of(host.get() == PermissionLevel.OPERATE || own.get() == PermissionLevel.OPERATE
                 ? PermissionLevel.OPERATE : PermissionLevel.VIEW);
+    }
+
+    /** Best level over the user's own grant and the grants of all their teams. */
+    private Optional<PermissionLevel> best(List<Permission> matching) {
+        return matching.stream().map(Permission::getLevel)
+                .reduce((a, b) -> a == PermissionLevel.OPERATE || b == PermissionLevel.OPERATE
+                        ? PermissionLevel.OPERATE : PermissionLevel.VIEW);
     }
 
     private boolean allowsOperate(PermissionSubject subject, Optional<PermissionLevel> level) {

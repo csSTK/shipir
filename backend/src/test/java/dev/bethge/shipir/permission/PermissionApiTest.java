@@ -56,6 +56,7 @@ class PermissionApiTest {
     void data() {
         jdbc.update("DELETE FROM audit_log");
         jdbc.update("DELETE FROM permissions");
+        jdbc.update("DELETE FROM teams");
         jdbc.update("DELETE FROM deployments");
         jdbc.update("DELETE FROM docker_hosts");
         jdbc.update("DELETE FROM users WHERE username <> 'admin'");
@@ -74,6 +75,7 @@ class PermissionApiTest {
     void cleanUp() {
         jdbc.update("DELETE FROM audit_log");
         jdbc.update("DELETE FROM permissions");
+        jdbc.update("DELETE FROM teams");
         jdbc.update("DELETE FROM deployments");
         jdbc.update("DELETE FROM docker_hosts");
         jdbc.update("DELETE FROM users WHERE username <> 'admin'");

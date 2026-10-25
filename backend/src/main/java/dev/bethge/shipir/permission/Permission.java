@@ -12,7 +12,10 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 
-/** A grant to one user on exactly one target: a host or a deployment (see V21 check constraint). */
+/**
+ * A grant to exactly one subject (a user or a team, V26 check) on exactly one target (a host or a deployment,
+ * V22 check).
+ */
 @Entity
 @Table(name = "permissions")
 public class Permission {
@@ -21,8 +24,11 @@ public class Permission {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "user_id", nullable = false, updatable = false)
+    @Column(name = "user_id", updatable = false)
     private UUID userId;
+
+    @Column(name = "team_id", updatable = false)
+    private UUID teamId;
 
     @Column(name = "host_id", updatable = false)
     private UUID hostId;
@@ -40,8 +46,9 @@ public class Permission {
     protected Permission() {
     }
 
-    Permission(UUID userId, UUID hostId, UUID deploymentId, PermissionLevel level, Instant createdAt) {
+    Permission(UUID userId, UUID teamId, UUID hostId, UUID deploymentId, PermissionLevel level, Instant createdAt) {
         this.userId = userId;
+        this.teamId = teamId;
         this.hostId = hostId;
         this.deploymentId = deploymentId;
         this.level = level;
@@ -50,6 +57,7 @@ public class Permission {
 
     public UUID getId() { return id; }
     public UUID getUserId() { return userId; }
+    public UUID getTeamId() { return teamId; }
     public UUID getHostId() { return hostId; }
     public UUID getDeploymentId() { return deploymentId; }
     public PermissionLevel getLevel() { return level; }

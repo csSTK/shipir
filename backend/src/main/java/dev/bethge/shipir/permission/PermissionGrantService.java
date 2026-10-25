@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-/** ADMIN management of a user's grants. PUT replaces the complete set. */
+/** ADMIN management of the grants of a user or a team. PUT replaces the complete set. */
 @Service
 class PermissionGrantService {
 
@@ -27,14 +27,16 @@ class PermissionGrantService {
     private final UserRepository users;
     private final DockerHostRepository hosts;
     private final DeploymentDirectory deployments;
+    private final TeamRepository teams;
     private final Clock clock;
 
     PermissionGrantService(PermissionRepository grants, UserRepository users, DockerHostRepository hosts,
-                           DeploymentDirectory deployments, Clock clock) {
+                           DeploymentDirectory deployments, TeamRepository teams, Clock clock) {
         this.grants = grants;
         this.users = users;
         this.hosts = hosts;
         this.deployments = deployments;
+        this.teams = teams;
         this.clock = clock;
     }
 
@@ -53,6 +55,15 @@ class PermissionGrantService {
             throw new PermissionException(HttpStatus.BAD_REQUEST, "ADMIN_NEEDS_NO_GRANTS",
                     "Administrators can already access everything; grants are not allowed");
         }
+        List<Permission> entities = build(userId, null, wanted);
+        grants.deleteByUserId(userId);
+        grants.flush();
+        grants.saveAll(entities);
+        return response(userId);
+    }
+
+    /** Validates the requested grants and maps them to entities of exactly one subject (user xor team). */
+    private List<Permission> build(UUID userId, UUID teamId, List<GrantRequest> wanted) {
         Set<UUID> seenHosts = new HashSet<>();
         Set<UUID> seenDeployments = new HashSet<>();
         List<Permission> entities = new ArrayList<>();
@@ -76,12 +87,36 @@ class PermissionGrantService {
                     throw duplicate();
                 }
             }
-            entities.add(new Permission(userId, g.hostId(), g.deploymentId(), g.level(), clock.instant()));
+            entities.add(new Permission(userId, teamId, g.hostId(), g.deploymentId(), g.level(), clock.instant()));
         }
-        grants.deleteByUserId(userId);
+        return entities;
+    }
+
+    @Transactional(readOnly = true)
+    PermissionsResponse getForTeam(UUID teamId) {
+        findTeam(teamId);
+        return teamResponse(teamId);
+    }
+
+    @Auditable(action = "TEAM_PERMISSIONS_UPDATE", targetType = "TEAM", targetId = "#teamId")
+    @Transactional
+    PermissionsResponse replaceForTeam(UUID teamId, List<GrantRequest> requested) {
+        findTeam(teamId);
+        List<Permission> entities = build(null, teamId, requested == null ? List.of() : requested);
+        grants.deleteByTeamId(teamId);
         grants.flush();
         grants.saveAll(entities);
-        return response(userId);
+        return teamResponse(teamId);
+    }
+
+    private void findTeam(UUID teamId) {
+        if (!teams.existsById(teamId)) {
+            throw new PermissionException(HttpStatus.NOT_FOUND, "TEAM_NOT_FOUND", "Team not found");
+        }
+    }
+
+    private PermissionsResponse teamResponse(UUID teamId) {
+        return toResponse(grants.findByTeamId(teamId));
     }
 
     private PermissionException duplicate() {
@@ -94,7 +129,11 @@ class PermissionGrantService {
     }
 
     private PermissionsResponse response(UUID userId) {
-        List<GrantResponse> list = grants.findByUserId(userId).stream()
+        return toResponse(grants.findByUserId(userId));
+    }
+
+    private PermissionsResponse toResponse(List<Permission> permissions) {
+        List<GrantResponse> list = permissions.stream()
                 .map(p -> new GrantResponse(p.getHostId(), p.getDeploymentId(),
                         p.getDeploymentId() == null ? null : deployments.hostIdOf(p.getDeploymentId()).orElse(null),
                         p.getLevel()))
