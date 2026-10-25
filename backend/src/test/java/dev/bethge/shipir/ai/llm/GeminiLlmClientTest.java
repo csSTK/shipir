@@ -240,12 +240,13 @@ class GeminiLlmClientTest {
 
     @Test
     void mapsStatusCodes() {
-        for (int[] c : new int[][]{{401, 0}, {403, 0}, {429, 1}, {500, 2}, {400, 2}}) {
+        for (int[] c : new int[][]{{401, 0}, {403, 0}, {429, 1}, {500, 2}, {400, 2}, {404, 2}}) {
             respond(c[0], "application/json", "{\"error\":{\"message\":\"provider body " + KEY + "\"}}");
             LlmException ex = catchLlm();
             LlmException.Code expected = c[1] == 0 ? LlmException.Code.AUTH_FAILED
                     : c[1] == 1 ? LlmException.Code.RATE_LIMITED : LlmException.Code.BAD_RESPONSE;
             assertThat(ex.code()).as("status %d", c[0]).isEqualTo(expected);
+            assertThat(ex.httpStatus()).as("status %d", c[0]).isEqualTo(c[0]);
             assertThat(ex.getMessage()).doesNotContain(KEY).doesNotContain("provider body");
         }
     }

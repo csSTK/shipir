@@ -9,20 +9,35 @@ public class LlmException extends RuntimeException {
 
     private final Code code;
     private final Duration retryAfter;
+    private final Integer httpStatus;
 
     public LlmException(Code code, String message) {
-        this(code, message, null);
+        this(code, message, null, null);
     }
 
     /** {@code retryAfter} is the provider's requested wait on a rate limit, {@code null} if unknown. */
     public LlmException(Code code, String message, Duration retryAfter) {
+        this(code, message, retryAfter, null);
+    }
+
+    /**
+     * {@code httpStatus} is the provider's HTTP status when the failure came from an HTTP answer, {@code null}
+     * otherwise. Only the number is kept, never the provider's body.
+     */
+    public LlmException(Code code, String message, Duration retryAfter, Integer httpStatus) {
         super(message);
         this.code = code;
         this.retryAfter = retryAfter;
+        this.httpStatus = httpStatus;
     }
 
     public Duration retryAfter() {
         return retryAfter;
+    }
+
+    /** The provider's HTTP status, {@code null} for failures that did not come from an HTTP answer. */
+    public Integer httpStatus() {
+        return httpStatus;
     }
 
     /**

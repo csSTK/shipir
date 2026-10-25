@@ -170,13 +170,14 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
 
     private static LlmException statusError(int status, String retryAfterHeader) {
         if (status == 401 || status == 403) {
-            return new LlmException(LlmException.Code.AUTH_FAILED, "LLM provider rejected the credentials");
+            return new LlmException(LlmException.Code.AUTH_FAILED, "LLM provider rejected the credentials", null,
+                    status);
         }
         if (status == 429) {
             return new LlmException(LlmException.Code.RATE_LIMITED, "LLM provider rate limit reached",
-                    LlmException.parseRetryAfter(retryAfterHeader));
+                    LlmException.parseRetryAfter(retryAfterHeader), status);
         }
-        return new LlmException(LlmException.Code.BAD_RESPONSE, "LLM provider answered HTTP " + status);
+        return new LlmException(LlmException.Code.BAD_RESPONSE, "LLM provider answered HTTP " + status, null, status);
     }
 
     private LlmResponse readStream(InputStream body, Consumer<String> onToken, AtomicBoolean timedOut)

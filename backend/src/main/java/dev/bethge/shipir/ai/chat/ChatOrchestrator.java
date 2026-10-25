@@ -271,10 +271,7 @@ public class ChatOrchestrator {
             } catch (RunInterruptedException e) {
                 return INTERRUPTED;
             } catch (LlmException e) {
-                String message = e.code() == LlmException.Code.RATE_LIMITED
-                        ? "The language model is rate limited; retry in about " + waitSeconds(e) + "s."
-                        : "The language model could not be reached or refused the request.";
-                recordError(sessionId, e.code().name(), message);
+                recordError(sessionId, e.code().name(), errorMessage(e));
                 return e.code().name();
             }
             String text = response.content() == null ? "" : response.content();
@@ -324,6 +321,22 @@ public class ChatOrchestrator {
                 }
             }
         }
+    }
+
+    /**
+     * Text stored for a failed model call. Only fixed wording and numbers: never the provider's body or the key.
+     * A 400 or 404 usually means a wrong base URL or model name, so the user is pointed at the settings.
+     */
+    private static String errorMessage(LlmException e) {
+        if (e.code() == LlmException.Code.RATE_LIMITED) {
+            return "The language model is rate limited; retry in about " + waitSeconds(e) + "s.";
+        }
+        Integer status = e.httpStatus();
+        if (e.code() == LlmException.Code.BAD_RESPONSE && status != null && (status == 400 || status == 404)) {
+            return "The provider rejected the request (HTTP " + status
+                    + "). Check base URL and model name in /settings/ai.";
+        }
+        return "The language model could not be reached or refused the request.";
     }
 
     private static Duration requestedWait(LlmException e) {

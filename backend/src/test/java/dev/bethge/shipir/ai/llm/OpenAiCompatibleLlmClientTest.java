@@ -200,6 +200,19 @@ class OpenAiCompatibleLlmClientTest {
     }
 
     @Test
+    void rejectedRequestCarriesHttpStatusButNoProviderText() {
+        for (int status : new int[]{400, 404}) {
+            respond(status, "application/json", "{\"error\":\"model not found " + KEY + "\"}");
+            assertThatThrownBy(() -> call(new ArrayList<>()))
+                    .isInstanceOfSatisfying(LlmException.class, e -> {
+                        assertThat(e.code()).isEqualTo(LlmException.Code.BAD_RESPONSE);
+                        assertThat(e.httpStatus()).isEqualTo(status);
+                        assertThat(e.getMessage()).doesNotContain(KEY).doesNotContain("model not found");
+                    });
+        }
+    }
+
+    @Test
     void rateLimitCarriesRetryAfterFromHeader() {
         record Case(String header, java.time.Duration expected) { }
         for (Case c : java.util.Arrays.asList(new Case("7", java.time.Duration.ofSeconds(7)),
@@ -286,7 +299,7 @@ class OpenAiCompatibleLlmClientTest {
     @Test
     void apiKeyNeverAppearsInLogsOrExceptionMessages(CapturedOutput output) {
         List<String> messages = new ArrayList<>();
-        for (int status : new int[]{401, 429, 500}) {
+        for (int status : new int[]{400, 401, 404, 429, 500}) {
             respond(status, "application/json", "{\"error\":\"bad key " + KEY + "\"}");
             try {
                 call(new ArrayList<>());
@@ -301,7 +314,7 @@ class OpenAiCompatibleLlmClientTest {
             messages.add(e.getMessage());
         }
 
-        assertThat(messages).hasSize(4).noneMatch(m -> m.contains(KEY));
+        assertThat(messages).hasSize(6).noneMatch(m -> m.contains(KEY));
         assertThat(output.getAll()).doesNotContain(KEY).doesNotContain("Bearer");
     }
 

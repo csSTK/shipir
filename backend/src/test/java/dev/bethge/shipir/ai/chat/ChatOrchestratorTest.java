@@ -104,6 +104,13 @@ class ChatOrchestratorTest {
             });
         }
 
+        void rejected(int httpStatus) {
+            script.add(m -> {
+                throw new LlmException(LlmException.Code.BAD_RESPONSE, "provider body secret-body-text", null,
+                        httpStatus);
+            });
+        }
+
         void rateLimited(java.time.Duration retryAfter) {
             script.add(m -> {
                 throw new LlmException(LlmException.Code.RATE_LIMITED, "slow down", retryAfter);
@@ -489,6 +496,34 @@ class ChatOrchestratorTest {
 
     private void restoreSleeper() {
         ReflectionTestUtils.setField(orchestrator, "sleeper", (ChatOrchestrator.Sleeper) Thread::sleep);
+    }
+
+    @Test
+    void providerRejectedRequestGivesFixedHintWithStatusAndNoProviderText() throws Exception {
+        Login l = login("viewer");
+        String id = newSession(l);
+        for (int status : new int[]{400, 404}) {
+            llm.rejected(status);
+            say(l, id, "Hello?");
+
+            String content = lastContent(messages(l, id));
+            assertThat(content).isEqualTo("Error (BAD_RESPONSE): The provider rejected the request (HTTP " + status
+                    + "). Check base URL and model name in /settings/ai.");
+            assertThat(content).doesNotContain("secret-body-text");
+        }
+    }
+
+    @Test
+    void otherProviderStatusKeepsTheGenericMessage() throws Exception {
+        Login l = login("viewer");
+        String id = newSession(l);
+        llm.rejected(500);
+        say(l, id, "Hello?");
+
+        String content = lastContent(messages(l, id));
+        assertThat(content).isEqualTo("Error (BAD_RESPONSE): The language model could not be reached or refused "
+                + "the request.");
+        assertThat(content).doesNotContain("HTTP 500").doesNotContain("secret-body-text");
     }
 
     private List<ChatStreamEvent> waitEvents() {
