@@ -138,6 +138,47 @@ class OidcLoginTest extends OidcTestBase {
     }
 
     @Test
+    void roleChangeExpiresTheUsersEarlierSessions() throws Exception {
+        configure(true, true);
+        Flow first = signIn(claims("sub-20", "rita", "ops"));
+        assertThat(meJson(first.session())).contains("\"username\":\"rita\"");
+
+        Flow second = signIn(claims("sub-20", "rita", "viewers"));
+        assertThat(meJson(second.session())).contains("\"role\":\"VIEWER\"");
+        assertThat(meJson(first.session())).doesNotContain("\"username\":\"rita\"");
+    }
+
+    @Test
+    void unchangedRoleKeepsEarlierSessions() throws Exception {
+        configure(true, true);
+        Flow first = signIn(claims("sub-21", "sam", "ops"));
+        signIn(claims("sub-21", "sam", "ops"));
+        assertThat(meJson(first.session())).contains("\"username\":\"sam\"");
+    }
+
+    @Test
+    void lastEnabledAdminIsNotDemotedBySso() throws Exception {
+        configure(true, true);
+        signIn(claims("sub-22", "tess", "admins"));
+        jdbc.update("UPDATE users SET disabled_at = now() WHERE external_subject IS NULL AND role = 'ADMIN'");
+
+        Flow f = signIn(claims("sub-22", "tess", "viewers"));
+        assertThat(f.callbackLocation()).isEqualTo("/?oidc_error=LAST_ADMIN");
+        assertThat(jdbc.queryForObject("SELECT role FROM users WHERE username = 'tess'", String.class))
+                .isEqualTo("ADMIN");
+    }
+
+    @Test
+    void adminIsDemotedBySsoWhenAnotherEnabledAdminExists() throws Exception {
+        configure(true, true);
+        signIn(claims("sub-23", "uma", "admins"));
+        Flow f = signIn(claims("sub-23", "uma", "viewers"));
+        assertThat(f.callbackLocation()).isEqualTo("/");
+        assertThat(jdbc.queryForObject("SELECT role FROM users WHERE username = 'uma'", String.class))
+                .isEqualTo("VIEWER");
+    }
+
+    @Test
     void knownIdentityWithoutMatchingGroupIsDenied() throws Exception {
         configure(true, true);
         signIn(claims("sub-7", "gina", "ops"));

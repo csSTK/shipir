@@ -1,6 +1,8 @@
 package dev.bethge.shipir.auth.oidc;
 
+import dev.bethge.shipir.auth.LastAdminGuard;
 import dev.bethge.shipir.auth.Role;
+import dev.bethge.shipir.auth.SessionInvalidator;
 import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -32,9 +34,14 @@ class OidcUserResolver {
     private final UserRepository users;
     private final PasswordEncoder encoder;
     private final Clock clock;
+    private final SessionInvalidator sessions;
+    private final LastAdminGuard lastAdmin;
     private final SecureRandom random = new SecureRandom();
 
-    OidcUserResolver(UserRepository users, PasswordEncoder encoder, Clock clock) {
+    OidcUserResolver(UserRepository users, PasswordEncoder encoder, Clock clock,
+                     SessionInvalidator sessions, LastAdminGuard lastAdmin) {
+        this.sessions = sessions;
+        this.lastAdmin = lastAdmin;
         this.users = users;
         this.encoder = encoder;
         this.clock = clock;
@@ -51,7 +58,12 @@ class OidcUserResolver {
             }
             Role mapped = role.orElseThrow(this::roleDenied);
             if (user.getRole() != mapped) {
+                if (user.getRole() == Role.ADMIN && lastAdmin.isOnlyEnabledAdmin(user)) {
+                    throw new OidcException("LAST_ADMIN", "At least one enabled ADMIN must remain");
+                }
                 user.changeRole(mapped);
+                // Sessions carry the old authorities; the new login creates its session after this call.
+                sessions.expireSessionsOf(user.getUsername());
             }
             return new ResolvedUser(user.getId(), user.getUsername(), false);
         }

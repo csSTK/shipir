@@ -34,12 +34,14 @@ class UserAdminService {
     private final UserRepository users;
     private final PasswordEncoder encoder;
     private final SessionInvalidator sessions;
+    private final LastAdminGuard lastAdmin;
     private final Clock clock;
     private final TotpService totp;
     private final SecureRandom random = new SecureRandom();
 
     UserAdminService(UserRepository users, PasswordEncoder encoder, SessionInvalidator sessions, Clock clock,
-                     TotpService totp) {
+                     TotpService totp, LastAdminGuard lastAdmin) {
+        this.lastAdmin = lastAdmin;
         this.totp = totp;
         this.users = users;
         this.encoder = encoder;
@@ -171,7 +173,7 @@ class UserAdminService {
 
     /** Refuses an action that would leave no enabled ADMIN. */
     private void requireOtherActiveAdmin(User target) {
-        if (users.countByRoleAndDisabledAtIsNullAndIdNot(Role.ADMIN, target.getId()) == 0) {
+        if (lastAdmin.isOnlyEnabledAdmin(target)) {
             throw new UserAdminException(HttpStatus.CONFLICT, "LAST_ADMIN", "At least one enabled ADMIN must remain");
         }
     }
