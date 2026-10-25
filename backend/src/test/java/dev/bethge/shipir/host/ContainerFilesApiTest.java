@@ -145,10 +145,10 @@ class ContainerFilesApiTest extends HostApiTestBase {
                 .when(files).list(any(), any(), any(), eq("/nope"), anyLong());
         mvc.perform(get("/api/hosts/{h}/containers/c1/files?path=/nope", host).session(l.session()))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
-        doThrow(new DockerConnectionException(DockerErrorCode.SIZE_LIMIT_EXCEEDED, "x", null))
+        doThrow(new DockerConnectionException(DockerErrorCode.DIRECTORY_TOO_LARGE, "x", null))
                 .when(files).list(any(), any(), any(), eq("/big"), anyLong());
         mvc.perform(get("/api/hosts/{h}/containers/c1/files?path=/big", host).session(l.session()))
-                .andExpect(status().isPayloadTooLarge()).andExpect(jsonPath("$.code").value("SIZE_LIMIT_EXCEEDED"));
+                .andExpect(status().isPayloadTooLarge()).andExpect(jsonPath("$.code").value("DIRECTORY_TOO_LARGE"));
         doThrow(new DockerConnectionException(DockerErrorCode.INVALID_PATH, "x", null))
                 .when(files).list(any(), any(), any(), eq("/file"), anyLong());
         mvc.perform(get("/api/hosts/{h}/containers/c1/files?path=/file", host).session(l.session()))

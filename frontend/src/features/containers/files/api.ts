@@ -67,7 +67,7 @@ export function uploadFile(
 }
 
 const LIST_ERRORS: Record<string, string> = {
-  SIZE_LIMIT_EXCEEDED: 'This directory is too large to list. Open a subdirectory instead.',
+  DIRECTORY_TOO_LARGE: 'This directory is too large to list. Open a subdirectory instead.',
   INVALID_PATH: 'This path is not valid.',
   RESOURCE_NOT_FOUND: 'This path does not exist in the container.',
   UNREACHABLE: 'Could not reach the Docker host.',

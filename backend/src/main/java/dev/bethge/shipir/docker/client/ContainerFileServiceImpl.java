@@ -37,7 +37,17 @@ public class ContainerFileServiceImpl implements ContainerFileService {
     public List<ContainerFileEntry> list(UUID hostId, DockerEndpoint endpoint, String containerId, String path,
                                          long maxScanBytes) {
         String dir = normalizePath(path);
-        List<ContainerFileEntry> entries = readDirectory(hostId, endpoint, containerId, dir, maxScanBytes, true);
+        List<ContainerFileEntry> entries;
+        try {
+            entries = readDirectory(hostId, endpoint, containerId, dir, maxScanBytes, true);
+        } catch (DockerConnectionException e) {
+            if (e.getCode() == DockerErrorCode.SIZE_LIMIT_EXCEEDED) {
+                // the archive API sends the whole subtree; this is a listing problem, not an oversize transfer
+                throw new DockerConnectionException(DockerErrorCode.DIRECTORY_TOO_LARGE,
+                        "The directory is too large to list.", e);
+            }
+            throw e;
+        }
         entries.sort(Comparator.comparing((ContainerFileEntry e) -> e.type() != ContainerFileEntry.Type.DIRECTORY)
                 .thenComparing(ContainerFileEntry::name));
         return entries;

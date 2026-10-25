@@ -26,6 +26,8 @@ public enum DockerErrorCode {
     INVALID_PATH,
     /** A file transfer or directory scan exceeded the allowed number of bytes; aborted while streaming. */
     SIZE_LIMIT_EXCEEDED,
+    /** Listing a directory needed to scan more than the allowed bytes (archive API reads the whole subtree); distinct from a transfer limit. */
+    DIRECTORY_TOO_LARGE,
     /** Recreate failed after the new container was created; it has been removed and the old one restored (or restoring failed, see log). */
     RECREATE_FAILED,
     /** The daemon refused new resource limits (e.g. memory below current usage or below the minimum). */

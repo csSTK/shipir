@@ -101,7 +101,7 @@ class ContainerFileServiceIntegrationTest {
     @Test
     void listScanLimitIsEnforced() {
         assertThatThrownBy(() -> service.list(hostId, endpoint, id, "/data", 3000))
-                .isInstanceOfSatisfying(DockerConnectionException.class, e -> assertThat(e.getCode()).isEqualTo(DockerErrorCode.SIZE_LIMIT_EXCEEDED));
+                .isInstanceOfSatisfying(DockerConnectionException.class, e -> assertThat(e.getCode()).isEqualTo(DockerErrorCode.DIRECTORY_TOO_LARGE));
     }
 
     @Test

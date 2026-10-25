@@ -55,7 +55,7 @@ describe('ContainerFilesPanel', () => {
   })
 
   it('shows a clear message when the directory is too large to list', async () => {
-    apiFetch.mockRejectedValue(new ApiError(413, 'x', 'SIZE_LIMIT_EXCEEDED'))
+    apiFetch.mockRejectedValue(new ApiError(413, 'x', 'DIRECTORY_TOO_LARGE'))
     renderPanel()
     expect(await screen.findByText(/too large to list.*subdirectory/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()

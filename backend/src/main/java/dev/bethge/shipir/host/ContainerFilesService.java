@@ -249,6 +249,8 @@ public class ContainerFilesService {
             case NOT_FOUND -> new HostException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Container or path not found");
             case INVALID_PATH -> invalidPath();
             case SIZE_LIMIT_EXCEEDED -> sizeLimit();
+            case DIRECTORY_TOO_LARGE -> new HostException(HttpStatus.PAYLOAD_TOO_LARGE, "DIRECTORY_TOO_LARGE",
+                    "The directory is too large to list");
             case INVALID_STATE -> new HostException(HttpStatus.CONFLICT, "INVALID_CONTAINER_STATE",
                     "The container is not in a state that allows this action");
             default -> new HostException(HttpStatus.BAD_GATEWAY, e.getCode().name(), "Environment could not be reached");
