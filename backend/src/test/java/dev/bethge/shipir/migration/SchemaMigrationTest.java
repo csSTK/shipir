@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To31Successfully() {
+    void flywayAppliedVersions1To32Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32");
     }
 
     @Test
@@ -2294,6 +2294,80 @@ class SchemaMigrationTest {
         jdbc.update("UPDATE deployments SET image_update_last_result = 'FAILED' WHERE id = ?", deployment);
         assertThat(jdbc.queryForObject("SELECT image_update_last_result FROM deployments WHERE id = ?", String.class,
                 deployment)).isEqualTo("FAILED");
+    }
+
+    @Test
+    void hostTagAcceptsValidTagAndDefaultsIdAndCreatedAt() {
+        UUID host = insertHost(insertUser("alice"));
+        insertHostTag(host, "prod");
+        Map<String, Object> row = jdbc.queryForMap("SELECT id, created_at FROM host_tags WHERE host_id = ?", host);
+        assertThat(row.get("id")).isNotNull();
+        assertThat(row.get("created_at")).isNotNull();
+    }
+
+    @Test
+    void hostTagPatternAcceptsBoundaryNamesAndRejectsUppercase() {
+        UUID host = insertHost(insertUser("alice"));
+        insertHostTag(host, "a");
+        insertHostTag(host, "0-prod");
+        insertHostTag(host, "a".repeat(24));
+        assertThat(count("host_tags")).isEqualTo(3);
+        assertThatThrownBy(() -> insertHostTag(host, "Prod"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("host_tags_tag_check");
+    }
+
+    @Test
+    void hostTagRejectsLeadingHyphen() {
+        UUID host = insertHost(insertUser("alice"));
+        assertThatThrownBy(() -> insertHostTag(host, "-prod"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("host_tags_tag_check");
+    }
+
+    @Test
+    void hostTagLongerThan24CharactersIsRejected() {
+        UUID host = insertHost(insertUser("alice"));
+        // the column type VARCHAR(24) is the length rule; Postgres checks it before the pattern
+        assertThatThrownBy(() -> insertHostTag(host, "a".repeat(25)))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("value too long for type character varying(24)");
+    }
+
+    @Test
+    void hostTagIsUniquePerHostButNotAcrossHosts() {
+        UUID owner = insertUser("alice");
+        UUID first = insertHost(owner);
+        UUID second = insertHost(owner);
+        insertHostTag(first, "prod");
+        insertHostTag(second, "prod");
+        assertThat(count("host_tags")).isEqualTo(2);
+        assertThatThrownBy(() -> insertHostTag(first, "prod"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("uq_host_tags_host_tag");
+    }
+
+    @Test
+    void hostTagWithUnknownHostIsRejected() {
+        assertThatThrownBy(() -> insertHostTag(UUID.randomUUID(), "prod"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("host_tags_host_id_fkey");
+    }
+
+    @Test
+    void deletingHostCascadesToItsTagsOnly() {
+        UUID owner = insertUser("alice");
+        UUID host = insertHost(owner);
+        UUID other = insertHost(owner);
+        insertHostTag(host, "prod");
+        insertHostTag(other, "staging");
+        jdbc.update("DELETE FROM docker_hosts WHERE id = ?", host);
+        assertThat(count("host_tags")).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT tag FROM host_tags", String.class)).isEqualTo("staging");
+    }
+
+    private void insertHostTag(UUID host, String tag) {
+        jdbc.update("INSERT INTO host_tags (host_id, tag) VALUES (?, ?)", host, tag);
     }
 
     private void insertNotification(UUID user, String type) {

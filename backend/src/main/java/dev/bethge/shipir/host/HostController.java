@@ -5,6 +5,7 @@ import dev.bethge.shipir.host.dto.ConnectionTestRequest;
 import dev.bethge.shipir.host.dto.CreateHostRequest;
 import dev.bethge.shipir.host.dto.HostOverviewResponse;
 import dev.bethge.shipir.host.dto.HostResponse;
+import dev.bethge.shipir.host.dto.SetHostTagsRequest;
 import dev.bethge.shipir.host.dto.UpdateHostRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -59,7 +61,13 @@ class HostController {
 
     @PatchMapping("/{id}")
     HostResponse rename(@PathVariable UUID id, @Valid @RequestBody UpdateHostRequest request) {
-        return service.rename(id, request.name());
+        return service.rename(id, request.name(), request.tags());
+    }
+
+    /** Replaces the tag set (ADMIN only, enforced in {@code SecurityConfig} by the {@code /api/hosts/**} rule). */
+    @PutMapping("/{id}/tags")
+    HostResponse setTags(@PathVariable UUID id, @Valid @RequestBody SetHostTagsRequest request) {
+        return service.setTags(id, request);
     }
 
     @DeleteMapping("/{id}")

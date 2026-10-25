@@ -20,6 +20,8 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -43,11 +45,13 @@ public class HostOverviewService {
     private final DockerHostConnectionManager connections;
     private final HostOverviewProperties properties;
     private final CurrentAccess access;
+    private final HostTagService tags;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     HostOverviewService(DockerHostRepository hosts, HostEndpointResolver endpoints, DockerSystemService docker,
                         DockerHostConnectionManager connections, HostOverviewProperties properties,
-                        CurrentAccess access) {
+                        CurrentAccess access, HostTagService tags) {
+        this.tags = tags;
         this.hosts = hosts;
         this.endpoints = endpoints;
         this.docker = docker;
@@ -71,57 +75,63 @@ public class HostOverviewService {
                 .filter(h -> visible.isEmpty() || visible.get().contains(h.getId()))
                 .sorted(Comparator.comparing(DockerHost::getName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
+        Map<UUID, List<String>> tagsByHost = tags.tagsByHost(all.stream().map(DockerHost::getId).toList());
         List<Future<HostOverviewResponse>> futures = all.stream()
-                .map(h -> executor.submit(() -> query(h)))
+                .map(h -> executor.submit(() -> query(h, tagsOf(tagsByHost, h))))
                 .toList();
         long deadline = System.nanoTime() + properties.overviewTimeout().toNanos();
         List<HostOverviewResponse> result = new ArrayList<>(all.size());
         for (int i = 0; i < all.size(); i++) {
-            result.add(await(all.get(i), futures.get(i), deadline));
+            result.add(await(all.get(i), futures.get(i), deadline, tagsOf(tagsByHost, all.get(i))));
         }
         return result;
     }
 
-    private HostOverviewResponse await(DockerHost host, Future<HostOverviewResponse> future, long deadline) {
+    private static List<String> tagsOf(Map<UUID, List<String>> tagsByHost, DockerHost host) {
+        return tagsByHost.getOrDefault(host.getId(), List.of());
+    }
+
+    private HostOverviewResponse await(DockerHost host, Future<HostOverviewResponse> future, long deadline,
+                                       List<String> tagList) {
         try {
             return future.get(Math.max(0, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
         } catch (TimeoutException e) {
             future.cancel(true);
-            return down(host, "TIMEOUT");
+            return down(host, "TIMEOUT", tagList);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             future.cancel(true);
-            return down(host, "INTERRUPTED");
+            return down(host, "INTERRUPTED", tagList);
         } catch (ExecutionException e) {
-            return down(host, "UNKNOWN");
+            return down(host, "UNKNOWN", tagList);
         }
     }
 
     /** Never throws: every failure of one environment is reported as {@code DOWN}. */
-    private HostOverviewResponse query(DockerHost host) {
+    private HostOverviewResponse query(DockerHost host, List<String> tagList) {
         try {
             DockerSystemInfoDto info = docker.info(host.getId(), endpoints.endpointOf(host));
             return new HostOverviewResponse(host.getId(), host.getName(), host.getConnectionType(), endpointOf(host),
                     Status.UP, null, info.dockerVersion(), info.cpus(), info.memoryBytes(),
                     new Containers(info.containersRunning(), info.containersStopped(), info.containersHealthy(),
                             info.containersUnhealthy()),
-                    info.images(), info.volumes());
+                    info.images(), info.volumes(), tagList);
         } catch (DockerConnectionException e) {
-            return down(host, e.getCode().name());
+            return down(host, e.getCode().name(), tagList);
         } catch (EncryptionKeyMissingException e) {
-            return down(host, "ENCRYPTION_KEY_MISSING");
+            return down(host, "ENCRYPTION_KEY_MISSING", tagList);
         } catch (SecretDecryptionException e) {
-            return down(host, "DECRYPTION_FAILED");
+            return down(host, "DECRYPTION_FAILED", tagList);
         } catch (RuntimeException e) {
             // class only: the message could contain connection details
             log.warn("Overview of environment {} failed: {}", host.getId(), e.getClass().getSimpleName());
-            return down(host, "UNKNOWN");
+            return down(host, "UNKNOWN", tagList);
         }
     }
 
-    private HostOverviewResponse down(DockerHost host, String error) {
+    private HostOverviewResponse down(DockerHost host, String error, List<String> tagList) {
         return new HostOverviewResponse(host.getId(), host.getName(), host.getConnectionType(), endpointOf(host),
-                Status.DOWN, error, null, null, null, null, null, null);
+                Status.DOWN, error, null, null, null, null, null, null, tagList);
     }
 
     /** Display form only; never contains credentials. */

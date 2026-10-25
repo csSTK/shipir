@@ -60,7 +60,7 @@ class HostHealthCheckSchedulerTest {
         });
         overview = new HostOverviewService(repository, resolver, docker, connections,
                 new HostOverviewProperties(Duration.ofSeconds(1), Duration.ofSeconds(60), true),
-                mock(dev.bethge.shipir.permission.CurrentAccess.class)); // unstubbed = system caller, no filtering
+                mock(dev.bethge.shipir.permission.CurrentAccess.class), mock(HostTagService.class)); // unstubbed = no filtering
         scheduler = new HostHealthCheckScheduler(overview, publisher, clock);
     }
 
@@ -88,7 +88,8 @@ class HostHealthCheckSchedulerTest {
         });
         overview.shutdown();
         overview = new HostOverviewService(repository, mock(HostEndpointResolver.class), docker, connections,
-                new HostOverviewProperties(Duration.ofSeconds(1), Duration.ofSeconds(60), true), access);
+                new HostOverviewProperties(Duration.ofSeconds(1), Duration.ofSeconds(60), true), access,
+                mock(HostTagService.class));
         scheduler = new HostHealthCheckScheduler(overview, publisher, clock);
 
         scheduler.check();

@@ -16,15 +16,19 @@ import dev.bethge.shipir.docker.tls.TlsMaterialValidator;
 import dev.bethge.shipir.host.dto.ConnectionTestRequest;
 import dev.bethge.shipir.host.dto.CreateHostRequest;
 import dev.bethge.shipir.host.dto.HostResponse;
+import dev.bethge.shipir.host.dto.SetHostTagsRequest;
 import dev.bethge.shipir.permission.CurrentAccess;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -39,10 +43,12 @@ public class HostService {
     private final DockerHostConnectionManager connections;
     private final CurrentAccess access;
     private final EgressPolicy egress;
+    private final HostTagService tags;
+    private final TransactionTemplate tx;
 
     HostService(DockerHostRepository hosts, UserRepository users, SecretCipher cipher,
                 DockerSystemService docker, DockerHostConnectionManager connections, CurrentAccess access,
-                EgressPolicy egress) {
+                EgressPolicy egress, HostTagService tags, PlatformTransactionManager transactions) {
         this.hosts = hosts;
         this.users = users;
         this.cipher = cipher;
@@ -50,16 +56,21 @@ public class HostService {
         this.connections = connections;
         this.access = access;
         this.egress = egress;
+        this.tags = tags;
+        this.tx = new TransactionTemplate(transactions);
     }
 
     /** Hosts the signed-in user may see (all for ADMIN and system callers). */
     @Transactional(readOnly = true)
     public List<HostResponse> list() {
         var visible = access.visibleHostIds();
-        return hosts.findAll().stream()
+        List<DockerHost> selected = hosts.findAll().stream()
                 .filter(h -> visible.isEmpty() || visible.get().contains(h.getId()))
                 .sorted(Comparator.comparing(DockerHost::getName, String.CASE_INSENSITIVE_ORDER))
-                .map(HostService::toResponse)
+                .toList();
+        Map<UUID, List<String>> tagsByHost = tags.tagsByHost(selected.stream().map(DockerHost::getId).toList());
+        return selected.stream()
+                .map(h -> toResponse(h, tagsByHost.getOrDefault(h.getId(), List.of())))
                 .toList();
     }
 
@@ -92,8 +103,10 @@ public class HostService {
     }
 
     /** Not transactional: the (slow) connection test must not hold a database connection. */
-    @Auditable(action = "HOST_CREATE", targetType = "HOST", targetId = "#result?.id")
+    @Auditable(action = "HOST_CREATE", targetType = "HOST", targetId = "#result?.id",
+            details = "{'tags': #result.tags()}")
     public HostResponse create(CreateHostRequest request, String username) {
+        List<String> requestedTags = HostTagPolicy.normalize(request.tags());
         DockerEndpoint endpoint = toEndpoint(request.connectionType(), request.host(), request.port(),
                 request.tlsCaPem(), request.tlsCertPem(), request.tlsKeyPem());
         if (request.connectionType() == ConnectionType.TCP && !cipher.isConfigured()) {
@@ -119,17 +132,36 @@ public class HostService {
                         cipher.encrypt(request.tlsCaPem()), cipher.encrypt(request.tlsCertPem()),
                         cipher.encrypt(request.tlsKeyPem()), ownerId);
         try {
-            return toResponse(hosts.saveAndFlush(host));
+            // host and tags commit together; a lost race on the name or the LOCAL slot rolls both back
+            return tx.execute(status -> {
+                DockerHost saved = hosts.saveAndFlush(host);
+                tags.replace(saved.getId(), requestedTags);
+                return toResponse(saved, requestedTags);
+            });
         } catch (DataIntegrityViolationException e) {
             // lost a race against another request with the same name or the single LOCAL environment
             throw isLocalIndexViolation(e) ? localExists() : nameTaken();
         }
     }
 
-    @Auditable(action = "HOST_RENAME", targetType = "HOST", targetId = "#id")
+    /** Rename only; the tags stay as they are. */
+    @Auditable(action = "HOST_RENAME", targetType = "HOST", targetId = "#id", details = "{'tags': #result.tags()}")
     @Transactional
     public HostResponse rename(UUID id, String name) {
+        return doRename(id, name, null);
+    }
+
+    /** Renames and, when {@code requestedTags} is not null, replaces the tags. Invalid tags change nothing. */
+    @Auditable(action = "HOST_RENAME", targetType = "HOST", targetId = "#id", details = "{'tags': #result.tags()}")
+    @Transactional
+    public HostResponse rename(UUID id, String name, List<String> requestedTags) {
+        return doRename(id, name, requestedTags);
+    }
+
+    // both overloads are audited and transactional; each is called through the proxy from outside the service
+    private HostResponse doRename(UUID id, String name, List<String> requestedTags) {
         DockerHost host = find(id);
+        List<String> normalizedTags = requestedTags == null ? null : HostTagPolicy.normalize(requestedTags);
         if (!host.getName().equals(name) && hosts.existsByName(name)) {
             throw nameTaken();
         }
@@ -139,8 +171,29 @@ public class HostService {
         } catch (DataIntegrityViolationException e) {
             throw nameTaken();
         }
+        if (normalizedTags != null) {
+            replaceTags(id, normalizedTags);
+        }
         connections.evict(id);
-        return toResponse(host);
+        return toResponse(host, tags.tagsOf(id));
+    }
+
+    /** Replaces the whole tag set of one environment; an empty list removes all tags. */
+    @Auditable(action = "HOST_UPDATE", targetType = "HOST", targetId = "#id", details = "{'tags': #result.tags()}")
+    @Transactional
+    public HostResponse setTags(UUID id, SetHostTagsRequest request) {
+        DockerHost host = find(id);
+        replaceTags(id, HostTagPolicy.normalize(request.tags()));
+        return toResponse(host, tags.tagsOf(id));
+    }
+
+    private void replaceTags(UUID id, List<String> normalizedTags) {
+        try {
+            tags.replace(id, normalizedTags);
+        } catch (DataIntegrityViolationException e) {
+            // another request changed the same tags between the read and the insert
+            throw new HostException(HttpStatus.CONFLICT, "TAGS_CONFLICT", "The tags changed concurrently, retry");
+        }
     }
 
     @Auditable(action = "HOST_DELETE", targetType = "HOST", targetId = "#id")
@@ -222,8 +275,8 @@ public class HostService {
         }
     }
 
-    private static HostResponse toResponse(DockerHost h) {
+    private static HostResponse toResponse(DockerHost h, List<String> tags) {
         return new HostResponse(h.getId(), h.getName(), h.getConnectionType(), h.getHost(), h.getPort(),
-                h.hasTls(), h.getCreatedAt());
+                h.hasTls(), h.getCreatedAt(), tags);
     }
 }

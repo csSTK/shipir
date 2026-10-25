@@ -7,7 +7,12 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-/** Cross-field rules (TCP needs host, port and all three PEMs; LOCAL takes none) are checked by the service. */
+import java.util.List;
+
+/**
+ * Cross-field rules (TCP needs host, port and all three PEMs; LOCAL takes none) are checked by the service.
+ * {@code tags} is optional; the service validates it.
+ */
 public record CreateHostRequest(
         @NotBlank @Size(max = 100) String name,
         @NotNull ConnectionType connectionType,
@@ -15,7 +20,14 @@ public record CreateHostRequest(
         @Min(1) @Max(65535) Integer port,
         @Size(max = HostLimits.MAX_PEM_CHARS) String tlsCaPem,
         @Size(max = HostLimits.MAX_PEM_CHARS) String tlsCertPem,
-        @Size(max = HostLimits.MAX_PEM_CHARS) String tlsKeyPem) {
+        @Size(max = HostLimits.MAX_PEM_CHARS) String tlsKeyPem,
+        List<String> tags) {
+
+    /** Without tags (callers that predate tags). */
+    public CreateHostRequest(String name, ConnectionType connectionType, String host, Integer port,
+                             String tlsCaPem, String tlsCertPem, String tlsKeyPem) {
+        this(name, connectionType, host, port, tlsCaPem, tlsCertPem, tlsKeyPem, null);
+    }
 
     /** Never print the PEMs. */
     @Override
