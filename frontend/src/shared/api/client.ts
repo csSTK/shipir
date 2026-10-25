@@ -10,6 +10,8 @@ export class ApiError extends Error {
   readonly violations?: string[]
   /** Human-readable detail lines from the response body (e.g. `port: must be ...`), if any. */
   readonly details?: string[]
+  /** Seconds from a numeric `Retry-After` response header (set on 429 throttling), if any. */
+  readonly retryAfterSeconds?: number
 
   constructor(
     status: number,
@@ -17,6 +19,7 @@ export class ApiError extends Error {
     code?: string,
     violations?: string[],
     details?: string[],
+    retryAfterSeconds?: number,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -24,6 +27,7 @@ export class ApiError extends Error {
     this.code = code
     this.violations = violations
     this.details = details
+    this.retryAfterSeconds = retryAfterSeconds
   }
 }
 
@@ -43,6 +47,12 @@ function stringArray(value: unknown): string[] | undefined {
   return Array.isArray(value) && value.every((v): v is string => typeof v === 'string')
     ? value
     : undefined
+}
+
+/** Only a plain number of seconds counts; an HTTP date or junk is ignored. */
+function retryAfterSeconds(response: Response): number | undefined {
+  const value = response.headers.get('Retry-After')
+  return value !== null && /^\d+$/.test(value.trim()) ? Number(value) : undefined
 }
 
 function parseErrorBody(text: string): {
@@ -81,7 +91,14 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   if (!response.ok) {
     const text = await response.text()
     const { code, violations, details } = parseErrorBody(text)
-    throw new ApiError(response.status, text || response.statusText, code, violations, details)
+    throw new ApiError(
+      response.status,
+      text || response.statusText,
+      code,
+      violations,
+      details,
+      retryAfterSeconds(response),
+    )
   }
   if (response.status === 204) {
     return undefined as T

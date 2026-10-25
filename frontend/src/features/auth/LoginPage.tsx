@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Button, Card, Skeleton } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { isMfaRequired, useLogin, useOidcConfig, useVerifyTwoFactor } from './api.ts'
+import { throttleMessage } from './throttleErrors.ts'
 import { twoFactorErrorMessage } from './twoFactorErrors.ts'
 import { AuthBrand } from './AuthBrand.tsx'
 import { PasswordResetPage } from './PasswordResetPage.tsx'
@@ -121,11 +122,11 @@ function SignInForm({
 
   const errorMessage = !login.isError
     ? problem
-    : login.error instanceof ApiError && login.error.status === 401
+    : throttleMessage(login.error) ?? (login.error instanceof ApiError && login.error.status === 401
       ? 'Invalid username or password.'
       : login.error instanceof ApiError && login.error.code === 'LOCAL_LOGIN_DISABLED'
         ? 'Local login is disabled. Use single sign-on.'
-      : 'Sign-in failed. Please try again.'
+      : 'Sign-in failed. Please try again.')
 
   return (
     <main className="login">

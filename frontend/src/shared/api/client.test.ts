@@ -91,3 +91,31 @@ describe('apiFetch error details', () => {
     })
   })
 })
+
+describe('apiFetch Retry-After', () => {
+  it('exposes a numeric Retry-After header as retryAfterSeconds on 429', async () => {
+    const response = new Response('{"code":"TOO_MANY_ATTEMPTS"}', { status: 429, headers: { 'Retry-After': '42' } })
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(response)))
+
+    await expect(apiFetch('/auth/login', { method: 'POST', body: {} })).rejects.toMatchObject({
+      status: 429,
+      code: 'TOO_MANY_ATTEMPTS',
+      retryAfterSeconds: 42,
+    })
+  })
+
+  it('ignores a Retry-After header that is not a number of seconds', async () => {
+    const response = new Response('{}', { status: 429, headers: { 'Retry-After': 'Wed, 21 Oct 2026 07:28:00 GMT' } })
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(response)))
+
+    await expect(apiFetch('/auth/login', { method: 'POST', body: {} })).rejects.toMatchObject({
+      retryAfterSeconds: undefined,
+    })
+  })
+
+  it('leaves retryAfterSeconds undefined without the header', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response('{}', { status: 500 }))))
+
+    await expect(apiFetch('/x')).rejects.toMatchObject({ retryAfterSeconds: undefined })
+  })
+})

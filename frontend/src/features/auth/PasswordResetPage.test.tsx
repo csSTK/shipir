@@ -126,3 +126,22 @@ describe('password reset', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/password was reset/i)
   })
 })
+
+describe('password reset throttling', () => {
+  it('shows the wait from Retry-After when a code request is throttled', async () => {
+    renderLogin()
+    fireEvent.click(await screen.findByRole('button', { name: /forgot password/i }))
+    type('Username', 'admin')
+    apiFetchMock.mockRejectedValueOnce(new ApiError(429, 'x', 'TOO_MANY_ATTEMPTS', undefined, undefined, 42))
+    fireEvent.click(screen.getByRole('button', { name: /request code/i }))
+    expect(await screen.findByText('Too many attempts, try again in 42 seconds.')).toBeInTheDocument()
+  })
+
+  it('shows the wait from Retry-After when the code confirmation is throttled', async () => {
+    await openStepTwo()
+    fillStepTwo()
+    apiFetchMock.mockRejectedValueOnce(new ApiError(429, 'x', 'TOO_MANY_ATTEMPTS', undefined, undefined, 60))
+    fireEvent.click(confirm())
+    expect(await screen.findByText('Too many attempts, try again in 60 seconds.')).toBeInTheDocument()
+  })
+})

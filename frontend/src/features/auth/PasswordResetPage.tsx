@@ -4,6 +4,7 @@ import { ApiError } from '../../shared/api/client.ts'
 import { AuthBrand } from './AuthBrand.tsx'
 import { useConfirmPasswordReset, useRequestPasswordReset } from './api.ts'
 import { checkPassword, isPasswordValid, violationMessage } from './passwordPolicy.ts'
+import { throttleMessage } from './throttleErrors.ts'
 import './LoginPage.css'
 import './PasswordResetPage.css'
 
@@ -16,6 +17,8 @@ interface Props {
 }
 
 function confirmErrors(error: unknown): { invalidCode: boolean; messages: string[] } {
+  const throttled = throttleMessage(error)
+  if (throttled) return { invalidCode: false, messages: [throttled] }
   if (error instanceof ApiError && error.status === 400) {
     if (error.code === 'INVALID_RESET_CODE') {
       return { invalidCode: true, messages: ['The code is invalid or expired.'] }
@@ -86,7 +89,7 @@ function RequestStep({
           />
         </label>
         <p className="login__error" role="alert">
-          {request.isError && 'Could not request a code. Please try again.'}
+          {request.isError && (throttleMessage(request.error) ?? 'Could not request a code. Please try again.')}
         </p>
         <Button className="login__submit" variant="primary" type="submit" disabled={request.isPending || username.trim() === ''} loading={request.isPending}>
           {request.isPending ? 'Requesting…' : 'Request code'}
