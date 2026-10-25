@@ -32,6 +32,7 @@ const NAV: { label: string; to: string; admin?: boolean }[] = [
   { label: 'Notifications', to: '/notifications' },
   { label: 'Account', to: '/account' },
   { label: 'Users', to: '/settings/users', admin: true },
+  { label: 'Teams', to: '/settings/teams', admin: true },
   { label: 'Notification webhooks', to: '/settings/notifications', admin: true },
   { label: 'Retention', to: '/settings/retention', admin: true },
   { label: 'Git credentials', to: '/settings/git', admin: true },

@@ -1,9 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ApiError } from '../../shared/api/client.ts'
+import { useQueries } from '@tanstack/react-query'
+import { ApiError, apiFetch } from '../../shared/api/client.ts'
 import { Button, Dialog, Select } from '../../shared/ui/index.ts'
 import { useHosts, type Host } from '../hosts/api.ts'
 import { useManagedDeployments } from '../deployments/api.ts'
-import { useSaveUserPermissions, useUserPermissions, type ManagedUser, type PermissionGrant, type PermissionGrantInput } from './api.ts'
+import {
+  useSaveSubjectPermissions,
+  useSubjectPermissions,
+  useTeams,
+  TEAMS_KEY,
+  type ManagedUser,
+  type PermissionGrant,
+  type PermissionGrantInput,
+  type PermissionLevel,
+  type TeamDetail,
+  type Team,
+} from './api.ts'
 import './SettingsPage.css'
 import './UserAccessDialog.css'
 
@@ -39,6 +51,8 @@ function errorMessage(error: unknown): string {
     switch (error.code) {
       case 'USER_NOT_FOUND':
         return 'This user no longer exists.'
+      case 'TEAM_NOT_FOUND':
+        return 'This team no longer exists.'
       case 'UNKNOWN_HOST':
         return 'An environment in this list no longer exists. Close and reopen the dialog.'
       case 'UNKNOWN_DEPLOYMENT':
@@ -114,11 +128,83 @@ function HostAccess({
   )
 }
 
-/** ADMIN dialog: per-host and per-managed-deployment access for one user, saved as a full replacement. */
-export function UserAccessDialog({ user, onClose }: { user: ManagedUser; onClose: () => void }) {
+/** Who the access is edited for: one user or one team. */
+export type AccessSubject = { kind: 'user'; user: ManagedUser } | { kind: 'team'; team: Team }
+
+const LEVEL_TEXT: Record<PermissionLevel, string> = { VIEW: 'View', OPERATE: 'Operate' }
+
+function GrantLine({ grant }: { grant: PermissionGrant }) {
+  return grant.deploymentId && grant.deploymentHostId ? (
+    <DeploymentGrantLine deploymentId={grant.deploymentId} hostId={grant.deploymentHostId} level={grant.level} />
+  ) : (
+    <HostGrantLine hostId={grant.hostId ?? ''} level={grant.level} />
+  )
+}
+
+function HostGrantLine({ hostId, level }: { hostId: string; level: PermissionLevel }) {
   const hosts = useHosts()
-  const perms = useUserPermissions(user.id)
-  const save = useSaveUserPermissions()
+  return <li>{`${hosts.data?.find((h) => h.id === hostId)?.name ?? 'Environment'}: ${LEVEL_TEXT[level]}`}</li>
+}
+
+function DeploymentGrantLine({ deploymentId, hostId, level }: { deploymentId: string; hostId: string; level: PermissionLevel }) {
+  const deployments = useManagedDeployments(hostId)
+  const name = deployments.data?.find((d) => d.id === deploymentId)?.name ?? 'Deployment'
+  return <li>{`${name} (deployment): ${LEVEL_TEXT[level]}`}</li>
+}
+
+function TeamGrants({ team }: { team: Team }) {
+  const perms = useSubjectPermissions('team', team.id)
+  return (
+    <li>
+      <strong>{team.name}</strong>
+      {perms.isError && <span className="settings__muted"> Could not load the team's access.</span>}
+      {perms.data && perms.data.grants.length === 0 && <span className="settings__muted"> No access granted yet.</span>}
+      {perms.data && perms.data.grants.length > 0 && (
+        <ul>
+          {perms.data.grants.map((g) => (
+            <GrantLine key={g.deploymentId ?? g.hostId} grant={g} />
+          ))}
+        </ul>
+      )}
+    </li>
+  )
+}
+
+/** Teams the user belongs to with their grants. These add to the direct ones; the effective result is the highest level. */
+function InheritedTeams({ user }: { user: ManagedUser }) {
+  const teams = useTeams()
+  const details = useQueries({
+    queries: (teams.data ?? []).map((t) => ({
+      queryKey: [...TEAMS_KEY, t.id],
+      queryFn: () => apiFetch<TeamDetail>(`/teams/${t.id}`),
+      gcTime: 0,
+    })),
+  })
+  const memberOf = (teams.data ?? []).filter((_, i) => details[i]?.data?.members.some((m) => m.userId === user.id))
+  if (memberOf.length === 0) return null
+  return (
+    <div className="ua-inherited" role="group" aria-label="Inherited team access">
+      <p className="settings__muted">
+        Also inherits access from these teams (managed under Teams).
+        {user.role === 'VIEWER' && ' Team grants never allow Operate for a viewer; it is capped to View.'}
+      </p>
+      <ul>
+        {memberOf.map((t) => (
+          <TeamGrants key={t.id} team={t} />
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+/** ADMIN dialog: per-host and per-managed-deployment access for one user or team, saved as a full replacement. */
+export function UserAccessDialog({ subject, onClose }: { subject: AccessSubject; onClose: () => void }) {
+  const kind = subject.kind
+  const target = subject.kind === 'user' ? subject.user : subject.team
+  const name = subject.kind === 'user' ? subject.user.username : subject.team.name
+  const hosts = useHosts()
+  const perms = useSubjectPermissions(kind, target.id)
+  const save = useSaveSubjectPermissions()
   const [edited, setEdited] = useState<Levels | null>(null)
   const [deploymentHosts, setDeploymentHosts] = useState<Record<string, string>>({})
   const [problem, setProblem] = useState<string | null>(null)
@@ -140,7 +226,7 @@ export function UserAccessDialog({ user, onClose }: { user: ManagedUser; onClose
   function submit() {
     setProblem(null)
     save.mutate(
-      { id: user.id, grants: toGrants(levels, deploymentHosts) },
+      { kind, id: target.id, grants: toGrants(levels, deploymentHosts) },
       { onSuccess: onClose, onError: (err) => setProblem(errorMessage(err)) },
     )
   }
@@ -149,7 +235,7 @@ export function UserAccessDialog({ user, onClose }: { user: ManagedUser; onClose
     <Dialog
       open
       onOpenChange={(open) => !open && onClose()}
-      title={`Access for ${user.username}`}
+      title={`Access for ${name}`}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -162,9 +248,11 @@ export function UserAccessDialog({ user, onClose }: { user: ManagedUser; onClose
       }
     >
       <p className="settings__muted">
-        Choose what {user.username} can see and do per environment. Access to an environment covers all its deployments.
-        {user.role === 'VIEWER' && ' Viewers are limited to view, even if Operate is selected.'}
+        Choose what {name} can see and do per environment. Access to an environment covers all its deployments.
+        {subject.kind === 'user' && subject.user.role === 'VIEWER' && ' Viewers are limited to view, even if Operate is selected.'}
+        {subject.kind === 'team' && ' Members get this access in addition to their own.'}
       </p>
+      {subject.kind === 'user' && <InheritedTeams user={subject.user} />}
       {!ready && !failed && <p className="settings__muted">Loading…</p>}
       {failed && <p role="alert" className="settings__error">Could not load the access settings.</p>}
       {ready && hosts.data.length === 0 && <p className="settings__muted">There are no environments yet.</p>}

@@ -17,6 +17,7 @@ import {
   Server,
   Sparkles,
   Users,
+  UsersRound,
   Webhook,
   type LucideIcon,
 } from 'lucide-react'
@@ -115,6 +116,9 @@ export function Sidebar({ role, onNavigate, drawer = false }: Props) {
           </span>
           <Item to="/settings/users" icon={Users} onNavigate={onNavigate}>
             Users
+          </Item>
+          <Item to="/settings/teams" icon={UsersRound} onNavigate={onNavigate}>
+            Teams
           </Item>
           <Item to="/settings/notifications" icon={Webhook} onNavigate={onNavigate}>
             Notifications

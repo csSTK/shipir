@@ -1,7 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes, useMatch, useParams } from 'react-router-dom'
 import { EnvironmentDashboard, EnvironmentsOverview } from '../features/hosts/index.ts'
 import { AccountPage } from '../features/account/index.ts'
-import { AiSettingsPage, AuditLogPage, BackupSettingsPage, GitCredentialsSettingsPage, OidcSettingsPage, RegistriesSettingsPage, RetentionSettingsPage, SharedChatSessionsPage, UsersSettingsPage, WebhooksSettingsPage } from '../features/settings/index.ts'
+import { AiSettingsPage, AuditLogPage, BackupSettingsPage, GitCredentialsSettingsPage, OidcSettingsPage, RegistriesSettingsPage, RetentionSettingsPage, SharedChatSessionsPage, TeamsSettingsPage, UsersSettingsPage, WebhooksSettingsPage } from '../features/settings/index.ts'
 import { ChatPage } from '../features/ai-chat/index.ts'
 import { ContainersPage, ContainerLogsPage, ContainerConsolePage, ContainerDetailsPage } from '../features/containers/index.ts'
 import { ImagesPage } from '../features/images/index.ts'
@@ -66,6 +66,7 @@ function AuthGate() {
         <Route path="/settings/notifications" element={isAdmin ? <WebhooksSettingsPage /> : <NotAllowedPage />} />
         <Route path="/settings/retention" element={isAdmin ? <RetentionSettingsPage /> : <NotAllowedPage />} />
         <Route path="/settings/users" element={isAdmin ? <UsersSettingsPage currentUsername={user.username} /> : <NotAllowedPage />} />
+        <Route path="/settings/teams" element={isAdmin ? <TeamsSettingsPage /> : <NotAllowedPage />} />
         <Route path="/settings/git" element={isAdmin ? <GitCredentialsSettingsPage /> : <NotAllowedPage />} />
         <Route path="/settings/registries" element={isAdmin ? <RegistriesSettingsPage /> : <NotAllowedPage />} />
         <Route path="/settings/oidc" element={isAdmin ? <OidcSettingsPage /> : <NotAllowedPage />} />

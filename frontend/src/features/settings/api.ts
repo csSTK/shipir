@@ -430,23 +430,90 @@ export interface PermissionGrantInput {
   level: PermissionLevel
 }
 
-const permissionsPath = (userId: string) => `/users/${userId}/permissions`
+export type AccessSubjectKind = 'user' | 'team'
 
-export function useUserPermissions(userId: string) {
+const permissionsPath = (kind: AccessSubjectKind, id: string) => `/${kind}s/${id}/permissions`
+const permissionsKey = (kind: AccessSubjectKind, id: string) => [kind === 'user' ? 'users' : 'teams', id, 'permissions'] as const
+
+/** Direct grants of a user or a team (same response shape). */
+export function useSubjectPermissions(kind: AccessSubjectKind, id: string) {
   return useQuery({
-    queryKey: [...USERS_KEY, userId, 'permissions'],
-    queryFn: () => apiFetch<{ grants: PermissionGrant[] }>(permissionsPath(userId)),
+    queryKey: permissionsKey(kind, id),
+    queryFn: () => apiFetch<{ grants: PermissionGrant[] }>(permissionsPath(kind, id)),
     gcTime: 0,
   })
 }
 
-/** Replaces the user's full grant set; an empty list revokes everything. */
-export function useSaveUserPermissions() {
+/** Replaces the subject's full grant set; an empty list revokes everything. */
+export function useSaveSubjectPermissions() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, grants }: { id: string; grants: PermissionGrantInput[] }) =>
-      apiFetch<{ grants: PermissionGrant[] }>(permissionsPath(id), { method: 'PUT', body: { grants } }),
-    onSuccess: (_data, { id }) => qc.invalidateQueries({ queryKey: [...USERS_KEY, id, 'permissions'] }),
+    mutationFn: ({ kind, id, grants }: { kind: AccessSubjectKind; id: string; grants: PermissionGrantInput[] }) =>
+      apiFetch<{ grants: PermissionGrant[] }>(permissionsPath(kind, id), { method: 'PUT', body: { grants } }),
+    onSuccess: (_data, { kind, id }) => qc.invalidateQueries({ queryKey: permissionsKey(kind, id) }),
+  })
+}
+
+export interface Team {
+  id: string
+  name: string
+  memberCount: number
+  createdAt: string
+}
+
+export interface TeamMember {
+  userId: string
+  username: string
+}
+
+export interface TeamDetail {
+  id: string
+  name: string
+  members: TeamMember[]
+  createdAt: string
+}
+
+export const TEAMS_KEY = ['teams'] as const
+
+export function useTeams() {
+  return useQuery({ queryKey: TEAMS_KEY, queryFn: () => apiFetch<Team[]>('/teams') })
+}
+
+export function useTeam(id: string) {
+  return useQuery({ queryKey: [...TEAMS_KEY, id], queryFn: () => apiFetch<TeamDetail>(`/teams/${id}`), gcTime: 0 })
+}
+
+export function useCreateTeam() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (name: string) => apiFetch<Team>('/teams', { method: 'POST', body: { name } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: TEAMS_KEY }),
+  })
+}
+
+export function useRenameTeam() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => apiFetch<Team>(`/teams/${id}`, { method: 'PUT', body: { name } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: TEAMS_KEY }),
+  })
+}
+
+export function useDeleteTeam() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<void>(`/teams/${id}`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: TEAMS_KEY }),
+  })
+}
+
+/** Replaces all members of a team. */
+export function useSaveTeamMembers() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, userIds }: { id: string; userIds: string[] }) =>
+      apiFetch<TeamDetail>(`/teams/${id}/members`, { method: 'PUT', body: { userIds } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: TEAMS_KEY }),
   })
 }
 

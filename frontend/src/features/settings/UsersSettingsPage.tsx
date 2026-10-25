@@ -332,7 +332,7 @@ export function UsersSettingsPage({ currentUsername }: { currentUsername: string
         rowLabel={(u) => u.username}
       />
       {dialog?.kind === 'create' && <CreateDialog onClose={close} onCreated={(result) => open({ kind: 'password', result })} />}
-      {dialog?.kind === 'access' && <UserAccessDialog user={dialog.user} onClose={close} />}
+      {dialog?.kind === 'access' && <UserAccessDialog subject={{ kind: 'user', user: dialog.user }} onClose={close} />}
       {dialog?.kind === 'password' && <PasswordDialog result={dialog.result} onClose={close} />}
       {dialog?.kind === 'reset' && (
         <ConfirmDialog
