@@ -52,6 +52,11 @@ export function describeDeploymentError(error: unknown, fallback: string): strin
         return 'This project no longer exists on the environment.'
       case 'PATH_NOT_ALLOWED':
         return 'The compose file of this project is in a directory Shipir may not read. Paste the YAML instead.'
+      case 'RELATIVE_PATHS_NOT_SUPPORTED':
+        return [
+          'This project uses paths relative to its original directory, which Shipir cannot keep. Make them absolute and adopt again:',
+          ...(error.details ?? []),
+        ].join(' ')
       case 'HOST_NOT_FOUND':
         return 'This environment no longer exists.'
       default:

@@ -42,6 +42,9 @@ export function AdoptDeploymentDialog({ hostId, project, onClose }: { hostId: st
           } else if (code === 'PATH_NOT_ALLOWED') {
             setManual(true)
             setProblem(describeDeploymentError(err, 'Shipir may not read the Compose file of this project. Paste it below.'))
+          } else if (code === 'RELATIVE_PATHS_NOT_SUPPORTED') {
+            setManual(true)
+            setProblem(describeDeploymentError(err, 'The Compose file uses relative paths. Use absolute paths.'))
           } else if (code === 'INVALID_COMPOSE') {
             const details = (err as ApiError).details
             setManual(true)
@@ -63,8 +66,8 @@ export function AdoptDeploymentDialog({ hostId, project, onClose }: { hostId: st
           {manual ? ' as pasted below' : ' as found on the environment'}. Running containers are not restarted.
         </p>
         <p className="ui-hint">
-          Relative bind mounts and <code>env_file</code> entries in a pasted Compose file resolve against Shipir&apos;s own stack directory
-          on the next deploy, not the original project directory.
+          Projects whose Compose file uses relative bind mounts, <code>env_file</code> entries or build contexts cannot be adopted,
+          because they would resolve against Shipir&apos;s own stack directory instead of the original one. Use absolute paths.
         </p>
         {manual && (
           <div className="ui-form">

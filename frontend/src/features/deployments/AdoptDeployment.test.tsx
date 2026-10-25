@@ -111,6 +111,17 @@ describe('Adopt deployment', () => {
     expect(await within(dialog).findByRole('textbox', { name: 'Compose file' })).toBeInTheDocument()
   })
 
+  it('names the relative paths when adoption is refused and offers the paste editor', async () => {
+    serve('OPERATOR', () =>
+      Promise.reject(new ApiError(422, 'refused', 'RELATIVE_PATHS_NOT_SUPPORTED', undefined, ['web bind mount: ./html', 'web env_file: .env'])),
+    )
+    const dialog = await open()
+    const alert = await within(dialog).findByRole('alert')
+    expect(alert).toHaveTextContent('web bind mount: ./html')
+    expect(alert).toHaveTextContent('web env_file: .env')
+    expect(await within(dialog).findByRole('textbox', { name: 'Compose file' })).toBeInTheDocument()
+  })
+
   it('shows the editor and message when the detected file is invalid', async () => {
     serve('OPERATOR', () => Promise.reject(new ApiError(400, 'bad', 'INVALID_COMPOSE', undefined, ['services.web: bad'])))
     const dialog = await open()

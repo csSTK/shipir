@@ -30,6 +30,7 @@ import java.util.UUID;
  * stay untouched and the next deploy reconciles them. The compose file is either pasted by the caller or, on a LOCAL host
  * only, read from the path in the containers' {@code config_files} label, and only when that path lies inside one of
  * {@code shipir.compose.adopt-allowed-dirs} (default none). Every read goes through {@link PathValidationUtil}.
+ * A file with relative bind mounts, env_file or build contexts is refused (422), see {@link RelativePathDetector}.
  */
 @Service
 public class AdoptionService {
@@ -88,7 +89,19 @@ public class AdoptionService {
                 env = source.env();
             }
         }
+        rejectRelativePaths(yaml);
         return deployments.createFile(hostId, host, name, yaml, env, username, VersionSource.ADOPTED);
+    }
+
+    /** The stored file lives in Shipir's stacks dir, so paths relative to the original working_dir would resolve elsewhere. */
+    private static void rejectRelativePaths(String yaml) {
+        List<String> relative = RelativePathDetector.find(yaml);
+        if (!relative.isEmpty()) {
+            throw new DeploymentException(HttpStatus.UNPROCESSABLE_ENTITY, "RELATIVE_PATHS_NOT_SUPPORTED",
+                    "This project uses paths relative to its original directory (bind mounts, env_file or build contexts), "
+                            + "which would resolve elsewhere once Shipir manages it. Change them to absolute paths and adopt again",
+                    relative);
+        }
     }
 
     private record Source(String yaml, List<EnvEntry> env) { }

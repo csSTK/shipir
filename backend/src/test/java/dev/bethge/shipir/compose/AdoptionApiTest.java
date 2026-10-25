@@ -210,6 +210,47 @@ class AdoptionApiTest extends DeploymentTestBase {
     }
 
     @Test
+    void relativePathsInPastedYamlAreRefusedBeforeAnythingIsWritten() throws Exception {
+        project("legacy", null, null);
+        String yaml = "services:\\n  web:\\n    image: nginx\\n    volumes:\\n      - ./html:/usr/share/nginx/html\\n"
+                + "    env_file: .env\\n";
+
+        mvc.perform(login("admin").write(post(url("legacy")).contentType("application/json")
+                        .content("{\"yaml\":\"" + yaml + "\"}")))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("RELATIVE_PATHS_NOT_SUPPORTED"))
+                .andExpect(jsonPath("$.details[0]").value("web bind mount: ./html"))
+                .andExpect(jsonPath("$.details[1]").value("web env_file: .env"));
+        assertNothingAdopted(0);
+        assertThat(audit()).containsExactly("DEPLOYMENT_ADOPT:FAILURE");
+        assertThat(commands).isEmpty();
+    }
+
+    @Test
+    void relativePathsInTheHostFileAreRefused() throws Exception {
+        Path dir = Files.createDirectory(ALLOWED.resolve("rel1"));
+        Files.writeString(dir.resolve("compose.yaml"), "services:\n  web:\n    image: x\n    build: ./app\n");
+        project("rel1", dir.resolve("compose.yaml").toString(), dir.toString());
+
+        mvc.perform(login("admin").write(post(url("rel1"))))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("RELATIVE_PATHS_NOT_SUPPORTED"))
+                .andExpect(jsonPath("$.details[0]").value("web build context: ./app"));
+        assertNothingAdopted(0);
+    }
+
+    @Test
+    void absolutePathsAndNamedVolumesStayAdoptable() throws Exception {
+        project("abs", null, null);
+        String yaml = "services:\\n  web:\\n    image: nginx\\n    volumes:\\n      - /srv/html:/html\\n      - data:/d\\n"
+                + "volumes:\\n  data: {}\\n";
+
+        mvc.perform(login("admin").write(post(url("abs")).contentType("application/json")
+                        .content("{\"yaml\":\"" + yaml + "\"}")))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
     void operatorWithoutHostGrantGets404() throws Exception {
         jdbc.update("DELETE FROM permissions");
         project("legacy", null, null);
