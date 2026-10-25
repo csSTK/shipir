@@ -275,9 +275,13 @@ class WriteToolsTest {
 
     @Test
     void createDeploymentFromGitWithUnknownCredentialIsAnErrorResult() {
+        UUID unknown = UUID.randomUUID();
+        org.mockito.Mockito.doThrow(new dev.bethge.shipir.git.GitOperationException(
+                org.springframework.http.HttpStatus.NOT_FOUND, "CREDENTIAL_NOT_FOUND", "Git credential not found"))
+                .when(git).requireCredentialForUrl(org.mockito.ArgumentMatchers.eq(unknown), any());
         String args = mapper.writeValueAsString(Map.of("hostId", hostId.toString(), "name", "app", "source", "GIT",
                 "repoUrl", "https://example.com/r.git", "ref", "main", "composePath", "compose.yaml",
-                "credentialId", UUID.randomUUID().toString()));
+                "credentialId", unknown.toString()));
         ToolResult result = confirmed("create_deployment", args, Role.OPERATOR);
         assertThat(result.error()).isTrue();
         assertThat(result.content()).contains("CREDENTIAL_NOT_FOUND");

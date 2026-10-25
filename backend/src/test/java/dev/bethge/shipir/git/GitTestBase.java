@@ -80,10 +80,18 @@ abstract class GitTestBase {
         return new Login((MockHttpSession) r.getRequest().getSession(false), anon);
     }
 
+    /** Credentials are bound to a host; the stubs of these tests listen on 127.0.0.1. */
+    static final String STUB_HOST = "127.0.0.1";
+
     static String json(String name, String username, String token) {
+        return json(name, STUB_HOST, username, token);
+    }
+
+    static String json(String name, String host, String username, String token) {
         return token == null
-                ? "{\"name\":\"%s\",\"username\":\"%s\"}".formatted(name, username)
-                : "{\"name\":\"%s\",\"username\":\"%s\",\"token\":\"%s\"}".formatted(name, username, token);
+                ? "{\"name\":\"%s\",\"host\":\"%s\",\"username\":\"%s\"}".formatted(name, host, username)
+                : "{\"name\":\"%s\",\"host\":\"%s\",\"username\":\"%s\",\"token\":\"%s\"}"
+                        .formatted(name, host, username, token);
     }
 
     String create(Login l, String name) throws Exception {

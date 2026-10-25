@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V30 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V31 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To30Successfully() {
+    void flywayAppliedVersions1To31Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31");
     }
 
     @Test
@@ -1226,7 +1226,7 @@ class SchemaMigrationTest {
                 WHERE table_schema = 'public' AND table_name = 'git_credentials'
                 """);
         assertThat(cols).extracting(c -> c.get("column_name")).containsExactlyInAnyOrder(
-                "id", "name", "username", "token_ciphertext", "token_hint", "created_by", "created_at", "updated_at");
+                "id", "name", "host", "username", "token_ciphertext", "token_hint", "created_by", "created_at", "updated_at");
         assertThat(cols).filteredOn(c -> "token_ciphertext".equals(c.get("column_name")))
                 .singleElement().satisfies(c -> {
                     assertThat(c.get("data_type")).isEqualTo("bytea");
@@ -1891,6 +1891,42 @@ class SchemaMigrationTest {
                 INSERT INTO registry_credentials (name, registry_host, username, secret_ciphertext, secret_hint, created_by)
                 VALUES (?, ?, 'octocat', ?, '...abcd', ?)
                 """, name, registryHost, new byte[] {1, 2, 3}, creator);
+    }
+
+    @Test
+    void gitCredentialHostIsAnOptionalColumn() {
+        UUID admin = insertUser("gh-admin");
+        UUID bound = insertCredential("bound", admin);
+        jdbc.update("UPDATE git_credentials SET host = 'github.com' WHERE id = ?", bound);
+        UUID legacy = insertCredential("legacy", admin);
+        assertThat(jdbc.queryForObject("SELECT host FROM git_credentials WHERE id = ?", String.class, bound))
+                .isEqualTo("github.com");
+        assertThat(jdbc.queryForObject("SELECT host FROM git_credentials WHERE id = ?", String.class, legacy)).isNull();
+    }
+
+    @Test
+    void gitCredentialHostBackfillOnlyBindsWhenAllDeploymentsShareOneHost() throws Exception {
+        UUID admin = insertUser("bf-admin");
+        UUID host = insertHost(admin);
+        UUID single = insertCredential("single", admin);
+        UUID multi = insertCredential("multi", admin);
+        insertCredential("unused", admin);
+        insertGitDeployment(host, admin, "s1", single, null);
+        insertGitDeployment(host, admin, "s2", single, null);
+        insertGitDeployment(host, admin, "m1", multi, null);
+        UUID m2 = insertGitDeployment(host, admin, "m2", multi, null);
+        jdbc.update("UPDATE deployments SET git_repo_url = 'https://EVIL.example./x.git' WHERE id = ?", m2);
+        jdbc.update("UPDATE git_credentials SET host = NULL");
+
+        String sql = new String(new org.springframework.core.io.ClassPathResource(
+                "db/migration/V31__add_git_credential_host.sql").getInputStream().readAllBytes(),
+                java.nio.charset.StandardCharsets.UTF_8);
+        jdbc.execute(sql.substring(sql.indexOf("UPDATE git_credentials")));
+
+        assertThat(jdbc.queryForObject("SELECT host FROM git_credentials WHERE name = 'single'", String.class))
+                .isEqualTo("example.com");
+        assertThat(jdbc.queryForObject("SELECT host FROM git_credentials WHERE name = 'multi'", String.class)).isNull();
+        assertThat(jdbc.queryForObject("SELECT host FROM git_credentials WHERE name = 'unused'", String.class)).isNull();
     }
 
     private UUID insertCredential(String name, UUID creator) {

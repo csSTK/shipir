@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URI;
 import java.time.Clock;
 import java.util.Comparator;
 import java.util.List;
@@ -52,8 +53,9 @@ public class GitCredentialService {
         if (credentials.existsByName(request.name())) {
             throw nameTaken();
         }
+        String host = GitHostBinding.normalize(request.host());
         UUID ownerId = users.findByUsername(username).orElseThrow().getId();
-        GitCredential c = new GitCredential(request.name(), request.username(), cipher.encrypt(request.token()),
+        GitCredential c = new GitCredential(request.name(), host, request.username(), cipher.encrypt(request.token()),
                 hint(request.token()), ownerId, clock.instant());
         try {
             return toResponse(credentials.saveAndFlush(c));
@@ -66,6 +68,7 @@ public class GitCredentialService {
     @Transactional
     GitCredentialResponse update(UUID id, GitCredentialRequest request) {
         GitCredential c = find(id);
+        String host = GitHostBinding.normalize(request.host());
         if (!c.getName().equals(request.name()) && credentials.existsByName(request.name())) {
             throw nameTaken();
         }
@@ -73,7 +76,7 @@ public class GitCredentialService {
             requireKey();
             c.replaceToken(cipher.encrypt(request.token()), hint(request.token()));
         }
-        c.update(request.name(), request.username(), clock.instant());
+        c.update(request.name(), host, request.username(), clock.instant());
         try {
             credentials.flush();
         } catch (DataIntegrityViolationException e) {
@@ -104,9 +107,12 @@ public class GitCredentialService {
     GitConnectionTestResponse test(UUID id, GitConnectionTestRequest request) {
         checker.validateUrl(request.repoUrl());
         GitCredential c = credentials.findById(id).orElseThrow(GitCredentialService::notFound);
+        if (!GitHostBinding.matches(c.getHost(), URI.create(request.repoUrl().trim()))) {
+            throw new GitException(HttpStatus.BAD_REQUEST, "CREDENTIAL_HOST_MISMATCH", GitRepositoryService.MISMATCH_MESSAGE);
+        }
         requireKey();
         String token = cipher.decrypt(c.getTokenCiphertext());
-        return new GitConnectionTestResponse(checker.check(request.repoUrl(), c.getUsername(), token));
+        return new GitConnectionTestResponse(checker.check(request.repoUrl(), c.getHost(), c.getUsername(), token));
     }
 
     private GitCredential find(UUID id) {
@@ -136,7 +142,7 @@ public class GitCredentialService {
     }
 
     private static GitCredentialResponse toResponse(GitCredential c) {
-        return new GitCredentialResponse(c.getId(), c.getName(), c.getUsername(), c.getTokenHint(),
+        return new GitCredentialResponse(c.getId(), c.getName(), c.getHost(), c.getUsername(), c.getTokenHint(),
                 c.getCreatedAt(), c.getUpdatedAt());
     }
 }

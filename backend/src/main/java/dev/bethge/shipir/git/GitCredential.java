@@ -10,7 +10,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Username and personal access token for a private repository. The token exists only as ciphertext. */
+/** Username and personal access token for a private repository. The token exists only as ciphertext. It is bound to one host (see {@link GitHostBinding}). */
 @Entity
 @Table(name = "git_credentials")
 public class GitCredential {
@@ -24,6 +24,10 @@ public class GitCredential {
 
     @Column(nullable = false, length = 255)
     private String username;
+
+    /** Host (optionally host:port) the token may be sent to; null = unbound, refused everywhere. */
+    @Column(length = 255)
+    private String host;
 
     @Column(name = "token_ciphertext", nullable = false)
     private byte[] tokenCiphertext;
@@ -43,9 +47,10 @@ public class GitCredential {
     protected GitCredential() {
     }
 
-    GitCredential(String name, String username, byte[] tokenCiphertext, String tokenHint, UUID createdBy,
+    GitCredential(String name, String host, String username, byte[] tokenCiphertext, String tokenHint, UUID createdBy,
                   Instant now) {
         this.name = name;
+        this.host = host;
         this.username = username;
         this.tokenCiphertext = tokenCiphertext;
         this.tokenHint = tokenHint;
@@ -54,8 +59,9 @@ public class GitCredential {
         this.updatedAt = now;
     }
 
-    void update(String name, String username, Instant now) {
+    void update(String name, String host, String username, Instant now) {
         this.name = name;
+        this.host = host;
         this.username = username;
         this.updatedAt = now;
     }
@@ -67,6 +73,7 @@ public class GitCredential {
 
     public UUID getId() { return id; }
     public String getName() { return name; }
+    public String getHost() { return host; }
     public String getUsername() { return username; }
     public String getTokenHint() { return tokenHint; }
     public Instant getCreatedAt() { return createdAt; }

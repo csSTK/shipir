@@ -193,9 +193,8 @@ public class DeploymentService {
         requireText(r.ref(), "ref");
         requireText(r.composePath(), "composePath");
         git.validateUrl(r.repoUrl());
-        if (r.credentialId() != null && !git.credentialExists(r.credentialId())) {
-            throw new DeploymentException(HttpStatus.NOT_FOUND, "CREDENTIAL_NOT_FOUND", "Git credential not found");
-        }
+        // before the row exists: a credential for another host is a 400, the token is never read for it
+        git.requireCredentialForUrl(r.credentialId(), r.repoUrl());
         String envText = renderEnv(r.env());
         UUID userId = users.findByUsername(username).orElseThrow().getId();
         DockerEndpoint endpoint = endpointOf(host);

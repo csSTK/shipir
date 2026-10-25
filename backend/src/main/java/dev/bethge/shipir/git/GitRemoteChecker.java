@@ -7,7 +7,6 @@ import org.eclipse.jgit.api.LsRemoteCommand;
 import org.eclipse.jgit.api.errors.TransportException;
 import org.eclipse.jgit.errors.NoRemoteRepositoryException;
 import org.eclipse.jgit.transport.TransportHttp;
-import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
@@ -60,12 +59,12 @@ class GitRemoteChecker {
         });
     }
 
-    String check(String repoUrl, String username, String token) {
+    String check(String repoUrl, String boundHost, String username, String token) {
         LsRemoteCommand cmd = Git.lsRemoteRepository()
                 .setRemote(repoUrl.trim())
                 .setHeads(true)
                 .setTimeout((int) Math.max(1, properties.connectTimeout().toSeconds()))
-                .setCredentialsProvider(new UsernamePasswordCredentialsProvider(username, token));
+                .setCredentialsProvider(new HostBoundCredentialsProvider(boundHost, username, token));
         guard(cmd);
         try {
             cmd.call();

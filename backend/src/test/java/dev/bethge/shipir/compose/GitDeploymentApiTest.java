@@ -152,7 +152,7 @@ class GitDeploymentApiTest extends DeploymentTestBase {
     private String credential(String token) throws Exception {
         Login admin = login("admin");
         String body = mvc.perform(admin.write(post("/api/git/credentials")).contentType(APPLICATION_JSON)
-                        .content("{\"name\":\"c-%s\",\"username\":\"octocat\",\"token\":\"%s\"}"
+                        .content("{\"name\":\"c-%s\",\"host\":\"127.0.0.1\",\"username\":\"octocat\",\"token\":\"%s\"}"
                                 .formatted(UUID.randomUUID(), token)))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         return JsonPath.read(body, "$.id");

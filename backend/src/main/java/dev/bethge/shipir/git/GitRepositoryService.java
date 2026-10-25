@@ -18,13 +18,14 @@ import org.eclipse.jgit.lib.RefUpdate;
 import org.eclipse.jgit.transport.CredentialsProvider;
 import org.eclipse.jgit.transport.RefSpec;
 import org.eclipse.jgit.transport.TagOpt;
-import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -45,6 +46,7 @@ public class GitRepositoryService {
     private static final Pattern SHA = Pattern.compile("[0-9a-fA-F]{40}");
     private static final String TARGET_REF = "refs/shipir/target";
     private static final long MAX_COMPOSE_BYTES = 500_000;
+    static final String MISMATCH_MESSAGE = "The credential is bound to a different host than the repository URL";
 
     private final GitCredentialRepository credentials;
     private final SecretCipher cipher;
@@ -68,6 +70,17 @@ public class GitRepositoryService {
         }
     }
 
+    /**
+     * Fails with 400 CREDENTIAL_HOST_MISMATCH unless the credential is bound to the host of {@code repoUrl}, and with 404
+     * if it does not exist. Callers use it to reject early; {@link #sync}, {@link #ensureCommit} and {@link #remoteCommit}
+     * enforce it again right where the token is read, so no path can bypass it. {@code credentialId == null} passes.
+     */
+    public void requireCredentialForUrl(UUID credentialId, String repoUrl) {
+        if (credentialId != null) {
+            credentialFor(credentialId, repoUrl);
+        }
+    }
+
     /** True if a credential with this id exists. */
     public boolean credentialExists(UUID credentialId) {
         return credentials.existsById(credentialId);
@@ -81,7 +94,7 @@ public class GitRepositoryService {
      */
     public GitCheckout sync(Path repoDir, String repoUrl, String ref, String composePath, UUID credentialId) {
         validateUrl(repoUrl);
-        CredentialsProvider provider = provider(credentialId);
+        CredentialsProvider provider = provider(credentialId, repoUrl);
         prepare(repoDir);
         // reject a traversing/absolute path before any network traffic (the final check follows the checkout)
         composeFile(repoDir, composePath, false);
@@ -127,7 +140,7 @@ public class GitRepositoryService {
      */
     public String remoteCommit(String repoUrl, String ref, UUID credentialId) {
         validateUrl(repoUrl);
-        CredentialsProvider provider = provider(credentialId);
+        CredentialsProvider provider = provider(credentialId, repoUrl);
         if (SHA.matcher(ref.trim()).matches()) {
             return ref.trim().toLowerCase();
         }
@@ -218,14 +231,30 @@ public class GitRepositoryService {
                 "The branch, tag or commit was not found in the repository");
     }
 
-    private CredentialsProvider provider(UUID credentialId) {
+    private GitCredential credentialFor(UUID credentialId, String repoUrl) {
+        GitCredential c = credentials.findById(credentialId).orElseThrow(() -> new GitOperationException(
+                HttpStatus.NOT_FOUND, "CREDENTIAL_NOT_FOUND", "Git credential not found"));
+        URI uri;
+        try {
+            uri = new URI(repoUrl.trim());
+        } catch (URISyntaxException e) {
+            uri = null;
+        }
+        if (!GitHostBinding.matches(c.getHost(), uri)) {
+            log.warn("Git credential {} refused for a repository on another host", credentialId);
+            throw new GitOperationException(HttpStatus.BAD_REQUEST, "CREDENTIAL_HOST_MISMATCH", MISMATCH_MESSAGE);
+        }
+        return c;
+    }
+
+    /** The only place a token is decrypted for a repository operation; it checks the host binding first. */
+    private CredentialsProvider provider(UUID credentialId, String repoUrl) {
         if (credentialId == null) {
             return null;
         }
-        GitCredential c = credentials.findById(credentialId).orElseThrow(() -> new GitOperationException(
-                HttpStatus.NOT_FOUND, "CREDENTIAL_NOT_FOUND", "Git credential not found"));
+        GitCredential c = credentialFor(credentialId, repoUrl);
         try {
-            return new UsernamePasswordCredentialsProvider(c.getUsername(), cipher.decrypt(c.getTokenCiphertext()));
+            return new HostBoundCredentialsProvider(c.getHost(), c.getUsername(), cipher.decrypt(c.getTokenCiphertext()));
         } catch (EncryptionKeyMissingException e) {
             throw new GitOperationException(HttpStatus.CONFLICT, "ENCRYPTION_KEY_MISSING",
                     "Git credentials need shipir.encryption-key (SHIPIR_ENCRYPTION_KEY)");

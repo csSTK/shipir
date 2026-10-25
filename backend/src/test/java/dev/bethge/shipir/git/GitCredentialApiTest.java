@@ -159,7 +159,7 @@ class GitCredentialApiTest extends GitTestBase {
 
     @Test
     void requestToStringHidesToken() {
-        assertThat(new dev.bethge.shipir.git.dto.GitCredentialRequest("n", "u", TOKEN).toString())
+        assertThat(new dev.bethge.shipir.git.dto.GitCredentialRequest("n", "github.com", "u", TOKEN).toString())
                 .doesNotContain("SECRETTOKEN");
     }
 

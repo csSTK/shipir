@@ -19,6 +19,7 @@ afterEach(() => {
 const cred: GitCredential = {
   id: 'g1',
   name: 'GitHub work',
+  host: 'github.com',
   username: 'octocat',
   tokenHint: '…a1b2',
   createdAt: '2026-10-23T10:00:00Z',
@@ -43,9 +44,10 @@ function renderPage(handler?: (path: string, method: string, body: unknown) => u
 const calls = (method: string) =>
   apiFetchMock.mock.calls.filter(([, o]) => (o as { method?: string } | undefined)?.method === method)
 
-function fillCreate(name: string, username: string, token: string) {
+function fillCreate(name: string, host: string, username: string, token: string) {
   fireEvent.click(screen.getByRole('button', { name: 'Add credential' }))
   fireEvent.change(screen.getByLabelText('Name'), { target: { value: name } })
+  fireEvent.change(screen.getByLabelText('Host'), { target: { value: host } })
   fireEvent.change(screen.getByLabelText('Username'), { target: { value: username } })
   fireEvent.change(screen.getByLabelText('Access token'), { target: { value: token } })
   fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -67,18 +69,34 @@ describe('GitCredentialsSettingsPage', () => {
   it('creates a credential', async () => {
     renderPage(() => ({ ...cred, id: 'g2' }))
     await screen.findByText('GitHub work')
-    fillCreate('Gitea', 'me', 'secret-token')
+    fillCreate('Gitea', 'gitea.example.org', 'me', 'secret-token')
     await waitFor(() => expect(calls('POST')).toHaveLength(1))
     expect(calls('POST')[0]).toEqual([
       '/git/credentials',
-      { method: 'POST', body: { name: 'Gitea', username: 'me', token: 'secret-token' } },
+      { method: 'POST', body: { name: 'Gitea', host: 'gitea.example.org', username: 'me', token: 'secret-token' } },
     ])
+  })
+
+  it('requires a host on create and explains a rejected host', async () => {
+    renderPage((_p, method) => (method === 'POST' ? new ApiError(400, 'bad', 'INVALID_CREDENTIAL_HOST') : undefined))
+    await screen.findByText('GitHub work')
+    fillCreate('Gitea', '', 'me', 'secret-token')
+    expect(await screen.findByText('Enter the host the token may be sent to, e.g. github.com.')).toBeInTheDocument()
+    expect(calls('POST')).toHaveLength(0)
+    fireEvent.change(screen.getByLabelText('Host'), { target: { value: 'https://x' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText(/only a host name/)).toBeInTheDocument()
+  })
+
+  it('shows the bound host in the list', async () => {
+    renderPage()
+    expect((await screen.findAllByText('github.com')).length).toBeGreaterThan(0)
   })
 
   it('requires a token on create', async () => {
     renderPage()
     await screen.findByText('GitHub work')
-    fillCreate('Gitea', 'me', '')
+    fillCreate('Gitea', 'gitea.example.org', 'me', '')
     expect(await screen.findByText('Enter the access token.')).toBeInTheDocument()
     expect(calls('POST')).toHaveLength(0)
   })
@@ -95,21 +113,21 @@ describe('GitCredentialsSettingsPage', () => {
     await waitFor(() => expect(calls('PUT')).toHaveLength(1))
     const body = (calls('PUT')[0][1] as { body: Record<string, unknown> }).body
     expect(calls('PUT')[0][0]).toBe('/git/credentials/g1')
-    expect(body).toEqual({ name: 'Renamed', username: 'octocat' })
+    expect(body).toEqual({ name: 'Renamed', host: 'github.com', username: 'octocat' })
     expect('token' in body).toBe(false)
   })
 
   it('shows a taken name inline', async () => {
     renderPage((_p, method) => (method === 'POST' ? new ApiError(409, 'taken', 'CREDENTIAL_NAME_TAKEN') : undefined))
     await screen.findByText('GitHub work')
-    fillCreate('GitHub work', 'me', 't')
+    fillCreate('GitHub work', 'github.com', 'me', 't')
     expect(await screen.findByText('This name is already in use.')).toBeInTheDocument()
   })
 
   it('hints at the missing encryption key', async () => {
     renderPage((_p, method) => (method === 'POST' ? new ApiError(409, 'no key', 'ENCRYPTION_KEY_MISSING') : undefined))
     await screen.findByText('GitHub work')
-    fillCreate('X', 'me', 't')
+    fillCreate('X', 'github.com', 'me', 't')
     expect(await screen.findByText(/SHIPIR_ENCRYPTION_KEY/)).toBeInTheDocument()
   })
 

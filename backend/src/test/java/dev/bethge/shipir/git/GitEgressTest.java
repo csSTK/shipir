@@ -67,20 +67,20 @@ class GitEgressTest {
 
     @Test
     void connectionTestNeverContactsLoopbackByDefault() {
-        assertThat(checker(false).check(base + "/x.git", "u", "t")).isEqualTo(GitRemoteChecker.UNREACHABLE);
+        assertThat(checker(false).check(base + "/x.git", "127.0.0.1", "u", "t")).isEqualTo(GitRemoteChecker.UNREACHABLE);
         assertThat(hits).isEmpty();
     }
 
     @Test
     void connectionTestReachesLoopbackWithOptIn() {
         // 404 from the stub: reachable, so the outcome is NOT_FOUND rather than UNREACHABLE
-        assertThat(checker(true).check(base + "/x.git", "u", "t")).isEqualTo(GitRemoteChecker.NOT_FOUND);
+        assertThat(checker(true).check(base + "/x.git", "127.0.0.1", "u", "t")).isEqualTo(GitRemoteChecker.NOT_FOUND);
         assertThat(hits).isNotEmpty();
     }
 
     @Test
     void redirectToInternalAddressIsRevalidatedAndRefused() {
-        assertThat(checker(true).check(base + "/redirect.git", "u", "t")).isEqualTo(GitRemoteChecker.UNREACHABLE);
+        assertThat(checker(true).check(base + "/redirect.git", "127.0.0.1", "u", "t")).isEqualTo(GitRemoteChecker.UNREACHABLE);
         assertThat(hits).anyMatch(p -> p.startsWith("/redirect"));
         assertThat(hits).noneMatch(p -> p.startsWith("/r.git"));
         assertThat(lookups).contains("internal.test");
@@ -89,9 +89,9 @@ class GitEgressTest {
     @Test
     void deniedAndUnreachableAreIndistinguishable() {
         GitRemoteChecker c = checker(false);
-        assertThat(c.check("https://10.0.0.5/x.git", "u", "t")).isEqualTo(GitRemoteChecker.UNREACHABLE);
-        assertThat(c.check("https://169.254.169.254/x.git", "u", "t")).isEqualTo(GitRemoteChecker.UNREACHABLE);
-        assertThat(c.check("https://[::ffff:127.0.0.1]/x.git", "u", "t")).isEqualTo(GitRemoteChecker.UNREACHABLE);
+        assertThat(c.check("https://10.0.0.5/x.git", "127.0.0.1", "u", "t")).isEqualTo(GitRemoteChecker.UNREACHABLE);
+        assertThat(c.check("https://169.254.169.254/x.git", "127.0.0.1", "u", "t")).isEqualTo(GitRemoteChecker.UNREACHABLE);
+        assertThat(c.check("https://[::ffff:127.0.0.1]/x.git", "127.0.0.1", "u", "t")).isEqualTo(GitRemoteChecker.UNREACHABLE);
     }
 
     @Test

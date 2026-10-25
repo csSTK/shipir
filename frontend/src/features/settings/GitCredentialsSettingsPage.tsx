@@ -26,6 +26,10 @@ function errorMessage(error: unknown, fallback: string): string {
       return 'The server has no encryption key. Set SHIPIR_ENCRYPTION_KEY to store access tokens.'
     if (error.code === 'TOKEN_REQUIRED') return 'Enter the access token.'
     if (error.code === 'INVALID_REPO_URL') return 'This is not a valid https repository URL.'
+    if (error.code === 'INVALID_CREDENTIAL_HOST')
+      return 'Use only a host name such as github.com, optionally with a port (git.example.org:8443).'
+    if (error.code === 'CREDENTIAL_HOST_MISMATCH')
+      return 'The repository URL is not on the host this credential is bound to.'
     if (error.code === 'CREDENTIAL_NOT_FOUND') return 'This credential no longer exists.'
     if (error.status === 409) return 'This name is already in use.'
     if (error.status === 400 && error.details?.length) return error.details.join(' ')
@@ -43,6 +47,7 @@ const TEST_MESSAGES: Record<GitConnectionStatus, { ok: boolean; text: string }> 
 
 function CredentialDialog({ credential, onClose }: { credential: GitCredential | null; onClose: () => void }) {
   const [name, setName] = useState(credential?.name ?? '')
+  const [host, setHost] = useState(credential?.host ?? '')
   const [username, setUsername] = useState(credential?.username ?? '')
   const [token, setToken] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
@@ -54,11 +59,13 @@ function CredentialDialog({ credential, onClose }: { credential: GitCredential |
     e.preventDefault()
     const n = name.trim()
     const u = username.trim()
+    const h = host.trim()
     if (n.length < 1 || n.length > FIELD_MAX) return setProblem(`The name must be 1 to ${FIELD_MAX} characters.`)
     if (u.length < 1 || u.length > FIELD_MAX) return setProblem(`The username must be 1 to ${FIELD_MAX} characters.`)
+    if (h === '') return setProblem('Enter the host the token may be sent to, e.g. github.com.')
     if (!credential && token.trim() === '') return setProblem('Enter the access token.')
     setProblem(null)
-    const input = { name: n, username: u, ...(token.trim() !== '' ? { token: token.trim() } : {}) }
+    const input = { name: n, host: h, username: u, ...(token.trim() !== '' ? { token: token.trim() } : {}) }
     const options = {
       onSuccess: onClose,
       onError: (err: unknown) => setProblem(errorMessage(err, 'Could not save the credential. Try again.')),
@@ -85,6 +92,14 @@ function CredentialDialog({ credential, onClose }: { credential: GitCredential |
     >
       <form id="git-credential-form" onSubmit={submit} className="settings__form">
         <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
+        <TextField
+          label="Host"
+          value={host}
+          onChange={(e) => setHost(e.target.value)}
+          autoComplete="off"
+          placeholder="github.com"
+          help="The token is only sent to repositories on this host."
+        />
         <TextField label="Username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" />
         <TextField
           label="Access token"
@@ -206,6 +221,7 @@ export function GitCredentialsSettingsPage() {
 
   const columns: ResourceColumn<GitCredential>[] = [
     { id: 'name', header: 'Name', sortValue: (c) => c.name, defaultWidth: 220, hideable: false, render: (c) => <strong>{c.name}</strong> },
+    { id: 'host', header: 'Host', sortValue: (c) => c.host ?? '', defaultWidth: 200, render: (c) => c.host ?? 'Not set' },
     { id: 'username', header: 'Username', sortValue: (c) => c.username, defaultWidth: 200, render: (c) => c.username },
     { id: 'token', header: 'Token', defaultWidth: 200, render: (c) => <span className="settings__mono">{c.tokenHint}</span> },
   ]
@@ -233,7 +249,7 @@ export function GitCredentialsSettingsPage() {
         columns={columns}
         rows={data}
         rowKey={(c) => c.id}
-        searchText={(c) => `${c.name} ${c.username}`}
+        searchText={(c) => `${c.name} ${c.host ?? ''} ${c.username}`}
         defaultSort="name"
         emptyMessage="No credentials yet."
         isPending={isPending}

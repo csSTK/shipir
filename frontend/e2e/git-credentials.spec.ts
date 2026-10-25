@@ -3,6 +3,7 @@ import { expect, test } from './fixtures/api.ts'
 const cred = {
   id: 'g1',
   name: 'GitHub work',
+  host: 'github.com',
   username: 'octocat',
   tokenHint: '…a1b2',
   createdAt: '2026-10-23T10:00:00Z',
@@ -20,6 +21,7 @@ test('admin adds a credential and tests the connection', async ({ page, api }) =
   await expect(page.getByText('GitHub work')).toBeVisible()
   await page.getByRole('button', { name: 'Add credential' }).click()
   await page.getByLabel('Name', { exact: true }).fill('Gitea')
+  await page.getByLabel('Host', { exact: true }).fill('gitea.example.org')
   await page.getByLabel('Username', { exact: true }).fill('me')
   await page.getByLabel('Access token').fill('super-secret-pat')
   await page.getByRole('button', { name: 'Save' }).click()

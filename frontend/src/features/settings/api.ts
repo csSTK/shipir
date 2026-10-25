@@ -312,6 +312,8 @@ export function useAuditLog(query: AuditLogQuery) {
 export interface GitCredential {
   id: string
   name: string
+  /** Host the token may be sent to; null for a credential created before host binding (unusable until set). */
+  host: string | null
   username: string
   tokenHint: string
   createdAt: string
@@ -321,6 +323,7 @@ export interface GitCredential {
 /** `token` is required on create and omitted on update to keep the stored one. */
 export interface GitCredentialInput {
   name: string
+  host: string
   username: string
   token?: string
 }
