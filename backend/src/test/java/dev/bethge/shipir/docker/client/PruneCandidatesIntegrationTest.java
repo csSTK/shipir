@@ -59,16 +59,52 @@ class PruneCandidatesIntegrationTest {
         }
     }
 
+    /**
+     * Asserts only on resources this test creates, so containers or images that other tests or sessions create and
+     * remove on the shared daemon cannot make it fail.
+     */
     @Test
-    void candidatesAreStoppedContainersAndUnusedImagesOnly() {
-        var containers = new ContainerServiceImpl(manager).listPrunable(hostId, endpoint);
-        var all = new ContainerServiceImpl(manager).listContainers(hostId, endpoint);
-        assertThat(containers).allSatisfy(c -> assertThat(all)
-                .anyMatch(a -> a.id().equals(c.id()) && !java.util.Set.of("running", "paused", "restarting").contains(a.state())));
-        var images = new ImageServiceImpl(manager);
-        var inUse = images.list(hostId, endpoint).stream().filter(i -> i.inUse()).map(i -> i.id()).toList();
-        assertThat(images.listPrunable(hostId, endpoint, true)).noneMatch(c -> inUse.contains(c.id()));
-        assertThat(images.listPrunable(hostId, endpoint, false).size())
-                .isLessThanOrEqualTo(images.listPrunable(hostId, endpoint, true).size());
+    void candidatesAreStoppedContainersAndUnusedImagesOnly() throws Exception {
+        String image = "alpine:3.20";
+        var docker = DockerClientFactory.instance().client();
+        try {
+            docker.inspectImageCmd(image).exec();
+        } catch (Exception notPresent) {
+            docker.pullImageCmd(image).start().awaitCompletion(2, java.util.concurrent.TimeUnit.MINUTES);
+        }
+        String imageId = docker.inspectImageCmd(image).exec().getId();
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        // created but never started = not running = a prune candidate
+        String stopped = null;
+        String running = null;
+        try {
+            stopped = docker.createContainerCmd(image).withName("shipir-it-prune-stopped-" + suffix)
+                    .withCmd("sleep", "300").exec().getId();
+            running = docker.createContainerCmd(image).withName("shipir-it-prune-running-" + suffix)
+                    .withCmd("sleep", "300").exec().getId();
+            final String stoppedId = stopped;
+            final String runningId = running;
+            docker.startContainerCmd(runningId).exec();
+
+            var containers = new ContainerServiceImpl(manager).listPrunable(hostId, endpoint);
+            assertThat(containers).anyMatch(c -> stoppedId.equals(c.id()));
+            assertThat(containers).noneMatch(c -> runningId.equals(c.id()));
+
+            // both containers use the image, so it is in use and never a candidate, tagged or not
+            var images = new ImageServiceImpl(manager);
+            assertThat(images.listPrunable(hostId, endpoint, true)).noneMatch(c -> imageId.equals(c.id()));
+            assertThat(images.listPrunable(hostId, endpoint, false)).noneMatch(c -> imageId.equals(c.id()));
+            assertThat(images.list(hostId, endpoint)).filteredOn(i -> imageId.equals(i.id()))
+                    .allSatisfy(i -> assertThat(i.inUse()).isTrue());
+        } finally {
+            for (String id : new String[]{running, stopped}) {
+                if (id == null) continue;
+                try {
+                    docker.removeContainerCmd(id).withForce(true).exec();
+                } catch (Exception ignored) {
+                    // cleanup must not mask the real failure
+                }
+            }
+        }
     }
 }
