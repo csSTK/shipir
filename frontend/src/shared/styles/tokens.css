@@ -117,6 +117,12 @@
   --color-info-soft: #e3effd;
   --color-info-solid: #0a84ff;
 
+  /* Categorical series (charts, legends): neutral hues, not health states. Non-text contrast >= 3:1 on surface. */
+  --color-cat-1: #4f46e5;
+  --color-cat-2: #0f766e;
+  --color-cat-3: #be185d;
+  --color-cat-4: #64748b;
+
   /* Elevation */
   --shadow-sm: 0 1px 2px rgb(26 26 36 / 0.06), 0 1px 3px rgb(26 26 36 / 0.08);
   --shadow-md: 0 4px 14px rgb(26 26 36 / 0.1);
@@ -161,6 +167,11 @@
     --color-info-soft: #112a47;
     --color-info-solid: #0a84ff;
 
+    --color-cat-1: #8b8cf8;
+    --color-cat-2: #2dd4bf;
+    --color-cat-3: #f472b6;
+    --color-cat-4: #94a3b8;
+
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
     --shadow-md: 0 4px 14px rgb(0 0 0 / 0.45);
     --shadow-lg: 0 24px 60px rgb(0 0 0 / 0.6);
@@ -201,6 +212,11 @@
   --color-info: #7db7ff;
   --color-info-soft: #112a47;
   --color-info-solid: #0a84ff;
+
+  --color-cat-1: #8b8cf8;
+  --color-cat-2: #2dd4bf;
+  --color-cat-3: #f472b6;
+  --color-cat-4: #94a3b8;
 
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-md: 0 4px 14px rgb(0 0 0 / 0.45);

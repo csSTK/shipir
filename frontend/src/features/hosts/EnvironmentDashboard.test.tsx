@@ -43,12 +43,19 @@ const down: HostOverview = {
   volumes: null,
 }
 
+const usage = {
+  images: { count: 12, totalSize: 1024 ** 3, reclaimableSize: 0 },
+  containers: { count: 7, totalSize: 0, reclaimableSize: 0 },
+  volumes: { count: 4, totalSize: 0, reclaimableSize: 0 },
+  buildCache: { count: 0, totalSize: 0, reclaimableSize: 0 },
+}
+
 function serve(overview: HostOverview[], role = 'VIEWER') {
-  apiFetch.mockImplementation((path: string) =>
-    path === '/auth/me'
-      ? Promise.resolve({ username: 'u', role, setupRequired: false })
-      : Promise.resolve(overview),
-  )
+  apiFetch.mockImplementation((path: string) => {
+    if (path === '/auth/me') return Promise.resolve({ username: 'u', role, setupRequired: false })
+    if (path.endsWith('/disk-usage')) return Promise.resolve(usage)
+    return Promise.resolve(overview)
+  })
 }
 
 function renderAt(id: string) {
@@ -81,6 +88,18 @@ describe('EnvironmentDashboard', () => {
         `/environments/a/${name.toLowerCase()}`,
       )
     }
+  })
+
+  it('shows the disk usage card only for a running environment', async () => {
+    serve([up, down])
+    renderAt('a')
+    expect(await screen.findByText('Disk usage')).toBeInTheDocument()
+    cleanup()
+    serve([up, down])
+    renderAt('b')
+    await screen.findByRole('heading', { name: 'Staging' })
+    expect(screen.queryByText('Disk usage')).not.toBeInTheDocument()
+    expect(apiFetch).not.toHaveBeenCalledWith('/hosts/b/disk-usage')
   })
 
   it('shows the error message when the environment is DOWN', async () => {

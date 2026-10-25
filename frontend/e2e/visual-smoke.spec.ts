@@ -35,6 +35,12 @@ const images = [
 const networks = [{ id: '1', name: 'bridge', driver: 'bridge', scope: 'local', subnet: '172.17.0.0/16', internal: false, containerCount: 2 }]
 const volumes = [{ name: 'pgdata', driver: 'local', mountpoint: '/v/pgdata', created: null, inUse: true }]
 
+const DISK_USAGE = {
+  images: { count: 12, totalSize: 1024 ** 3, reclaimableSize: 0 },
+  containers: { count: 3, totalSize: 0, reclaimableSize: 0 },
+  volumes: { count: 4, totalSize: 0, reclaimableSize: 0 },
+  buildCache: { count: 0, totalSize: 0, reclaimableSize: 0 },
+}
 const pages = [
   { name: 'overview', path: '/' },
   { name: 'dashboard', path: '/environments/a' },
@@ -55,6 +61,7 @@ const schemes = ['light', 'dark'] as const
 test.beforeEach(({ api }) => {
   api.mock('GET', '/api/auth/me', me)
   api.mock('GET', '/api/hosts/overview', { body: [local] })
+  api.mock('GET', '/api/hosts/a/disk-usage', { body: DISK_USAGE })
   api.mock('GET', '/api/hosts/a/containers', { body: containers })
   api.mock('GET', '/api/hosts/a/deployments', { body: deployments })
   api.mock('GET', '/api/hosts/a/managed-deployments', { body: [] })

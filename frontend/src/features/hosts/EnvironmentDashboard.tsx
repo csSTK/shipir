@@ -8,6 +8,7 @@ import { useHostsOverview, type HostOverview } from './api.ts'
 import { ENV_RESOURCES, type EnvResourceSlug } from './resources.ts'
 import { EnvironmentActions } from './EnvironmentActions.tsx'
 import { PruneDialog } from './PruneDialog.tsx'
+import { DiskUsageCard } from './DiskUsageCard.tsx'
 import './EnvironmentsOverview.css'
 import './EnvironmentDashboard.css'
 
@@ -127,6 +128,11 @@ export function EnvironmentDashboard() {
           )
         })}
       </ul>
+      {up && (
+        <div className="dash__disk">
+          <DiskUsageCard hostId={env.id} onCleanUp={canClean ? () => setPruning(true) : undefined} />
+        </div>
+      )}
       <PruneDialog hostId={env.id} open={pruning} onClose={() => setPruning(false)} />
     </section>
   )

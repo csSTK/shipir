@@ -324,6 +324,8 @@ Frontend (`frontend/`):
 - `e2e/environment-tags.spec.ts`: chips and tag filter (URL, combined with search, empty state) for viewers, operator without edit, admin edits tags
 - `src/features/hosts/EnvironmentDashboard.{tsx,css,test.tsx}`: `/environments/:id`: `PageHeader` (status `Badge`, Docker/CPU/memory subtitle, ADMIN/OPERATOR 'Clean up' opens `PruneDialog`, ADMIN overflow menu), icon + tone resource tiles (`ENV_RESOURCES` has `icon`/`tone`) with counts linking to resource routes; DOWN error, not-found
 - `src/features/hosts/{PruneDialog.tsx,.css,.test.tsx,prune.ts}`, `e2e/prune.spec.ts`: prune `Dialog` (`open` prop; content + preview request mount only while open; stopped containers, images none/dangling/unused, volumes + managed toggle, networks; live preview via `usePrunePreview`, confirm -> `usePrune` POST `/hosts/{id}/prune`, result summary, 403 inline); invalidates `['hosts', id]` + overview
+- `src/features/hosts/{DiskUsageCard.tsx,DiskUsageCard.css,DiskUsageCard.test.tsx,diskUsage.ts}`: 'Disk usage' card on `EnvironmentDashboard` (running environments only): `useDiskUsage` = GET `/hosts/{id}/disk-usage` once per visit (staleTime 10 min, no polling/focus refetch, key under `['hosts', id]`); stacked bar (`role=img` summary) + legend per category (count, size, reclaimable, 'unknown' for null); refresh IconButton, 403 = 'Only available with access to the whole environment.', other errors = Retry; 'Review cleanup' (ADMIN/OPERATOR) opens the prune dialog; category colours from palette tokens
+- `src/features/hosts/format.test.ts`: `formatSize` tiers (B, KiB, MiB, GiB, TiB, PiB; larger stays PiB)
 - `src/features/hosts/resources.ts`: `ENV_RESOURCES` (deployments/containers/images/networks/volumes) for sidebar, tiles
 - `src/features/hosts/format.ts`: memory/plural formatting, overview error code to message, `describeResourceError(err)` for `/hosts/{id}/...` failures
 - `src/features/hosts/index.ts`: exports form, overview, dashboard, `ENV_RESOURCES`, hooks, types
@@ -341,6 +343,7 @@ Frontend (`frontend/`):
 - `e2e/auth.spec.ts`: login happy path + sign out, wrong password
 - `e2e/environments.spec.ts`: overview list/search, viewer vs admin add, admin rename/delete, taken name, operator no actions, error, dashboard navigation
 - `e2e/environment-dashboard.spec.ts`: overview -> dashboard -> sidebar items, tile counts, DOWN, not found, narrow screen
+- `frontend/e2e/disk-usage.spec.ts`: dashboard disk card: breakdown with unknown values and reclaimable, 403 message, 502 retry, refresh refetch, operator opens prune dialog from the card
 - `e2e/password-reset.spec.ts`: forgot password happy path, invalid code, unknown user neutral message
 - `e2e/setup.spec.ts`: setup flow (password -> environment step -> app), reload on step 2, connection failure, server error, no setup when done
 - `Dockerfile`: multi-stage image (pnpm build, nginx-unprivileged on :8080; `BACKEND_URL`, `NGINX_RESOLVER`)

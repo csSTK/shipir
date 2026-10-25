@@ -24,10 +24,17 @@ const result = {
   networks: counts(1),
   reclaimedBytes: 3 * 1024 ** 2,
 }
+const DISK_USAGE = {
+  images: { count: 12, totalSize: 1024 ** 3, reclaimableSize: 0 },
+  containers: { count: 3, totalSize: 0, reclaimableSize: 0 },
+  volumes: { count: 4, totalSize: 0, reclaimableSize: 0 },
+  buildCache: { count: 0, totalSize: 0, reclaimableSize: 0 },
+}
 const as = (role: string) => ({ body: { username: 'u', role, setupRequired: false } })
 
 test.beforeEach(({ api }) => {
   api.mock('GET', '/api/hosts/overview', { body: [local] })
+  api.mock('GET', '/api/hosts/a/disk-usage', { body: DISK_USAGE })
 })
 
 test('operator previews and cleans up', async ({ page, api }) => {

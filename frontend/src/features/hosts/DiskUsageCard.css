@@ -1,0 +1,104 @@
+.disk {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.disk__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.disk__title {
+  margin: 0;
+  font-size: var(--text-title-size);
+  line-height: var(--text-title-leading);
+  letter-spacing: var(--text-title-tracking);
+  font-weight: var(--weight-semibold);
+}
+.disk__summary,
+.disk__note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-small-size);
+  line-height: var(--text-small-leading);
+}
+.disk__error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.disk__error p {
+  margin: 0;
+  color: var(--color-bad);
+  font-size: var(--text-small-size);
+}
+.disk__bar {
+  display: flex;
+  height: var(--space-3);
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+}
+.disk__seg {
+  height: 100%;
+}
+.disk__legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+.disk__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--text-small-size);
+}
+.disk__swatch {
+  flex: none;
+  width: var(--space-3);
+  height: var(--space-3);
+  border-radius: var(--radius-pill);
+}
+.disk__name {
+  flex: 1 1 8rem;
+  font-weight: var(--weight-medium);
+}
+.disk__count {
+  font-weight: var(--weight-regular);
+  color: var(--color-text-muted);
+}
+.disk__num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.disk__reclaim {
+  min-width: 10rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* Categorical series tokens (not health states); the legend text carries the values, so colour is never the only signal. */
+.disk__seg--images,
+.disk__swatch--images {
+  background: var(--color-cat-1);
+}
+.disk__seg--containers,
+.disk__swatch--containers {
+  background: var(--color-cat-2);
+}
+.disk__seg--volumes,
+.disk__swatch--volumes {
+  background: var(--color-cat-3);
+}
+.disk__seg--buildCache,
+.disk__swatch--buildCache {
+  background: var(--color-cat-4);
+}
+.disk__foot {
+  display: flex;
+  justify-content: flex-end;
+}

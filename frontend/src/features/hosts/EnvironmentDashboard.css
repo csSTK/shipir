@@ -16,6 +16,9 @@
   grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
   gap: var(--space-4);
 }
+.dash__disk {
+  margin-top: var(--space-5);
+}
 .dash__tile {
   display: block;
   height: 100%;

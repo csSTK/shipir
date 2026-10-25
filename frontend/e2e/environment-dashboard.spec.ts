@@ -26,12 +26,19 @@ const staging = {
   images: null,
   volumes: null,
 }
+const DISK_USAGE = {
+  images: { count: 12, totalSize: 1024 ** 3, reclaimableSize: 0 },
+  containers: { count: 3, totalSize: 0, reclaimableSize: 0 },
+  volumes: { count: 4, totalSize: 0, reclaimableSize: 0 },
+  buildCache: { count: 0, totalSize: 0, reclaimableSize: 0 },
+}
 const me = { body: { username: 'u', role: 'VIEWER', setupRequired: false } }
 
 test('overview -> dashboard -> sidebar items', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', me)
   api.mock('GET', '/api/notifications/unread-count', { body: { count: 0 } })
   api.mock('GET', '/api/hosts/overview', { body: [local, staging] })
+  api.mock('GET', '/api/hosts/a/disk-usage', { body: DISK_USAGE })
   api.mock('GET', '/api/hosts/a/containers', { body: [] })
   api.mock('GET', '/api/hosts/a/images', { body: [] })
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
@@ -63,6 +70,7 @@ test('tile counts and a DOWN environment', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', me)
   api.mock('GET', '/api/notifications/unread-count', { body: { count: 0 } })
   api.mock('GET', '/api/hosts/overview', { body: [local, staging] })
+  api.mock('GET', '/api/hosts/a/disk-usage', { body: DISK_USAGE })
   await page.goto('/environments/a')
   await expect(page.getByRole('main').getByRole('link', { name: /Containers/ })).toContainText('7')
   await expect(page.getByRole('main').getByRole('link', { name: /Images/ })).toContainText('12')
@@ -84,6 +92,7 @@ test('sidebar section works on a narrow screen', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', me)
   api.mock('GET', '/api/notifications/unread-count', { body: { count: 0 } })
   api.mock('GET', '/api/hosts/overview', { body: [local] })
+  api.mock('GET', '/api/hosts/a/disk-usage', { body: DISK_USAGE })
   api.mock('GET', '/api/hosts/a/images', { body: [] })
   await page.goto('/environments/a')
   await page.getByRole('button', { name: 'Navigation' }).click()

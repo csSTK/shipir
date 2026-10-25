@@ -34,6 +34,12 @@ const staging = {
   images: null,
   volumes: null,
 }
+const DISK_USAGE = {
+  images: { count: 12, totalSize: 1024 ** 3, reclaimableSize: 0 },
+  containers: { count: 3, totalSize: 0, reclaimableSize: 0 },
+  volumes: { count: 4, totalSize: 0, reclaimableSize: 0 },
+  buildCache: { count: 0, totalSize: 0, reclaimableSize: 0 },
+}
 const user = (role: string) => ({ username: 'u', role, setupRequired: false })
 
 test('lists UP and DOWN environments and filters by name', async ({ page, api }) => {
@@ -85,6 +91,7 @@ test('shows an error when the overview cannot be loaded', async ({ page, api }) 
 test('opens the dashboard and navigates back', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: user('OPERATOR') })
   api.mock('GET', '/api/hosts/overview', { body: [local] })
+  api.mock('GET', '/api/hosts/a/disk-usage', { body: DISK_USAGE })
   await page.goto('/')
 
   await page.getByRole('link', { name: /Local/ }).click()
