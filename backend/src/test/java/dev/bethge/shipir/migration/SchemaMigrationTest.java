@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V26 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V27 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To26Successfully() {
+    void flywayAppliedVersions1To27Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27");
     }
 
     @Test
@@ -1806,6 +1806,86 @@ class SchemaMigrationTest {
                 INSERT INTO notification_webhooks (name, url_encrypted, url_hint, event_types, created_by)
                 VALUES (?, ?, 'https://example.com', ARRAY['HOST_DOWN'], ?)
                 """, name, new byte[] {1, 2, 3}, creator);
+    }
+
+    @Test
+    void volumeBackupScheduleAcceptsValidRowWithDefaults() {
+        UUID admin = insertUser("vb-admin");
+        UUID host = insertHost(admin);
+        UUID id = insertSchedule(host, admin, "data", 24, 7);
+        Map<String, Object> row = jdbc.queryForMap("SELECT * FROM volume_backup_schedules WHERE id = ?", id);
+        assertThat(row.get("last_status")).isNull();
+        assertThat(row.get("last_run_at")).isNull();
+        assertThat(row.get("created_at")).isNotNull();
+    }
+
+    @Test
+    void volumeBackupScheduleIsRemovedWithItsHost() {
+        UUID admin = insertUser("vb-admin2");
+        UUID host = insertHost(admin);
+        insertSchedule(host, admin, "data", 24, 7);
+        jdbc.update("DELETE FROM docker_hosts WHERE id = ?", host);
+        assertThat(count("volume_backup_schedules")).isZero();
+    }
+
+    @Test
+    void volumeBackupScheduleIsUniquePerHostAndVolume() {
+        UUID admin = insertUser("vb-admin3");
+        UUID host = insertHost(admin);
+        insertSchedule(host, admin, "data", 24, 7);
+        assertThatThrownBy(() -> insertSchedule(host, admin, "data", 12, 3))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, -1, 8761})
+    void volumeBackupScheduleRejectsIntervalOutOfRange(int interval) {
+        UUID admin = insertUser("vb-admin4");
+        UUID host = insertHost(admin);
+        assertThatThrownBy(() -> insertSchedule(host, admin, "data", interval, 7))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 101})
+    void volumeBackupScheduleRejectsKeepCountOutOfRange(int keep) {
+        UUID admin = insertUser("vb-admin5");
+        UUID host = insertHost(admin);
+        assertThatThrownBy(() -> insertSchedule(host, admin, "data", 24, keep))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"../etc", "/abs", "a b", "-lead", ".dot", ""})
+    void volumeBackupScheduleRejectsUnsafeVolumeNames(String name) {
+        UUID admin = insertUser("vb-admin6");
+        UUID host = insertHost(admin);
+        assertThatThrownBy(() -> insertSchedule(host, admin, name, 24, 7))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void volumeBackupScheduleRejectsUnknownLastStatus() {
+        UUID admin = insertUser("vb-admin7");
+        UUID host = insertHost(admin);
+        UUID id = insertSchedule(host, admin, "data", 24, 7);
+        assertThatThrownBy(() -> jdbc.update("UPDATE volume_backup_schedules SET last_status = 'MAYBE' WHERE id = ?", id))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void volumeBackupScheduleRequiresAnExistingCreator() {
+        UUID admin = insertUser("vb-admin8");
+        UUID host = insertHost(admin);
+        assertThatThrownBy(() -> insertSchedule(host, UUID.randomUUID(), "data", 24, 7))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    private UUID insertSchedule(UUID host, UUID creator, String volume, int interval, int keep) {
+        return jdbc.queryForObject("""
+                INSERT INTO volume_backup_schedules (host_id, volume_name, interval_hours, keep_count, next_run_at, created_by)
+                VALUES (?, ?, ?, ?, now(), ?) RETURNING id
+                """, UUID.class, host, volume, interval, keep, creator);
     }
 
     private int count(String table) {

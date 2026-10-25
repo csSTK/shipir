@@ -9,7 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.multipart.MultipartException;
 
 @RestControllerAdvice(assignableTypes = {HostController.class, HostResourcesController.class, SearchController.class,
-        ContainerFilesController.class})
+        ContainerFilesController.class, VolumeBackupController.class, VolumeBackupScheduleController.class})
 class HostExceptionHandler {
 
     @ExceptionHandler(HostException.class)

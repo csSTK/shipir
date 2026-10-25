@@ -25,6 +25,15 @@ shipir:
   git:
     poll-enabled: true
     poll-tick: 60s
+  volume-backup:
+    # cap for one backup stream and one restore upload (spring.servlet.multipart.* below must allow it too)
+    max-bytes: 100MB
+    # short-lived helper container with only the volume mounted (never started: the archive API does the work)
+    helper-image: alpine:3
+    # archives of scheduled backups: <dir>/<hostId>/<volume>/<volume>-<timestamp>.tar
+    dir: ${SHIPIR_VOLUME_BACKUP_DIR:./data/volume-backups}
+    scheduler-enabled: true
+    tick: 1m
   container-files:
     max-bytes: 100MB
     max-scan-bytes: 64MB

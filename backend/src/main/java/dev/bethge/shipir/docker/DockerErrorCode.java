@@ -29,5 +29,9 @@ public enum DockerErrorCode {
     /** Recreate failed after the new container was created; it has been removed and the old one restored (or restoring failed, see log). */
     RECREATE_FAILED,
     /** The daemon refused new resource limits (e.g. memory below current usage or below the minimum). */
-    UPDATE_REJECTED
+    UPDATE_REJECTED,
+    /** The volume name is not a plain Docker volume name (could otherwise be read as a host path by the daemon). */
+    INVALID_VOLUME_NAME,
+    /** A volume archive was refused: not a tar, unsafe entry (traversal, absolute, escaping link, device) or empty. */
+    INVALID_ARCHIVE
 }

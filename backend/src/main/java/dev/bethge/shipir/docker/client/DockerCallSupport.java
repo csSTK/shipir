@@ -106,6 +106,8 @@ class DockerCallSupport {
             case SIZE_LIMIT_EXCEEDED -> "The transfer exceeds the size limit.";
             case RECREATE_FAILED -> "The container could not be recreated.";
             case UPDATE_REJECTED -> "The daemon refused the new resource limits.";
+            case INVALID_VOLUME_NAME -> "The volume name is not valid.";
+            case INVALID_ARCHIVE -> "The archive is not a safe volume archive.";
         };
         return new DockerConnectionException(code, message, e);
     }
