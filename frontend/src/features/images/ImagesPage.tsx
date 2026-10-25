@@ -1,15 +1,22 @@
+import { Tag, Upload } from 'lucide-react'
 import { useState } from 'react'
 import { useCurrentUser } from '../auth/index.ts'
 import { deleteMenu } from '../hosts/deleteRowActions.tsx'
 import { DeleteResourceDialog } from '../hosts/DeleteResourceDialog.tsx'
 import { useParams } from 'react-router-dom'
 import { describeResourceError, formatSize } from '../hosts/format.ts'
-import { Badge, Button, PageHeader, ResourceTable, type ResourceColumn } from '../../shared/ui/index.ts'
+import { Badge, Button, PageHeader, ResourceTable, type MenuEntry, type ResourceColumn } from '../../shared/ui/index.ts'
 import { useDeleteImage, useImages, type Image } from './api.ts'
+import { BuildImageDialog } from './BuildImageDialog.tsx'
 import { PullImageDialog } from './PullImageDialog.tsx'
+import { PushImageDialog } from './PushImageDialog.tsx'
+import { TagImageDialog } from './TagImageDialog.tsx'
 import './ImagesPage.css'
 
-const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+const dateFormat = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+})
 
 /** `sha256:abcdef...` -> first 12 hex characters, like `docker images`. */
 function shortId(id: string): string {
@@ -32,9 +39,24 @@ const columns: ResourceColumn<Image>[] = [
         <span>&lt;none&gt;</span>
       ),
   },
-  { id: 'id', header: 'ID', sortValue: (i) => shortId(i.id), render: (i) => <span className="images__id">{shortId(i.id)}</span> },
-  { id: 'size', header: 'Size', sortValue: (i) => i.size, render: (i) => (i.size === null ? '–' : formatSize(i.size)) },
-  { id: 'created', header: 'Created', sortValue: (i) => Date.parse(i.created), render: (i) => dateFormat.format(new Date(i.created)) },
+  {
+    id: 'id',
+    header: 'ID',
+    sortValue: (i) => shortId(i.id),
+    render: (i) => <span className="images__id">{shortId(i.id)}</span>,
+  },
+  {
+    id: 'size',
+    header: 'Size',
+    sortValue: (i) => i.size,
+    render: (i) => (i.size === null ? '–' : formatSize(i.size)),
+  },
+  {
+    id: 'created',
+    header: 'Created',
+    sortValue: (i) => Date.parse(i.created),
+    render: (i) => dateFormat.format(new Date(i.created)),
+  },
   {
     id: 'usage',
     header: 'Usage',
@@ -66,10 +88,14 @@ function updateColumn(onPull: ((i: Image) => void) | null): ResourceColumn<Image
 export function ImagesPage() {
   const { id = '' } = useParams()
   const { data: user } = useCurrentUser()
-  const canWrite = user?.role === 'ADMIN' || user?.role === 'OPERATOR'
+  const isAdmin = user?.role === 'ADMIN'
+  const canWrite = isAdmin || user?.role === 'OPERATOR'
   const { data, isPending, error, refetch } = useImages(id)
   const del = useDeleteImage(id)
   const [target, setTarget] = useState<Image | null>(null)
+  const [tagging, setTagging] = useState<Image | null>(null)
+  const [pushing, setPushing] = useState<Image | null>(null)
+  const [building, setBuilding] = useState(false)
   const [pulling, setPulling] = useState<{ reference: string } | null>(null)
   const withUpdate = [...columns, updateColumn(canWrite ? (i) => setPulling({ reference: i.repoTags[0] }) : null)]
 
@@ -79,9 +105,12 @@ export function ImagesPage() {
         title="Images"
         actions={
           canWrite && (
-            <Button variant="primary" onClick={() => setPulling({ reference: '' })}>
-              Pull image
-            </Button>
+            <>
+              {isAdmin && <Button onClick={() => setBuilding(true)}>Build image</Button>}
+              <Button variant="primary" onClick={() => setPulling({ reference: '' })}>
+                Pull image
+              </Button>
+            </>
           )
         }
       />
@@ -97,9 +126,32 @@ export function ImagesPage() {
         error={error ? describeResourceError(error) : null}
         onRetry={() => void refetch()}
         rowLabel={(i) => i.repoTags[0] ?? shortId(i.id)}
-        rowActions={canWrite ? (i) => ({ menu: deleteMenu(() => setTarget(i)) }) : undefined}
+        rowActions={
+          canWrite
+            ? (i) => ({
+                menu: [
+                  {
+                    label: 'Tag…',
+                    icon: <Tag size={16} strokeWidth={1.75} />,
+                    onSelect: () => setTagging(i),
+                  },
+                  {
+                    label: 'Push…',
+                    icon: <Upload size={16} strokeWidth={1.75} />,
+                    disabled: !i.repoTags.length,
+                    onSelect: () => setPushing(i),
+                  },
+                  { type: 'separator' },
+                  ...deleteMenu(() => setTarget(i)),
+                ] satisfies MenuEntry[],
+              })
+            : undefined
+        }
       />
       {pulling && <PullImageDialog hostId={id} initialReference={pulling.reference} onClose={() => setPulling(null)} />}
+      {building && <BuildImageDialog hostId={id} onClose={() => setBuilding(false)} />}
+      {tagging && <TagImageDialog hostId={id} image={tagging} onClose={() => setTagging(null)} />}
+      {pushing && <PushImageDialog hostId={id} image={pushing} onClose={() => setPushing(null)} />}
       {target && (
         <DeleteResourceDialog
           kind="image"

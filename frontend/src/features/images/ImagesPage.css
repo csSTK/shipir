@@ -16,3 +16,40 @@
   align-items: center;
   gap: var(--space-2);
 }
+.build__source {
+  display: flex;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.build__source legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-small-size);
+  color: var(--color-text-muted);
+}
+.build__radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.build__args {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.build__args-title {
+  font-size: var(--text-small-size);
+  color: var(--color-text-muted);
+}
+.build__arg-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  align-self: stretch;
+}
+.build__arg-row > :first-child {
+  flex: 1;
+}
