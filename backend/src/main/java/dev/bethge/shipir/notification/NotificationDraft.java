@@ -2,6 +2,7 @@ package dev.bethge.shipir.notification;
 
 import dev.bethge.shipir.compose.DeploymentRunFailedEvent;
 import dev.bethge.shipir.compose.GitAutoUpdateFailedEvent;
+import dev.bethge.shipir.compose.ImageAutoUpdateEvent;
 import dev.bethge.shipir.host.ContainerProblemEvent;
 
 import java.time.Instant;
@@ -35,6 +36,16 @@ record NotificationDraft(NotificationType type, UUID hostId, String hostName, UU
                 cap("Auto-update of deployment \"%s\" on \"%s\" failed (%s)".formatted(e.deploymentName(),
                         e.hostName(), e.errorCode())),
                 null, e.errorCode(), e.occurredAt());
+    }
+
+    static NotificationDraft of(ImageAutoUpdateEvent e) {
+        String message = e.applied()
+                ? "Images of deployment \"%s\" on \"%s\" were updated".formatted(e.deploymentName(), e.hostName())
+                : "Image update of deployment \"%s\" on \"%s\" failed (%s)".formatted(e.deploymentName(),
+                        e.hostName(), e.errorCode());
+        return new NotificationDraft(e.applied() ? NotificationType.IMAGE_UPDATE_APPLIED
+                : NotificationType.IMAGE_UPDATE_FAILED, e.hostId(), e.hostName(), e.deploymentId(), e.deploymentName(),
+                null, null, cap(message), null, e.errorCode(), e.occurredAt());
     }
 
     static NotificationDraft of(ContainerProblemEvent e) {

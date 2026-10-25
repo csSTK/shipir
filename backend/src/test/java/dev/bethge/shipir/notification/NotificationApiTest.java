@@ -114,7 +114,7 @@ class NotificationApiTest extends NotificationTestBase {
         Login l = login("viewer");
         mvc.perform(get("/api/notifications/preferences").session(l.session()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(6))
+                .andExpect(jsonPath("$.length()").value(8))
                 .andExpect(jsonPath("$[?(@.type=='CONTAINER_CRASHED')].inAppEnabled").value(true))
                 .andExpect(jsonPath("$[?(@.type=='HOST_DOWN')].inAppEnabled").value(true))
                 .andExpect(jsonPath("$[?(@.type=='HOST_UP')].inAppEnabled").value(true));

@@ -32,6 +32,8 @@ public class ComposeFileRepository {
 
     public static final String COMPOSE_FILE = "compose.yaml";
     public static final String ENV_FILE = ".env";
+    /** Temporary compose file merged over {@code compose.yaml} while rolling back an image update. */
+    public static final String ROLLBACK_OVERRIDE_FILE = "compose.rollback.yaml";
     public static final String REPO_DIR = "repo";
 
     private static final FileAttribute<Set<PosixFilePermission>> DIR_PERMISSIONS =
@@ -54,6 +56,18 @@ public class ComposeFileRepository {
         } else {
             deleteQuietly(dir.resolve(ENV_FILE));
         }
+    }
+
+    /** Writes the temporary rollback override next to {@code compose.yaml}; returns its path. */
+    public Path writeRollbackOverride(UUID hostId, String deploymentName, String content) {
+        Path dir = ensureDeploymentDir(hostId, deploymentName);
+        Path file = dir.resolve(ROLLBACK_OVERRIDE_FILE);
+        writeAtomically(file, content);
+        return file;
+    }
+
+    public void deleteRollbackOverride(UUID hostId, String deploymentName) {
+        deleteQuietly(deploymentDir(hostId, deploymentName).resolve(ROLLBACK_OVERRIDE_FILE));
     }
 
     public Optional<String> readCompose(UUID hostId, String deploymentName) {

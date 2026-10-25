@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V28 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V29 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To28Successfully() {
+    void flywayAppliedVersions1To29Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29");
     }
 
     @Test
@@ -197,7 +197,7 @@ class SchemaMigrationTest {
                 WHERE table_schema = 'public' AND data_type = 'timestamp with time zone'
                   AND table_name IN ('users','docker_hosts','deployments','deployment_versions')
                 """, Integer.class);
-        assertThat(count).isEqualTo(10); // 4 users (incl. totp_enabled_at) + 1 hosts + 3 deployments + 2 versions
+        assertThat(count).isEqualTo(11); // 4 users (incl. totp_enabled_at) + 1 hosts + 4 deployments (incl. image_update_last_attempt_at) + 2 versions
     }
 
     @Test
@@ -521,7 +521,7 @@ class SchemaMigrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"HOST_DOWN", "HOST_UP", "DEPLOYMENT_FAILED", "CONTAINER_CRASHED", "CONTAINER_UNHEALTHY",
-            "GIT_AUTO_UPDATE_FAILED"})
+            "GIT_AUTO_UPDATE_FAILED", "IMAGE_UPDATE_APPLIED", "IMAGE_UPDATE_FAILED"})
     void notificationAcceptsKnownTypes(String type) {
         UUID user = insertUser("alice");
         insertNotification(user, type);
@@ -529,7 +529,8 @@ class SchemaMigrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"DEPLOYMENT_FAILED", "CONTAINER_CRASHED", "CONTAINER_UNHEALTHY", "GIT_AUTO_UPDATE_FAILED"})
+    @ValueSource(strings = {"DEPLOYMENT_FAILED", "CONTAINER_CRASHED", "CONTAINER_UNHEALTHY", "GIT_AUTO_UPDATE_FAILED",
+            "IMAGE_UPDATE_APPLIED", "IMAGE_UPDATE_FAILED"})
     void notificationPreferenceAcceptsNewTypes(String type) {
         UUID user = insertUser("alice");
         insertPreference(user, type, true);
@@ -2070,6 +2071,85 @@ class SchemaMigrationTest {
                 INSERT INTO deployments (name, host_id, compose_file_path, created_by)
                 VALUES (?, ?, '/deployments/x/compose.yml', ?) RETURNING id
                 """, UUID.class, name, host, creator);
+    }
+
+    @Test
+    void notificationWebhookAcceptsImageUpdateEventTypes() {
+        UUID user = insertUser("alice");
+        jdbc.update("""
+                INSERT INTO notification_webhooks (name, url_encrypted, url_hint, event_types, created_by)
+                VALUES ('img-hook', ?, 'https://example.com', ARRAY['IMAGE_UPDATE_APPLIED', 'IMAGE_UPDATE_FAILED'], ?)
+                """, new byte[] {1, 2, 3}, user);
+        assertThat(count("notification_webhooks")).isEqualTo(1);
+    }
+
+    @Test
+    void deploymentImageAutoUpdateDefaultsToOffWithoutWindowOrAttempt() {
+        UUID owner = insertUser("alice");
+        UUID deployment = insertDeployment(insertHost(owner), owner, "web");
+        Map<String, Object> row = jdbc.queryForMap("""
+                SELECT image_auto_update, image_update_window_start, image_update_window_end,
+                       image_update_last_attempt_at, image_update_last_result
+                FROM deployments WHERE id = ?
+                """, deployment);
+        assertThat(row.get("image_auto_update")).isEqualTo(false);
+        assertThat(row.get("image_update_window_start")).isNull();
+        assertThat(row.get("image_update_window_end")).isNull();
+        assertThat(row.get("image_update_last_attempt_at")).isNull();
+        assertThat(row.get("image_update_last_result")).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"02:00,05:00", "22:00,06:00", "00:00,23:59"})
+    void deploymentAcceptsWindowIncludingOneOverMidnight(String window) {
+        UUID owner = insertUser("alice");
+        UUID deployment = insertDeployment(insertHost(owner), owner, "web");
+        String[] parts = window.split(",");
+        jdbc.update("UPDATE deployments SET image_update_window_start = ?::time, image_update_window_end = ?::time WHERE id = ?",
+                parts[0], parts[1], deployment);
+        assertThat(jdbc.queryForObject("SELECT image_update_window_start::text FROM deployments WHERE id = ?",
+                String.class, deployment)).startsWith(parts[0]);
+    }
+
+    @Test
+    void deploymentRejectsWindowWithOnlyOneBound() {
+        UUID owner = insertUser("alice");
+        UUID deployment = insertDeployment(insertHost(owner), owner, "web");
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE deployments SET image_update_window_start = '02:00' WHERE id = ?", deployment))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("deployments_image_update_window_check");
+    }
+
+    @Test
+    void deploymentRejectsEmptyWindowWithEqualBounds() {
+        UUID owner = insertUser("alice");
+        UUID deployment = insertDeployment(insertHost(owner), owner, "web");
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE deployments SET image_update_window_start = '03:00', image_update_window_end = '03:00' WHERE id = ?",
+                deployment))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("deployments_image_update_window_check");
+    }
+
+    @Test
+    void deploymentRejectsUnknownImageUpdateResult() {
+        UUID owner = insertUser("alice");
+        UUID deployment = insertDeployment(insertHost(owner), owner, "web");
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE deployments SET image_update_last_result = 'MAYBE' WHERE id = ?", deployment))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("deployments_image_update_last_result_check");
+    }
+
+    @Test
+    void deploymentAcceptsKnownImageUpdateResults() {
+        UUID owner = insertUser("alice");
+        UUID deployment = insertDeployment(insertHost(owner), owner, "web");
+        jdbc.update("UPDATE deployments SET image_update_last_result = 'APPLIED' WHERE id = ?", deployment);
+        jdbc.update("UPDATE deployments SET image_update_last_result = 'FAILED' WHERE id = ?", deployment);
+        assertThat(jdbc.queryForObject("SELECT image_update_last_result FROM deployments WHERE id = ?", String.class,
+                deployment)).isEqualTo("FAILED");
     }
 
     private void insertNotification(UUID user, String type) {

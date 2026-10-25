@@ -38,7 +38,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.Clock;
 import java.util.List;
 import java.util.Map;
+import java.nio.file.Path;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -58,6 +60,13 @@ public class DeploymentRunService {
 
     private static final Logger log = LoggerFactory.getLogger(DeploymentRunService.class);
     private static final String SYSTEM_USER = "system";
+    private static final java.util.regex.Pattern PIN_SERVICE = java.util.regex.Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]*");
+    private static final java.util.regex.Pattern PIN_IMAGE =
+            java.util.regex.Pattern.compile("[a-z0-9][a-z0-9._/:-]*@sha256:[0-9a-f]{64}");
+
+    /** How the pull and up of an automatic image update ended; {@code failedStep} is the compose step or ERROR. */
+    record PullUpdateOutcome(boolean success, String failedStep) {
+    }
 
     private final DeploymentService deploymentService;
     private final DeploymentRepository deployments;
@@ -127,7 +136,7 @@ public class DeploymentRunService {
     @Auditable(action = "DEPLOYMENT_PULL_UPDATE", targetType = "DEPLOYMENT", targetId = "#id")
     public DeploymentRunResponse pullUpdate(UUID hostId, UUID id, String username) {
         deploymentService.requireOperate(hostId, id);
-        return startPullUpdate(hostId, id, userIdOf(username), username);
+        return startPullUpdate(hostId, id, userIdOf(username), username, "DEPLOYMENT_PULL_UPDATE_RESULT", null, false);
     }
 
     /**
@@ -148,15 +157,20 @@ public class DeploymentRunService {
                 return start(deployment.getHostId(), deploymentId, deployment.getCreatedBy(), SYSTEM_USER, null,
                         "DEPLOYMENT_GIT_REDEPLOY_RESULT", true);
             }
-            return startPullUpdate(deployment.getHostId(), deploymentId, null, SYSTEM_USER);
+            return startPullUpdate(deployment.getHostId(), deploymentId, null, SYSTEM_USER,
+                    "DEPLOYMENT_PULL_UPDATE_RESULT", null, false);
         });
     }
 
-    private DeploymentRunResponse startPullUpdate(UUID hostId, UUID id, UUID userId, String username) {
+    private DeploymentRunResponse startPullUpdate(UUID hostId, UUID id, UUID userId, String username,
+                                                  String resultAction, CompletableFuture<PullUpdateOutcome> done,
+                                                  boolean lockHeld) {
         var host = deploymentService.requireHost(hostId);
         Deployment deployment = deploymentService.requireDeployment(hostId, id);
         DockerEndpoint endpoint = deploymentService.endpointOf(host);
-        locks.acquire(deployment.getId());
+        if (!lockHeld) {
+            locks.acquire(deployment.getId());
+        }
         boolean started = false;
         try {
             DeploymentVersion version = versions.findByDeploymentIdOrderByCreatedAtDesc(deployment.getId()).stream()
@@ -172,11 +186,11 @@ public class DeploymentRunService {
             Consumer<String> sink = streams.start(runId);
             Thread.ofVirtual().name("deploy-" + runId).start(
                     () -> run(deployment, version, endpoint, runId, sink, userId, username,
-                            "DEPLOYMENT_PULL_UPDATE_RESULT", aiMarker, List.of(ComposeCommand.PULL, ComposeCommand.UP)));
+                            resultAction, aiMarker, List.of(ComposeCommand.PULL, ComposeCommand.UP), done, lockHeld));
             started = true;
             return new DeploymentRunResponse(runId, version.getId());
         } finally {
-            if (!started) {
+            if (!started && !lockHeld) {
                 locks.release(deployment.getId());
             }
         }
@@ -278,6 +292,92 @@ public class DeploymentRunService {
         recordSystemAudit("DEPLOYMENT_AUTO_UPDATE", AuditLogEntry.Outcome.SUCCESS, deploymentId,
                 Map.of("runId", response.runId(), "versionId", response.versionId().toString()));
         return response;
+    }
+
+    /**
+     * Pull &amp; update triggered by {@code ImageAutoUpdateScheduler}, as the system (audit user {@code system}, no user
+     * id, no new version, like the webhook's pull &amp; update). Not {@code @Auditable} (no request): the worker records
+     * {@code IMAGE_AUTO_UPDATE_RESULT}, the scheduler the overall {@code IMAGE_AUTO_UPDATE} entry.
+     *
+     * <p>The caller must hold the deployment lock ({@link DeploymentLocks}) and keeps it until it is done with the
+     * whole update (health wait and rollback), so no manual run can start in between. This method and its worker
+     * neither acquire nor release it.
+     *
+     * @return completes when pull and up ended
+     * @throws DeploymentException 400 NOT_DEPLOYED
+     */
+    CompletableFuture<PullUpdateOutcome> autoPullUpdate(UUID deploymentId) {
+        return SystemScope.call(() -> {
+            Deployment deployment = deployments.findById(deploymentId).orElseThrow(
+                    () -> new DeploymentException(HttpStatus.NOT_FOUND, "DEPLOYMENT_NOT_FOUND", "Deployment not found"));
+            CompletableFuture<PullUpdateOutcome> done = new CompletableFuture<>();
+            startPullUpdate(deployment.getHostId(), deploymentId, null, SYSTEM_USER, "IMAGE_AUTO_UPDATE_RESULT", done, true);
+            return done;
+        });
+    }
+
+    /**
+     * Brings the deployment back to the images it ran before an automatic update: a temporary override file pins each
+     * service to its previous digest ({@code service name -> repo@sha256:...}) and {@code up} recreates the containers.
+     * The stored compose file and the version history stay untouched. The caller must hold the deployment lock (see
+     * {@link #autoPullUpdate}); any failure returns false (nothing is thrown).
+     *
+     * @return true when {@code up} with the pinned images succeeded
+     */
+    boolean rollbackImages(UUID deploymentId, Map<String, String> pinnedImages) {
+        String yaml = rollbackOverride(pinnedImages);
+        if (yaml == null) {
+            return false;
+        }
+        return SystemScope.call(() -> {
+            Deployment deployment = deployments.findById(deploymentId).orElse(null);
+            if (deployment == null) {
+                return false;
+            }
+            try {
+                DockerEndpoint endpoint = deploymentService.endpointOf(deploymentService.requireHost(deployment.getHostId()));
+                Path override = files.writeRollbackOverride(deployment.getHostId(), deployment.getName(), yaml);
+                ComposeProcessResult result = execution.execute(deployment.getHostId(), deployment.getName(),
+                        ComposeCommand.UP, endpoint, line -> { }, null, override);
+                tx.executeWithoutResult(status -> deployments.findById(deploymentId).ifPresent(s -> {
+                    s.setStatus(result.success() ? DeploymentStatus.RUNNING : DeploymentStatus.ERROR);
+                    deployments.save(s);
+                }));
+                return result.success();
+            } catch (RuntimeException e) {
+                log.warn("Image rollback of deployment {} failed: {}", deploymentId, e.toString());
+                return false;
+            } finally {
+                try {
+                    files.deleteRollbackOverride(deployment.getHostId(), deployment.getName());
+                } catch (RuntimeException e) {
+                    log.warn("Could not remove rollback override of deployment {}: {}", deploymentId, e.toString());
+                }
+            }
+        });
+    }
+
+    /** Override compose file pinning services to digests; entries that do not look like a service name / digest reference are dropped. */
+    private static String rollbackOverride(Map<String, String> pinnedImages) {
+        StringBuilder yaml = new StringBuilder("services:\n");
+        boolean any = false;
+        for (Map.Entry<String, String> pin : new java.util.TreeMap<>(pinnedImages).entrySet()) {
+            if (PIN_SERVICE.matcher(pin.getKey()).matches() && PIN_IMAGE.matcher(pin.getValue()).matches()) {
+                yaml.append("  \"").append(pin.getKey()).append("\":\n    image: \"").append(pin.getValue()).append("\"\n");
+                any = true;
+            }
+        }
+        return any ? yaml.toString() : null;
+    }
+
+    /** Publishes the end of an automatic image update; {@code errorCode} is null when applied. */
+    void publishImageUpdate(UUID deploymentId, boolean applied, String errorCode) {
+        try {
+            deployments.findById(deploymentId).ifPresent(d -> events.publishEvent(new ImageAutoUpdateEvent(d.getHostId(),
+                    hostNameOf(d.getHostId()), d.getId(), d.getName(), applied, errorCode, clock.instant())));
+        } catch (RuntimeException e) {
+            log.warn("Could not publish image update result of deployment {}: {}", deploymentId, e.toString());
+        }
     }
 
     /** Audit entry of a system-triggered action without user; failures to write it never fail the caller. */
@@ -393,12 +493,33 @@ public class DeploymentRunService {
     private void run(Deployment deployment, DeploymentVersion version, DockerEndpoint endpoint, String runId,
                      Consumer<String> sink, UUID userId, String username, String resultAction,
                      Map<String, Object> aiMarker) {
-        run(deployment, version, endpoint, runId, sink, userId, username, resultAction, aiMarker, List.of(ComposeCommand.UP));
+        run(deployment, version, endpoint, runId, sink, userId, username, resultAction, aiMarker, List.of(ComposeCommand.UP), null, false);
     }
 
     private void run(Deployment deployment, DeploymentVersion version, DockerEndpoint endpoint, String runId,
                      Consumer<String> sink, UUID userId, String username, String resultAction,
-                     Map<String, Object> aiMarker, List<ComposeCommand> steps) {
+                     Map<String, Object> aiMarker, List<ComposeCommand> steps,
+                     CompletableFuture<PullUpdateOutcome> done, boolean lockHeld) {
+        boolean[] lockReleased = {false};
+        PullUpdateOutcome outcome = new PullUpdateOutcome(false, "ERROR");
+        try {
+            outcome = runSteps(deployment, version, endpoint, runId, sink, userId, username, resultAction, aiMarker, steps,
+                    done != null, lockHeld, lockReleased);
+        } finally {
+            // every path (also an Error) frees the lock and completes the waiting scheduler
+            if (!lockHeld && !lockReleased[0]) {
+                locks.release(deployment.getId());
+            }
+            if (done != null) {
+                done.complete(outcome);
+            }
+        }
+    }
+
+    private PullUpdateOutcome runSteps(Deployment deployment, DeploymentVersion version, DockerEndpoint endpoint,
+                                       String runId, Consumer<String> sink, UUID userId, String username,
+                                       String resultAction, Map<String, Object> aiMarker, List<ComposeCommand> steps,
+                                       boolean automatic, boolean lockHeld, boolean[] lockReleased) {
         boolean success = false;
         String failedStep = null;
         Integer failedExit = null;
@@ -430,7 +551,12 @@ public class DeploymentRunService {
         }
         try {
             boolean ok = success;
+            // An automatic update whose pull failed touched no container: the deployment keeps its status.
+            boolean untouched = automatic && "PULL".equals(failedStep);
             tx.executeWithoutResult(status -> deployments.findById(deployment.getId()).ifPresent(s -> {
+                if (untouched) {
+                    return;
+                }
                 s.setStatus(ok ? DeploymentStatus.RUNNING : DeploymentStatus.ERROR);
                 if (ok) {
                     s.setLastDeployedAt(clock.instant());
@@ -451,8 +577,13 @@ public class DeploymentRunService {
             publishRunFailed(deployment, failedStep, failedExit, timedOut, runError);
         }
         // Release before announcing the end so a client reacting to DONE/FAILED can start the next deployment.
-        locks.release(deployment.getId());
+        if (!lockHeld) {
+            locks.release(deployment.getId());
+            lockReleased[0] = true;
+        }
+        PullUpdateOutcome outcome = new PullUpdateOutcome(success, success ? null : failedStep != null ? failedStep : "ERROR");
         streams.complete(runId, success ? RunStatus.DONE : RunStatus.FAILED);
+        return outcome;
     }
 
     private void publishRunFailed(Deployment deployment, String failedStep, Integer exitCode, boolean timedOut,

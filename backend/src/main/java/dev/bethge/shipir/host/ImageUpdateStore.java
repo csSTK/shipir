@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /** In-memory result of the last update check per host: the tagged references with a newer remote digest. */
 @Component
-class ImageUpdateStore {
+class ImageUpdateStore implements ImageUpdates {
 
     private record Result(Set<String> updatable, Instant checkedAt) {
     }
@@ -27,12 +27,14 @@ class ImageUpdateStore {
     }
 
     /** True when the tagged reference ({@link ImageReference#key()}) has a newer remote digest. */
-    boolean hasUpdate(UUID hostId, String key) {
+    @Override
+    public boolean hasUpdate(UUID hostId, String key) {
         Result r = results.get(hostId);
         return r != null && r.updatable().contains(key);
     }
 
-    Instant checkedAt(UUID hostId) {
+    @Override
+    public Instant checkedAt(UUID hostId) {
         Result r = results.get(hostId);
         return r == null ? null : r.checkedAt();
     }

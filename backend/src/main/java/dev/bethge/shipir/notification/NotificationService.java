@@ -4,6 +4,7 @@ import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
 import dev.bethge.shipir.compose.DeploymentRunFailedEvent;
 import dev.bethge.shipir.compose.GitAutoUpdateFailedEvent;
+import dev.bethge.shipir.compose.ImageAutoUpdateEvent;
 import dev.bethge.shipir.host.ContainerProblemEvent;
 import dev.bethge.shipir.host.HostStatusChangedEvent;
 import dev.bethge.shipir.host.dto.HostOverviewResponse.Status;
@@ -78,6 +79,12 @@ public class NotificationService {
     @EventListener
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     void onGitAutoUpdateFailed(GitAutoUpdateFailedEvent event) {
+        notifyAllowed(NotificationDraft.of(event));
+    }
+
+    @EventListener
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    void onImageAutoUpdate(ImageAutoUpdateEvent event) {
         notifyAllowed(NotificationDraft.of(event));
     }
 

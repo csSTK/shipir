@@ -20,6 +20,17 @@ shipir:
   images:
     update-check-enabled: true
     update-check-interval: 6h
+  image-auto-update:
+    # scheduled pull + up of FILE deployments that opted in (per deployment: on/off + daily UTC window)
+    enabled: true
+    tick: 60s
+    # time the new containers get to become healthy, else the previous image digests are restored
+    health-timeout: 2m
+    # a container without healthcheck must stay running this long
+    stable-for: 30s
+    health-poll: 5s
+    # cap for waiting on pull + up
+    run-timeout: 20m
   compose:
     timeout: 10m
     # Absolute directories (LOCAL host only) adoption may read compose files from; empty = YAML must be pasted.

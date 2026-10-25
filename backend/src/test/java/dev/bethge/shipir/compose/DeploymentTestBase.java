@@ -85,6 +85,8 @@ abstract class DeploymentTestBase {
     protected final List<ComposeCommand> commands = new CopyOnWriteArrayList<>();
     /** Compose file passed to each execution (null = default {@code compose.yaml}); parallel to {@link #commands}. */
     protected final List<Path> composeFiles = new CopyOnWriteArrayList<>();
+    /** Content of the override file ({@code -f} after the main file) of each execution that had one, read at call time. */
+    protected final List<String> overrideYamls = new CopyOnWriteArrayList<>();
     protected boolean downFails;
     protected volatile boolean upFails;
     protected volatile boolean pullFails;
@@ -113,12 +115,17 @@ abstract class DeploymentTestBase {
         pullFails = false;
         upGate = new java.util.concurrent.CountDownLatch(0);
         composeFiles.clear();
+        overrideYamls.clear();
         org.mockito.stubbing.Answer<ComposeProcessResult> fake = inv -> {
             UUID h = inv.getArgument(0);
             String name = inv.getArgument(1);
             ComposeCommand command = inv.getArgument(2);
             commands.add(command);
             composeFiles.add(inv.getArguments().length > 5 ? inv.getArgument(5) : null);
+            if (inv.getArguments().length > 6) {
+                Path override = inv.getArgument(6);
+                overrideYamls.add(Files.readString(override));
+            }
             if (command == ComposeCommand.DOWN) {
                 return downFails ? new ComposeProcessResult(1, false, List.of("cannot reach daemon"))
                         : new ComposeProcessResult(0, false, List.of());
@@ -144,6 +151,7 @@ abstract class DeploymentTestBase {
         };
         org.mockito.Mockito.doAnswer(fake).when(execution).execute(any(), any(), any(), any(), any());
         org.mockito.Mockito.doAnswer(fake).when(execution).execute(any(), any(), any(), any(), any(), any());
+        org.mockito.Mockito.doAnswer(fake).when(execution).execute(any(), any(), any(), any(), any(), any(), any());
     }
 
     /** Host-level grant for a seeded user; cascades away with the host. */

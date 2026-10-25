@@ -112,6 +112,19 @@ public class ComposeExecutionService {
      */
     public ComposeProcessResult execute(UUID hostId, String deploymentName, ComposeCommand command,
                                         DockerEndpoint endpoint, Consumer<String> onLine, Path composeFile) {
+        return execute(hostId, deploymentName, command, endpoint, onLine, composeFile, null);
+    }
+
+    /**
+     * Like the variant with {@code composeFile}, plus a second compose file merged over the first ({@code -f main -f
+     * override}); used to pin images when rolling back an image update. Like the main file it must lie inside the
+     * deployment directory (symlinks resolved), else {@code ComposeExecutionException}.
+     *
+     * @param overrideFile {@code null} for none
+     */
+    public ComposeProcessResult execute(UUID hostId, String deploymentName, ComposeCommand command,
+                                        DockerEndpoint endpoint, Consumer<String> onLine, Path composeFile,
+                                        Path overrideFile) {
         Path deploymentDir = files.deploymentDir(hostId, deploymentName);
         Path dir = deploymentDir;
         Path file = deploymentDir.resolve(ComposeFileRepository.COMPOSE_FILE);
@@ -126,6 +139,9 @@ public class ComposeExecutionService {
             }
         }
         cmd.addAll(List.of("--project-directory", dir.toString(), "-f", file.toString()));
+        if (overrideFile != null) {
+            cmd.addAll(List.of("-f", requireInside(deploymentDir, overrideFile).toString()));
+        }
         cmd.addAll(command.args());
 
         Path certDir = null;

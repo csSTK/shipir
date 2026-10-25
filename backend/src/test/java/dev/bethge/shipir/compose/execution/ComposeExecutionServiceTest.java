@@ -228,6 +228,31 @@ class ComposeExecutionServiceTest {
     }
 
     @Test
+    void overrideFileIsMergedAsSecondComposeFile() throws IOException {
+        files.write(hostId, "web", "services: {}\n", null);
+        Path override = files.writeRollbackOverride(hostId, "web", "services:\n  web:\n    image: x\n");
+        Path dir = files.deploymentDir(hostId, "web");
+        List<String> lines = new ArrayList<>();
+
+        service(Duration.ofSeconds(20)).execute(hostId, "web", ComposeCommand.UP, local(), lines::add, null, override);
+
+        assertThat(line(lines, "ARGS:")).isEqualTo("ARGS:-p web --project-directory " + dir + " -f "
+                + dir.resolve("compose.yaml") + " -f " + override + " up -d --remove-orphans");
+    }
+
+    @Test
+    void overrideFilesOutsideTheDeploymentDirectoryAreRejected() throws IOException {
+        files.write(hostId, "web", "services: {}\n", null);
+        Path outside = Files.writeString(tmp.resolve("outside.yaml"), "services: {}\n");
+        var service = service(Duration.ofSeconds(5));
+
+        for (Path bad : List.of(outside, files.deploymentDir(hostId, "web").resolve("../other/o.yaml"))) {
+            assertThatThrownBy(() -> service.execute(hostId, "web", ComposeCommand.UP, local(), l -> { }, null, bad))
+                    .isInstanceOf(ComposeExecutionException.class);
+        }
+    }
+
+    @Test
     void executeProjectRunsOnlyProjectNameAndCommandWithoutComposeFile() {
         ComposeProcessResult result = service(Duration.ofSeconds(10))
                 .executeProject("legacy", ComposeCommand.DOWN, local(), line -> { });

@@ -6,6 +6,7 @@ import dev.bethge.shipir.compose.DeploymentException;
 import dev.bethge.shipir.compose.DeploymentService;
 import dev.bethge.shipir.compose.DeploymentWebhookService;
 import dev.bethge.shipir.compose.dto.AutoUpdateRequest;
+import dev.bethge.shipir.compose.dto.ImageAutoUpdateRequest;
 import dev.bethge.shipir.compose.dto.DeploymentRunResponse;
 import dev.bethge.shipir.compose.dto.DeploymentCreateRequest;
 import dev.bethge.shipir.compose.dto.DeploymentDetailResponse;
@@ -107,6 +108,12 @@ class DeploymentController {
     DeploymentDetailResponse autoUpdate(@PathVariable UUID hostId, @PathVariable UUID id,
                                    @Valid @RequestBody AutoUpdateRequest request) {
         return service.configureAutoUpdate(hostId, id, request);
+    }
+
+    @PutMapping("/{id}/image-auto-update")
+    DeploymentDetailResponse imageAutoUpdate(@PathVariable UUID hostId, @PathVariable UUID id,
+                                             @Valid @RequestBody ImageAutoUpdateRequest request) {
+        return service.configureImageAutoUpdate(hostId, id, request);
     }
 
     @PostMapping("/{id}/stop")

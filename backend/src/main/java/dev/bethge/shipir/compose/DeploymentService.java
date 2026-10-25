@@ -9,6 +9,8 @@ import dev.bethge.shipir.common.util.PathValidationException;
 import dev.bethge.shipir.common.util.PathValidationUtil;
 import dev.bethge.shipir.compose.dto.EnvEntry;
 import dev.bethge.shipir.compose.dto.AutoUpdateRequest;
+import dev.bethge.shipir.compose.dto.ImageAutoUpdateInfo;
+import dev.bethge.shipir.compose.dto.ImageAutoUpdateRequest;
 import dev.bethge.shipir.compose.dto.GitInfo;
 import dev.bethge.shipir.compose.dto.DeploymentCreateRequest;
 import dev.bethge.shipir.compose.dto.DeploymentDetailResponse;
@@ -251,6 +253,25 @@ public class DeploymentService {
             throw missing("intervalSeconds");
         }
         deployment.configureAutoUpdate(request.enabled(), request.intervalSeconds());
+        deployments.save(deployment);
+        return get(hostId, id);
+    }
+
+    /**
+     * Turns the scheduled image update on or off for a FILE deployment and sets its daily UTC window. Git deployments
+     * have their own auto-update and are rejected: 400 NOT_A_FILE_DEPLOYMENT; 400 VALIDATION_ERROR for a bad window.
+     */
+    @Auditable(action = "DEPLOYMENT_IMAGE_AUTO_UPDATE_CONFIG", targetType = "DEPLOYMENT", targetId = "#id")
+    public DeploymentDetailResponse configureImageAutoUpdate(UUID hostId, UUID id, ImageAutoUpdateRequest request) {
+        requireOperate(hostId, id);
+        requireHost(hostId);
+        Deployment deployment = requireDeployment(hostId, id);
+        if (deployment.getSourceType() != DeploymentSource.FILE) {
+            throw new DeploymentException(HttpStatus.BAD_REQUEST, "NOT_A_FILE_DEPLOYMENT",
+                    "Image auto-update is only available for deployments with a compose file; Git deployments use the Git auto-update");
+        }
+        ImageUpdateWindow window = ImageUpdateWindow.parse(request.windowStart(), request.windowEnd());
+        deployment.configureImageAutoUpdate(request.enabled(), window);
         deployments.save(deployment);
         return get(hostId, id);
     }
@@ -499,7 +520,12 @@ public class DeploymentService {
                         s.getLastCommitSha(), s.isAutoUpdateEnabled(), s.getAutoUpdateIntervalSeconds(),
                         s.getLastPolledAt(), s.getLastPollError())
                 : null;
+        ImageAutoUpdateInfo imageInfo = s.getSourceType() == DeploymentSource.FILE
+                ? new ImageAutoUpdateInfo(s.isImageAutoUpdate(), ImageUpdateWindow.format(s.getImageUpdateWindowStart()),
+                        ImageUpdateWindow.format(s.getImageUpdateWindowEnd()), s.getImageUpdateLastAttemptAt(),
+                        s.getImageUpdateLastResult())
+                : null;
         return new DeploymentDetailResponse(s.getId(), s.getName(), s.getStatus(), s.getSourceType(),
-                s.getLastDeployedAt(), s.getCreatedAt(), yaml, envKeys, gitInfo);
+                s.getLastDeployedAt(), s.getCreatedAt(), yaml, envKeys, gitInfo, imageInfo);
     }
 }

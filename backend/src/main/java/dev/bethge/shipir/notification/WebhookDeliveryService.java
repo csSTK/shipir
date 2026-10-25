@@ -3,6 +3,7 @@ package dev.bethge.shipir.notification;
 import dev.bethge.shipir.common.security.SecretCipher;
 import dev.bethge.shipir.compose.DeploymentRunFailedEvent;
 import dev.bethge.shipir.compose.GitAutoUpdateFailedEvent;
+import dev.bethge.shipir.compose.ImageAutoUpdateEvent;
 import dev.bethge.shipir.host.ContainerProblemEvent;
 import dev.bethge.shipir.host.HostStatusChangedEvent;
 import dev.bethge.shipir.host.dto.HostOverviewResponse.Status;
@@ -91,6 +92,12 @@ class WebhookDeliveryService {
     @EventListener
     @Order(Ordered.HIGHEST_PRECEDENCE)
     void onGitAutoUpdateFailed(GitAutoUpdateFailedEvent event) {
+        dispatch(NotificationDraft.of(event));
+    }
+
+    @EventListener
+    @Order(Ordered.HIGHEST_PRECEDENCE)
+    void onImageAutoUpdate(ImageAutoUpdateEvent event) {
         dispatch(NotificationDraft.of(event));
     }
 

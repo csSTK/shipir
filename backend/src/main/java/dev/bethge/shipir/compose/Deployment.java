@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.UUID;
 
 /** A Compose deployment managed by Shipir on one environment. The compose file and .env live on disk, see {@code ComposeFileRepository}. */
@@ -65,6 +66,21 @@ public class Deployment {
     @Column(name = "last_poll_error", length = 50)
     private String lastPollError;
 
+    @Column(name = "image_auto_update", nullable = false)
+    private boolean imageAutoUpdate;
+
+    @Column(name = "image_update_window_start")
+    private LocalTime imageUpdateWindowStart;
+
+    @Column(name = "image_update_window_end")
+    private LocalTime imageUpdateWindowEnd;
+
+    @Column(name = "image_update_last_attempt_at")
+    private Instant imageUpdateLastAttemptAt;
+
+    @Column(name = "image_update_last_result", length = 20)
+    private String imageUpdateLastResult;
+
     @Column(name = "created_by", nullable = false, updatable = false)
     private UUID createdBy;
 
@@ -112,6 +128,11 @@ public class Deployment {
     public Integer getAutoUpdateIntervalSeconds() { return autoUpdateIntervalSeconds; }
     public Instant getLastPolledAt() { return lastPolledAt; }
     public String getLastPollError() { return lastPollError; }
+    public boolean isImageAutoUpdate() { return imageAutoUpdate; }
+    public LocalTime getImageUpdateWindowStart() { return imageUpdateWindowStart; }
+    public LocalTime getImageUpdateWindowEnd() { return imageUpdateWindowEnd; }
+    public Instant getImageUpdateLastAttemptAt() { return imageUpdateLastAttemptAt; }
+    public String getImageUpdateLastResult() { return imageUpdateLastResult; }
     public UUID getCreatedBy() { return createdBy; }
     public Instant getLastDeployedAt() { return lastDeployedAt; }
     public Instant getCreatedAt() { return createdAt; }
@@ -125,6 +146,18 @@ public class Deployment {
         if (!enabled) {
             this.lastPollError = null;
         }
+    }
+
+    /** Image auto-update on or off with its daily UTC window ({@code null} window = any time). */
+    public void configureImageAutoUpdate(boolean enabled, ImageUpdateWindow window) {
+        this.imageAutoUpdate = enabled;
+        this.imageUpdateWindowStart = window == null ? null : window.start();
+        this.imageUpdateWindowEnd = window == null ? null : window.end();
+    }
+
+    /** The window, or null when the deployment may update at any time. */
+    ImageUpdateWindow imageUpdateWindow() {
+        return imageUpdateWindowStart == null ? null : new ImageUpdateWindow(imageUpdateWindowStart, imageUpdateWindowEnd);
     }
 
     public void recordPoll(Instant at, String error) {
