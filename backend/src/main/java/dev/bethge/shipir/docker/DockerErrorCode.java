@@ -25,5 +25,9 @@ public enum DockerErrorCode {
     /** The container path is not an absolute path, contains NUL, or is not a directory where one is needed. */
     INVALID_PATH,
     /** A file transfer or directory scan exceeded the allowed number of bytes; aborted while streaming. */
-    SIZE_LIMIT_EXCEEDED
+    SIZE_LIMIT_EXCEEDED,
+    /** Recreate failed after the new container was created; it has been removed and the old one restored (or restoring failed, see log). */
+    RECREATE_FAILED,
+    /** The daemon refused new resource limits (e.g. memory below current usage or below the minimum). */
+    UPDATE_REJECTED
 }

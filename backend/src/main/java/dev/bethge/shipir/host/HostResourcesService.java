@@ -18,6 +18,8 @@ import dev.bethge.shipir.docker.dto.NetworkDto;
 import dev.bethge.shipir.docker.dto.DeploymentSummaryDto;
 import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import dev.bethge.shipir.docker.dto.ContainerCreateSpec;
+import dev.bethge.shipir.docker.dto.ContainerResourcesSpec;
+import dev.bethge.shipir.host.dto.UpdateContainerResourcesRequest;
 import dev.bethge.shipir.docker.dto.CreatedResourceDto;
 import dev.bethge.shipir.docker.dto.NetworkCreateSpec;
 import dev.bethge.shipir.docker.dto.VolumeCreateSpec;
@@ -498,13 +500,97 @@ public class HostResourcesService {
             targetId = "#request?.name() != null ? #request.name() : #request?.image()")
     CreatedResourceDto createContainer(UUID hostId, CreateContainerRequest request) {
         requireOperate(hostId);
+        ContainerCreateSpec spec = authorizedSpec(request);
+        return call(hostId, (id, endpoint) -> containers.createContainer(id, endpoint, spec));
+    }
+
+    /** The create validation and the ADMIN gate, shared by create, duplicate and recreate so none can be weaker. */
+    private ContainerCreateSpec authorizedSpec(CreateContainerRequest request) {
         ContainerCreateSpec spec = validateContainer(request);
         boolean bind = spec.mounts().stream().anyMatch(m -> "BIND".equals(m.type()));
         if ((spec.privileged() || spec.hostNetwork() || bind) && !access.isAdmin()) {
             throw new HostException(HttpStatus.FORBIDDEN, "ADMIN_REQUIRED",
                     "Privileged mode, host networking and bind mounts need the ADMIN role");
         }
+        return spec;
+    }
+
+    /** Compose owns its containers: changing one behind its back would be undone by the next {@code up}. */
+    private ContainerDetailsDto requireNotComposeManaged(UUID hostId, String containerId) {
+        ContainerDetailsDto existing = call(hostId, (id, endpoint) -> containers.inspect(id, endpoint, containerId));
+        if (existing.composeProject() != null) {
+            throw new HostException(HttpStatus.CONFLICT, "MANAGED_BY_COMPOSE",
+                    "This container belongs to a Compose project; change it through its deployment");
+        }
+        return existing;
+    }
+
+    /**
+     * Replaces a container by one built from the edited spec (same validation and ADMIN gate as create). The name is
+     * always the old one; the new container is started only if the old one was running; a failure restores the old one
+     * (409 CONTAINER_RECREATE_FAILED). Compose-labelled containers: 409 MANAGED_BY_COMPOSE.
+     */
+    @Auditable(action = "CONTAINER_RECREATE", targetType = "CONTAINER", targetId = "#containerId")
+    CreatedResourceDto recreateContainer(UUID hostId, String containerId, CreateContainerRequest request) {
+        requireOperate(hostId);
+        validateResourceId(containerId);
+        ContainerCreateSpec spec = authorizedSpec(request);
+        ContainerDetailsDto existing = requireNotComposeManaged(hostId, containerId);
+        ContainerCreateSpec named = withName(spec, existing.name());
+        return call(hostId, (id, endpoint) -> containers.recreateContainer(id, endpoint, containerId, named));
+    }
+
+    /** Creates a new container from the edited spec of an existing one; the original is not touched. */
+    @Auditable(action = "CONTAINER_DUPLICATE", targetType = "CONTAINER", targetId = "#containerId")
+    CreatedResourceDto duplicateContainer(UUID hostId, String containerId, CreateContainerRequest request) {
+        requireOperate(hostId);
+        validateResourceId(containerId);
+        ContainerCreateSpec spec = authorizedSpec(request);
+        requireNotComposeManaged(hostId, containerId);
         return call(hostId, (id, endpoint) -> containers.createContainer(id, endpoint, spec));
+    }
+
+    private static ContainerCreateSpec withName(ContainerCreateSpec s, String name) {
+        return new ContainerCreateSpec(name, s.image(), s.command(), s.env(), s.ports(), s.mounts(), s.network(),
+                s.restartPolicy(), s.privileged(), s.hostNetwork(), s.start());
+    }
+
+    private static final long MIN_MEMORY_BYTES = 6L * 1024 * 1024;
+    private static final long MAX_MEMORY_BYTES = 1L << 40;
+
+    /** Changes memory, CPU limit and restart policy in place (no restart). 400 INVALID_RESOURCES, 409 RESOURCES_REJECTED. */
+    @Auditable(action = "CONTAINER_UPDATE", targetType = "CONTAINER", targetId = "#containerId",
+            details = "{memoryBytes: #request?.memoryBytes(), cpus: #request?.cpus(), restartPolicy: #request?.restartPolicy()}")
+    void updateContainerResources(UUID hostId, String containerId, UpdateContainerResourcesRequest request) {
+        requireOperate(hostId);
+        validateResourceId(containerId);
+        ContainerResourcesSpec spec = validateResources(request);
+        requireNotComposeManaged(hostId, containerId);
+        call(hostId, (id, endpoint) -> {
+            containers.updateResources(id, endpoint, containerId, spec);
+            return null;
+        });
+    }
+
+    private static ContainerResourcesSpec validateResources(UpdateContainerResourcesRequest r) {
+        List<String> v = new java.util.ArrayList<>();
+        if (r == null || (r.memoryBytes() == null && r.cpus() == null && r.restartPolicy() == null)) {
+            v.add("body: at least one of memoryBytes, cpus, restartPolicy");
+            failIfAny("INVALID_RESOURCES", "Invalid resources", v);
+        }
+        if (r.memoryBytes() != null && r.memoryBytes() != 0
+                && (r.memoryBytes() < MIN_MEMORY_BYTES || r.memoryBytes() > MAX_MEMORY_BYTES)) {
+            v.add("memoryBytes: 0 (unlimited) or between 6 MiB and 1 TiB");
+        }
+        if (r.cpus() != null && r.cpus() != 0 && !(r.cpus() >= 0.01 && r.cpus() <= 1024)) {
+            v.add("cpus: 0 (unlimited) or between 0.01 and 1024");
+        }
+        String restart = r.restartPolicy() == null || r.restartPolicy().isBlank() ? null : r.restartPolicy();
+        if (restart != null && !RESTART_POLICIES.contains(restart)) {
+            v.add("restartPolicy: one of " + new java.util.TreeSet<>(RESTART_POLICIES));
+        }
+        failIfAny("INVALID_RESOURCES", "Invalid resources", v);
+        return new ContainerResourcesSpec(r.memoryBytes(), r.cpus() == null ? null : Math.round(r.cpus() * 1_000_000_000d), restart);
     }
 
     @Auditable(action = "NETWORK_CREATE", targetType = "NETWORK", targetId = "#request?.name()")
@@ -693,6 +779,14 @@ public class HostResourcesService {
             if (e.getCode() == DockerErrorCode.START_FAILED) {
                 throw new HostException(HttpStatus.CONFLICT, "CONTAINER_START_FAILED",
                         "The container was created but could not be started (e.g. port in use); it has been removed");
+            }
+            if (e.getCode() == DockerErrorCode.RECREATE_FAILED) {
+                throw new HostException(HttpStatus.CONFLICT, "CONTAINER_RECREATE_FAILED",
+                        "The container could not be recreated (e.g. a port is in use); the previous container was kept");
+            }
+            if (e.getCode() == DockerErrorCode.UPDATE_REJECTED) {
+                throw new HostException(HttpStatus.CONFLICT, "RESOURCES_REJECTED",
+                        "The Docker daemon refused the new limits (e.g. memory below current usage)");
             }
             if (e.getCode() == DockerErrorCode.INVALID_STATE) {
                 throw new HostException(HttpStatus.CONFLICT, "INVALID_CONTAINER_STATE",

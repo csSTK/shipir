@@ -129,6 +129,9 @@ class SecurityConfig {
                                 "/api/hosts/*/containers/*/restart", "/api/hosts/*/containers/*/pause",
                                 "/api/hosts/*/containers/*/unpause", "/api/hosts/*/containers/*/kill")
                         .hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.POST, "/api/hosts/*/containers/*/recreate", "/api/hosts/*/containers/*/duplicate")
+                        .hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.PATCH, "/api/hosts/*/containers/*/resources").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/hosts/*/containers", "/api/hosts/*/networks",
                                 "/api/hosts/*/volumes").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/hosts/*/images/pull").hasAnyRole("ADMIN", "OPERATOR")

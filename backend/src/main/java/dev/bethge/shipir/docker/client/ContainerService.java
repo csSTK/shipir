@@ -2,6 +2,7 @@ package dev.bethge.shipir.docker.client;
 
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.dto.ContainerCreateSpec;
+import dev.bethge.shipir.docker.dto.ContainerResourcesSpec;
 import dev.bethge.shipir.docker.dto.CreatedResourceDto;
 import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import dev.bethge.shipir.docker.dto.ContainerDetailsDto;
@@ -54,6 +55,24 @@ public interface ContainerService {
      * not start; the container is removed again).
      */
     CreatedResourceDto createContainer(UUID hostId, DockerEndpoint endpoint, ContainerCreateSpec spec);
+
+    /**
+     * Replaces the container {@code id} by a new one built from {@code spec}, keeping its name, labels and every
+     * host setting the spec does not model (resource limits, devices, ...), plus hostname, tty/stdin and, if the image
+     * is unchanged, user, working dir, entrypoint and healthcheck. StopSignal and StopTimeout are not carried over
+     * (docker-java's ContainerConfig has no getters for them). Order: create the new container under a
+     * temporary name, stop and rename the old one, rename and start the new one (only if the old one was running),
+     * remove the old one (anonymous volumes are kept). On any failure the new container is removed and the old one is
+     * renamed back and restarted. {@code spec.name()} and {@code spec.start()} are ignored. Throws
+     * {@code DockerConnectionException}: NOT_FOUND (container or image missing), RECREATE_FAILED (rolled back).
+     */
+    CreatedResourceDto recreateContainer(UUID hostId, DockerEndpoint endpoint, String id, ContainerCreateSpec spec);
+
+    /**
+     * Applies resource limits to an existing container without restarting it ({@code docker update}). Throws
+     * {@code DockerConnectionException}: NOT_FOUND, UPDATE_REJECTED (the daemon refused the values).
+     */
+    void updateResources(UUID hostId, DockerEndpoint endpoint, String id, ContainerResourcesSpec spec);
 
     /** Containers a prune removes: every container that is not running, paused or restarting (size = writable layer). */
     List<PruneCandidateDto> listPrunable(UUID hostId, DockerEndpoint endpoint);

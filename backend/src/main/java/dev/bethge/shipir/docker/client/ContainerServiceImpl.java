@@ -1,7 +1,9 @@
 package dev.bethge.shipir.docker.client;
 
 import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.exception.BadRequestException;
 import com.github.dockerjava.api.exception.ConflictException;
+import com.github.dockerjava.api.exception.NotModifiedException;
 import com.github.dockerjava.api.exception.DockerException;
 import com.github.dockerjava.api.exception.InternalServerErrorException;
 import com.github.dockerjava.api.model.AccessMode;
@@ -10,8 +12,10 @@ import com.github.dockerjava.api.model.HostConfig;
 import com.github.dockerjava.api.model.InternetProtocol;
 import com.github.dockerjava.api.model.Volume;
 import dev.bethge.shipir.docker.dto.ContainerCreateSpec;
+import dev.bethge.shipir.docker.dto.ContainerResourcesSpec;
 import dev.bethge.shipir.docker.dto.CreatedResourceDto;
 import com.github.dockerjava.api.model.Container;
+import com.github.dockerjava.api.model.ContainerConfig;
 import com.github.dockerjava.api.command.HealthState;
 import com.github.dockerjava.api.command.HealthStateLog;
 import com.github.dockerjava.api.command.InspectContainerResponse;
@@ -46,6 +50,8 @@ import java.util.function.Consumer;
 
 @Service
 public class ContainerServiceImpl implements ContainerService {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ContainerServiceImpl.class);
 
     static final String PROJECT_LABEL = "com.docker.compose.project";
     static final String SERVICE_LABEL = "com.docker.compose.service";
@@ -247,43 +253,7 @@ public class ContainerServiceImpl implements ContainerService {
     @Override
     public CreatedResourceDto createContainer(UUID hostId, DockerEndpoint endpoint, ContainerCreateSpec spec) {
         return calls.call(hostId, endpoint, client -> {
-            HostConfig host = HostConfig.newHostConfig().withPrivileged(spec.privileged());
-            Ports bindings = new Ports();
-            List<ExposedPort> exposed = new ArrayList<>();
-            for (ContainerCreateSpec.Port p : spec.ports()) {
-                ExposedPort port = new ExposedPort(p.containerPort(),
-                        "udp".equals(p.protocol()) ? InternetProtocol.UDP : InternetProtocol.TCP);
-                exposed.add(port);
-                bindings.bind(port, p.hostPort() == null ? Ports.Binding.empty() : Ports.Binding.bindPort(p.hostPort()));
-            }
-            if (!spec.ports().isEmpty()) {
-                host.withPortBindings(bindings);
-            }
-            host.withBinds(spec.mounts().stream()
-                    .map(m -> new Bind(m.source(), new Volume(m.target()), Boolean.TRUE.equals(m.readOnly()) ? AccessMode.ro : AccessMode.rw))
-                    .toList());
-            if (spec.restartPolicy() != null) {
-                host.withRestartPolicy(RestartPolicy.parse(spec.restartPolicy()));
-            }
-            if (spec.hostNetwork()) {
-                host.withNetworkMode("host");
-            } else if (spec.network() != null) {
-                host.withNetworkMode(spec.network());
-            }
-            var cmd = client.createContainerCmd(spec.image()).withHostConfig(host).withExposedPorts(exposed)
-                    .withEnv(spec.env().entrySet().stream().map(e -> e.getKey() + "=" + e.getValue()).toList());
-            if (spec.name() != null) {
-                cmd.withName(spec.name());
-            }
-            if (!spec.command().isEmpty()) {
-                cmd.withCmd(spec.command());
-            }
-            String id;
-            try {
-                id = cmd.exec().getId();
-            } catch (ConflictException e) {
-                throw new DockerConnectionException(DockerErrorCode.NAME_TAKEN, "The container name is taken.", e);
-            }
+            String id = createFrom(client, spec, spec.name(), HostConfig.newHostConfig(), null, null);
             if (spec.start()) {
                 try {
                     client.startContainerCmd(id).exec();
@@ -298,6 +268,162 @@ public class ContainerServiceImpl implements ContainerService {
                 }
             }
             return new CreatedResourceDto(id, spec.name());
+        });
+    }
+
+    /**
+     * Creates (does not start) a container from {@code spec} under {@code name}. {@code host} is the base host config
+     * (fresh for create, the old container's for recreate, so settings the spec does not model survive); everything the
+     * spec models is set on it explicitly. {@code old} (recreate only) supplies what the spec does not model: labels,
+     * hostname (if it was set explicitly), tty/stdin and, when the image is unchanged, user, working dir, entrypoint
+     * and healthcheck (with a new image these would pin the old image's defaults).
+     */
+    private static String createFrom(DockerClient client, ContainerCreateSpec spec, String name, HostConfig host,
+                                     ContainerConfig old, String oldId) {
+        host.withPrivileged(spec.privileged()).withMounts(List.of());
+        Ports bindings = new Ports();
+        List<ExposedPort> exposed = new ArrayList<>();
+        for (ContainerCreateSpec.Port p : spec.ports()) {
+            ExposedPort port = new ExposedPort(p.containerPort(),
+                    "udp".equals(p.protocol()) ? InternetProtocol.UDP : InternetProtocol.TCP);
+            exposed.add(port);
+            bindings.bind(port, p.hostPort() == null ? Ports.Binding.empty() : Ports.Binding.bindPort(p.hostPort()));
+        }
+        host.withPortBindings(bindings);
+        host.withBinds(spec.mounts().stream()
+                .map(m -> new Bind(m.source(), new Volume(m.target()), Boolean.TRUE.equals(m.readOnly()) ? AccessMode.ro : AccessMode.rw))
+                .toList());
+        host.withRestartPolicy(spec.restartPolicy() == null ? RestartPolicy.noRestart() : RestartPolicy.parse(spec.restartPolicy()));
+        if (spec.hostNetwork()) {
+            host.withNetworkMode("host");
+        } else {
+            host.withNetworkMode(spec.network() == null ? "default" : spec.network());
+        }
+        var cmd = client.createContainerCmd(spec.image()).withHostConfig(host).withExposedPorts(exposed)
+                .withEnv(spec.env().entrySet().stream().map(e -> e.getKey() + "=" + e.getValue()).toList());
+        if (name != null) {
+            cmd.withName(name);
+        }
+        if (old != null) {
+            if (old.getLabels() != null) {
+                cmd.withLabels(old.getLabels());
+            }
+            if (old.getHostName() != null && oldId != null && !oldId.startsWith(old.getHostName())) {
+                cmd.withHostName(old.getHostName());
+            }
+            cmd.withTty(old.getTty()).withStdinOpen(old.getStdinOpen());
+            if (spec.image().equals(old.getImage())) {
+                cmd.withUser(old.getUser()).withWorkingDir(old.getWorkingDir()).withHealthcheck(old.getHealthcheck());
+                if (old.getEntrypoint() != null) {
+                    cmd.withEntrypoint(old.getEntrypoint());
+                }
+            }
+        }
+        if (!spec.command().isEmpty()) {
+            cmd.withCmd(spec.command());
+        }
+        try {
+            return cmd.exec().getId();
+        } catch (ConflictException e) {
+            throw new DockerConnectionException(DockerErrorCode.NAME_TAKEN, "The container name is taken.", e);
+        }
+    }
+
+    private static final int RECREATE_STOP_SECONDS = 10;
+    private static final Duration RECREATE_EXTRA = Duration.ofSeconds(RECREATE_STOP_SECONDS + 60);
+
+    @Override
+    public CreatedResourceDto recreateContainer(UUID hostId, DockerEndpoint endpoint, String id, ContainerCreateSpec spec) {
+        return calls.call(hostId, endpoint, RECREATE_EXTRA, client -> {
+            InspectContainerResponse old = client.inspectContainerCmd(id).exec();
+            String name = stripSlash(old.getName());
+            boolean running = old.getState() != null && Boolean.TRUE.equals(old.getState().getRunning());
+            String suffix = UUID.randomUUID().toString().substring(0, 8);
+            String oldName = name + "-shipir-old-" + suffix;
+            HostConfig baseHost = old.getHostConfig() == null ? HostConfig.newHostConfig() : old.getHostConfig();
+            String newId = createFrom(client, spec, name + "-shipir-new-" + suffix, baseHost, old.getConfig(), old.getId());
+            boolean stopped = running; // set before stopping: a failed stop may still have stopped it
+            boolean oldRenamed = false;
+            try {
+                if (running) {
+                    try {
+                        client.stopContainerCmd(id).withTimeout(RECREATE_STOP_SECONDS).exec();
+                    } catch (NotModifiedException alreadyStopped) {
+                        // fine
+                    }
+                }
+                client.renameContainerCmd(id).withName(oldName).exec();
+                oldRenamed = true;
+                client.renameContainerCmd(newId).withName(name).exec();
+                if (running) {
+                    client.startContainerCmd(newId).exec();
+                }
+            } catch (RuntimeException e) {
+                boolean restored = rollback(client, id, newId, name, running, stopped, oldRenamed);
+                throw new DockerConnectionException(DockerErrorCode.RECREATE_FAILED, restored
+                        ? "The container could not be recreated; the previous container was restored."
+                        : "The container could not be recreated and restoring the previous one failed.", e);
+            }
+            try {
+                client.removeContainerCmd(id).withForce(true).withRemoveVolumes(false).exec();
+            } catch (RuntimeException e) {
+                log.warn("Recreated container {} but could not remove the old one ({}): {}", name, oldName, e.toString());
+            }
+            return new CreatedResourceDto(newId, name);
+        });
+    }
+
+    /** Best effort, every step on its own: the new container goes, the old one gets its name and state back. */
+    private static boolean rollback(DockerClient client, String oldId, String newId, String name, boolean wasRunning,
+                                    boolean stopped, boolean oldRenamed) {
+        boolean ok = true;
+        try {
+            client.removeContainerCmd(newId).withForce(true).withRemoveVolumes(false).exec();
+        } catch (RuntimeException e) {
+            ok = false;
+            log.error("Rollback: could not remove the new container {}: {}", newId, e.toString());
+        }
+        if (oldRenamed) {
+            try {
+                client.renameContainerCmd(oldId).withName(name).exec();
+            } catch (RuntimeException e) {
+                ok = false;
+                log.error("Rollback: could not rename the old container {} back to {}: {}", oldId, name, e.toString());
+            }
+        }
+        if (wasRunning && stopped) {
+            try {
+                client.startContainerCmd(oldId).exec();
+            } catch (NotModifiedException alreadyRunning) {
+                // fine
+            } catch (RuntimeException e) {
+                ok = false;
+                log.error("Rollback: could not restart the old container {}: {}", oldId, e.toString());
+            }
+        }
+        return ok;
+    }
+
+    @Override
+    public void updateResources(UUID hostId, DockerEndpoint endpoint, String id, ContainerResourcesSpec spec) {
+        calls.call(hostId, endpoint, client -> {
+            var cmd = client.updateContainerCmd(id);
+            if (spec.memoryBytes() != null) {
+                cmd.withMemory(spec.memoryBytes()).withMemorySwap(spec.memoryBytes() == 0 ? -1L : spec.memoryBytes());
+            }
+            if (spec.nanoCpus() != null) {
+                cmd.withNanoCPUs(spec.nanoCpus());
+            }
+            if (spec.restartPolicy() != null) {
+                cmd.withRestartPolicy(RestartPolicy.parse(spec.restartPolicy()));
+            }
+            try {
+                cmd.exec();
+            } catch (BadRequestException | InternalServerErrorException e) {
+                throw new DockerConnectionException(DockerErrorCode.UPDATE_REJECTED,
+                        "The daemon refused the new resource limits.", e);
+            }
+            return null;
         });
     }
 

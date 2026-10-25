@@ -14,10 +14,12 @@ import dev.bethge.shipir.host.dto.PruneRequest;
 import dev.bethge.shipir.host.dto.PruneResponse;
 import dev.bethge.shipir.host.dto.PullImageRequest;
 import dev.bethge.shipir.host.dto.PullImageResponse;
+import dev.bethge.shipir.host.dto.UpdateContainerResourcesRequest;
 import dev.bethge.shipir.docker.dto.VolumeDto;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -144,6 +146,27 @@ class HostResourcesController {
     @ResponseStatus(HttpStatus.CREATED)
     CreatedResourceDto createContainer(@PathVariable UUID id, @RequestBody CreateContainerRequest request) {
         return service.createContainer(id, request);
+    }
+
+    /** Replaces the container by one built from the edited spec; keeps its name, 409 if Compose manages it. */
+    @PostMapping("/containers/{containerId}/recreate")
+    CreatedResourceDto recreateContainer(@PathVariable UUID id, @PathVariable String containerId,
+                                         @RequestBody CreateContainerRequest request) {
+        return service.recreateContainer(id, containerId, request);
+    }
+
+    @PostMapping("/containers/{containerId}/duplicate")
+    @ResponseStatus(HttpStatus.CREATED)
+    CreatedResourceDto duplicateContainer(@PathVariable UUID id, @PathVariable String containerId,
+                                          @RequestBody CreateContainerRequest request) {
+        return service.duplicateContainer(id, containerId, request);
+    }
+
+    @PatchMapping("/containers/{containerId}/resources")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void updateContainerResources(@PathVariable UUID id, @PathVariable String containerId,
+                                  @RequestBody UpdateContainerResourcesRequest request) {
+        service.updateContainerResources(id, containerId, request);
     }
 
     @PostMapping("/networks")
