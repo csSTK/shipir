@@ -419,7 +419,7 @@ public class DeploymentRunService {
         try {
             DeploymentVersion source = rollbackTo == null ? deploymentService.currentVersion(deployment) : versionOf(deployment, rollbackTo);
             String envText = decryptEnv(source);
-            GitCheckout checkout = pullGit ? pull(deployment, endpoint, envText) : null;
+            GitCheckout checkout = pullGit ? pull(deployment, endpoint, envText, unrestricted(username, userId)) : null;
             if (!pullGit) {
                 alignCheckout(deployment, source);
             }
@@ -475,7 +475,7 @@ public class DeploymentRunService {
     }
 
     /** Fetches the ref into the checkout and validates the compose file; the previous file is restored when invalid. */
-    private GitCheckout pull(Deployment deployment, DockerEndpoint endpoint, String envText) {
+    private GitCheckout pull(Deployment deployment, DockerEndpoint endpoint, String envText, boolean unrestricted) {
         if (deployment.getSourceType() != DeploymentSource.GIT) {
             throw new DeploymentException(HttpStatus.BAD_REQUEST, "NOT_A_GIT_DEPLOYMENT", "This deployment is not sourced from Git");
         }
@@ -486,6 +486,12 @@ public class DeploymentRunService {
         String previousYaml = files.readCompose(hostId, name).orElse(null);
         files.write(hostId, name, checkout.composeYaml(), envText);
         ValidationResult result;
+        try {
+            deploymentService.enforceFileAccess(hostId, name, deploymentService.composeFileOf(deployment), unrestricted);
+        } catch (RuntimeException e) {
+            restore(hostId, name, previousYaml, envText);
+            throw e;
+        }
         try {
             result = validation.validate(hostId, name, endpoint, deploymentService.composeFileOf(deployment));
         } catch (ComposeExecutionException e) {

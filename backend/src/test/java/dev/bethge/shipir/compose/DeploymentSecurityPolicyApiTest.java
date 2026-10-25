@@ -61,6 +61,34 @@ class DeploymentSecurityPolicyApiTest extends DeploymentTestBase {
         mvc.perform(admin.write(post(url() + "/" + id + "/deploy"))).andExpect(status().isAccepted());
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"/proc/self/environ", "../other/.env", "'${HOME}/.env'"})
+    void operatorCannotReadFilesOutsideTheDeploymentDirectoryViaEnvFile(String path) throws Exception {
+        String yaml = "services:\n  x:\n    image: alpine\n    env_file: " + path + "\n";
+        mvc.perform(login("operator").write(post(url()).contentType(APPLICATION_JSON).content(body("leak", yaml))))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ADMIN_REQUIRED"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM deployments", Integer.class)).isZero();
+        assertThat(commands).doesNotContain(ComposeCommand.UP);
+    }
+
+    @Test
+    void operatorCannotHideEnvFileBehindAYamlAlias() throws Exception {
+        String yaml = "x-p: &p /proc/self/environ\nservices:\n  x:\n    image: alpine\n    env_file: *p\n";
+        mvc.perform(login("operator").write(post(url()).contentType(APPLICATION_JSON).content(body("alias", yaml))))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ADMIN_REQUIRED"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM deployments", Integer.class)).isZero();
+    }
+
+    @Test
+    void operatorMayUseEnvFileInsideTheDeploymentDirectory() throws Exception {
+        create(login("operator"), "local-env", "services:\n  x:\n    image: alpine\n    env_file: [app.env]\n");
+    }
+
+    @Test
+    void adminIsExemptFromTheFilePathRestriction() throws Exception {
+        create(login("admin"), "adminenv", "services:\n  x:\n    image: alpine\n    env_file: /etc/shipir.env\n");
+    }
+
     @Test
     void operatorMayUseNamedVolumesAndPlainServices() throws Exception {
         create(login("operator"), "fine", "services:\n  x:\n    image: nginx\n    volumes:\n      - data:/data\nvolumes:\n  data: {}\n");

@@ -24,7 +24,8 @@ import java.util.UUID;
  * {@code docker compose config --format json}, never the raw text, so anchors, {@code extends} and {@code include} cannot
  * hide a setting. Denied for non-ADMIN: {@code privileged}, {@code cap_add}, {@code pid}/{@code ipc}/{@code network_mode}
  * {@code host}, {@code devices}, {@code security_opt}, {@code userns_mode}, bind mounts outside the deployment directory
- * (including the Docker socket) and named volumes that are bind mounts in disguise ({@code driver_opts}). Named volumes
+ * (including the Docker socket) and named volumes that are bind mounts in disguise ({@code driver_opts}), plus {@code secrets}/{@code configs} files outside the
+ * deployment directory and (see {@link ComposeFilePolicy}) {@code env_file}/{@code include}/{@code extends} paths outside it. Named volumes
  * and paths inside the deployment directory stay allowed. Callers decide who is ADMIN; this class only evaluates.
  */
 @Service
@@ -53,7 +54,23 @@ public class ComposeSecurityPolicy {
             throw new ComposeExecutionException("docker compose config failed", null);
         }
         Path allowedDir = files.deploymentDir(hostId, deploymentName);
-        return violationsOf(parse(result.output()), allowedDir);
+        List<String> violations = new ArrayList<>(violationsOf(parse(result.output()), allowedDir));
+        violations.addAll(ComposeFilePolicy.violations(composeFileOf(allowedDir, composeFile), allowedDir, true));
+        return violations;
+    }
+
+    /**
+     * Cheap check of the raw compose YAML (and the local files it includes) for paths outside the deployment directory.
+     * Runs before any {@code docker compose} call so compose never opens such a file for a non-ADMIN author. Unparsable
+     * YAML is skipped here (compose rejects it itself); {@link #violations} re-checks strictly after compose accepted it.
+     */
+    public List<String> fileViolations(UUID hostId, String deploymentName, Path composeFile) {
+        Path allowedDir = files.deploymentDir(hostId, deploymentName);
+        return ComposeFilePolicy.violations(composeFileOf(allowedDir, composeFile), allowedDir, false);
+    }
+
+    private static Path composeFileOf(Path deploymentDir, Path composeFile) {
+        return composeFile != null ? composeFile : deploymentDir.resolve(ComposeFileRepository.COMPOSE_FILE);
     }
 
     /**
@@ -129,6 +146,14 @@ public class ComposeSecurityPolicy {
                 }
             }
         });
+        for (String section : List.of("secrets", "configs")) {
+            config.path(section).propertyStream().forEach(entry -> {
+                String file = entry.getValue().path("file").asString("");
+                if (!file.isEmpty() && !insideOf(allowed, file)) {
+                    violations.add(section.substring(0, section.length() - 1) + " " + entry.getKey() + ": file " + file);
+                }
+            });
+        }
         config.path("volumes").propertyStream().forEach(entry -> {
             JsonNode opts = entry.getValue().path("driver_opts");
             String type = opts.path("type").asString("");
@@ -157,7 +182,7 @@ public class ComposeSecurityPolicy {
     }
 
     /** Symlink-resolved absolute path, or null when it cannot be resolved. */
-    private static Path real(Path path) {
+    static Path real(Path path) {
         Path normalized = path.toAbsolutePath().normalize();
         try {
             // resolve symlinks of the longest existing prefix so a link inside the checkout cannot point out of it

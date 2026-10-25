@@ -39,8 +39,7 @@ public class ComposeExecutionService {
             PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------"));
     private static final FileAttribute<Set<PosixFilePermission>> FILE_PERMISSIONS =
             PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"));
-    private static final List<String> DOCKER_ENV =
-            List.of("DOCKER_HOST", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH", "DOCKER_CONTEXT");
+    private static final Set<String> ENV_ALLOW_LIST = Set.of("PATH", "HOME", "LANG", "LANGUAGE", "TZ", "TMPDIR", "DOCKER_CONFIG");
     private static final String DOCKER_HUB_CONFIG_KEY = "https://index.docker.io/v1/";
 
     private final ComposeFileRepository files;
@@ -49,6 +48,7 @@ public class ComposeExecutionService {
     private final List<String> executable;
     private final Supplier<List<String>> pluginDirs;
     private final Path tempRoot;
+    private Map<String, String> parentEnvironment = System.getenv();
 
     @Autowired
     public ComposeExecutionService(ComposeFileRepository files, ComposeProperties properties,
@@ -84,6 +84,38 @@ public class ComposeExecutionService {
         this.properties = properties;
         this.registryAuths = registryAuths;
         this.executable = List.copyOf(executable);
+    }
+
+    /** Test seam: replaces the backend environment the child environment is derived from. */
+    ComposeExecutionService withParentEnvironment(Map<String, String> parent) {
+        this.parentEnvironment = parent;
+        return this;
+    }
+
+    /**
+     * The environment of the compose child process: an allow-list taken from the backend environment, never the whole
+     * thing. Compose interpolates {@code ${VAR}} from its process environment, so an inherited
+     * {@code SHIPIR_ENCRYPTION_KEY} or {@code DB_PASSWORD} would let a deployment author read it into a container.
+     * Kept: {@code PATH} (find {@code docker} and credential helpers), {@code HOME} (CLI plugin dir
+     * {@code ~/.docker/cli-plugins}), locale ({@code LANG}, {@code LC_*}), {@code TZ}, {@code TMPDIR}, and
+     * {@code DOCKER_CONFIG} (plugin/config location; replaced when registry logins are applied). Everything else is
+     * dropped, including {@code COMPOSE_*} (can redirect files/project) and {@code DOCKER_HOST}/{@code DOCKER_CERT_PATH}/
+     * {@code DOCKER_TLS_VERIFY}/{@code DOCKER_CONTEXT}, which are set per host after this. Not kept: {@code XDG_*}
+     * (not used by the CLI/compose), proxy and {@code SSL_*} variables (image pulls are done by the target daemon).
+     */
+    static Map<String, String> allowListed(Map<String, String> parent) {
+        Map<String, String> env = new java.util.HashMap<>();
+        parent.forEach((k, v) -> {
+            if (ENV_ALLOW_LIST.contains(k) || k.startsWith("LC_")) {
+                env.put(k, v);
+            }
+        });
+        return env;
+    }
+
+    private void restrictEnvironment(Map<String, String> env) {
+        env.clear();
+        env.putAll(allowListed(parentEnvironment));
     }
 
     /**
@@ -152,7 +184,7 @@ public class ComposeExecutionService {
                 builder.directory(dir.toFile());
             }
             Map<String, String> env = builder.environment();
-            DOCKER_ENV.forEach(env::remove);
+            restrictEnvironment(env);
             certDir = applyEndpoint(env, endpoint);
             configDir = applyRegistryAuths(env);
             return run(builder, onLine);
@@ -180,7 +212,7 @@ public class ComposeExecutionService {
         try {
             ProcessBuilder builder = new ProcessBuilder(cmd).redirectErrorStream(true);
             Map<String, String> env = builder.environment();
-            DOCKER_ENV.forEach(env::remove);
+            restrictEnvironment(env);
             certDir = applyEndpoint(env, endpoint);
             configDir = applyRegistryAuths(env);
             return run(builder, onLine);

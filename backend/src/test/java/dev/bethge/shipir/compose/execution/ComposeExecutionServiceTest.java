@@ -365,6 +365,57 @@ class ComposeExecutionServiceTest {
         assertThat(new RegistryAuthSource.Auth("h", "u", "s3cret").toString()).doesNotContain("s3cret");
     }
 
+    private static final java.util.Map<String, String> BACKEND_ENV = java.util.Map.ofEntries(
+            java.util.Map.entry("PATH", "/usr/bin:/bin"), java.util.Map.entry("HOME", "/home/shipir"),
+            java.util.Map.entry("LANG", "C.UTF-8"), java.util.Map.entry("LC_ALL", "C.UTF-8"),
+            java.util.Map.entry("TZ", "UTC"), java.util.Map.entry("DOCKER_CONFIG", "/home/shipir/.docker"),
+            java.util.Map.entry("DOCKER_HOST", "tcp://backend-env:1"), java.util.Map.entry("COMPOSE_FILE", "/etc/evil.yaml"),
+            java.util.Map.entry("DB_PASSWORD", "db-secret"), java.util.Map.entry("SHIPIR_ENCRYPTION_KEY", "key-secret"),
+            java.util.Map.entry("SHIPIR_INITIAL_ADMIN_PASSWORD", "admin-secret"), java.util.Map.entry("AWS_SECRET_ACCESS_KEY", "aws-secret"));
+
+    private List<String> envDump(boolean project) throws IOException {
+        writeScript("#!/bin/sh\nenv\n");
+        List<String> lines = new ArrayList<>();
+        ComposeExecutionService svc = service(Duration.ofSeconds(20)).withParentEnvironment(BACKEND_ENV);
+        if (project) {
+            svc.executeProject("web", ComposeCommand.DOWN, local(), lines::add);
+        } else {
+            svc.execute(hostId, "web", ComposeCommand.UP, local(), lines::add);
+        }
+        return lines;
+    }
+
+    @Test
+    void childProcessGetsAllowListedEnvironmentOnly() throws IOException {
+        List<String> lines = envDump(false);
+        assertThat(String.join("\n", lines)).doesNotContain("db-secret", "key-secret", "admin-secret", "aws-secret",
+                "SHIPIR_", "DB_PASSWORD", "backend-env", "COMPOSE_FILE");
+        assertThat(lines).contains("PATH=/usr/bin:/bin", "HOME=/home/shipir", "LANG=C.UTF-8", "LC_ALL=C.UTF-8", "TZ=UTC",
+                "DOCKER_HOST=unix:///var/run/docker.sock", "DOCKER_CONFIG=/home/shipir/.docker");
+    }
+
+    @Test
+    void executeProjectGetsAllowListedEnvironmentOnly() throws IOException {
+        assertThat(String.join("\n", envDump(true))).doesNotContain("db-secret", "key-secret", "admin-secret", "aws-secret");
+    }
+
+    @Test
+    void allowListedEnvironmentKeepsRegistryAuthDockerConfig() throws IOException {
+        withAuths(new RegistryAuthSource.Auth("ghcr.io", "robot", "s3cret"));
+        List<String> lines = envDump(false);
+        assertThat(lines).anyMatch(l -> l.startsWith("DOCKER_CONFIG=" + tempRoot));
+        assertThat(String.join("\n", lines)).doesNotContain("db-secret");
+    }
+
+    @Test
+    void composeInterpolationOfBackendSecretsResolvesEmpty() throws IOException {
+        writeScript("#!/bin/sh\necho \"KEY:${SHIPIR_ENCRYPTION_KEY}\"\necho \"DB:${DB_PASSWORD}\"\n");
+        List<String> lines = new ArrayList<>();
+        service(Duration.ofSeconds(20)).withParentEnvironment(BACKEND_ENV)
+                .execute(hostId, "web", ComposeCommand.UP, local(), lines::add);
+        assertThat(lines).containsExactly("KEY:", "DB:");
+    }
+
     private List<Path> tempRootEntries() throws IOException {
         try (var s = Files.list(tempRoot)) {
             return s.toList();

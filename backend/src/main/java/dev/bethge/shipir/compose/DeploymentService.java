@@ -391,6 +391,7 @@ public class DeploymentService {
     private void writeAndValidate(UUID hostId, String name, String yaml, String envText, DockerEndpoint endpoint,
                                   Path composeFile) {
         files.write(hostId, name, yaml, envText);
+        enforceFileAccess(hostId, name, composeFile, access.isAdmin());
         ValidationResult result;
         try {
             result = validation.validate(hostId, name, endpoint, composeFile);
@@ -413,6 +414,8 @@ public class DeploymentService {
         if (unrestricted) {
             return;
         }
+        // lenient raw-YAML check first: compose must not open a forbidden file even for the config call below
+        enforceFileAccess(hostId, name, composeFile, false);
         List<String> violations;
         try {
             violations = policy.violations(hostId, name, endpoint, composeFile);
@@ -422,6 +425,24 @@ public class DeploymentService {
         if (!violations.isEmpty()) {
             throw new DeploymentException(HttpStatus.FORBIDDEN, "ADMIN_REQUIRED",
                     "Privileged mode, host namespaces, devices, security options and host bind mounts need the ADMIN role",
+                    violations);
+        }
+    }
+
+    /**
+     * Before compose runs at all: non-ADMIN callers may not reference files outside the deployment directory
+     * ({@code env_file}, {@code include}, {@code extends}, secrets/configs), since compose reads them on the Shipir server
+     * (other deployments' {@code .env}, {@code /proc/self/environ}). Checked on the raw YAML because compose inlines
+     * env_file contents; also keeps the file contents out of {@code docker compose config} error output.
+     */
+    void enforceFileAccess(UUID hostId, String name, Path composeFile, boolean unrestricted) {
+        if (unrestricted) {
+            return;
+        }
+        List<String> violations = policy.fileViolations(hostId, name, composeFile);
+        if (!violations.isEmpty()) {
+            throw new DeploymentException(HttpStatus.FORBIDDEN, "ADMIN_REQUIRED",
+                    "Files outside the deployment directory (env_file, include, extends, secrets, configs) need the ADMIN role",
                     violations);
         }
     }
