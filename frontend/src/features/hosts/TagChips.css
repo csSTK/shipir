@@ -1,0 +1,53 @@
+/* Read-only chips on environment cards. Colours come from the Badge tone. */
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Overview filter: toggle chips with a pressed state. */
+.tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.tag-filter__chip {
+  font: inherit;
+  font-size: var(--text-small-size);
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: transform var(--duration-press) var(--ease-out), background-color var(--duration-fast) var(--ease-out);
+}
+.tag-filter__chip:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+.tag-filter__chip:active {
+  transform: scale(var(--press-scale));
+}
+.tag-filter__chip[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-text);
+}
+.tag-filter__chip:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tag-filter__chip {
+    transition: background-color var(--duration-fast) var(--ease-out);
+  }
+  .tag-filter__chip:active {
+    transform: none;
+  }
+}

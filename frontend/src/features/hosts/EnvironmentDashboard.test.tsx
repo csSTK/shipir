@@ -29,6 +29,7 @@ const up: HostOverview = {
   containers: { running: 5, stopped: 2, healthy: 3, unhealthy: 1 },
   images: 12,
   volumes: 4,
+  tags: [],
 }
 const down: HostOverview = {
   ...up,

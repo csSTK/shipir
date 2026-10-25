@@ -1,0 +1,77 @@
+/* Chip input: a field that looks like the other form controls, with chips inside. */
+.tag-input {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.tag-input__field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+.tag-input__field:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-focus);
+}
+.tag-input__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-1) 0 var(--space-3);
+  min-height: calc(var(--control-height) - var(--space-2));
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-text);
+  font-size: var(--text-small-size);
+}
+.tag-input__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height);
+  height: var(--control-height);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: transform var(--duration-press) var(--ease-out);
+}
+.tag-input__remove:hover {
+  background: var(--color-surface-hover);
+}
+.tag-input__remove:active {
+  transform: scale(var(--press-scale));
+}
+.tag-input__remove:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+.tag-input__input {
+  flex: 1;
+  min-width: calc(var(--control-height) * 3);
+  height: var(--control-height);
+  padding: 0 var(--space-1);
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-body-size);
+}
+.tag-input__input::placeholder {
+  color: var(--color-text-subtle);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tag-input__remove:active {
+    transform: none;
+  }
+}

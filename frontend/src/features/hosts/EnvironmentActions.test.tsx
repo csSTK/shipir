@@ -30,6 +30,7 @@ const env: HostOverview = {
   containers: null,
   images: null,
   volumes: null,
+  tags: ['prod'],
 }
 
 function renderOverview(role: 'ADMIN' | 'OPERATOR' | 'VIEWER', mutation?: (path: string, method?: string) => unknown) {
@@ -47,7 +48,7 @@ function renderOverview(role: 'ADMIN' | 'OPERATOR' | 'VIEWER', mutation?: (path:
   )
 }
 
-async function choose(item: 'Rename' | 'Delete') {
+async function choose(item: 'Rename' | 'Delete' | 'Edit tags') {
   const trigger = await screen.findByRole('button', { name: 'Actions for Local' })
   trigger.focus()
   fireEvent.keyDown(trigger, { key: 'Enter' })
@@ -133,5 +134,32 @@ describe('environment row actions', () => {
     await choose('Delete')
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
     expect(await screen.findByRole('alert')).toHaveTextContent(/no longer exists/i)
+  })
+
+  it('opens the edit tags dialog for ADMIN', async () => {
+    renderOverview('ADMIN')
+    await choose('Edit tags')
+    expect(screen.getByRole('dialog', { name: 'Edit tags' })).toBeInTheDocument()
+  })
+
+  it('edit tags PUTs the full replacement set and closes the dialog', async () => {
+    renderOverview('ADMIN')
+    await choose('Edit tags')
+    const dialog = screen.getByRole('dialog', { name: 'Edit tags' })
+    expect(within(dialog).getByText('prod')).toBeInTheDocument()
+    const input = within(dialog).getByRole('textbox', { name: 'Tags' })
+    fireEvent.change(input, { target: { value: 'EU' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(mutationCalls()).toEqual([['/hosts/a/tags', { method: 'PUT', body: { tags: ['prod', 'eu'] } }]])
+  })
+
+  it('edit tags shows a server error inline and keeps the dialog open', async () => {
+    renderOverview('ADMIN', (path) => (path === '/hosts/a/tags' ? Promise.reject(new ApiError(400, '', 'TOO_MANY_TAGS')) : undefined))
+    await choose('Edit tags')
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/at most 10/i)
+    expect(screen.getByRole('dialog', { name: 'Edit tags' })).toBeInTheDocument()
   })
 })

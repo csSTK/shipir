@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apiFetch } from '../../shared/api/client.ts'
 import { EnvironmentsOverview } from './EnvironmentsOverview.tsx'
@@ -30,6 +30,7 @@ const up: HostOverview = {
   containers: { running: 5, stopped: 2, healthy: 3, unhealthy: 1 },
   images: 12,
   volumes: 4,
+  tags: ['prod', 'eu'],
 }
 const down: HostOverview = {
   id: 'b',
@@ -44,16 +45,24 @@ const down: HostOverview = {
   containers: null,
   images: null,
   volumes: null,
+  tags: [],
+}
+const berlin: HostOverview = { ...down, id: 'c', name: 'Berlin', status: 'UP', error: null, dockerVersion: '27.0.0', cpus: 4, memoryBytes: 8 * 1024 ** 3, containers: { running: 1, stopped: 0, healthy: 1, unhealthy: 0 }, images: 3, volumes: 1, tags: ['eu'] }
+
+function LocationProbe() {
+  const location = useLocation()
+  return <output data-testid="location">{location.search}</output>
 }
 
-function renderOverview(role: 'ADMIN' | 'OPERATOR' | 'VIEWER', rows: HostOverview[] | Error) {
+function renderOverview(role: 'ADMIN' | 'OPERATOR' | 'VIEWER', rows: HostOverview[] | Error, url = '/') {
   if (rows instanceof Error) apiFetchMock.mockRejectedValue(rows)
   else apiFetchMock.mockResolvedValue(rows)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[url]}>
         <EnvironmentsOverview role={role} />
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -142,5 +151,51 @@ describe('EnvironmentsOverview', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
     await waitFor(() => expect(screen.getByRole('link', { name: /Local/ })).toBeInTheDocument())
     expect(apiFetchMock).toHaveBeenCalledWith('/hosts/overview')
+  })
+
+  it('shows the tag chips of each environment to every role', async () => {
+    renderOverview('VIEWER', [up, down])
+    const row = (await screen.findByRole('link', { name: /Local/ })).closest('li')!
+    expect(within(row).getByText('prod')).toBeInTheDocument()
+    expect(within(row).getByText('eu')).toBeInTheDocument()
+  })
+
+  it('treats a row without a tags field as having no tags', async () => {
+    const { tags: _ignored, ...legacy } = up
+    renderOverview('VIEWER', [legacy as HostOverview])
+    expect(await screen.findByRole('link', { name: /Local/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'prod' })).not.toBeInTheDocument()
+  })
+
+  it('filters by a tag and keeps the selection in the URL', async () => {
+    renderOverview('VIEWER', [up, down, berlin])
+    await screen.findByRole('link', { name: /Berlin/ })
+    fireEvent.click(screen.getByRole('button', { name: 'prod' }))
+    expect(screen.getByRole('button', { name: 'prod' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('link', { name: /Local/ })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Berlin/ })).not.toBeInTheDocument()
+    expect(screen.getByTestId('location')).toHaveTextContent('tag=prod')
+  })
+
+  it('combines the tag filter with the name search', async () => {
+    renderOverview('VIEWER', [up, berlin, down], '/?tag=eu')
+    await screen.findByRole('link', { name: /Berlin/ })
+    expect(screen.queryByRole('link', { name: /Local/ })).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search environments' }), { target: { value: 'berl' } })
+    expect(screen.getByRole('link', { name: /Berlin/ })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Local/ })).not.toBeInTheDocument()
+  })
+
+  it('shows the tag empty state when only the tag filter removes every match', async () => {
+    renderOverview('VIEWER', [berlin], '/?tag=prod')
+    expect(await screen.findByText('No environments with this tag')).toBeInTheDocument()
+  })
+
+  it('shows a neutral empty state when the search term removes every match under a tag filter', async () => {
+    renderOverview('VIEWER', [up, berlin], '/?tag=eu')
+    await screen.findByRole('link', { name: /Local/ })
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search environments' }), { target: { value: 'xyz' } })
+    expect(await screen.findByText('No environments match your filters')).toBeInTheDocument()
+    expect(screen.queryByText('No environments with this tag')).not.toBeInTheDocument()
   })
 })

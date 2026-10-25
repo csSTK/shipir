@@ -1,8 +1,9 @@
 import { useId, useState, type FormEvent } from 'react'
-import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { MoreHorizontal, Pencil, Tag, Trash2 } from 'lucide-react'
 import { ApiError } from '../../shared/api/client.ts'
 import { Button, ConfirmDialog, Dialog, IconButton, Menu } from '../../shared/ui/index.ts'
 import { useDeleteHost, useRenameHost, type HostOverview } from './api.ts'
+import { EditTagsDialog } from './EditTagsDialog.tsx'
 import './EnvironmentActions.css'
 
 const NAME_MAX = 100
@@ -105,13 +106,13 @@ function DeleteDialog({ env, open, onClose, onDeleted }: { env: HostOverview; op
 }
 
 /**
- * Overflow menu with Rename and Delete (ADMIN only; the caller decides). Dialogs stay mounted so
+ * Overflow menu with Rename, Edit tags and Delete (ADMIN only; the caller decides). Dialogs stay mounted so
  * they animate out; `session` gives every opening fresh form state.
  */
 export function EnvironmentActions({ env, onDeleted }: { env: HostOverview; onDeleted?: () => void }) {
-  const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null)
+  const [dialog, setDialog] = useState<'rename' | 'tags' | 'delete' | null>(null)
   const [session, setSession] = useState(0)
-  const show = (which: 'rename' | 'delete') => {
+  const show = (which: 'rename' | 'tags' | 'delete') => {
     setSession((s) => s + 1)
     setDialog(which)
   }
@@ -122,11 +123,13 @@ export function EnvironmentActions({ env, onDeleted }: { env: HostOverview; onDe
         trigger={<IconButton icon={MoreHorizontal} aria-label={`Actions for ${env.name}`} />}
         items={[
           { label: 'Rename', icon: <Pencil size={16} strokeWidth={1.75} />, onSelect: () => show('rename') },
+          { label: 'Edit tags', icon: <Tag size={16} strokeWidth={1.75} />, onSelect: () => show('tags') },
           { type: 'separator' },
           { label: 'Delete', icon: <Trash2 size={16} strokeWidth={1.75} />, danger: true, onSelect: () => show('delete') },
         ]}
       />
       <RenameDialog key={`rename-${session}`} env={env} open={dialog === 'rename'} onClose={close} />
+      <EditTagsDialog key={`tags-${session}`} env={env} open={dialog === 'tags'} onClose={close} />
       <DeleteDialog key={`delete-${session}`} env={env} open={dialog === 'delete'} onClose={close} onDeleted={onDeleted} />
     </>
   )

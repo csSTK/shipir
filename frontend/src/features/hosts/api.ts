@@ -13,6 +13,8 @@ export interface Host {
   port: number | null
   tls: boolean
   createdAt: string
+  /** Sorted, lowercase environment tags. */
+  tags: string[]
 }
 
 /** Body of create and connection test. LOCAL sends none of host/port/PEMs. */
@@ -64,6 +66,8 @@ export interface HostOverview {
   containers: ContainerCounts | null
   images: number | null
   volumes: number | null
+  /** Sorted, lowercase environment tags. */
+  tags: string[]
 }
 
 export const HOSTS_KEY = ['hosts'] as const
@@ -131,6 +135,16 @@ export function useDeleteHost() {
   const invalidate = useInvalidateHostData()
   return useMutation({
     mutationFn: (id: string) => apiFetch<void>(`/hosts/${id}`, { method: 'DELETE' }),
+    onSuccess: () => void invalidate(),
+  })
+}
+
+/** Replaces the whole tag set of an environment (ADMIN). */
+export function useSetHostTags() {
+  const invalidate = useInvalidateHostData()
+  return useMutation({
+    mutationFn: ({ id, tags }: { id: string; tags: string[] }) =>
+      apiFetch<void>(`/hosts/${id}/tags`, { method: 'PUT', body: { tags } }),
     onSuccess: () => void invalidate(),
   })
 }

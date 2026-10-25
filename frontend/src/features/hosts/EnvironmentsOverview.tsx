@@ -1,11 +1,13 @@
 import { useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Plus, RefreshCw, Server } from 'lucide-react'
 import { Badge, Button, Card, Dialog, EmptyState, PageHeader, SearchField, Skeleton, Toolbar } from '../../shared/ui/index.ts'
 import { EnvironmentActions } from './EnvironmentActions.tsx'
 import { EnvironmentForm } from './EnvironmentForm.tsx'
+import { TagChips, TagFilter } from './TagChips.tsx'
 import { describeError, formatMemory, plural } from './format.ts'
 import { useHostsOverview, type HostOverview } from './api.ts'
+import { envTags } from './tags.ts'
 import './EnvironmentsOverview.css'
 
 type Role = 'ADMIN' | 'OPERATOR' | 'VIEWER'
@@ -37,6 +39,7 @@ function EnvironmentCard({ env, isAdmin }: { env: HostOverview; isAdmin: boolean
             <Badge tone={up ? 'ok' : 'bad'}>{up ? 'Up' : 'Down'}</Badge>
           </div>
           <div className="env-card__endpoint">{env.endpoint}</div>
+          <TagChips tags={envTags(env)} />
           {message && <p className="env-card__error">{message}</p>}
           {up && env.containers && (
             <div className="env-card__chips">
@@ -70,10 +73,28 @@ export function EnvironmentsOverview({ role }: { role: Role }) {
   const { data, isPending, isError, refetch, isFetching } = useHostsOverview()
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
+  // The tag filter lives in the URL (`?tag=a&tag=b`): an environment must carry every selected tag.
+  const [params, setParams] = useSearchParams()
+  const selectedTags = params.getAll('tag')
   const isAdmin = role === 'ADMIN'
 
   const needle = query.trim().toLowerCase()
-  const rows = (data ?? []).filter((env) => env.name.toLowerCase().includes(needle))
+  const rows = (data ?? []).filter(
+    (env) => env.name.toLowerCase().includes(needle) && selectedTags.every((tag) => envTags(env).includes(tag)),
+  )
+  // Selected tags stay listed even when no environment carries them, so they can be unselected.
+  const filterTags = [...new Set([...(data ?? []).flatMap(envTags), ...selectedTags])].sort()
+
+  function toggleTag(tag: string) {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev)
+      const current = next.getAll('tag')
+      next.delete('tag')
+      const updated = current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag]
+      for (const t of updated) next.append('tag', t)
+      return next
+    })
+  }
   const addButton = (
     <Button variant="primary" onClick={() => setAdding(true)}>
       <Plus size={16} strokeWidth={1.75} aria-hidden="true" /> Add environment
@@ -96,6 +117,7 @@ export function EnvironmentsOverview({ role }: { role: Role }) {
       />
       <Toolbar label="Filter environments">
         <SearchField placeholder="Search" aria-label="Search environments" value={query} onChange={(e) => setQuery(e.target.value)} />
+        {filterTags.length > 0 && <TagFilter tags={filterTags} selected={selectedTags} onToggle={toggleTag} />}
       </Toolbar>
 
       {isPending && (
@@ -119,8 +141,14 @@ export function EnvironmentsOverview({ role }: { role: Role }) {
           action={isAdmin ? addButton : undefined}
         />
       )}
-      {data && data.length > 0 && rows.length === 0 && (
+      {data && data.length > 0 && rows.length === 0 && selectedTags.length === 0 && (
         <EmptyState icon={Server} title={`No environment matches “${query.trim()}”.`} />
+      )}
+      {data && data.length > 0 && rows.length === 0 && selectedTags.length > 0 && needle === '' && (
+        <EmptyState icon={Server} title="No environments with this tag" />
+      )}
+      {data && data.length > 0 && rows.length === 0 && selectedTags.length > 0 && needle !== '' && (
+        <EmptyState icon={Server} title="No environments match your filters" />
       )}
       {rows.length > 0 && (
         <ul className="envs__list">
