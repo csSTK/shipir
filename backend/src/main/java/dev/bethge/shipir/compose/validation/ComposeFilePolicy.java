@@ -95,8 +95,8 @@ final class ComposeFilePolicy {
         walk(root, file.getParent(), file, depth, true);
     }
 
-    private static final Set<String> PATH_KEYS = Set.of("env_file", "include", "extends", "secrets", "configs", "file",
-            "path", "project_directory");
+    private static final Set<String> PATH_KEYS = Set.of("env_file", "label_file", "include", "extends", "secrets",
+            "configs", "file", "path", "project_directory");
 
     private static final String MERGE_TAG = "tag:yaml.org,2002:merge";
 
@@ -186,6 +186,13 @@ final class ComposeFilePolicy {
             JsonNode value = entry.getValue();
             switch (key) {
                 case "env_file" -> pathsOf(value).forEach(p -> check(p, baseDir, "env_file"));
+                case "label_file" -> pathsOf(value).forEach(p -> check(p, baseDir, "label_file"));
+                case "provider" -> {
+                    // a provider service makes compose execute a binary (or plugin) on the Shipir host (Compose 2.36+)
+                    if (value.isObject() && value.has("type")) {
+                        violations.add("provider services are not allowed (they run an executable on the Shipir host)");
+                    }
+                }
                 case "extends" -> {
                     if (value.isObject() && value.has("file")) {
                         pathsOf(value.get("file")).forEach(p -> follow(check(p, baseDir, "extends file"), file, depth));
@@ -210,13 +217,29 @@ final class ComposeFilePolicy {
     private void include(JsonNode include, Path baseDir, Path file, int depth) {
         for (JsonNode entry : include.isArray() ? include : List.of(include)) {
             if (entry.isTextual()) {
-                follow(check(entry.asString(), baseDir, "include"), file, depth);
+                follow(checkInclude(entry.asString(), baseDir), file, depth);
             } else if (entry.isObject()) {
-                pathsOf(entry.get("path")).forEach(p -> follow(check(p, baseDir, "include"), file, depth));
+                pathsOf(entry.get("path")).forEach(p -> follow(checkInclude(p, baseDir), file, depth));
                 // an include entry's env_file is covered by the generic env_file check in walk()
                 pathsOf(entry.get("project_directory")).forEach(p -> check(p, baseDir, "include project_directory"));
             }
         }
+    }
+
+    /**
+     * Compose treats {@code oci://}, {@code git@host:x/y}, {@code https://...} and the {@code github.com/x/y} shorthand as
+     * remote sources and fetches them from the network on the Shipir host. Only plain local paths are allowed: no
+     * {@code :} and no host-like first segment (a dot, e.g. {@code github.com/...}).
+     */
+    private Path checkInclude(String raw, Path baseDir) {
+        String first = raw.startsWith("./") ? raw.substring(2) : raw;
+        int slash = first.indexOf('/');
+        boolean hostLike = slash > 0 && first.substring(0, slash).contains(".") && !first.startsWith(".");
+        if (raw.contains(":") || hostLike) {
+            violations.add("include " + raw + ": remote include sources are not allowed");
+            return null;
+        }
+        return check(raw, baseDir, "include");
     }
 
     private void follow(Path included, Path from, int depth) {
