@@ -22,7 +22,7 @@ import java.util.regex.Pattern;
  * {@code X-XSRF-TOKEN} equal to the {@code XSRF-TOKEN} cookie of the handshake, see {@link CsrfHandshakeInterceptor}),
  * SUBSCRIBE only to {@code /topic/deployments/{id}} (needs view access to the run's deployment; registers the subscription for replay) and
  * {@code /topic/chat/{sessionId}} (owner only, via {@link ChatTopicAccess}) and container logs
- * {@code /topic/hosts/{hostId}/containers/{id}/logs} (hosts the user fully sees, see {@link LogStreamHandler}), Docker events {@code /topic/hosts/{hostId}/events} (hosts the user fully sees, see {@link DockerEventStreamService}), container stats {@code /topic/hosts/{hostId}/stats} (visible hosts, frames filtered per user, see {@link ContainerStatsStreamService}), interactive console {@code /topic/exec/{id}} (ADMIN owner, see {@link ExecSessionHandler}); clients may only SEND
+ * {@code /topic/hosts/{hostId}/containers/{id}/logs} (hosts the user fully sees, see {@link LogStreamHandler}), project logs {@code /topic/hosts/{hostId}/deployments/{project}/logs} (view of the managed deployment or the whole host, see {@link DeploymentLogStreamService}), Docker events {@code /topic/hosts/{hostId}/events} (hosts the user fully sees, see {@link DockerEventStreamService}), container stats {@code /topic/hosts/{hostId}/stats} (visible hosts, frames filtered per user, see {@link ContainerStatsStreamService}), interactive console {@code /topic/exec/{id}} (ADMIN owner, see {@link ExecSessionHandler}); clients may only SEND
  * input/resize frames of their own console to {@code /app/exec/{id}/{input|resize}}.
  * CONNECT and SUBSCRIBE are refused with SETUP_REQUIRED while the user has a pending {@link SetupStatus} step.
  */
@@ -44,6 +44,7 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
     private final ComposeOutputStreamService streams;
     private final ChatTopicAccess chatAccess;
     private final LogStreamHandler logStreams;
+    private final DeploymentLogStreamService deploymentLogs;
     private final ExecSessionHandler execSessions;
     private final DockerEventStreamService eventStreams;
     private final ContainerStatsStreamService statsStreams;
@@ -51,7 +52,8 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
     private final SetupStatus setupStatus;
 
     StompSecurityInterceptor(ComposeOutputStreamService streams, ChatTopicAccess chatAccess,
-                             LogStreamHandler logStreams, ExecSessionHandler execSessions,
+                             LogStreamHandler logStreams, DeploymentLogStreamService deploymentLogs,
+                             ExecSessionHandler execSessions,
                              DockerEventStreamService eventStreams, ContainerStatsStreamService statsStreams,
                              StreamAccess access, SetupStatus setupStatus) {
         this.setupStatus = setupStatus;
@@ -62,6 +64,7 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
         this.streams = streams;
         this.chatAccess = chatAccess;
         this.logStreams = logStreams;
+        this.deploymentLogs = deploymentLogs;
     }
 
     @Override
@@ -113,6 +116,22 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                             accessor.getSubscriptionId());
                     break;
                 }
+                var projectLogs = DeploymentLogStreamService.parse(destination);
+                if (projectLogs != null) {
+                    // managed deployment: view of that deployment; unmanaged project: the whole host
+                    if (!access.mayFollowProject(accessor.getUser().getName(), projectLogs.hostId(), projectLogs.project())) {
+                        throw new MessageDeliveryException("Subscription destination not allowed");
+                    }
+                    DeploymentLogStreamService.Options options;
+                    try {
+                        options = deploymentLogs.parseOptions(accessor.getFirstNativeHeader("tail"),
+                                accessor.getFirstNativeHeader("timestamps"));
+                    } catch (IllegalArgumentException e) {
+                        throw new MessageDeliveryException("Invalid log stream option");
+                    }
+                    deploymentLogs.subscribe(projectLogs, options, accessor.getSessionId(), accessor.getSubscriptionId());
+                    break;
+                }
                 var logTarget = LogStreamHandler.parse(destination);
                 if (logTarget != null) {
                     if (!logStreams.mayFollow(accessor.getUser().getName(), logTarget)
@@ -141,6 +160,7 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
             case UNSUBSCRIBE -> {
                 streams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
                 logStreams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
+                deploymentLogs.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
                 eventStreams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
                 statsStreams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
                 execSessions.detach(accessor.getSessionId(), accessor.getSubscriptionId());
@@ -197,6 +217,7 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
     void onDisconnect(SessionDisconnectEvent event) {
         streams.unsubscribe(event.getSessionId(), null);
         logStreams.unsubscribe(event.getSessionId(), null);
+        deploymentLogs.unsubscribe(event.getSessionId(), null);
         eventStreams.unsubscribe(event.getSessionId(), null);
         statsStreams.unsubscribe(event.getSessionId(), null);
         execSessions.detach(event.getSessionId(), null);

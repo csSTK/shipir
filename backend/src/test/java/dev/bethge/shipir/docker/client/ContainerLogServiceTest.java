@@ -92,4 +92,24 @@ class ContainerLogServiceTest {
         assertThatThrownBy(() -> service.follow(UUID.randomUUID(), new DockerEndpoint.Local("unix:///x.sock"), "gone", 10, false, l -> { }))
                 .isInstanceOfSatisfying(DockerConnectionException.class, e -> assertThat(e.getCode()).isEqualTo(DockerErrorCode.NOT_FOUND));
     }
+
+    @Test
+    void snapshotReadsWithoutFollowAndPassesSinceAndTail() {
+        DockerHostConnectionManager manager = mock(DockerHostConnectionManager.class);
+        DockerClient client = mock(DockerClient.class, Answers.RETURNS_DEEP_STUBS);
+        when(manager.readTimeout()).thenReturn(Duration.ofSeconds(1));
+        when(manager.client(any(), any())).thenReturn(client);
+        var cmd = mock(com.github.dockerjava.api.command.LogContainerCmd.class, Answers.RETURNS_SELF);
+        when(client.logContainerCmd("web")).thenReturn(cmd);
+        var service = new ContainerLogServiceImpl(manager);
+
+        service.snapshot(UUID.randomUUID(), new DockerEndpoint.Local("unix:///x.sock"), "web", 50,
+                Instant.ofEpochSecond(1_700_000_000L), true, l -> { }, e -> { });
+
+        org.mockito.Mockito.verify(cmd).withFollowStream(false);
+        org.mockito.Mockito.verify(cmd).withSince(1_700_000_000);
+        org.mockito.Mockito.verify(cmd).withTail(50);
+        org.mockito.Mockito.verify(cmd).withTimestamps(true);
+        org.mockito.Mockito.verify(cmd, org.mockito.Mockito.never()).withFollowStream(true);
+    }
 }

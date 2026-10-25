@@ -4,6 +4,7 @@ import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.dto.LogLine;
 
 import java.io.Closeable;
+import java.time.Instant;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -24,4 +25,13 @@ public interface ContainerLogService {
      */
     Closeable follow(UUID hostId, DockerEndpoint endpoint, String containerId, int tail, boolean timestamps,
                      Consumer<LogLine> onLine, Consumer<Throwable> onEnd);
+
+    /**
+     * A finite read, no follow: the last {@code tail} lines (negative = all) of the output since {@code since}
+     * (null = from the start; second precision), then the end. Same callbacks and failure codes as
+     * {@link #follow(UUID, DockerEndpoint, String, int, boolean, Consumer, Consumer)}; {@code onEnd} is called once
+     * when everything was delivered (argument null) or the read failed. {@link Closeable#close()} aborts early.
+     */
+    Closeable snapshot(UUID hostId, DockerEndpoint endpoint, String containerId, int tail, Instant since,
+                       boolean timestamps, Consumer<LogLine> onLine, Consumer<Throwable> onEnd);
 }

@@ -66,6 +66,22 @@ class StreamAccess {
                 .collect(Collectors.toSet()));
     }
 
+    /**
+     * Combined logs of a Compose project: the whole host visible, or the project is a managed deployment of the
+     * host the user may view. Unmanaged projects need the whole host.
+     */
+    boolean mayFollowProject(String username, UUID hostId, String project) {
+        Optional<PermissionSubject> s = subject(username);
+        if (s.isEmpty()) {
+            return false;
+        }
+        if (permissions.hostFullyVisible(s.get(), hostId)) {
+            return true;
+        }
+        UUID deploymentId = managedDeployments.managedDeploymentIds(hostId).get(project);
+        return deploymentId != null && permissions.canView(s.get(), hostId, deploymentId);
+    }
+
     /** Output of a deploy or image-pull run: the user may view the run's deployment (ADMIN: any run, even unknown ones). */
     boolean mayFollowRun(String username, Optional<ComposeOutputStreamService.RunTarget> target) {
         Optional<PermissionSubject> s = subject(username);

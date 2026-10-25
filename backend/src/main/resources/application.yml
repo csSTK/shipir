@@ -58,6 +58,10 @@ shipir:
   container-files:
     max-bytes: 100MB
     max-scan-bytes: 64MB
+  log-download:
+    # one container log download stops (with a marker line) at this many bytes or this much time
+    max-bytes: 50MB
+    timeout: 2m
   openapi:
     # OpenAPI spec at /api/v3/api-docs and Swagger UI at /api/docs; both need a login (anyRequest().authenticated()).
     # Set SHIPIR_OPENAPI_ENABLED=false to switch both off.

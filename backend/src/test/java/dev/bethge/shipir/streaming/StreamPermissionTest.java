@@ -73,6 +73,8 @@ class StreamPermissionTest {
     LogStreamHandler logStreams;
     @Autowired
     DockerEventStreamService eventStreams;
+    @MockitoBean
+    dev.bethge.shipir.docker.client.ContainerService containerService;
 
     private final HttpClient http = HttpClient.newHttpClient();
     private final Map<String, String> jar = new HashMap<>();
@@ -201,6 +203,40 @@ class StreamPermissionTest {
         assertThat(r.statusCode()).isEqualTo(200);
         callWith(j, HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/me")));
         return j;
+    }
+
+    private String deploymentLogs(String project) {
+        return "/topic/hosts/" + hostId + "/deployments/" + project + "/logs";
+    }
+
+    @Test
+    void deploymentLogsAreRefusedWithoutGrant() throws Exception {
+        assertRefused(deploymentLogs("d"));
+        verify(containerService, never()).listContainers(any(), any(dev.bethge.shipir.docker.DockerEndpoint.class));
+    }
+
+    @Test
+    void deploymentLogsOfAManagedDeploymentNeedViewOfThatDeployment() throws Exception {
+        jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) VALUES (?, ?, 'VIEW')", userId, deploymentId);
+        assertAllowed(deploymentLogs("d"));
+        // a second managed deployment of the same host without grant stays hidden
+        jdbc.update("INSERT INTO deployments (name, host_id, compose_file_path, created_by) VALUES ('e', ?, 'x', ?)",
+                hostId, userId);
+        assertRefused(deploymentLogs("e"));
+    }
+
+    @Test
+    void deploymentLogsOfAnUnmanagedProjectNeedTheWholeHost() throws Exception {
+        jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) VALUES (?, ?, 'VIEW')", userId, deploymentId);
+        assertRefused(deploymentLogs("not-managed"));
+        verify(containerService, never()).listContainers(any(), any(dev.bethge.shipir.docker.DockerEndpoint.class));
+    }
+
+    @Test
+    void hostGrantAllowsDeploymentLogsOfAnyProject() throws Exception {
+        jdbc.update("INSERT INTO permissions (user_id, host_id, level) VALUES (?, ?, 'VIEW')", userId, hostId);
+        assertAllowed(deploymentLogs("not-managed"));
+        assertAllowed(deploymentLogs("d"));
     }
 
     private void assertRefused(String destination) throws Exception {

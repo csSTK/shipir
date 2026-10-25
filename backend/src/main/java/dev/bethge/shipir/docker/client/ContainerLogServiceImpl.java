@@ -43,6 +43,21 @@ public class ContainerLogServiceImpl implements ContainerLogService {
         });
     }
 
+    @Override
+    public Closeable snapshot(UUID hostId, DockerEndpoint endpoint, String containerId, int tail, Instant since,
+                              boolean timestamps, Consumer<LogLine> onLine, Consumer<Throwable> onEnd) {
+        calls.call(hostId, endpoint, client -> client.inspectContainerCmd(containerId).exec());
+        LineCallback callback = new LineCallback(timestamps, onLine, onEnd);
+        return calls.call(hostId, endpoint, client -> {
+            var cmd = client.logContainerCmd(containerId).withStdOut(true).withStdErr(true)
+                    .withFollowStream(false).withTimestamps(timestamps);
+            if (since != null) {
+                cmd = cmd.withSince((int) Math.min(Integer.MAX_VALUE, Math.max(0, since.getEpochSecond())));
+            }
+            return (tail < 0 ? cmd.withTailAll() : cmd.withTail(tail)).exec(callback);
+        });
+    }
+
     /** Reassembles lines from frames (a frame may hold part of a line or several) per stream. */
     static final class LineCallback extends ResultCallback.Adapter<Frame> {
 
