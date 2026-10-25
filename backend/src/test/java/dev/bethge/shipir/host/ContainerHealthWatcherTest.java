@@ -89,6 +89,34 @@ class ContainerHealthWatcherTest {
     }
 
     @Test
+    void dieAfterKillEventOfSameContainerIsNotReported() {
+        watcher.handle(hostId, container("kill", "c1", null, null));
+        watcher.handle(hostId, container("die", "c1", null, 137));
+        assertThat(published).isEmpty();
+    }
+
+    @Test
+    void killOfOtherContainerOrExpiredKillDoesNotSuppressCrash() {
+        watcher.handle(hostId, container("kill", "c2", null, null));
+        watcher.handle(hostId, container("die", "c1", null, 137));
+        assertThat(published).hasSize(1);
+
+        watcher.handle(hostId, container("kill", "c3", null, null));
+        clock.advance(Duration.ofMinutes(6));
+        watcher.handle(hostId, container("die", "c3", null, 137));
+        assertThat(published).hasSize(2);
+    }
+
+    @Test
+    void killSuppressesOnlyTheNextDie() {
+        watcher.handle(hostId, container("kill", "c1", null, null));
+        watcher.handle(hostId, container("die", "c1", null, 137));
+        clock.advance(Duration.ofMinutes(11)); // past the dedupe window
+        watcher.handle(hostId, container("die", "c1", null, 137)); // later crash without a kill
+        assertThat(published).hasSize(1);
+    }
+
+    @Test
     void unhealthyIsReported() {
         watcher.handle(hostId, container("health_status: unhealthy", "c1", null, null));
         assertThat(published).singleElement().isInstanceOfSatisfying(ContainerProblemEvent.class, e -> {

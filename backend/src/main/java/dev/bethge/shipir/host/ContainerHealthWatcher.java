@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Watches the Docker event stream of every host and publishes a {@link ContainerProblemEvent} when a container dies
- * with a non-zero exit code (exit 143, a plain SIGTERM stop, is ignored) or reports {@code health_status: unhealthy}.
+ * with a non-zero exit code (exit 143, a plain SIGTERM stop, is ignored, as is any death preceded by a {@code kill} event, i.e. a deliberate stop or kill) or reports {@code health_status: unhealthy}.
  *
  * <p>One worker (virtual thread) per host, started by {@link #sync()} and stopped when the host is deleted; a dropped
  * stream is reopened with exponential backoff. The same problem of the same container is reported once per
@@ -41,6 +41,8 @@ class ContainerHealthWatcher {
     private static final Logger log = LoggerFactory.getLogger(ContainerHealthWatcher.class);
 
     static final int SIGTERM_EXIT = 143;
+    /** How long a kill event explains the following die event (covers a long {@code docker stop -t}). */
+    static final Duration KILL_WINDOW = Duration.ofMinutes(5);
 
     private final DockerHostRepository hosts;
     private final HostEndpointResolver endpoints;
@@ -51,6 +53,7 @@ class ContainerHealthWatcher {
     private final ContainerWatchProperties properties;
     private final Map<UUID, Thread> workers = new ConcurrentHashMap<>();
     private final Map<String, Instant> lastReported = new ConcurrentHashMap<>();
+    private final Map<String, Instant> killedAt = new ConcurrentHashMap<>();
 
     ContainerHealthWatcher(DockerHostRepository hosts, HostEndpointResolver endpoints, DockerEventService events,
                            ManagedDeploymentLookup managed, ApplicationEventPublisher publisher, Clock clock,
@@ -127,7 +130,18 @@ class ContainerHealthWatcher {
             return;
         }
         ContainerProblemEvent.Kind kind;
+        if ("kill".equals(event.action())) {
+            // docker stop/kill and Shipir's stop send this before the die event; the death is deliberate
+            Instant now = clock.instant();
+            killedAt.values().removeIf(t -> t.plus(KILL_WINDOW).isBefore(now));
+            killedAt.put(hostId + "/" + event.id(), now);
+            return;
+        }
         if ("die".equals(event.action())) {
+            Instant killed = killedAt.remove(hostId + "/" + event.id());
+            if (killed != null && !killed.plus(KILL_WINDOW).isBefore(clock.instant())) {
+                return;
+            }
             Integer exit = event.exitCode();
             if (exit == null || exit == 0 || exit == SIGTERM_EXIT) {
                 return;
