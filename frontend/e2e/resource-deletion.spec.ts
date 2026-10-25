@@ -66,6 +66,7 @@ test('deletes an image, a volume and a network', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', as('ADMIN'))
   api.mock('GET', '/api/hosts/a/images', { body: images })
   api.mock('GET', '/api/hosts/a/volumes', { body: volumes })
+  api.mock('GET', '/api/hosts/a/volume-backup-schedules', { body: [] })
   api.mock('GET', '/api/hosts/a/networks', { body: networks })
   api.mock('DELETE', '/api/hosts/a/images/sha256%3Aaaaa', { status: 204 })
   api.mock('DELETE', '/api/hosts/a/volumes/pgdata', { status: 204 })
@@ -88,6 +89,7 @@ test('deletes an image, a volume and a network', async ({ page, api }) => {
 test('in-use refusal stays inline', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', as('ADMIN'))
   api.mock('GET', '/api/hosts/a/volumes', { body: volumes })
+  api.mock('GET', '/api/hosts/a/volume-backup-schedules', { body: [] })
   api.mock('DELETE', '/api/hosts/a/volumes/pgdata', { status: 409, body: { code: 'RESOURCE_IN_USE', message: 'Volume is used by container db.' } })
   await page.goto('/environments/a/volumes')
   await page.getByRole('button', { name: 'More actions for pgdata' }).click()

@@ -1,0 +1,86 @@
+import { expect, test } from './fixtures/api.ts'
+
+const local = {
+  id: 'a',
+  name: 'Local',
+  connectionType: 'LOCAL',
+  endpoint: 'unix:///var/run/docker.sock',
+  status: 'UP',
+  error: null,
+  dockerVersion: '27.1.2',
+  cpus: 8,
+  memoryBytes: 16 * 1024 ** 3,
+  containers: { running: 1, stopped: 0, healthy: 0, unhealthy: 0 },
+  images: 0,
+  volumes: 2,
+}
+const as = (role: string) => ({ body: { username: 'u', role, setupRequired: false } })
+const volumes = [
+  { name: 'pgdata', driver: 'local', mountpoint: '/v/pgdata', created: null, inUse: true },
+  { name: 'cache', driver: 'local', mountpoint: '/v/cache', created: null, inUse: false },
+]
+const schedule = {
+  id: 's1',
+  volumeName: 'cache',
+  intervalHours: 24,
+  keepCount: 7,
+  nextRunAt: '2026-10-26T10:00:00Z',
+  lastRunAt: '2026-10-25T10:00:00Z',
+  lastStatus: 'FAILED',
+}
+
+test.beforeEach(({ api }) => {
+  api.mock('GET', '/api/hosts/overview', { body: [local] })
+  api.mock('GET', '/api/hosts/a/volumes', { body: volumes })
+})
+
+test('operator sees the last result, restores into a volume in use and manages schedules', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', as('OPERATOR'))
+  api.mock('GET', '/api/hosts/a/volume-backup-schedules', { body: [schedule] })
+  api.mock('POST', '/api/hosts/a/volumes/pgdata/restore', { status: 204 })
+  api.mock('DELETE', '/api/hosts/a/volume-backup-schedules/s1', { status: 204 })
+  await page.goto('/environments/a/volumes')
+  await expect(page.getByRole('row', { name: /cache/ }).getByText('Backup failed')).toBeVisible()
+
+  await page.getByRole('button', { name: 'More actions for pgdata' }).click()
+  await page.getByRole('menuitem', { name: 'Restore…' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Restore pgdata' })
+  await expect(dialog).toContainText('100 MB')
+  await dialog.getByLabel('Backup archive (.tar)').setInputFiles({ name: 'pgdata.tar', mimeType: 'application/x-tar', buffer: Buffer.from('tar') })
+  const restore = dialog.getByRole('button', { name: 'Restore' })
+  await expect(restore).toBeDisabled()
+  await dialog.getByRole('switch').check()
+  const request = page.waitForRequest((r) => r.method() === 'POST' && r.url().endsWith('/volumes/pgdata/restore'))
+  await restore.click()
+  expect((await request).postData()).toContain('true')
+  await expect(page.getByRole('status')).toContainText('Restored pgdata.tar into pgdata.')
+
+  await page.getByRole('button', { name: 'Backup schedules' }).click()
+  const schedules = page.getByRole('dialog', { name: 'Backup schedules' })
+  await expect(schedules.getByRole('listitem')).toContainText('every 24 h')
+  const del = page.waitForRequest((r) => r.method() === 'DELETE' && r.url().endsWith('/volume-backup-schedules/s1'))
+  await schedules.getByRole('button', { name: 'Delete schedule for cache' }).click()
+  await del
+})
+
+test('operator downloads a backup of a volume in use', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', as('ADMIN'))
+  api.mock('GET', '/api/hosts/a/volume-backup-schedules', { body: [] })
+  await page.route('**/api/hosts/a/volumes/pgdata/backup', (route) =>
+    route.fulfill({ status: 200, body: 'tar', headers: { 'Content-Type': 'application/x-tar', 'Content-Disposition': 'attachment; filename="pgdata-1.tar"' } }),
+  )
+  await page.goto('/environments/a/volumes')
+  await page.getByRole('button', { name: 'More actions for pgdata' }).click()
+  const download = page.waitForEvent('download')
+  await page.getByRole('menuitem', { name: 'Backup', exact: true }).click()
+  expect((await download).suggestedFilename()).toBe('pgdata-1.tar')
+  await expect(page.getByRole('status')).toContainText('may be inconsistent')
+})
+
+test('viewer gets no backup actions', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', as('VIEWER'))
+  await page.goto('/environments/a/volumes')
+  await expect(page.getByText('pgdata')).toBeVisible()
+  await expect(page.getByRole('button', { name: /More actions/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Backup schedules' })).toHaveCount(0)
+})

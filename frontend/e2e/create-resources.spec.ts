@@ -23,6 +23,7 @@ test.beforeEach(({ api }) => {
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   api.mock('GET', '/api/hosts/a/networks', { body: [] })
   api.mock('GET', '/api/hosts/a/volumes', { body: [] })
+  api.mock('GET', '/api/hosts/a/volume-backup-schedules', { body: [] })
 })
 
 test('operator creates a container; ADMIN-only options are absent', async ({ page, api }) => {
