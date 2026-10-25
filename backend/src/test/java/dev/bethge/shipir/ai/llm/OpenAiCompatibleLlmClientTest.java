@@ -35,6 +35,7 @@ class OpenAiCompatibleLlmClientTest {
     private final AtomicReference<String> authHeader = new AtomicReference<>();
     private final AtomicReference<String> requestBody = new AtomicReference<>();
     private volatile HttpHandler handler;
+    private volatile String retryAfterHeader;
     private OpenAiCompatibleLlmClient client;
 
     @BeforeEach
@@ -64,6 +65,9 @@ class OpenAiCompatibleLlmClientTest {
             requestBody.set(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
             ex.getResponseHeaders().add("Content-Type", contentType);
+            if (retryAfterHeader != null) {
+                ex.getResponseHeaders().add("Retry-After", retryAfterHeader);
+            }
             ex.sendResponseHeaders(status, bytes.length);
             try (OutputStream os = ex.getResponseBody()) {
                 os.write(bytes);
@@ -193,6 +197,31 @@ class OpenAiCompatibleLlmClientTest {
             assertThatThrownBy(() -> call(new ArrayList<>()))
                     .isInstanceOfSatisfying(LlmException.class, e -> assertThat(e.code()).isEqualTo(c.code()));
         }
+    }
+
+    @Test
+    void rateLimitCarriesRetryAfterFromHeader() {
+        record Case(String header, java.time.Duration expected) { }
+        for (Case c : java.util.Arrays.asList(new Case("7", java.time.Duration.ofSeconds(7)),
+                new Case("1.5", java.time.Duration.ofMillis(1500)), new Case(null, null), new Case("abc", null),
+                new Case("-3", null), new Case("", null), new Case("Wed, 21 Oct 2026 07:28:00 GMT", null))) {
+            retryAfterHeader = c.header();
+            respond(429, "application/json", "{\"error\":\"" + KEY + "\"}");
+            assertThatThrownBy(() -> call(new ArrayList<>()))
+                    .isInstanceOfSatisfying(LlmException.class, e -> {
+                        assertThat(e.code()).isEqualTo(LlmException.Code.RATE_LIMITED);
+                        assertThat(e.retryAfter()).as("header %s", c.header()).isEqualTo(c.expected());
+                        assertThat(e.getMessage()).doesNotContain(KEY);
+                    });
+        }
+    }
+
+    @Test
+    void retryAfterIsIgnoredOnNon429() {
+        retryAfterHeader = "7";
+        respond(500, "application/json", "{}");
+        assertThatThrownBy(() -> call(new ArrayList<>()))
+                .isInstanceOfSatisfying(LlmException.class, e -> assertThat(e.retryAfter()).isNull());
     }
 
     @Test

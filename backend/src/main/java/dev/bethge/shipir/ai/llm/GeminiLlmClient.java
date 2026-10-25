@@ -86,7 +86,7 @@ public class GeminiLlmClient implements LlmClient {
             int status = response.statusCode();
             if (status < 200 || status >= 300) {
                 logErrorBody(status, body, apiKey);
-                throw statusError(status);
+                throw statusError(status, response.headers().firstValue("Retry-After").orElse(null));
             }
             return readStream(body, onToken, timedOut);
         } catch (IOException e) {
@@ -260,12 +260,13 @@ public class GeminiLlmClient implements LlmClient {
         return out;
     }
 
-    private static LlmException statusError(int status) {
+    private static LlmException statusError(int status, String retryAfterHeader) {
         if (status == 401 || status == 403) {
             return new LlmException(LlmException.Code.AUTH_FAILED, "LLM provider rejected the credentials");
         }
         if (status == 429) {
-            return new LlmException(LlmException.Code.RATE_LIMITED, "LLM provider rate limit reached");
+            return new LlmException(LlmException.Code.RATE_LIMITED, "LLM provider rate limit reached",
+                    LlmException.parseRetryAfter(retryAfterHeader));
         }
         return new LlmException(LlmException.Code.BAD_RESPONSE, "LLM provider answered HTTP " + status);
     }

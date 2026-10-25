@@ -36,6 +36,7 @@ class GeminiLlmClientTest {
     private final AtomicReference<String> requestUri = new AtomicReference<>();
     private final AtomicReference<String> requestBody = new AtomicReference<>();
     private volatile HttpHandler handler;
+    private volatile String retryAfterHeader;
     private GeminiLlmClient client;
 
     @BeforeEach
@@ -64,6 +65,9 @@ class GeminiLlmClientTest {
         handler = ex -> {
             byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
             ex.getResponseHeaders().add("Content-Type", contentType);
+            if (retryAfterHeader != null) {
+                ex.getResponseHeaders().add("Retry-After", retryAfterHeader);
+            }
             ex.sendResponseHeaders(status, bytes.length);
             try (OutputStream os = ex.getResponseBody()) {
                 os.write(bytes);
@@ -244,6 +248,28 @@ class GeminiLlmClientTest {
             assertThat(ex.code()).as("status %d", c[0]).isEqualTo(expected);
             assertThat(ex.getMessage()).doesNotContain(KEY).doesNotContain("provider body");
         }
+    }
+
+    @Test
+    void rateLimitCarriesRetryAfterFromHeader() {
+        record Case(String header, java.time.Duration expected) { }
+        for (Case c : java.util.Arrays.asList(new Case("7", java.time.Duration.ofSeconds(7)),
+                new Case("1.5", java.time.Duration.ofMillis(1500)), new Case(null, null), new Case("abc", null),
+                new Case("-3", null), new Case("", null), new Case("Wed, 21 Oct 2026 07:28:00 GMT", null))) {
+            retryAfterHeader = c.header();
+            respond(429, "application/json", "{\"error\":{\"message\":\"" + KEY + "\"}}");
+            LlmException ex = catchLlm();
+            assertThat(ex.code()).isEqualTo(LlmException.Code.RATE_LIMITED);
+            assertThat(ex.retryAfter()).as("header %s", c.header()).isEqualTo(c.expected());
+            assertThat(ex.getMessage()).doesNotContain(KEY);
+        }
+    }
+
+    @Test
+    void retryAfterIsIgnoredOnNon429() {
+        retryAfterHeader = "7";
+        respond(500, "application/json", "{}");
+        assertThat(catchLlm().retryAfter()).isNull();
     }
 
     private LlmException catchLlm() {
