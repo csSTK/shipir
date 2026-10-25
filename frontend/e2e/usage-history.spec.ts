@@ -112,6 +112,7 @@ test('container details: error with retry', async ({ page, api }) => {
 })
 
 test('dashboard: aggregate card says when the list is truncated', async ({ page, api }) => {
+  api.mock('GET', '/api/hosts/a/disk-usage', { status: 403, body: { code: 'FORBIDDEN', message: 'no' } })
   api.mock('GET', '/api/hosts/a/stats/history', { body: history(['c1', 'c2'], { truncated: true, seriesTotal: 80 }) })
   await page.goto('/environments/a')
   await expect(page.getByRole('heading', { name: 'Usage history' })).toBeVisible()
@@ -121,6 +122,7 @@ test('dashboard: aggregate card says when the list is truncated', async ({ page,
 })
 
 test('dashboard: no card when the history is not visible to the user', async ({ page, api }) => {
+  api.mock('GET', '/api/hosts/a/disk-usage', { status: 403, body: { code: 'FORBIDDEN', message: 'no' } })
   api.mock('GET', '/api/hosts/a/stats/history', { status: 404, body: { code: 'HOST_NOT_FOUND', message: 'nope' } })
   await page.goto('/environments/a')
   await expect(page.getByRole('heading', { name: 'Local' })).toBeVisible()
