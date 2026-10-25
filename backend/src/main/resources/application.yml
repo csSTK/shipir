@@ -34,6 +34,14 @@ shipir:
     # uploaded or cloned build context (tar or tar.gz), enforced while streaming; spring.servlet.multipart.* must allow it too
     max-build-context: 200MB
     build-timeout: 30m
+  uptime:
+    # HTTP uptime checks of managed deployments. Targets go through the egress policy (shipir.egress.*): private
+    # ranges are refused unless shipir.egress.allow-private-ranges is on; link-local and metadata always.
+    enabled: true
+    tick: 10s
+    # consecutive failures before a check is DOWN (one success brings it UP again)
+    failure-threshold: 2
+    result-retention: 14d
   image-auto-update:
     # scheduled pull + up of FILE deployments that opted in (per deployment: on/off + daily UTC window)
     enabled: true

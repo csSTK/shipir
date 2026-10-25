@@ -66,6 +66,16 @@ const imageFailed: N = {
   deploymentId: 'd1', deploymentName: 'web', message: 'web image update failed', read: false,
   createdAt: new Date().toISOString(),
 }
+const uptimeDown: N = {
+  ...base, id: 'n9', type: 'UPTIME_DOWN', hostId: 'h1', hostName: 'Staging',
+  deploymentId: 'd1', deploymentName: 'web', message: 'Uptime check "home" is down', read: false,
+  createdAt: new Date().toISOString(),
+}
+const uptimeUp: N = {
+  ...base, id: 'n10', type: 'UPTIME_UP', hostId: 'h1', hostName: 'Staging',
+  deploymentId: 'd1', deploymentName: 'web', message: 'Uptime check "home" is back up', read: false,
+  createdAt: new Date().toISOString(),
+}
 
 let items: N[]
 let calls: string[]
@@ -128,10 +138,21 @@ describe('NotificationsPage', () => {
     expect(screen.getByText('Image update failed')).toBeInTheDocument()
   })
 
+  it('renders the uptime types with labels instead of crashing', async () => {
+    items = [uptimeDown, uptimeUp]
+    renderPage()
+    expect(await screen.findByText('Uptime check "home" is down')).toBeInTheDocument()
+    expect(screen.getByText('Uptime check "home" is back up')).toBeInTheDocument()
+    expect(screen.getByText('Uptime check down')).toBeInTheDocument()
+    expect(screen.getByText('Uptime check up')).toBeInTheDocument()
+  })
+
   it('has a label for every notification type', () => {
     for (const type of NOTIFICATION_TYPES) expect(NOTIFICATION_TYPE_LABELS[type]).toBeTruthy()
     expect(NOTIFICATION_TYPES).toContain('IMAGE_UPDATE_APPLIED')
     expect(NOTIFICATION_TYPES).toContain('IMAGE_UPDATE_FAILED')
+    expect(NOTIFICATION_TYPES).toContain('UPTIME_DOWN')
+    expect(NOTIFICATION_TYPES).toContain('UPTIME_UP')
   })
 
   it('lists notifications, linking only hosts that still exist', async () => {

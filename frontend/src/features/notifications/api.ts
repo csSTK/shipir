@@ -10,6 +10,8 @@ export const NOTIFICATION_TYPES = [
   'GIT_AUTO_UPDATE_FAILED',
   'IMAGE_UPDATE_APPLIED',
   'IMAGE_UPDATE_FAILED',
+  'UPTIME_DOWN',
+  'UPTIME_UP',
 ] as const
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]
@@ -23,6 +25,8 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   GIT_AUTO_UPDATE_FAILED: 'Git auto-update failed',
   IMAGE_UPDATE_APPLIED: 'Image update applied',
   IMAGE_UPDATE_FAILED: 'Image update failed',
+  UPTIME_DOWN: 'Uptime check down',
+  UPTIME_UP: 'Uptime check up',
 }
 
 export interface AppNotification {

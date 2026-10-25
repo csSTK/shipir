@@ -3,6 +3,7 @@ package dev.bethge.shipir.notification;
 import dev.bethge.shipir.compose.DeploymentRunFailedEvent;
 import dev.bethge.shipir.compose.GitAutoUpdateFailedEvent;
 import dev.bethge.shipir.compose.ImageAutoUpdateEvent;
+import dev.bethge.shipir.compose.UptimeStateChangedEvent;
 import dev.bethge.shipir.host.ContainerProblemEvent;
 
 import java.time.Instant;
@@ -46,6 +47,17 @@ record NotificationDraft(NotificationType type, UUID hostId, String hostName, UU
         return new NotificationDraft(e.applied() ? NotificationType.IMAGE_UPDATE_APPLIED
                 : NotificationType.IMAGE_UPDATE_FAILED, e.hostId(), e.hostName(), e.deploymentId(), e.deploymentName(),
                 null, null, cap(message), null, e.errorCode(), e.occurredAt());
+    }
+
+    static NotificationDraft of(UptimeStateChangedEvent e) {
+        String message = e.down()
+                ? "Uptime check \"%s\" of deployment \"%s\" on \"%s\" is down (%s)".formatted(e.checkName(),
+                        e.deploymentName(), e.hostName(), e.errorCode())
+                : "Uptime check \"%s\" of deployment \"%s\" on \"%s\" is back up".formatted(e.checkName(),
+                        e.deploymentName(), e.hostName());
+        return new NotificationDraft(e.down() ? NotificationType.UPTIME_DOWN : NotificationType.UPTIME_UP, e.hostId(),
+                e.hostName(), e.deploymentId(), e.deploymentName(), null, null, cap(message), null, e.errorCode(),
+                e.occurredAt());
     }
 
     static NotificationDraft of(ContainerProblemEvent e) {

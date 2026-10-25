@@ -539,6 +539,12 @@ public class DeploymentService {
                 () -> new DeploymentException(HttpStatus.NOT_FOUND, "DEPLOYMENT_NOT_FOUND", "Deployment not found"));
     }
 
+    /** Deployment by id alone (system callers: the uptime scheduler). */
+    Deployment requireDeployment(UUID id) {
+        return deployments.findById(id).orElseThrow(
+                () -> new DeploymentException(HttpStatus.NOT_FOUND, "DEPLOYMENT_NOT_FOUND", "Deployment not found"));
+    }
+
     DeploymentVersion currentVersion(Deployment deployment) {
         return versions.findById(deployment.getCurrentVersionId()).orElseThrow(
                 () -> new DeploymentException(HttpStatus.NOT_FOUND, "DEPLOYMENT_NOT_FOUND", "Deployment not found"));

@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To33Successfully() {
+    void flywayAppliedVersions1To34Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34");
     }
 
     @Test
@@ -521,7 +521,7 @@ class SchemaMigrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"HOST_DOWN", "HOST_UP", "DEPLOYMENT_FAILED", "CONTAINER_CRASHED", "CONTAINER_UNHEALTHY",
-            "GIT_AUTO_UPDATE_FAILED", "IMAGE_UPDATE_APPLIED", "IMAGE_UPDATE_FAILED"})
+            "GIT_AUTO_UPDATE_FAILED", "IMAGE_UPDATE_APPLIED", "IMAGE_UPDATE_FAILED", "UPTIME_DOWN", "UPTIME_UP"})
     void notificationAcceptsKnownTypes(String type) {
         UUID user = insertUser("alice");
         insertNotification(user, type);
@@ -530,7 +530,7 @@ class SchemaMigrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"DEPLOYMENT_FAILED", "CONTAINER_CRASHED", "CONTAINER_UNHEALTHY", "GIT_AUTO_UPDATE_FAILED",
-            "IMAGE_UPDATE_APPLIED", "IMAGE_UPDATE_FAILED"})
+            "IMAGE_UPDATE_APPLIED", "IMAGE_UPDATE_FAILED", "UPTIME_DOWN", "UPTIME_UP"})
     void notificationPreferenceAcceptsNewTypes(String type) {
         UUID user = insertUser("alice");
         insertPreference(user, type, true);
@@ -2317,6 +2317,77 @@ class SchemaMigrationTest {
                 VALUES ('img-hook', ?, 'https://example.com', ARRAY['IMAGE_UPDATE_APPLIED', 'IMAGE_UPDATE_FAILED'], ?)
                 """, new byte[] {1, 2, 3}, user);
         assertThat(count("notification_webhooks")).isEqualTo(1);
+    }
+
+    @Test
+    void notificationWebhookAcceptsUptimeEventTypes() {
+        UUID user = insertUser("alice");
+        jdbc.update("""
+                INSERT INTO notification_webhooks (name, url_encrypted, url_hint, event_types, created_by)
+                VALUES ('up-hook', ?, 'https://example.com', ARRAY['UPTIME_DOWN', 'UPTIME_UP'], ?)
+                """, new byte[] {1, 2, 3}, user);
+        assertThat(count("notification_webhooks")).isEqualTo(1);
+    }
+
+    private UUID insertUptimeCheck(UUID deployment, String url, Integer expected, int interval, int timeout) {
+        return jdbc.queryForObject("""
+                INSERT INTO uptime_checks (deployment_id, name, url, expected_status, interval_seconds, timeout_seconds)
+                VALUES (?, 'home', ?, ?, ?, ?) RETURNING id
+                """, UUID.class, deployment, url, expected, interval, timeout);
+    }
+
+    private UUID uptimeDeployment() {
+        UUID owner = insertUser("alice");
+        return insertDeployment(insertHost(owner), owner, "web");
+    }
+
+    @Test
+    void uptimeCheckDefaultsToUnknownStateWithoutFailures() {
+        UUID check = insertUptimeCheck(uptimeDeployment(), "https://example.com/health", null, 60, 5);
+        Map<String, Object> row = jdbc.queryForMap("SELECT * FROM uptime_checks WHERE id = ?", check);
+        assertThat(row.get("last_status")).isEqualTo("UNKNOWN");
+        assertThat(row.get("enabled")).isEqualTo(true);
+        assertThat(row.get("consecutive_failures")).isEqualTo(0);
+        assertThat(row.get("last_checked_at")).isNull();
+        assertThat(row.get("created_at")).isNotNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ftp://example.com/", "file:///etc/passwd", "https://user:pw@example.com/", "https://", "example.com"})
+    void uptimeCheckRejectsNonHttpOrCredentialUrls(String url) {
+        UUID deployment = uptimeDeployment();
+        assertThatThrownBy(() -> insertUptimeCheck(deployment, url, null, 60, 5))
+                .hasMessageContaining("uptime_checks_url_check");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"29,5", "86401,5", "60,0", "60,31"})
+    void uptimeCheckRejectsOutOfRangeIntervalAndTimeout(String values) {
+        UUID deployment = uptimeDeployment();
+        String[] v = values.split(",");
+        assertThatThrownBy(() -> insertUptimeCheck(deployment, "https://example.com/", null,
+                Integer.parseInt(v[0]), Integer.parseInt(v[1]))).hasMessageContaining("uptime_checks_");
+    }
+
+    @Test
+    void uptimeCheckRejectsExpectedStatusOutsideHttpRange() {
+        UUID deployment = uptimeDeployment();
+        assertThatThrownBy(() -> insertUptimeCheck(deployment, "https://example.com/", 99, 60, 5))
+                .hasMessageContaining("uptime_checks_expected_status_check");
+    }
+
+    @Test
+    void uptimeResultsAndChecksAreRemovedWithTheirDeployment() {
+        UUID deployment = uptimeDeployment();
+        UUID check = insertUptimeCheck(deployment, "https://example.com/", 200, 60, 5);
+        jdbc.update("INSERT INTO uptime_results (check_id, checked_at, ok, status_code, latency_ms) VALUES (?, now(), true, 200, 12)",
+                check);
+        jdbc.update("INSERT INTO uptime_results (check_id, checked_at, ok, error_code) VALUES (?, now(), false, 'TIMEOUT')",
+                check);
+        assertThat(count("uptime_results")).isEqualTo(2);
+        jdbc.update("DELETE FROM deployments WHERE id = ?", deployment);
+        assertThat(count("uptime_checks")).isZero();
+        assertThat(count("uptime_results")).isZero();
     }
 
     @Test

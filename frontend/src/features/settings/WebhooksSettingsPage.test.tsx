@@ -78,7 +78,7 @@ describe('WebhooksSettingsPage', () => {
     ]) {
       expect(events.getByRole('checkbox', { name: label })).not.toBeChecked()
     }
-    expect(events.getAllByRole('checkbox')).toHaveLength(8)
+    expect(events.getAllByRole('checkbox')).toHaveLength(10)
   })
 
   it('sends a newly added event type when creating', async () => {

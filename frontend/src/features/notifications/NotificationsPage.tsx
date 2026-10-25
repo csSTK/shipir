@@ -38,6 +38,8 @@ const TYPE_STYLE: Record<NotificationType, { icon: LucideIcon; tone: Tone }> = {
   GIT_AUTO_UPDATE_FAILED: { icon: GitBranch, tone: 'warn' },
   IMAGE_UPDATE_APPLIED: { icon: PackageCheck, tone: 'ok' },
   IMAGE_UPDATE_FAILED: { icon: CircleX, tone: 'bad' },
+  UPTIME_DOWN: { icon: CircleArrowDown, tone: 'bad' },
+  UPTIME_UP: { icon: CircleArrowUp, tone: 'ok' },
 }
 
 /** The deployment or container the notification is about; `to` is null when it was removed. */
