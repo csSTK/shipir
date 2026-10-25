@@ -71,6 +71,7 @@ async function openAndDeploy(page: Page, api: import('./fixtures/api.ts').ApiMoc
   api.mock('GET', BASE, { body: [] })
   api.mock('GET', `${BASE}/s1`, { body: deployment })
   api.mock('GET', `${BASE}/s1/webhook`, { body: { enabled: false, createdAt: null, rotatedAt: null } })
+  api.mock('GET', `${BASE}/s1/uptime-checks`, { body: [] })
   api.mock('GET', `${BASE}/s1/versions`, { body: [] })
   api.mock('GET', `${BASE}/s1/files`, { body: [] })
   api.mock('POST', `${BASE}/s1/deploy`, { status: 202, body: { runId: 'dep-1', versionId: 'v1' } })

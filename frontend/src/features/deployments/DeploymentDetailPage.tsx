@@ -23,6 +23,7 @@ import { GitSourcePanel } from './GitSourcePanel.tsx'
 import { ImageAutoUpdatePanel } from './ImageAutoUpdatePanel.tsx'
 import { DeploymentLogsPanel } from './logs/DeploymentLogsPanel.tsx'
 import { ConfigFilesPanel } from './config-files/index.ts'
+import { UptimeCard } from './uptime/index.ts'
 import { WebhookCard } from './webhook/index.ts'
 import { DeploymentContentPanel } from './DeploymentContentPanel.tsx'
 import { describeDeploymentError } from './deploymentErrors.ts'
@@ -253,6 +254,7 @@ export function DeploymentDetailPage() {
       <ConfigFilesPanel hostId={hostId} deploymentId={deploymentId} canWrite={canWrite} />
 
       <WebhookCard hostId={hostId} deploymentId={deploymentId} canOperate={canWrite} />
+      <UptimeCard hostId={hostId} deploymentId={deploymentId} canOperate={canWrite} />
 
       <Card className="sd-panel">
         <h3 className="sd-panel__title">Versions</h3>

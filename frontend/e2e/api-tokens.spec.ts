@@ -80,6 +80,7 @@ test('enables, rotates and disables the redeploy webhook with a one-time URL', a
   api.mock('GET', `${BASE}/s1/versions`, { body: [] })
   api.mock('GET', `${BASE}/s1/files`, { body: [] })
   api.mock('GET', `${BASE}/s1/webhook`, { body: { enabled: false, createdAt: null, rotatedAt: null } })
+  api.mock('GET', `${BASE}/s1/uptime-checks`, { body: [] })
   const issued = { enabled: true, createdAt: '2026-10-25T10:00:00Z', rotatedAt: null, token: WEBHOOK_TOKEN, path: `/api/webhooks/deploy/${WEBHOOK_TOKEN}` }
   api.mock('PUT', `${BASE}/s1/webhook`, { body: issued })
   api.mock('POST', `${BASE}/s1/webhook/rotate`, { body: issued })
@@ -115,6 +116,7 @@ test('enables, rotates and disables the redeploy webhook with a one-time URL', a
   await page.getByRole('dialog').getByRole('button', { name: 'Done' }).click()
 
   api.mock('GET', `${BASE}/s1/webhook`, { body: { enabled: false, createdAt: null, rotatedAt: null } })
+  api.mock('GET', `${BASE}/s1/uptime-checks`, { body: [] })
   await card.getByRole('button', { name: 'Disable' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Disable' }).click()
   await expect(card.getByText('Disabled')).toBeVisible()
