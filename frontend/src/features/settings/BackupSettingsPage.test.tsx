@@ -69,7 +69,7 @@ describe('BackupSettingsPage', () => {
 
   it('posts the passphrase with the CSRF header, downloads the file and clears the fields', async () => {
     fetchMock.mockResolvedValue(
-      new Response(new Blob(['encrypted']), {
+      new Response(new TextEncoder().encode('encrypted'), {
         status: 200,
         headers: { 'Content-Disposition': 'attachment; filename="shipir-backup-20261024-120000.tar.gz.enc"' },
       }),
