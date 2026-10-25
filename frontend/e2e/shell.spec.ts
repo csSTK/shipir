@@ -56,8 +56,11 @@ test('environment switcher lists environments with status and navigates', async 
     ],
   })
   api.mock('GET', '/api/hosts/h2/images', { body: [] })
+  api.mock('GET', '/api/hosts/h1/images', { body: [] })
   await page.goto('/environments/h2/images')
   await page.getByRole('button', { name: /^Environment:/ }).click()
   await page.getByRole('menuitem', { name: 'Prod' }).click()
   await expect(page).toHaveURL(/\/environments\/h1\/images$/)
+  // The images page fetches its list after the URL changes; wait for its answer so the request cannot outlive the test.
+  await expect(page.getByText('No images in this environment.')).toBeVisible()
 })
