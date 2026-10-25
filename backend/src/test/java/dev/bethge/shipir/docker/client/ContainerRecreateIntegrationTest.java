@@ -267,6 +267,35 @@ class ContainerRecreateIntegrationTest {
     }
 
     @Test
+    void recreateKeepsTheAnonymousVolumeOfAnImageVolumeDeclaration() throws Exception {
+        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("shipir-vol-img");
+        java.nio.file.Files.writeString(dir.resolve("Dockerfile"), "FROM " + IMAGE + "\nVOLUME /vol\n");
+        String tag = "shipir-rc-vol:" + prefix;
+        docker.buildImageCmd(dir.toFile()).withTags(java.util.Set.of(tag)).start().awaitImageId();
+        String name = prefix + "-anon";
+        String oldId = create(new ContainerCreateSpec(name, tag, List.of("sleep", "300"), Map.of(), List.of(), List.of(),
+                null, null, false, false, true));
+        String volume = docker.inspectContainerCmd(oldId).exec().getMounts().stream()
+                .filter(m -> "/vol".equals(m.getDestination().getPath())).findFirst().orElseThrow().getName();
+        volumes.add(volume);
+
+        var result = service.recreateContainer(hostId, endpoint, oldId,
+                new ContainerCreateSpec(name, tag, List.of("sleep", "300"), Map.of("A", "2"), List.of(), List.of(),
+                        null, null, false, false, true));
+
+        containerIds.add(result.id());
+        try {
+            var mounts = docker.inspectContainerCmd(result.id()).exec().getMounts();
+            assertThat(mounts).filteredOn(m -> "/vol".equals(m.getDestination().getPath()))
+                    .singleElement().satisfies(m -> assertThat(m.getName()).isEqualTo(volume));
+            assertThat(docker.inspectVolumeCmd(volume).exec().getName()).isEqualTo(volume);
+        } finally {
+            docker.removeContainerCmd(result.id()).withForce(true).exec();
+            docker.removeImageCmd(tag).withForce(true).exec();
+        }
+    }
+
+    @Test
     void recreateOfUnknownContainerIsNotFound() {
         assertThatThrownBy(() -> service.recreateContainer(hostId, endpoint, "0".repeat(64),
                 spec(prefix + "-x", Map.of(), List.of(), List.of(), true)))

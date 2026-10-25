@@ -40,6 +40,7 @@ class ContainerRecreateRollbackTest {
         when(old.getState().getRunning()).thenReturn(true);
         when(old.getConfig().getImage()).thenReturn("busybox:1.36");
         when(old.getHostConfig()).thenReturn(HostConfig.newHostConfig());
+        when(old.getMounts()).thenReturn(List.of());
         when(client.inspectContainerCmd("old1").exec()).thenReturn(old);
 
         CreateContainerResponse created = mock(CreateContainerResponse.class);

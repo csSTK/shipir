@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 @Service
 public class ContainerServiceImpl implements ContainerService {
@@ -256,7 +257,7 @@ public class ContainerServiceImpl implements ContainerService {
     @Override
     public CreatedResourceDto createContainer(UUID hostId, DockerEndpoint endpoint, ContainerCreateSpec spec) {
         return calls.call(hostId, endpoint, client -> {
-            String id = createFrom(client, spec, spec.name(), HostConfig.newHostConfig(), null, null);
+            String id = createFrom(client, spec, spec.name(), HostConfig.newHostConfig(), null, null, null);
             if (spec.start()) {
                 try {
                     client.startContainerCmd(id).exec();
@@ -282,7 +283,7 @@ public class ContainerServiceImpl implements ContainerService {
      * and healthcheck (with a new image these would pin the old image's defaults).
      */
     private static String createFrom(DockerClient client, ContainerCreateSpec spec, String name, HostConfig host,
-                                     ContainerConfig old, String oldId) {
+                                     ContainerConfig old, String oldId, List<InspectContainerResponse.Mount> oldMounts) {
         host.withPrivileged(spec.privileged()).withMounts(List.of());
         Ports bindings = new Ports();
         List<ExposedPort> exposed = new ArrayList<>();
@@ -293,9 +294,11 @@ public class ContainerServiceImpl implements ContainerService {
             bindings.bind(port, p.hostPort() == null ? Ports.Binding.empty() : Ports.Binding.bindPort(p.hostPort()));
         }
         host.withPortBindings(bindings);
-        host.withBinds(spec.mounts().stream()
+        List<Bind> binds = new ArrayList<>(spec.mounts().stream()
                 .map(m -> new Bind(m.source(), new Volume(m.target()), Boolean.TRUE.equals(m.readOnly()) ? AccessMode.ro : AccessMode.rw))
                 .toList());
+        binds.addAll(anonymousVolumeBinds(oldMounts, spec));
+        host.withBinds(binds);
         host.withRestartPolicy(spec.restartPolicy() == null ? RestartPolicy.noRestart() : RestartPolicy.parse(spec.restartPolicy()));
         if (spec.hostNetwork()) {
             host.withNetworkMode("host");
@@ -332,6 +335,24 @@ public class ContainerServiceImpl implements ContainerService {
         }
     }
 
+    private static final java.util.regex.Pattern ANONYMOUS_VOLUME = java.util.regex.Pattern.compile("[0-9a-f]{64}");
+
+    /**
+     * Binds the old container's anonymous volumes (image VOLUME declarations, named by a 64-hex id) into the new one at
+     * the same paths, so their data survives a recreate. Targets the spec mounts itself are left to the spec.
+     */
+    private static List<Bind> anonymousVolumeBinds(List<InspectContainerResponse.Mount> oldMounts, ContainerCreateSpec spec) {
+        if (oldMounts == null) {
+            return List.of();
+        }
+        Set<String> taken = spec.mounts().stream().map(ContainerCreateSpec.Mount::target).collect(Collectors.toSet());
+        return oldMounts.stream()
+                .filter(m -> m.getName() != null && ANONYMOUS_VOLUME.matcher(m.getName()).matches())
+                .filter(m -> m.getDestination() != null && !taken.contains(m.getDestination().getPath()))
+                .map(m -> new Bind(m.getName(), m.getDestination(), Boolean.FALSE.equals(m.getRW()) ? AccessMode.ro : AccessMode.rw))
+                .toList();
+    }
+
     private static final int RECREATE_STOP_SECONDS = 10;
     private static final Duration RECREATE_EXTRA = Duration.ofSeconds(RECREATE_STOP_SECONDS + 60);
 
@@ -344,7 +365,7 @@ public class ContainerServiceImpl implements ContainerService {
             String suffix = UUID.randomUUID().toString().substring(0, 8);
             String oldName = name + "-shipir-old-" + suffix;
             HostConfig baseHost = old.getHostConfig() == null ? HostConfig.newHostConfig() : old.getHostConfig();
-            String newId = createFrom(client, spec, name + "-shipir-new-" + suffix, baseHost, old.getConfig(), old.getId());
+            String newId = createFrom(client, spec, name + "-shipir-new-" + suffix, baseHost, old.getConfig(), old.getId(), old.getMounts());
             boolean stopped = running; // set before stopping: a failed stop may still have stopped it
             boolean oldRenamed = false;
             try {
