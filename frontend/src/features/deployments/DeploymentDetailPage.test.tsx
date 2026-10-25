@@ -108,6 +108,13 @@ describe('DeploymentDetailPage', () => {
     expect(within(items[2]).getByText('Git · abcdef1')).toBeInTheDocument()
   })
 
+  it('offers the combined logs of the deployment to viewers too', async () => {
+    serve('VIEWER')
+    renderPage()
+    expect(await screen.findByRole('heading', { name: 'Logs' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show logs' })).toBeInTheDocument()
+  })
+
   it('shows the webhook card to operators but not to viewers', async () => {
     serve('OPERATOR')
     renderPage()

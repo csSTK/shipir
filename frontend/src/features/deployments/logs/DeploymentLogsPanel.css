@@ -1,0 +1,18 @@
+.dlogs__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.dlogs__notices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.dlogs__notice {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-warn-soft);
+  color: var(--color-warn);
+  font-size: var(--text-small-size);
+}

@@ -1,19 +1,15 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowDown, ArrowLeft } from 'lucide-react'
-import { Badge, Button, PageHeader, Toolbar } from '../../../shared/ui/index.ts'
+import { ArrowLeft } from 'lucide-react'
+import { Badge, PageHeader } from '../../../shared/ui/index.ts'
 import { useContainers } from '../api.ts'
+import { LogOptions } from './LogOptions.tsx'
+import { logDownloadHref } from './logDownload.ts'
+import { LogView } from './LogView.tsx'
 import { useContainerLogs, type LogEnd, type TailOption } from './useContainerLogs.ts'
 import './ContainerLogsPage.css'
 
-const BOTTOM_TOLERANCE_PX = 24
-const TAILS: { value: TailOption; label: string }[] = [
-  { value: '100', label: '100 lines' },
-  { value: '200', label: '200 lines' },
-  { value: '500', label: '500 lines' },
-  { value: '1000', label: '1000 lines' },
-  { value: 'all', label: 'All' },
-]
+const TAILS: readonly TailOption[] = ['100', '200', '500', '1000', 'all']
 
 const ERROR_TEXT: Record<string, string> = {
   NOT_FOUND: 'This container no longer exists.',
@@ -32,34 +28,7 @@ export function ContainerLogsPage() {
   const name = containers.data?.find((c) => c.id === cid)?.name ?? cid.slice(0, 12)
   const [tail, setTail] = useState<TailOption>('200')
   const [timestamps, setTimestamps] = useState(false)
-  const { lines, end, connection } = useContainerLogs(hostId, cid, tail, timestamps)
-
-  const logRef = useRef<HTMLDivElement>(null)
-  const [following, setFollowing] = useState(true)
-  const followingRef = useRef(true)
-  const setFollow = (value: boolean) => {
-    followingRef.current = value
-    setFollowing(value)
-  }
-
-  useLayoutEffect(() => {
-    const el = logRef.current
-    if (el && followingRef.current) el.scrollTop = el.scrollHeight
-  }, [lines.length])
-
-  useEffect(() => {
-    const el = logRef.current
-    if (!el) return
-    const onScroll = () => setFollow(el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_TOLERANCE_PX)
-    el.addEventListener('scroll', onScroll, { passive: true })
-    return () => el.removeEventListener('scroll', onScroll)
-  }, [])
-
-  const jumpToLatest = () => {
-    const el = logRef.current
-    if (el) el.scrollTop = el.scrollHeight
-    setFollow(true)
-  }
+  const { lines, end, connection, truncated, refused } = useContainerLogs(hostId, cid, tail, timestamps)
 
   const connectionLabel =
     connection === 'connected' ? 'Live' : connection === 'connecting' ? 'Connecting…' : 'Connection lost, reconnecting…'
@@ -70,51 +39,32 @@ export function ContainerLogsPage() {
         <ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" /> Containers
       </Link>
       <PageHeader title={`Logs: ${name}`} />
-      <Toolbar label="Log options">
-        <label className="clogs__field">
-          <span>Show last</span>
-          <select value={tail} onChange={(e) => setTail(e.target.value as TailOption)} className="clogs__select">
-            {TAILS.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="clogs__check">
-          <input type="checkbox" checked={timestamps} onChange={(e) => setTimestamps(e.target.checked)} />
-          <span>Timestamps</span>
-        </label>
+      <LogOptions
+        tails={TAILS}
+        tail={tail}
+        onTail={setTail}
+        timestamps={timestamps}
+        onTimestamps={setTimestamps}
+        downloadHref={logDownloadHref(hostId, cid, tail, timestamps)}
+      >
         <div role="status" className="clogs__state">
-          {end === null && <Badge tone={connection === 'reconnecting' ? 'warn' : 'muted'}>{connectionLabel}</Badge>}
+          {end === null && !refused && <Badge tone={connection === 'reconnecting' ? 'warn' : 'muted'}>{connectionLabel}</Badge>}
           {end?.status === 'ENDED' && <Badge tone="muted">Ended</Badge>}
           {end?.status === 'ERROR' && <Badge tone="bad">Error</Badge>}
+          {refused && <Badge tone="bad">Unavailable</Badge>}
         </div>
-      </Toolbar>
+      </LogOptions>
+      {refused && (
+        <p role="alert" className="ui-error">
+          You are not allowed to follow this log, or the stream is not available.
+        </p>
+      )}
       {end && (
         <p role={end.status === 'ERROR' ? 'alert' : undefined} className={end.status === 'ERROR' ? 'ui-error' : 'clogs__note'}>
           {endText(end)}
         </p>
       )}
-      <div className="clogs__body">
-        <div ref={logRef} className="clogs__log" role="log" aria-label="Container log" tabIndex={0}>
-          {lines.length === 0 ? (
-            <span className="clogs__empty">{end ? 'No log output.' : 'Waiting for output…'}</span>
-          ) : (
-            lines.map((l) => (
-              <div key={l.seq} className={`clogs__line${l.stream === 'STDERR' ? ' clogs__line--err' : ''}`}>
-                {l.timestamp && <time className="clogs__time">{l.timestamp}</time>}
-                {l.text || ' '}
-              </div>
-            ))
-          )}
-        </div>
-        {!following && (
-          <Button variant="primary" size="sm" className="clogs__jump" onClick={jumpToLatest}>
-            <ArrowDown size={16} strokeWidth={1.75} aria-hidden="true" /> Jump to latest
-          </Button>
-        )}
-      </div>
+      <LogView lines={lines} label="Container log" emptyText={end ? 'No log output.' : 'Waiting for output…'} truncated={truncated} />
     </section>
   )
 }

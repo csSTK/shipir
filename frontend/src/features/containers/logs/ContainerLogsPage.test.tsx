@@ -48,8 +48,8 @@ describe('ContainerLogsPage', () => {
     send({ seq: 2, type: 'LINE', stream: 'STDERR', line: 'boom' })
     const rows = screen.getByRole('log').children
     expect(rows).toHaveLength(2)
-    expect(rows[1]).toHaveClass('clogs__line--err')
-    expect(rows[0]).not.toHaveClass('clogs__line--err')
+    expect(rows[1]).toHaveClass('logv__line--err')
+    expect(rows[0]).not.toHaveClass('logv__line--err')
   })
 
   it('resubscribes with new options and clears the lines', () => {
@@ -91,6 +91,71 @@ describe('ContainerLogsPage', () => {
     fireEvent.click(jump)
     expect(log.scrollTop).toBe(1000)
     expect(screen.queryByRole('button', { name: 'Jump to latest' })).toBeNull()
+  })
+
+  it('highlights matches case-insensitively, counts them and steps with Enter and Shift+Enter', () => {
+    vi.useFakeTimers()
+    try {
+      renderPage()
+      send({ seq: 1, type: 'LINE', stream: 'STDOUT', line: 'Error one' })
+      send({ seq: 2, type: 'LINE', stream: 'STDOUT', line: 'fine' })
+      send({ seq: 3, type: 'LINE', stream: 'STDOUT', line: 'an error and another ERROR' })
+      const box = screen.getByRole('searchbox', { name: 'Search logs' })
+      fireEvent.change(box, { target: { value: 'error' } })
+      act(() => void vi.advanceTimersByTime(500))
+      const marks = () => Array.from(screen.getByRole('log').querySelectorAll('mark'))
+      expect(marks()).toHaveLength(3)
+      expect(screen.getByText('1 of 3')).toBeInTheDocument()
+      expect(marks()[0]).toHaveAttribute('data-active', 'true')
+      fireEvent.keyDown(box, { key: 'Enter' })
+      expect(screen.getByText('2 of 3')).toBeInTheDocument()
+      expect(marks()[1]).toHaveAttribute('data-active', 'true')
+      fireEvent.keyDown(box, { key: 'Enter', shiftKey: true })
+      fireEvent.keyDown(box, { key: 'Enter', shiftKey: true })
+      expect(screen.getByText('3 of 3')).toBeInTheDocument()
+      fireEvent.change(box, { target: { value: 'zzz' } })
+      act(() => void vi.advanceTimersByTime(500))
+      expect(screen.getByText('No matches')).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('filters to stderr only and offers to clear the filter', () => {
+    renderPage()
+    send({ seq: 1, type: 'LINE', stream: 'STDOUT', line: 'out' })
+    send({ seq: 2, type: 'LINE', stream: 'STDERR', line: 'err' })
+    fireEvent.click(screen.getByLabelText('stderr only'))
+    expect(screen.getByRole('log')).not.toHaveTextContent('out')
+    expect(screen.getByRole('log')).toHaveTextContent('err')
+    expect(screen.getByText('Showing 1 of 2 lines')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(screen.getByRole('log')).toHaveTextContent('out')
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull()
+  })
+
+  it('links the download to the endpoint with the current tail and timestamps and hints at the cap', () => {
+    renderPage()
+    expect(screen.getByRole('link', { name: /Download/ })).toHaveAttribute('href', '/api/hosts/h1/containers/c1/logs/download?tail=200&timestamps=false')
+    fireEvent.change(screen.getByLabelText('Show last'), { target: { value: 'all' } })
+    fireEvent.click(screen.getByLabelText('Timestamps'))
+    expect(screen.getByRole('link', { name: /Download/ })).toHaveAttribute('href', '/api/hosts/h1/containers/c1/logs/download?tail=all&timestamps=true')
+    expect(screen.getByText(/capped/i)).toBeInTheDocument()
+  })
+
+  it('says when the oldest lines were dropped from the buffer', () => {
+    renderPage()
+    act(() => {
+      for (let i = 1; i <= 5002; i++) handlers.onMessage(JSON.stringify({ seq: i, type: 'LINE', stream: 'STDOUT', line: `l${i}` }))
+    })
+    expect(screen.getByText(/oldest lines were dropped/i)).toBeInTheDocument()
+  })
+
+  it('explains a refused subscription instead of reconnecting forever', () => {
+    renderPage()
+    act(() => handlers.onError?.('Access denied'))
+    expect(screen.getByRole('alert')).toHaveTextContent(/not allowed|permission/i)
+    expect(unsubscribe).toHaveBeenCalled()
   })
 
   it('unsubscribes on unmount', () => {

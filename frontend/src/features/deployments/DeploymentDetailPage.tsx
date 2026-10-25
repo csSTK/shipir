@@ -21,6 +21,7 @@ import { ConfirmDialog } from './ConfirmDialog.tsx'
 import { DeploymentRunPanel, type StartedRun } from './DeploymentRunPanel.tsx'
 import { GitSourcePanel } from './GitSourcePanel.tsx'
 import { ImageAutoUpdatePanel } from './ImageAutoUpdatePanel.tsx'
+import { DeploymentLogsPanel } from './logs/DeploymentLogsPanel.tsx'
 import { ConfigFilesPanel } from './config-files/index.ts'
 import { WebhookCard } from './webhook/index.ts'
 import { DeploymentContentPanel } from './DeploymentContentPanel.tsx'
@@ -246,6 +247,8 @@ export function DeploymentDetailPage() {
       )}
 
       <DeploymentContentPanel deployment={data} hostId={hostId} canWrite={canWrite} />
+
+      <DeploymentLogsPanel hostId={hostId} project={data.name} />
 
       <ConfigFilesPanel hostId={hostId} deploymentId={deploymentId} canWrite={canWrite} />
 

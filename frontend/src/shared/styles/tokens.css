@@ -123,6 +123,16 @@
   --color-cat-3: #be185d;
   --color-cat-4: #64748b;
 
+  /* Categorical series (service colours in combined logs): text-safe on sunken surfaces, never the only signal */
+  --color-series-1: #4338ca;
+  --color-series-2: #0f766e;
+  --color-series-3: #a14a0a;
+  --color-series-4: #a21caf;
+  --color-series-5: #1d4ed8;
+  --color-series-6: #17693a;
+  --color-series-7: #be123c;
+  --color-series-8: #7a5a00;
+
   /* Elevation */
   --shadow-sm: 0 1px 2px rgb(26 26 36 / 0.06), 0 1px 3px rgb(26 26 36 / 0.08);
   --shadow-md: 0 4px 14px rgb(26 26 36 / 0.1);
@@ -172,6 +182,15 @@
     --color-cat-3: #f472b6;
     --color-cat-4: #94a3b8;
 
+    --color-series-1: #a5b4fc;
+    --color-series-2: #5eead4;
+    --color-series-3: #fdba74;
+    --color-series-4: #f0abfc;
+    --color-series-5: #93c5fd;
+    --color-series-6: #86efac;
+    --color-series-7: #fda4af;
+    --color-series-8: #fde047;
+
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
     --shadow-md: 0 4px 14px rgb(0 0 0 / 0.45);
     --shadow-lg: 0 24px 60px rgb(0 0 0 / 0.6);
@@ -212,6 +231,14 @@
   --color-info: #7db7ff;
   --color-info-soft: #112a47;
   --color-info-solid: #0a84ff;
+  --color-series-1: #a5b4fc;
+  --color-series-2: #5eead4;
+  --color-series-3: #fdba74;
+  --color-series-4: #f0abfc;
+  --color-series-5: #93c5fd;
+  --color-series-6: #86efac;
+  --color-series-7: #fda4af;
+  --color-series-8: #fde047;
 
   --color-cat-1: #8b8cf8;
   --color-cat-2: #2dd4bf;

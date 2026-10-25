@@ -1,5 +1,5 @@
-import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures/api.ts'
+import { mockBroker } from './fixtures/stomp.ts'
 
 const host = {
   id: 'a',
@@ -28,32 +28,6 @@ const container = {
   composeService: null,
 }
 
-const stompFrame = (command: string, headers: Record<string, string>, body = '') =>
-  `${command}\n${Object.entries(headers).map(([k, v]) => `${k}:${v}`).join('\n')}\n\n${body}\0`
-
-/** Minimal STOMP broker: records SUBSCRIBE headers and lets the test push frames. */
-async function mockBroker(page: Page, onSubscribe: (send: (body: object) => void, headers: Record<string, string>) => void) {
-  const subscribes: Record<string, string>[] = []
-  await page.routeWebSocket('**/ws', (ws) => {
-    ws.onMessage((raw) => {
-      const text = String(raw)
-      if (text.startsWith('CONNECT') || text.startsWith('STOMP')) {
-        ws.send(stompFrame('CONNECTED', { version: '1.2', 'heart-beat': '0,0' }))
-      } else if (text.startsWith('SUBSCRIBE') && !text.includes('/events') && !text.includes('/stats')) {
-        const headers = Object.fromEntries(
-          text.split('\n').slice(1).map((l) => l.split(':')).filter((p) => p.length >= 2).map(([k, ...v]) => [k, v.join(':')]),
-        )
-        subscribes.push(headers)
-        onSubscribe(
-          (body) => ws.send(stompFrame('MESSAGE', { subscription: headers.id ?? '0', destination: headers.destination ?? '', 'message-id': String(Math.random()) }, JSON.stringify(body))),
-          headers,
-        )
-      }
-    })
-  })
-  return subscribes
-}
-
 test.beforeEach(({ api }) => {
   api.mock('GET', '/api/auth/me', { body: { username: 'u', role: 'VIEWER', setupRequired: false } })
   api.mock('GET', '/api/hosts/overview', { body: [host] })
@@ -73,7 +47,7 @@ test('opens the logs from the container row and streams lines, stderr marked', a
   const log = page.getByRole('log', { name: 'Container log' })
   await expect(log).toContainText('listening on 80')
   await expect(log).toContainText('warn: slow')
-  await expect(log.locator('.clogs__line--err')).toHaveText('warn: slow')
+  await expect(log.locator('.logv__line--err')).toHaveText('warn: slow')
   expect(subs[0].tail).toBe('200')
   expect(subs[0].timestamps).toBe('false')
 })
@@ -120,4 +94,46 @@ test('shows an error status from the server', async ({ page }) => {
   await mockBroker(page, (send) => send({ seq: 1, type: 'STATUS', status: 'ERROR', line: 'NOT_FOUND' }))
   await page.goto('/environments/a/containers/c1/logs')
   await expect(page.getByRole('alert')).toContainText('no longer exists')
+})
+
+test('searches with highlighting, steps through matches and filters stderr only', async ({ page }) => {
+  await mockBroker(page, (send) => {
+    send({ seq: 1, type: 'LINE', stream: 'STDOUT', line: 'Error one' })
+    send({ seq: 2, type: 'LINE', stream: 'STDOUT', line: 'all fine' })
+    send({ seq: 3, type: 'LINE', stream: 'STDERR', line: 'an error and another ERROR' })
+  })
+  await page.goto('/environments/a/containers/c1/logs')
+  const log = page.getByRole('log', { name: 'Container log' })
+  await expect(log).toContainText('all fine')
+  const box = page.getByRole('searchbox', { name: 'Search logs' })
+  await box.fill('error')
+  await expect(log.locator('mark')).toHaveCount(3)
+  await expect(page.getByText('1 of 3')).toBeVisible()
+  await box.press('Enter')
+  await expect(page.getByText('2 of 3')).toBeVisible()
+  await box.press('Shift+Enter')
+  await expect(page.getByText('1 of 3')).toBeVisible()
+  await page.getByLabel('stderr only').check()
+  await expect(log).not.toContainText('all fine')
+  await expect(log.locator('mark')).toHaveCount(2)
+  await expect(page.getByText('Showing 1 of 3 lines')).toBeVisible()
+  await page.getByRole('button', { name: 'Clear filters' }).click()
+  await expect(log).toContainText('all fine')
+})
+
+test('downloads the log with the selected tail and timestamps', async ({ page, api }) => {
+  api.mock('GET', '/api/hosts/a/containers/c1/logs/download', { body: null })
+  await mockBroker(page, () => {})
+  await page.goto('/environments/a/containers/c1/logs')
+  await page.getByLabel('Show last').selectOption('1000')
+  await page.getByLabel('Timestamps').check()
+  await expect(page.getByText(/Downloads are capped/)).toBeVisible()
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: /Download/ }).click()])
+  expect(download.url()).toContain('/api/hosts/a/containers/c1/logs/download?tail=1000&timestamps=true')
+})
+
+test('explains a refused log stream', async ({ page }) => {
+  await mockBroker(page, () => {}, { refuse: true })
+  await page.goto('/environments/a/containers/c1/logs')
+  await expect(page.getByRole('alert')).toContainText('not allowed')
 })

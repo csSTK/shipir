@@ -1,0 +1,199 @@
+/* Shared log viewer (container page and deployment panel). Motion is opacity/transform only; base.css collapses it for reduced motion. */
+.logv {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.logv .ui-toolbar {
+  margin-bottom: 0;
+}
+.logv__field,
+.logv__check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-small-size);
+}
+.logv__select {
+  font: inherit;
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.logv__select:focus-visible,
+.logv__check input:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+.logv__check input {
+  accent-color: var(--color-accent);
+}
+.logv__download {
+  text-decoration: none;
+}
+.logv__note,
+.logv__count {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-small-size);
+  font-variant-numeric: tabular-nums;
+}
+.logv__legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.logv__chip {
+  --chip-color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-small-size);
+  cursor: pointer;
+  transition:
+    transform var(--duration-press) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
+}
+.logv__chip:active {
+  transform: scale(var(--press-scale));
+}
+.logv__chip:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+.logv__chip[aria-pressed='false'] {
+  color: var(--color-text-muted);
+  background: transparent;
+  text-decoration: line-through;
+}
+.logv__dot {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--chip-color);
+}
+.logv__ended {
+  color: var(--color-text-subtle);
+  font-size: var(--text-caption-size);
+}
+.logv__body {
+  position: relative;
+}
+.logv__log {
+  height: min(65vh, calc(var(--space-8) * 10));
+  min-height: calc(var(--space-8) * 2);
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  font-family: var(--font-mono);
+  font-size: var(--text-small-size);
+  line-height: var(--text-body-leading);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.logv__log:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+.logv__line--err {
+  color: var(--color-bad);
+}
+.logv__svc {
+  margin-right: var(--space-2);
+  font-weight: var(--weight-semibold);
+}
+.logv__time {
+  color: var(--color-text-subtle);
+  margin-right: var(--space-2);
+}
+.logv__empty {
+  color: var(--color-text-muted);
+}
+.logv__mark {
+  border-radius: var(--radius-sm);
+  background: var(--color-warn-soft);
+  color: inherit;
+  box-shadow: 0 0 0 1px var(--color-warn-solid);
+}
+.logv__mark[data-active='true'] {
+  /* Text stays the normal ink on the soft tint (>= 4.5:1 in both themes); the active match is told apart by weight and a thick ring, not by a text-on-solid colour. */
+  font-weight: var(--weight-bold);
+  box-shadow: 0 0 0 var(--space-1) var(--color-warn-solid);
+}
+.logv__jump {
+  position: absolute;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  box-shadow: var(--shadow-md);
+  animation: logv-in var(--duration-base) var(--ease-out);
+}
+@keyframes logv-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-1));
+  }
+}
+.logv__svc--1 {
+  color: var(--color-series-1);
+}
+.logv__chip--1 {
+  --chip-color: var(--color-series-1);
+}
+.logv__svc--2 {
+  color: var(--color-series-2);
+}
+.logv__chip--2 {
+  --chip-color: var(--color-series-2);
+}
+.logv__svc--3 {
+  color: var(--color-series-3);
+}
+.logv__chip--3 {
+  --chip-color: var(--color-series-3);
+}
+.logv__svc--4 {
+  color: var(--color-series-4);
+}
+.logv__chip--4 {
+  --chip-color: var(--color-series-4);
+}
+.logv__svc--5 {
+  color: var(--color-series-5);
+}
+.logv__chip--5 {
+  --chip-color: var(--color-series-5);
+}
+.logv__svc--6 {
+  color: var(--color-series-6);
+}
+.logv__chip--6 {
+  --chip-color: var(--color-series-6);
+}
+.logv__svc--7 {
+  color: var(--color-series-7);
+}
+.logv__chip--7 {
+  --chip-color: var(--color-series-7);
+}
+.logv__svc--8 {
+  color: var(--color-series-8);
+}
+.logv__chip--8 {
+  --chip-color: var(--color-series-8);
+}

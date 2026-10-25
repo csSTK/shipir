@@ -6,6 +6,8 @@ export type ConnectionState = 'connecting' | 'connected' | 'reconnecting'
 export interface TopicHandlers {
   onMessage: (body: string) => void
   onState: (state: ConnectionState) => void
+  /** The broker answered with an ERROR frame (e.g. the subscription was refused). The connection is closed afterwards. */
+  onError?: (message: string) => void
 }
 
 export interface SubscribeOptions {
@@ -45,6 +47,7 @@ export function openTopicChannel(destination: string, handlers: TopicHandlers, o
       handlers.onState('connected')
       client.subscribe(destination, (frame) => handlers.onMessage(frame.body), options.headers)
     },
+    onStompError: (frame) => handlers.onError?.(frame.headers.message ?? ''),
     onWebSocketClose: () => handlers.onState('reconnecting'),
   })
   handlers.onState('connecting')

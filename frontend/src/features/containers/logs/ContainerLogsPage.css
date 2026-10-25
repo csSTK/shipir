@@ -1,4 +1,4 @@
-/* Container log viewer. Motion is opacity/transform only; base.css collapses it for reduced motion. */
+/* Container log page chrome; the viewer itself is styled in LogView.css. */
 .clogs {
   max-width: var(--content-max);
   margin: 0 auto;
@@ -28,30 +28,6 @@
 .clogs .ui-toolbar {
   margin-bottom: 0;
 }
-.clogs__field,
-.clogs__check {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-small-size);
-}
-.clogs__select {
-  font: inherit;
-  min-height: var(--control-height);
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border-strong);
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-.clogs__select:focus-visible,
-.clogs__check input:focus-visible {
-  outline: none;
-  box-shadow: var(--shadow-focus);
-}
-.clogs__check input {
-  accent-color: var(--color-accent);
-}
 .clogs__state {
   margin-left: auto;
 }
@@ -59,48 +35,4 @@
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--text-small-size);
-}
-.clogs__body {
-  position: relative;
-}
-.clogs__log {
-  height: min(65vh, 40rem);
-  min-height: 8rem;
-  overflow-y: auto;
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-sunken);
-  font-family: var(--font-mono);
-  font-size: var(--text-small-size);
-  line-height: var(--text-body-leading);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.clogs__log:focus-visible {
-  outline: none;
-  box-shadow: var(--shadow-focus);
-}
-.clogs__line--err {
-  color: var(--color-bad);
-}
-.clogs__time {
-  color: var(--color-text-subtle);
-  margin-right: var(--space-2);
-}
-.clogs__empty {
-  color: var(--color-text-muted);
-}
-.clogs__jump {
-  position: absolute;
-  right: var(--space-4);
-  bottom: var(--space-4);
-  box-shadow: var(--shadow-md);
-  animation: clogs-in var(--duration-base) var(--ease-out);
-}
-@keyframes clogs-in {
-  from {
-    opacity: 0;
-    transform: translateY(var(--space-1));
-  }
 }
