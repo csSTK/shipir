@@ -11,6 +11,7 @@ import dev.bethge.shipir.notification.WebhookException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
@@ -38,7 +39,7 @@ import java.util.stream.Collectors;
 
 /**
  * Entry point for the chat feature: offers the model only tools the user's role may use and runs calls with
- * validated arguments. Every failure becomes an error {@link ToolResult}; results are capped in size.
+ * validated arguments. Every failure becomes an error {@link ToolResult}; results are capped in size ({@link AiToolProperties#maxResultChars()}).
  *
  * <p>Confirmation gate: {@link #execute} refuses write tools. A write call goes through {@link #propose}, which
  * validates it and stores it under an unguessable single-use token bound to the user and chat session; only
@@ -47,9 +48,10 @@ import java.util.stream.Collectors;
  * actions are in memory (lost on restart, the user simply asks again) and expire after {@link #PENDING_TTL}.
  */
 @Component
+@EnableConfigurationProperties(AiToolProperties.class)
 public class AiToolRegistry {
 
-    static final int DEFAULT_MAX_RESULT_CHARS = 20_000;
+    static final int DEFAULT_MAX_RESULT_CHARS = AiToolProperties.DEFAULT_MAX_RESULT_CHARS;
     static final Duration PENDING_TTL = Duration.ofMinutes(10);
     static final int MAX_PENDING = 1000;
     private static final Logger log = LoggerFactory.getLogger(AiToolRegistry.class);
@@ -71,8 +73,8 @@ public class AiToolRegistry {
     }
 
     @Autowired
-    AiToolRegistry(List<AiTool> tools, ObjectMapper mapper, Clock clock) {
-        this(tools, mapper, DEFAULT_MAX_RESULT_CHARS, clock);
+    AiToolRegistry(List<AiTool> tools, ObjectMapper mapper, AiToolProperties properties, Clock clock) {
+        this(tools, mapper, properties.maxResultChars(), clock);
     }
 
     AiToolRegistry(List<AiTool> tools, ObjectMapper mapper) {
@@ -276,6 +278,7 @@ public class AiToolRegistry {
         }
         int omitted = content.length() - maxResultChars;
         return new ToolResult(result.error(), content.substring(0, maxResultChars)
-                + "\n...[truncated, " + omitted + " more characters omitted; narrow the request]");
+                + "\n...[RESULT TRUNCATED: the result was cut (truncated), " + omitted + " more characters omitted. "
+                + "Do not assume the list is complete; narrow the request (filters, smaller limit, a single id)]");
     }
 }

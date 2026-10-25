@@ -9,6 +9,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -183,7 +184,29 @@ class AiToolRegistryTest {
 
         assertThat(result.error()).isFalse();
         assertThat(result.content()).startsWith("\"xxx").contains("truncated");
-        assertThat(result.content().length()).isLessThan(250);
+        assertThat(result.content().length()).isLessThan(400);
+    }
+
+    @Test
+    void truncationNoteTellsTheModelTheResultWasCutAndHowManyCharsAreMissing() {
+        AiToolRegistry registry = new AiToolRegistry(List.of(
+                tool("big", Role.VIEWER, false, (a, c) -> "x".repeat(500))), MAPPER, new AiToolProperties(100), Clock.systemUTC());
+
+        String content = registry.execute("big", "{\"hostId\":\"" + UUID.randomUUID() + "\"}", ctx(Role.VIEWER)).content();
+
+        assertThat(content).contains("RESULT TRUNCATED", "result was cut", "narrow", "more characters omitted");
+    }
+
+    @Test
+    void capComesFromTheProperties() {
+        assertThat(new AiToolProperties(null).maxResultChars()).isEqualTo(4000);
+        assertThat(new AiToolProperties(0).maxResultChars()).isEqualTo(4000);
+        assertThat(new AiToolProperties(123).maxResultChars()).isEqualTo(123);
+
+        AiToolRegistry custom = new AiToolRegistry(List.of(
+                tool("mid", Role.VIEWER, false, (a, c) -> "y".repeat(300))), MAPPER, new AiToolProperties(1000), Clock.systemUTC());
+        assertThat(custom.execute("mid", "{\"hostId\":\"" + UUID.randomUUID() + "\"}", ctx(Role.VIEWER)).content())
+                .doesNotContain("truncated");
     }
 
     @Test
