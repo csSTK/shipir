@@ -546,6 +546,56 @@ class ChatOrchestratorTest {
         assertThat(last.get(2).toolCalls().get(0).name()).isEqualTo("rename_host");
     }
 
+    private void threeReadRuns(Login l, String id) throws Exception {
+        llm.call("call-1", "list_hosts", "{}");
+        llm.call("call-2", "list_hosts", "{}");
+        llm.answer("Done one.");
+        say(l, id, "First question");
+        llm.call("call-3", "list_hosts", "{}");
+        llm.answer("Done two.");
+        say(l, id, "Second question");
+    }
+
+    @Test
+    void toolResultsOlderThanTheLastNAreStubbedInTheRequestOnly() throws Exception {
+        Login l = login("viewer");
+        String id = newSession(l);
+        threeReadRuns(l, id);
+
+        List<LlmMessage> sent = llm.conversations.getLast();
+        List<LlmMessage> toolMessages = sent.stream().filter(m -> m.role() == LlmMessage.Role.TOOL).toList();
+        assertThat(toolMessages).extracting(LlmMessage::toolCallId).containsExactly("call-1", "call-2", "call-3");
+        assertThat(toolMessages.get(0).content()).isEqualTo(ChatOrchestrator.OMITTED_TOOL_RESULT);
+        assertThat(toolMessages.get(1).content()).contains("Chat host");
+        assertThat(toolMessages.get(2).content()).contains("Chat host");
+
+        // every assistant tool call still has its result, in the same order
+        List<String> calls = sent.stream().flatMap(m -> m.toolCalls().stream()).map(LlmToolCall::id).toList();
+        assertThat(calls).containsExactly("call-1", "call-2", "call-3");
+
+        // stored history and the transcript are untouched
+        JsonNode msgs = messages(l, id);
+        assertThat(msgs).filteredOn(m -> "TOOL".equals(m.get("role").asString()))
+                .extracting(m -> m.get("content").asString())
+                .allSatisfy(c -> assertThat(c).contains("Chat host").isNotEqualTo(ChatOrchestrator.OMITTED_TOOL_RESULT));
+    }
+
+    @Test
+    void aHighLimitDisablesTrimming() throws Exception {
+        Object original = ReflectionTestUtils.getField(orchestrator, "properties");
+        ReflectionTestUtils.setField(orchestrator, "properties", new ChatProperties(8, 1000));
+        try {
+            Login l = login("viewer");
+            String id = newSession(l);
+            threeReadRuns(l, id);
+            assertThat(llm.conversations.getLast()).filteredOn(m -> m.role() == LlmMessage.Role.TOOL)
+                    .extracting(LlmMessage::content)
+                    .allSatisfy(c -> assertThat(c).contains("Chat host"));
+        } finally {
+            ReflectionTestUtils.setField(orchestrator, "properties", original);
+        }
+    }
+
     @Test
     void stackEnvValuesAreNeverStoredReturnedOrReplayedToTheModel() throws Exception {
         String secret = "S3cr3t-Env-Value-9f2c";

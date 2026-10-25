@@ -61,6 +61,7 @@ public class ChatOrchestrator {
             Be concise and say plainly when a tool call failed.""";
 
     static final String ENV_CIPHERTEXT = "envCiphertext";
+    static final String OMITTED_TOOL_RESULT = "[older tool result omitted]";
     static final String REJECTED_OUTCOME = "The user rejected this action. It was not executed.";
     private static final String MAX_STEPS_TEXT =
             "I stopped after %d steps without reaching an answer. Ask me to continue if you want me to go on.";
@@ -314,14 +315,27 @@ public class ChatOrchestrator {
         }
     }
 
+    /**
+     * Stored history as the model sees it. Tool results older than the newest {@code fullToolResults} are replaced
+     * by a stub to save tokens; the message stays in place so every tool call keeps its result.
+     */
     private List<LlmMessage> llmHistory(UUID sessionId) {
+        List<ChatMessage> history = sessions.history(sessionId);
+        long toolResults = history.stream().filter(m -> m.getRole() == ChatRole.TOOL).count();
+        long stubbed = Math.max(0, toolResults - Math.max(0, properties.fullToolResults()));
         List<LlmMessage> out = new ArrayList<>();
         out.add(LlmMessage.system(SYSTEM_PROMPT));
-        for (ChatMessage m : sessions.history(sessionId)) {
+        for (ChatMessage m : history) {
             switch (m.getRole()) {
                 case USER -> out.add(LlmMessage.user(m.getContent()));
                 case ASSISTANT -> out.add(LlmMessage.assistant(m.getContent(), parseCalls(m.getToolCalls())));
-                case TOOL -> out.add(LlmMessage.tool(m.getToolCallId(), m.getContent()));
+                case TOOL -> {
+                    boolean old = stubbed > 0;
+                    if (old) {
+                        stubbed--;
+                    }
+                    out.add(LlmMessage.tool(m.getToolCallId(), old ? OMITTED_TOOL_RESULT : m.getContent()));
+                }
             }
         }
         return out;
