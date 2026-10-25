@@ -2,6 +2,7 @@ package dev.bethge.shipir.docker.client;
 
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.dto.ConnectionTestResult;
+import dev.bethge.shipir.docker.dto.DiskUsageDto;
 import dev.bethge.shipir.docker.dto.DockerSystemInfoDto;
 
 import java.util.UUID;
@@ -13,4 +14,7 @@ public interface DockerSystemService {
 
     /** Overview of the host, using the cached client for {@code hostId}. */
     DockerSystemInfoDto info(UUID hostId, DockerEndpoint endpoint);
+
+    /** Disk usage per category as the daemon reports it; raw HTTP call, see {@link DockerDiskUsageReader}. */
+    DiskUsageDto diskUsage(UUID hostId, DockerEndpoint endpoint);
 }

@@ -8,6 +8,7 @@ import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
 import dev.bethge.shipir.docker.dto.ConnectionTestResult;
+import dev.bethge.shipir.docker.dto.DiskUsageDto;
 import dev.bethge.shipir.docker.dto.DockerSystemInfoDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +44,11 @@ public class DockerSystemServiceImpl implements DockerSystemService {
     @Override
     public DockerSystemInfoDto info(UUID hostId, DockerEndpoint endpoint) {
         return calls.call(hostId, endpoint, DockerSystemServiceImpl::collectInfo);
+    }
+
+    @Override
+    public DiskUsageDto diskUsage(UUID hostId, DockerEndpoint endpoint) {
+        return calls.call(hostId, endpoint, DockerDiskUsageReader::read);
     }
 
     private static DockerSystemInfoDto collectInfo(DockerClient client) {

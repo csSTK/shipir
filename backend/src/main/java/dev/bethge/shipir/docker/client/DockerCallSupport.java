@@ -109,6 +109,7 @@ class DockerCallSupport {
             case UPDATE_REJECTED -> "The daemon refused the new resource limits.";
             case INVALID_VOLUME_NAME -> "The volume name is not valid.";
             case INVALID_ARCHIVE -> "The archive is not a safe volume archive.";
+            case INVALID_RESPONSE -> "The Docker daemon returned an unexpected response.";
         };
         return new DockerConnectionException(code, message, e);
     }

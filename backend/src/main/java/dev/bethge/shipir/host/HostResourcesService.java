@@ -7,6 +7,8 @@ import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.client.ContainerService;
+import dev.bethge.shipir.docker.client.DockerSystemService;
+import dev.bethge.shipir.docker.dto.DiskUsageDto;
 import dev.bethge.shipir.docker.client.ImageService;
 import dev.bethge.shipir.docker.client.NetworkService;
 import dev.bethge.shipir.docker.client.VolumeService;
@@ -84,12 +86,14 @@ public class HostResourcesService {
     private final ComposeOutputStreamService streams;
     private final RegistryAuthSource registryAuths;
     private final ImageUpdateStore imageUpdates;
+    private final DockerSystemService system;
 
     HostResourcesService(DockerHostRepository hosts, HostEndpointResolver endpoints, ContainerService containers,
                          ImageService images, NetworkService networks, VolumeService volumes,
                          ManagedDeploymentLookup managedDeployments, CurrentAccess access,
                          ComposeOutputStreamService streams, RegistryAuthSource registryAuths,
-                         ImageUpdateStore imageUpdates) {
+                         ImageUpdateStore imageUpdates, DockerSystemService system) {
+        this.system = system;
         this.hosts = hosts;
         this.endpoints = endpoints;
         this.containers = containers;
@@ -183,6 +187,18 @@ public class HostResourcesService {
         return call(hostId, images::list).stream()
                 .map(i -> i.withUpdateAvailable(i.repoTags().stream().anyMatch(t -> hasUpdate(hostId, t))))
                 .toList();
+    }
+
+    /**
+     * Disk usage of the whole host (all images, containers, volumes and build cache). The numbers are host-wide, so a
+     * host visible only through deployment grants gets 403 rather than a partial total; invisible hosts 404.
+     */
+    public DiskUsageDto diskUsage(UUID hostId) {
+        requireView(hostId);
+        if (!access.hostFullyVisible(hostId)) {
+            throw new HostException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied");
+        }
+        return call(hostId, system::diskUsage);
     }
 
     public List<NetworkDto> networks(UUID hostId) {

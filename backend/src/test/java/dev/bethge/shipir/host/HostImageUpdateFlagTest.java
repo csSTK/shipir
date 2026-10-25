@@ -2,6 +2,7 @@ package dev.bethge.shipir.host;
 
 import dev.bethge.shipir.compose.execution.RegistryAuthSource;
 import dev.bethge.shipir.docker.client.ContainerService;
+import dev.bethge.shipir.docker.client.DockerSystemService;
 import dev.bethge.shipir.docker.client.ImageService;
 import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.DeploymentSummaryDto;
@@ -45,7 +46,7 @@ class HostImageUpdateFlagTest {
         when(access.hostFullyVisible(hostId)).thenReturn(true);
         when(access.visibleDeploymentIds(hostId)).thenReturn(java.util.Optional.empty());
         service = new HostResourcesService(hosts, endpoints, containers, images, null, null, managed, access,
-                null, mock(RegistryAuthSource.class), store);
+                null, mock(RegistryAuthSource.class), store, mock(DockerSystemService.class));
     }
 
     private static ContainerDto container(String image, String project) {

@@ -2,6 +2,7 @@ package dev.bethge.shipir.host;
 
 import dev.bethge.shipir.docker.dto.ContainerDetailsDto;
 import dev.bethge.shipir.docker.dto.ContainerDto;
+import dev.bethge.shipir.docker.dto.DiskUsageDto;
 import dev.bethge.shipir.docker.dto.ImageDto;
 import dev.bethge.shipir.docker.dto.NetworkDto;
 import dev.bethge.shipir.docker.dto.CreatedResourceDto;
@@ -60,6 +61,12 @@ class HostResourcesController {
     @GetMapping("/images")
     List<ImageDto> images(@PathVariable UUID id) {
         return service.images(id);
+    }
+
+    /** Disk usage of the host; needs a host-wide (fully visible) grant. */
+    @GetMapping("/disk-usage")
+    DiskUsageDto diskUsage(@PathVariable UUID id) {
+        return service.diskUsage(id);
     }
 
     @GetMapping("/networks")

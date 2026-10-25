@@ -35,5 +35,7 @@ public enum DockerErrorCode {
     /** The volume name is not a plain Docker volume name (could otherwise be read as a host path by the daemon). */
     INVALID_VOLUME_NAME,
     /** A volume archive was refused: not a tar, unsafe entry (traversal, absolute, escaping link, device) or empty. */
-    INVALID_ARCHIVE
+    INVALID_ARCHIVE,
+    /** The daemon answered with an unexpected status, an oversized or unparsable body, or the client has no HTTP transport to call it. */
+    INVALID_RESPONSE
 }
