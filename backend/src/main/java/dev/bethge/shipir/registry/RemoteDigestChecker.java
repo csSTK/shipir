@@ -1,5 +1,6 @@
 package dev.bethge.shipir.registry;
 
+import dev.bethge.shipir.common.net.EgressHttpClient;
 import dev.bethge.shipir.host.ImageReference;
 import dev.bethge.shipir.host.RemoteDigestLookup;
 import org.slf4j.Logger;
@@ -11,19 +12,19 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
 /**
  * Reads the digest a registry serves for a tag: {@code HEAD /v2/<repo>/manifests/<tag>} and the
  * {@code Docker-Content-Digest} header, following a Bearer challenge (pull scope) with the stored login of that
- * registry if there is one, anonymously otherwise. https only, no redirects, every failure is an empty result.
+ * registry if there is one, anonymously otherwise. https only, no redirects, every connection checked by the egress policy (internal targets are refused), every failure is an empty result.
  */
 @Component
 @EnableConfigurationProperties(RegistryProperties.class)
@@ -39,16 +40,14 @@ class RemoteDigestChecker implements RemoteDigestLookup {
 
     private final RegistryProperties properties;
     private final RegistryCredentialService credentials;
-    private final HttpClient client;
+    private final EgressHttpClient egress;
     private final JsonMapper json = JsonMapper.builder().build();
 
-    RemoteDigestChecker(RegistryProperties properties, RegistryCredentialService credentials) {
+    RemoteDigestChecker(RegistryProperties properties, RegistryCredentialService credentials,
+                        EgressHttpClient egress) {
         this.properties = properties;
         this.credentials = credentials;
-        this.client = HttpClient.newBuilder()
-                .connectTimeout(properties.timeout())
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .build();
+        this.egress = egress;
     }
 
     @Override
@@ -58,10 +57,10 @@ class RemoteDigestChecker implements RemoteDigestLookup {
             String scheme = properties.allowInsecureHttp() ? "http" : "https";
             URI manifest = URI.create(scheme + "://" + RegistryHost.apiHost(reference.registryHost()) + "/v2/"
                     + reference.repository() + "/manifests/" + reference.tag());
-            HttpResponse<Void> response = head(manifest, null);
-            if (response.statusCode() == 401) {
+            EgressHttpClient.Response response = head(manifest, null);
+            if (response.status() == 401) {
                 BearerChallenge challenge = BearerChallenge.parse(
-                        response.headers().firstValue("WWW-Authenticate").orElse(""));
+                        Objects.toString(response.header("WWW-Authenticate"), ""));
                 String token = challenge == null ? null : fetchToken(challenge, reference.repository(), basic);
                 if (token == null) {
                     // some registries take Basic directly
@@ -70,15 +69,12 @@ class RemoteDigestChecker implements RemoteDigestLookup {
                     response = head(manifest, "Bearer " + token);
                 }
             }
-            if (response.statusCode() != 200) {
+            if (response.status() != 200) {
                 return Optional.empty();
             }
-            return response.headers().firstValue("Docker-Content-Digest").filter(d -> DIGEST.matcher(d).matches());
+            return Optional.ofNullable(response.header("Docker-Content-Digest")).filter(d -> DIGEST.matcher(d).matches());
         } catch (IOException | RuntimeException e) {
             log.debug("Remote digest lookup failed for {}: {}", reference.key(), e.getClass().getSimpleName());
-            return Optional.empty();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
             return Optional.empty();
         }
     }
@@ -96,17 +92,14 @@ class RemoteDigestChecker implements RemoteDigestLookup {
     }
 
     private String fetchToken(BearerChallenge challenge, String repository, String basic)
-            throws IOException, InterruptedException {
+            throws IOException {
         URI uri = challenge.tokenUri(properties.allowInsecureHttp(), "repository:" + repository + ":pull");
         if (uri == null) {
             return null;
         }
-        HttpRequest.Builder request = HttpRequest.newBuilder(uri).timeout(properties.timeout()).GET();
-        if (basic != null) {
-            request.header("Authorization", basic);
-        }
-        HttpResponse<String> response = client.send(request.build(), HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() != 200) {
+        EgressHttpClient.Response response = egress.send("GET", uri,
+                basic == null ? Map.of() : Map.of("Authorization", basic), properties.timeout());
+        if (response.status() != 200) {
             return null;
         }
         JsonNode body = json.readTree(response.body());
@@ -114,12 +107,12 @@ class RemoteDigestChecker implements RemoteDigestLookup {
         return token == null || token.isNull() ? null : token.asString();
     }
 
-    private HttpResponse<Void> head(URI uri, String authorization) throws IOException, InterruptedException {
-        HttpRequest.Builder request = HttpRequest.newBuilder(uri).timeout(properties.timeout())
-                .header("Accept", ACCEPT).method("HEAD", HttpRequest.BodyPublishers.noBody());
+    private EgressHttpClient.Response head(URI uri, String authorization) throws IOException {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Accept", ACCEPT);
         if (authorization != null) {
-            request.header("Authorization", authorization);
+            headers.put("Authorization", authorization);
         }
-        return client.send(request.build(), HttpResponse.BodyHandlers.discarding());
+        return egress.send("HEAD", uri, headers, properties.timeout());
     }
 }

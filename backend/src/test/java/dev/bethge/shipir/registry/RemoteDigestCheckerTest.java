@@ -1,6 +1,9 @@
 package dev.bethge.shipir.registry;
 
 import com.sun.net.httpserver.HttpServer;
+import dev.bethge.shipir.common.net.EgressHttpClient;
+import dev.bethge.shipir.common.net.EgressPolicy;
+import dev.bethge.shipir.common.net.EgressProperties;
 import dev.bethge.shipir.host.ImageReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -44,7 +47,16 @@ class RemoteDigestCheckerTest {
     }
 
     private RemoteDigestChecker checker(boolean insecure) {
-        return new RemoteDigestChecker(new RegistryProperties(insecure, Duration.ofSeconds(2)), credentials);
+        return checker(insecure, true);
+    }
+
+    private RemoteDigestChecker checker(boolean insecure, boolean allowPrivate) {
+        return checker(insecure, new EgressPolicy(new EgressProperties(allowPrivate)));
+    }
+
+    private RemoteDigestChecker checker(boolean insecure, EgressPolicy policy) {
+        return new RemoteDigestChecker(new RegistryProperties(insecure, Duration.ofSeconds(2)), credentials,
+                new EgressHttpClient(policy, Duration.ofSeconds(2)));
     }
 
     private void start() throws IOException {
@@ -181,5 +193,46 @@ class RemoteDigestCheckerTest {
         // allowInsecureHttp=true only for the registry; realm check shares the flag, so use https-only checker
         assertThat(checker(false).digestOf(ref())).isEmpty();
         assertThat(requests).isEmpty();
+    }
+
+    @Test
+    void privateRegistryIsNeverContactedByDefault() throws Exception {
+        start();
+        server.createContext("/v2/", ex -> {
+            requests.add("hit");
+            ex.getResponseHeaders().add("Docker-Content-Digest", DIGEST);
+            ex.sendResponseHeaders(200, -1);
+            ex.close();
+        });
+        server.start();
+        assertThat(checker(true, false).digestOf(ref())).isEmpty();
+        assertThat(requests).isEmpty();
+    }
+
+    @Test
+    void imageReferencesPointingAtMetadataOrPrivateHostsYieldNothing() {
+        RemoteDigestChecker c = checker(false, false);
+        assertThat(c.digestOf(ImageReference.parse("169.254.169.254:443/x/y:1"))).isEmpty();
+        assertThat(c.digestOf(ImageReference.parse("10.0.0.5:8443/x/y:1"))).isEmpty();
+    }
+
+    @Test
+    void bearerRealmOnAnInternalHostIsRefused() throws Exception {
+        start();
+        java.util.Set<String> looked = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        EgressPolicy policy = new EgressPolicy(new EgressProperties(true), host -> {
+            looked.add(host);
+            return host.equals("internal.test")
+                    ? new java.net.InetAddress[]{java.net.InetAddress.getByName("169.254.169.254")}
+                    : java.net.InetAddress.getAllByName(host);
+        });
+        server.createContext("/v2/", ex -> {
+            ex.getResponseHeaders().add("WWW-Authenticate", "Bearer realm=\"http://internal.test/token\"");
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+        });
+        server.start();
+        assertThat(checker(true, policy).digestOf(ref())).isEmpty();
+        assertThat(looked).contains("internal.test");
     }
 }

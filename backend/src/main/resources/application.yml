@@ -38,6 +38,11 @@ shipir:
   ai:
     connect-timeout: 5s
     read-timeout: 180s
+  egress:
+    # SSRF policy for outbound requests to user-influenced URLs (git, registries, ...). Loopback, private (RFC 1918,
+    # ULA, CGNAT) targets are refused by default; set true only if your git server/registry lives on such a network.
+    # Link-local and cloud metadata addresses stay blocked either way.
+    allow-private-ranges: ${SHIPIR_EGRESS_ALLOW_PRIVATE_RANGES:false}
   git:
     poll-enabled: true
     poll-tick: 60s

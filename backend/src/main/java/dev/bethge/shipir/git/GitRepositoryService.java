@@ -5,7 +5,9 @@ import dev.bethge.shipir.common.security.SecretCipher;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
 import dev.bethge.shipir.common.util.PathValidationException;
 import dev.bethge.shipir.common.util.PathValidationUtil;
+import org.eclipse.jgit.api.FetchCommand;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.LsRemoteCommand;
 import org.eclipse.jgit.api.ResetCommand;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.api.errors.TransportException;
@@ -144,13 +146,14 @@ public class GitRepositoryService {
             stale.delete();
         }
         try {
-            git.fetch().setRemote(url)
+            FetchCommand fetch = git.fetch().setRemote(url)
                     .setRefSpecs(new RefSpec("+" + source + ":" + TARGET_REF))
                     .setDepth(1)
                     .setTagOpt(TagOpt.NO_TAGS)
                     .setTimeout(timeoutSeconds())
-                    .setCredentialsProvider(provider)
-                    .call();
+                    .setCredentialsProvider(provider);
+            checker.guard(fetch);
+            fetch.call();
         } catch (TransportException e) {
             throw map(e, SHA.matcher(ref).matches());
         }
@@ -175,8 +178,10 @@ public class GitRepositoryService {
     private Ref lookupRemoteRef(String url, String ref, CredentialsProvider provider) {
         Collection<Ref> remote;
         try {
-            remote = Git.lsRemoteRepository().setRemote(url).setHeads(true).setTags(true)
-                    .setTimeout(timeoutSeconds()).setCredentialsProvider(provider).call();
+            LsRemoteCommand lsRemote = Git.lsRemoteRepository().setRemote(url).setHeads(true).setTags(true)
+                    .setTimeout(timeoutSeconds()).setCredentialsProvider(provider);
+            checker.guard(lsRemote);
+            remote = lsRemote.call();
         } catch (TransportException e) {
             throw map(e, false);
         } catch (GitAPIException e) {

@@ -1,9 +1,12 @@
 package dev.bethge.shipir.git;
 
+import dev.bethge.shipir.common.net.EgressPolicy;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.TransportCommand;
 import org.eclipse.jgit.api.LsRemoteCommand;
 import org.eclipse.jgit.api.errors.TransportException;
 import org.eclipse.jgit.errors.NoRemoteRepositoryException;
+import org.eclipse.jgit.transport.TransportHttp;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.springframework.stereotype.Component;
 
@@ -22,9 +25,11 @@ class GitRemoteChecker {
     static final String UNREACHABLE = "UNREACHABLE";
 
     private final GitProperties properties;
+    private final EgressGuardedConnectionFactory connections;
 
-    GitRemoteChecker(GitProperties properties) {
+    GitRemoteChecker(GitProperties properties, EgressPolicy policy) {
         this.properties = properties;
+        this.connections = new EgressGuardedConnectionFactory(policy);
     }
 
     /** Throws {@link GitException} (400 INVALID_REPO_URL) unless the URL is an absolute https URL with a host and no userinfo. */
@@ -43,12 +48,25 @@ class GitRemoteChecker {
         }
     }
 
+    /**
+     * Routes every HTTP connection of {@code command} through the egress policy: loopback, private, link-local and
+     * metadata targets (also reached by a redirect) fail like any unreachable host.
+     */
+    void guard(TransportCommand<?, ?> command) {
+        command.setTransportConfigCallback(transport -> {
+            if (transport instanceof TransportHttp http) {
+                http.setHttpConnectionFactory(connections);
+            }
+        });
+    }
+
     String check(String repoUrl, String username, String token) {
         LsRemoteCommand cmd = Git.lsRemoteRepository()
                 .setRemote(repoUrl.trim())
                 .setHeads(true)
                 .setTimeout((int) Math.max(1, properties.connectTimeout().toSeconds()))
                 .setCredentialsProvider(new UsernamePasswordCredentialsProvider(username, token));
+        guard(cmd);
         try {
             cmd.call();
             return OK;
