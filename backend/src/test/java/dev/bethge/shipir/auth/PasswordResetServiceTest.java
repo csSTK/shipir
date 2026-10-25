@@ -128,6 +128,51 @@ class PasswordResetServiceTest {
         return code.equals("000000") ? "000001" : "000000";
     }
 
+    private String createExternalUser() {
+        String name = "sso-" + UUID.randomUUID().toString().substring(0, 8);
+        users.save(User.external(name, encoder.encode(OLD_PASSWORD), Role.OPERATOR,
+                "https://idp.example", "sub-" + name, clock.instant()));
+        return name;
+    }
+
+    @Test
+    void requestResetForExternalUserSendsNoCodeAndStoresNone() {
+        String name = createExternalUser();
+
+        service.requestReset(name);
+
+        assertThat(sender.codes).isEmpty();
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM password_reset_codes c JOIN users u ON u.id = c.user_id WHERE u.username = ?",
+                Integer.class, name)).isZero();
+    }
+
+    @Test
+    void confirmResetForExternalUserIsRefusedAndKeepsHash() {
+        String name = createExternalUser();
+        String hashBefore = users.findByUsername(name).orElseThrow().getPasswordHash();
+
+        assertThatThrownBy(() -> service.confirmReset(name, "123456", NEW_PASSWORD))
+                .isInstanceOf(InvalidResetCodeException.class);
+        assertThat(users.findByUsername(name).orElseThrow().getPasswordHash()).isEqualTo(hashBefore);
+    }
+
+    @Test
+    void confirmResetRefusesExternalUserEvenWithAValidOpenCode() {
+        String name = createExternalUser();
+        User external = users.findByUsername(name).orElseThrow();
+        // a code that existed before the account was linked to SSO
+        jdbc.update("INSERT INTO password_reset_codes (user_id, code_hash, expires_at, created_at) "
+                        + "VALUES (?, encode(sha256('123456'::bytea), 'hex'), ?, ?)",
+                external.getId(), java.sql.Timestamp.from(clock.instant().plusSeconds(60)),
+                java.sql.Timestamp.from(clock.instant()));
+
+        assertThatThrownBy(() -> service.confirmReset(name, "123456", NEW_PASSWORD))
+                .isInstanceOf(InvalidResetCodeException.class);
+        assertThat(encoder.matches(NEW_PASSWORD, users.findByUsername(name).orElseThrow().getPasswordHash()))
+                .isFalse();
+    }
+
     @Test
     void validCodeResetsPasswordAndSetsPasswordChangedAt() {
         assertThat(user().isSetupRequired()).isTrue();

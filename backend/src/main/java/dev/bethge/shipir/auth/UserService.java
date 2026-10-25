@@ -30,6 +30,10 @@ class UserService {
     @Transactional
     void changePassword(String username, String currentPassword, String newPassword) {
         User user = users.findByUsername(username).orElseThrow(InvalidCurrentPasswordException::new);
+        if (user.getExternalIssuer() != null) {
+            // SSO users have no local password; refuse so none can be set while local login is enabled
+            throw new InvalidCurrentPasswordException();
+        }
         if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
             throw new InvalidCurrentPasswordException();
         }

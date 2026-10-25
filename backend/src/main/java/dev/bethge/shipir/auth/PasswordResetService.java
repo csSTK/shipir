@@ -43,11 +43,11 @@ class PasswordResetService {
         this.clock = clock;
     }
 
-    /** Unknown usernames are a silent no-op. Earlier open codes of the user become invalid. */
+    /** Unknown usernames and SSO users (no local password) are a silent no-op. Earlier open codes of the user become invalid. */
     @Transactional
     void requestReset(String username) {
         Optional<User> found = users.findByUsername(username);
-        if (found.isEmpty()) {
+        if (found.isEmpty() || found.get().getExternalIssuer() != null) {
             return;
         }
         User user = found.get();
@@ -65,6 +65,9 @@ class PasswordResetService {
     @Transactional(noRollbackFor = InvalidResetCodeException.class)
     void confirmReset(String username, String code, String newPassword) {
         User user = users.findByUsername(username).orElseThrow(InvalidResetCodeException::new);
+        if (user.getExternalIssuer() != null) {
+            throw new InvalidResetCodeException();
+        }
         Instant now = clock.instant();
         PasswordResetCode open = codes.findLatestOpen(user.getId(), now, properties.maxAttempts())
                 .orElseThrow(InvalidResetCodeException::new);
