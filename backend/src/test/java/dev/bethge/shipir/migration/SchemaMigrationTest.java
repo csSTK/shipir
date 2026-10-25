@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V27 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V28 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To27Successfully() {
+    void flywayAppliedVersions1To28Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28");
     }
 
     @Test
@@ -1879,6 +1879,162 @@ class SchemaMigrationTest {
         UUID host = insertHost(admin);
         assertThatThrownBy(() -> insertSchedule(host, UUID.randomUUID(), "data", 24, 7))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void apiTokenAcceptsValidRowWithDefaults() {
+        UUID user = insertUser("tok-user");
+        UUID id = insertApiToken(user, "ci", validHash(1), "shp_abcd");
+        Map<String, Object> row = jdbc.queryForMap("SELECT * FROM api_tokens WHERE id = ?", id);
+        assertThat(row.get("expires_at")).isNull();
+        assertThat(row.get("last_used_at")).isNull();
+        assertThat(row.get("created_at")).isNotNull();
+    }
+
+    @Test
+    void apiTokenHashIsUnique() {
+        UUID user = insertUser("tok-user2");
+        insertApiToken(user, "ci", validHash(2), "shp_abcd");
+        assertThatThrownBy(() -> insertApiToken(user, "deploy", validHash(2), "shp_efgh"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("uq_api_tokens_token_hash");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "abc", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+    void apiTokenHashWithBadFormatIsRejected(String hash) {
+        UUID user = insertUser("tok-user3");
+        assertThatThrownBy(() -> insertApiToken(user, "ci", hash, "shp_abcd"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   ", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"})
+    void apiTokenNameOutsideOneToHundredCharactersIsRejected(String name) {
+        UUID user = insertUser("tok-user4");
+        assertThatThrownBy(() -> insertApiToken(user, name, validHash(4), "shp_abcd"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"shp", "shp_abcdefghijklmnopq"})
+    void apiTokenPrefixOutsideFourToSixteenCharactersIsRejected(String prefix) {
+        UUID user = insertUser("tok-user5");
+        assertThatThrownBy(() -> insertApiToken(user, "ci", validHash(5), prefix))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void apiTokenExpiryBeforeCreationIsRejected() {
+        UUID user = insertUser("tok-user6");
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO api_tokens (user_id, name, token_hash, prefix, created_at, expires_at)
+                VALUES (?, 'ci', ?, 'shp_abcd', now(), now() - interval '1 day')
+                """, user, validHash(6)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void deletingUserCascadesTheirApiTokens() {
+        UUID user = insertUser("tok-user7");
+        insertApiToken(user, "ci", validHash(7), "shp_abcd");
+        jdbc.update("DELETE FROM users WHERE id = ?", user);
+        assertThat(count("api_tokens")).isZero();
+    }
+
+    @Test
+    void apiTokenRequiresAnExistingUser() {
+        assertThatThrownBy(() -> insertApiToken(UUID.randomUUID(), "ci", validHash(8), "shp_abcd"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("api_tokens_user_id_fkey");
+    }
+
+    @Test
+    void deploymentWebhookAcceptsValidRowWithDefaults() {
+        UUID owner = insertUser("hook-owner");
+        UUID deployment = insertDeployment(insertHost(owner), owner, "web");
+        UUID id = insertWebhook(deployment, validHash(10));
+        Map<String, Object> row = jdbc.queryForMap("SELECT * FROM deployment_webhooks WHERE id = ?", id);
+        assertThat(row.get("enabled")).isEqualTo(true);
+        assertThat(row.get("rotated_at")).isNull();
+        assertThat(row.get("created_at")).isNotNull();
+    }
+
+    @Test
+    void deploymentWebhookTokenHashIsUnique() {
+        UUID owner = insertUser("hook-owner2");
+        UUID host = insertHost(owner);
+        UUID first = insertDeployment(host, owner, "web");
+        UUID second = insertDeployment(host, owner, "api");
+        insertWebhook(first, validHash(11));
+        assertThatThrownBy(() -> insertWebhook(second, validHash(11)))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("uq_deployment_webhooks_token_hash");
+    }
+
+    @Test
+    void deploymentAllowsOnlyOneWebhook() {
+        UUID owner = insertUser("hook-owner3");
+        UUID deployment = insertDeployment(insertHost(owner), owner, "web");
+        insertWebhook(deployment, validHash(12));
+        assertThatThrownBy(() -> insertWebhook(deployment, validHash(13)))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("uq_deployment_webhooks_deployment");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "abc", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+    void deploymentWebhookHashWithBadFormatIsRejected(String hash) {
+        UUID owner = insertUser("hook-owner4");
+        UUID deployment = insertDeployment(insertHost(owner), owner, "web");
+        assertThatThrownBy(() -> insertWebhook(deployment, hash))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void deploymentWebhookRotatedBeforeCreationIsRejected() {
+        UUID owner = insertUser("hook-owner5");
+        UUID deployment = insertDeployment(insertHost(owner), owner, "web");
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO deployment_webhooks (deployment_id, token_hash, created_at, rotated_at)
+                VALUES (?, ?, now(), now() - interval '1 day')
+                """, deployment, validHash(14)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void deletingDeploymentCascadesItsWebhook() {
+        UUID owner = insertUser("hook-owner6");
+        UUID deployment = insertDeployment(insertHost(owner), owner, "web");
+        insertWebhook(deployment, validHash(15));
+        jdbc.update("DELETE FROM deployments WHERE id = ?", deployment);
+        assertThat(count("deployment_webhooks")).isZero();
+    }
+
+    @Test
+    void deploymentWebhookRequiresAnExistingDeployment() {
+        assertThatThrownBy(() -> insertWebhook(UUID.randomUUID(), validHash(16)))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("deployment_webhooks_deployment_id_fkey");
+    }
+
+    private UUID insertApiToken(UUID user, String name, String hash, String prefix) {
+        return jdbc.queryForObject("""
+                INSERT INTO api_tokens (user_id, name, token_hash, prefix)
+                VALUES (?, ?, ?, ?) RETURNING id
+                """, UUID.class, user, name, hash, prefix);
+    }
+
+    private UUID insertWebhook(UUID deployment, String hash) {
+        return jdbc.queryForObject("""
+                INSERT INTO deployment_webhooks (deployment_id, token_hash)
+                VALUES (?, ?) RETURNING id
+                """, UUID.class, deployment, hash);
+    }
+
+    /** A well-formed lowercase hex SHA-256 digest (64 chars), distinct per seed. */
+    private static String validHash(int seed) {
+        return String.format("%064x", seed);
     }
 
     private UUID insertSchedule(UUID host, UUID creator, String volume, int interval, int keep) {
