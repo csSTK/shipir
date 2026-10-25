@@ -18,9 +18,16 @@ public class SessionInvalidator {
     }
 
     public void expireSessionsOf(String username) {
+        expireSessionsExcept(username, null);
+    }
+
+    /** Like {@link #expireSessionsOf} but keeps the session with {@code keepSessionId} (null keeps none). */
+    public void expireSessionsExcept(String username, String keepSessionId) {
         for (Object principal : registry.getAllPrincipals()) {
             if (principal instanceof UserDetails details && details.getUsername().equals(username)) {
-                registry.getAllSessions(principal, false).forEach(s -> s.expireNow());
+                registry.getAllSessions(principal, false).stream()
+                        .filter(s -> !s.getSessionId().equals(keepSessionId))
+                        .forEach(s -> s.expireNow());
             }
         }
     }

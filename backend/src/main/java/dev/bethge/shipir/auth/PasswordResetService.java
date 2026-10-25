@@ -30,10 +30,11 @@ class PasswordResetService {
     private final PasswordEncoder passwordEncoder;
     private final PasswordPolicy policy;
     private final Clock clock;
+    private final SessionInvalidator sessions;
 
     PasswordResetService(UserRepository users, PasswordResetCodeRepository codes, PasswordResetCodeSender sender,
                          PasswordResetProperties properties, PasswordEncoder passwordEncoder,
-                         PasswordPolicy policy, Clock clock) {
+                         PasswordPolicy policy, Clock clock, SessionInvalidator sessions) {
         this.users = users;
         this.codes = codes;
         this.sender = sender;
@@ -41,6 +42,7 @@ class PasswordResetService {
         this.passwordEncoder = passwordEncoder;
         this.policy = policy;
         this.clock = clock;
+        this.sessions = sessions;
     }
 
     /** Unknown usernames and SSO users (no local password) are a silent no-op. Earlier open codes of the user become invalid. */
@@ -87,6 +89,8 @@ class PasswordResetService {
         }
         user.changePasswordHash(passwordEncoder.encode(newPassword), now);
         open.markUsed(now);
+        // The reset may be recovery from a compromise: every existing session of the user ends.
+        sessions.expireSessionsOf(user.getUsername());
     }
 
     private static String sha256Hex(String value) {

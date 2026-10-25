@@ -63,6 +63,7 @@ class AuthController {
     private final AuditService auditService;
     private final TotpService totp;
     private final LocalLoginPolicy localLoginPolicy;
+    private final SessionInvalidator sessionInvalidator;
 
     AuthController(AuthenticationManager authenticationManager,
                    SecurityContextRepository securityContextRepository,
@@ -76,7 +77,8 @@ class AuthController {
                    ClientAddressResolver clientAddress,
                    AuditService auditService,
                    TotpService totp,
-                   LocalLoginPolicy localLoginPolicy) {
+                   LocalLoginPolicy localLoginPolicy,
+                   SessionInvalidator sessionInvalidator) {
         this.authenticationManager = authenticationManager;
         this.securityContextRepository = securityContextRepository;
         this.sessionAuthenticationStrategy = sessionAuthenticationStrategy;
@@ -90,6 +92,7 @@ class AuthController {
         this.auditService = auditService;
         this.totp = totp;
         this.localLoginPolicy = localLoginPolicy;
+        this.sessionInvalidator = sessionInvalidator;
     }
 
     @PostMapping("/login")
@@ -170,6 +173,10 @@ class AuthController {
             throw ex;
         }
         throttle.recordSuccess(LoginThrottle.Scope.PASSWORD, authentication.getName(), address);
+        // Other sessions (a stolen one, say) must not survive; the current one is kept and rotated below.
+        HttpSession current = request.getSession(false);
+        sessionInvalidator.expireSessionsExcept(authentication.getName(),
+                current == null ? null : current.getId());
         // Privilege change: rotate the session id and CSRF token; the security context stays in the session.
         // A token request has no session to rotate (the strategy would register an empty one).
         if (!(authentication instanceof ApiTokenAuthentication)) {

@@ -177,4 +177,31 @@ class PasswordChangeTest {
         assertThat(oldLogin.getResponse().getStatus()).isEqualTo(401);
         loginAdmin(NEW_PASSWORD, freshCsrf);
     }
+
+    @Test
+    void changeExpiresTheUsersOtherSessionsButKeepsTheCurrentOne() throws Exception {
+        Cookie csrf = csrfCookie();
+        MockHttpSession sessionA = loginAdmin(ADMIN_PASSWORD, csrf);
+        MockHttpSession sessionB = loginAdmin(ADMIN_PASSWORD, csrf);
+        mvc.perform(get("/api/auth/me").session(sessionB)).andExpect(status().isOk());
+
+        MvcResult r = changePassword(sessionA, csrf, ADMIN_PASSWORD, NEW_PASSWORD);
+
+        assertThat(r.getResponse().getStatus()).isEqualTo(204);
+        mvc.perform(get("/api/auth/me").session(sessionB)).andExpect(status().isUnauthorized());
+        MockHttpSession rotatedA = (MockHttpSession) r.getRequest().getSession(false);
+        mvc.perform(get("/api/auth/me").session(rotatedA)).andExpect(status().isOk());
+    }
+
+    @Test
+    void failedChangeLeavesOtherSessionsAlone() throws Exception {
+        Cookie csrf = csrfCookie();
+        MockHttpSession sessionA = loginAdmin(ADMIN_PASSWORD, csrf);
+        MockHttpSession sessionB = loginAdmin(ADMIN_PASSWORD, csrf);
+
+        assertThat(changePassword(sessionA, csrf, "wrong-current-password", NEW_PASSWORD)
+                .getResponse().getStatus()).isEqualTo(400);
+
+        mvc.perform(get("/api/auth/me").session(sessionB)).andExpect(status().isOk());
+    }
 }

@@ -105,6 +105,8 @@ class PasswordResetServiceTest {
     private CapturingSender sender;
     @Autowired
     private MutableClock clock;
+    @Autowired
+    private org.springframework.security.core.session.SessionRegistry sessionRegistry;
 
     private String username;
 
@@ -353,5 +355,36 @@ class PasswordResetServiceTest {
         int succeeded = runConcurrently(10, i -> service.confirmReset(username, code, NEW_PASSWORD));
 
         assertThat(succeeded).isEqualTo(1);
+    }
+
+    @Test
+    void confirmResetExpiresAllSessionsOfTheUserOnly() {
+        var principal = org.springframework.security.core.userdetails.User.withUsername(username)
+                .password("x").roles("OPERATOR").build();
+        var other = org.springframework.security.core.userdetails.User.withUsername("other-" + username)
+                .password("x").roles("OPERATOR").build();
+        sessionRegistry.registerNewSession("sess-1-" + username, principal);
+        sessionRegistry.registerNewSession("sess-2-" + username, principal);
+        sessionRegistry.registerNewSession("sess-o-" + username, other);
+        String code = requestCode();
+
+        service.confirmReset(username, code, NEW_PASSWORD);
+
+        assertThat(sessionRegistry.getSessionInformation("sess-1-" + username).isExpired()).isTrue();
+        assertThat(sessionRegistry.getSessionInformation("sess-2-" + username).isExpired()).isTrue();
+        assertThat(sessionRegistry.getSessionInformation("sess-o-" + username).isExpired()).isFalse();
+    }
+
+    @Test
+    void failedResetLeavesSessionsAlone() {
+        var principal = org.springframework.security.core.userdetails.User.withUsername(username)
+                .password("x").roles("OPERATOR").build();
+        sessionRegistry.registerNewSession("sess-f-" + username, principal);
+        String code = requestCode();
+
+        assertThatThrownBy(() -> service.confirmReset(username, wrong(code), NEW_PASSWORD))
+                .isInstanceOf(InvalidResetCodeException.class);
+
+        assertThat(sessionRegistry.getSessionInformation("sess-f-" + username).isExpired()).isFalse();
     }
 }
