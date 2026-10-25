@@ -44,6 +44,12 @@ export function ActionConfirmCard({ call, status, readOnly = false, busy = false
         <Badge tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Badge>
       </div>
       <p className="chat-card__desc">{call.description ?? `Run ${toolLabel(call.name)}`}</p>
+      {call.fromToolContent && (
+        <p className="chat-card__notice" role="note">
+          This proposal was made after reading data from your environment (names, files, notifications written by
+          others). Check every value below before you confirm.
+        </p>
+      )}
       {args.length > 0 && (
         <dl className="chat-card__args">
           {args.map(([k, v]) => (

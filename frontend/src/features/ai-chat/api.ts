@@ -20,6 +20,8 @@ export interface ToolCall {
   /** Object or JSON text; `env` values are shown as `<hidden>`. */
   arguments?: unknown
   description?: string
+  /** The assistant had tool output (names, YAML, notifications) in view when it proposed this. */
+  fromToolContent?: boolean
 }
 
 export interface ChatMessage {

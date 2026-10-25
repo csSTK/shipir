@@ -99,6 +99,13 @@
   font-weight: var(--weight-semibold);
 }
 
+.chat-card__notice {
+  margin: 0;
+  font-size: var(--text-small-size);
+  line-height: var(--text-small-leading);
+  color: var(--color-warn-solid);
+}
+
 .chat-card__args {
   margin: 0;
   display: flex;

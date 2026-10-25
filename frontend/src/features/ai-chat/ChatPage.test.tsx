@@ -193,6 +193,24 @@ describe('ChatPage', () => {
     expect(await screen.findByText('Confirmed')).toBeInTheDocument()
   })
 
+  it('warns when the proposal came after the assistant read tool content and lists every argument', async () => {
+    env.messages = [
+      user('m1', 1, 'deploy shop'),
+      { ...pendingTool, toolCalls: [{ ...pendingTool.toolCalls[0], fromToolContent: true }] },
+    ]
+    renderAt('/assistant/s1')
+    expect(await screen.findByRole('note')).toHaveTextContent(/check every value/i)
+    expect(screen.getByText('hostId')).toBeInTheDocument()
+    expect(screen.getByText('deploymentId')).toBeInTheDocument()
+  })
+
+  it('shows no tool-content warning for a plain proposal', async () => {
+    env.messages = [user('m1', 1, 'deploy shop'), pendingTool]
+    renderAt('/assistant/s1')
+    await screen.findByText('Deploy "shop" on Local')
+    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+  })
+
   it('rejects a pending action through the API', async () => {
     env.messages = [user('m1', 1, 'deploy shop'), pendingTool]
     env.confirm = () => ({ messageId: 'm2', status: 'REJECTED', error: false, result: 'rejected' })
