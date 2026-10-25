@@ -3,6 +3,7 @@ import { expect, test } from './fixtures/api.ts'
 test('opens settings from the user menu, changes password, toggles a preference', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: { username: 'pat', role: 'OPERATOR', setupRequired: false } })
   api.mock('GET', '/api/hosts/overview', { body: [] })
+  api.mock('GET', '/api/account/tokens', { body: [] })
   api.mock('GET', '/api/notifications/preferences', {
     body: [
       { type: 'HOST_DOWN', inAppEnabled: true },

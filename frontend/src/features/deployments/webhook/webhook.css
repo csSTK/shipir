@@ -1,0 +1,28 @@
+.webhook {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.webhook__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.webhook__title {
+  margin: 0;
+  font-size: var(--text-body-size);
+  font-weight: var(--weight-semibold);
+}
+.webhook__text,
+.webhook__meta {
+  margin: 0;
+  font-size: var(--text-small-size);
+  line-height: var(--text-small-leading);
+  color: var(--color-text-muted);
+}
+.webhook__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

@@ -21,6 +21,7 @@ import { ConfirmDialog } from './ConfirmDialog.tsx'
 import { DeploymentRunPanel, type StartedRun } from './DeploymentRunPanel.tsx'
 import { GitSourcePanel } from './GitSourcePanel.tsx'
 import { ConfigFilesPanel } from './config-files/index.ts'
+import { WebhookCard } from './webhook/index.ts'
 import { DeploymentContentPanel } from './DeploymentContentPanel.tsx'
 import { describeDeploymentError } from './deploymentErrors.ts'
 import './DeploymentDetailPage.css'
@@ -236,6 +237,8 @@ export function DeploymentDetailPage() {
       <DeploymentContentPanel deployment={data} hostId={hostId} canWrite={canWrite} />
 
       <ConfigFilesPanel hostId={hostId} deploymentId={deploymentId} canWrite={canWrite} />
+
+      <WebhookCard hostId={hostId} deploymentId={deploymentId} canOperate={canWrite} />
 
       <Card className="sd-panel">
         <h3 className="sd-panel__title">Versions</h3>

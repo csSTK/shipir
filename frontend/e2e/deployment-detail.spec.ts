@@ -36,6 +36,7 @@ function mockCommon(api: import('./fixtures/api.ts').ApiMock, role: string) {
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   api.mock('GET', BASE, { body: [] })
   api.mock('GET', `${BASE}/s1`, { body: deployment })
+  api.mock('GET', `${BASE}/s1/webhook`, { body: { enabled: false, createdAt: null, rotatedAt: null } })
   api.mock('GET', `${BASE}/s1/versions`, { body: versions })
   api.mock('GET', `${BASE}/s1/files`, { body: [] })
   for (const v of versions) {

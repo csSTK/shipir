@@ -59,6 +59,7 @@ function serve(role: string, overrides: Record<string, Handler> = {}) {
     }
     if (path === '/auth/me') return Promise.resolve({ username: 'u', role, setupRequired: false })
     if (path === BASE) return Promise.resolve(deployment)
+    if (path === `${BASE}/webhook`) return Promise.resolve({ enabled: false, createdAt: null, rotatedAt: null })
     if (path === `${BASE}/versions`) return Promise.resolve(versions)
     const m = /\/versions\/([^/]+)$/.exec(path)
     if (m && details[m[1]]) return Promise.resolve(details[m[1]])
@@ -105,6 +106,19 @@ describe('DeploymentDetailPage', () => {
     expect(within(items[0]).getByText('Draft')).toBeInTheDocument()
     expect(within(items[1]).getByText('Current')).toBeInTheDocument()
     expect(within(items[2]).getByText('Git · abcdef1')).toBeInTheDocument()
+  })
+
+  it('shows the webhook card to operators but not to viewers', async () => {
+    serve('OPERATOR')
+    renderPage()
+    expect(await screen.findByRole('region', { name: 'Redeploy webhook' })).toBeInTheDocument()
+    cleanup()
+    apiFetch.mockClear()
+    serve('VIEWER')
+    renderPage()
+    await screen.findByRole('heading', { name: 'shop' })
+    expect(screen.queryByRole('region', { name: 'Redeploy webhook' })).not.toBeInTheDocument()
+    expect(apiFetch).not.toHaveBeenCalledWith(`${BASE}/webhook`, expect.anything())
   })
 
   it('hides all write actions from viewers', async () => {

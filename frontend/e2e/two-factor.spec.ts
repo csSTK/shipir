@@ -25,6 +25,7 @@ test('signs in with a second factor, and a wrong code stays on the step', async 
 test('enrols from the account page and shows the recovery codes once', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: { ...admin, twoFactorEnabled: false } })
   api.mock('GET', '/api/hosts/overview', { body: [] })
+  api.mock('GET', '/api/account/tokens', { body: [] })
   api.mock('GET', '/api/notifications/preferences', { body: [] })
   api.mock('POST', '/api/auth/2fa/setup', {
     body: { secret: 'JBSWY3DPEHPK3PXP', otpauthUri: 'otpauth://totp/Shipir:admin?secret=JBSWY3DPEHPK3PXP&issuer=Shipir' },

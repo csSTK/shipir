@@ -61,6 +61,7 @@ function serve(role: string, overrides: Record<string, Handler> = {}, detail: un
       return role === 'ADMIN' ? Promise.resolve(credentials) : Promise.reject(new ApiError(403, 'no', 'FORBIDDEN'))
     }
     if (path === `${BASE}/s1`) return Promise.resolve(detail)
+    if (path === `${BASE}/s1/webhook`) return Promise.resolve({ enabled: false, createdAt: null, rotatedAt: null })
     if (path === `${BASE}/s1/versions`) return Promise.resolve(versions)
     if (path.startsWith(`${BASE}/s1/files`)) return Promise.resolve([])
     return Promise.reject(new ApiError(404, 'x', 'NOT_FOUND'))

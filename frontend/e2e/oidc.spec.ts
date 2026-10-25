@@ -65,6 +65,7 @@ test('login page offers the provider and explains a refused sign-in', async ({ p
 
 test('account shows the linked single sign-on identity', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: { ...user('OPERATOR'), externalIssuer: 'https://id.example.com' } })
+  api.mock('GET', '/api/account/tokens', { body: [] })
   api.mock('GET', '/api/notifications/preferences', { body: [] })
   await page.goto('/account')
   await expect(page.getByText('Linked to https://id.example.com')).toBeVisible()

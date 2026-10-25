@@ -18,6 +18,7 @@ import {
   type NotificationPreference,
   type NotificationType,
 } from '../notifications/api.ts'
+import { TokensSection } from './tokens/TokensSection.tsx'
 import './AccountPage.css'
 
 function passwordErrors(error: unknown): string[] {
@@ -225,7 +226,7 @@ export function AccountPage({
 }) {
   return (
     <div className="account">
-      <PageHeader title="Account" subtitle="Your sign-in, password and notification preferences." />
+      <PageHeader title="Account" subtitle="Your sign-in, password, API tokens and notification preferences." />
       <Card className="account__card" role="region" aria-labelledby="account-info">
         <h2 className="account__heading" id="account-info">
           Account
@@ -245,6 +246,7 @@ export function AccountPage({
       </Card>
       <PasswordSection username={user.username} />
       <TwoFactorSection enabled={user.twoFactorEnabled === true} />
+      <TokensSection />
       <PreferencesSection />
     </div>
   )

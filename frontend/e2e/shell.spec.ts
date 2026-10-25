@@ -6,6 +6,7 @@ test('admin navigates via the sidebar and opens settings from the user menu', as
   api.mock('GET', '/api/auth/me', me('ADMIN'))
   api.mock('GET', '/api/hosts/overview', { body: [] })
   api.mock('GET', '/api/settings/retention', { body: { auditLogDays: 90, notificationDays: 30 } })
+  api.mock('GET', '/api/account/tokens', { body: [] })
   api.mock('GET', '/api/notifications/preferences', { body: [] })
   await page.goto('/')
 
