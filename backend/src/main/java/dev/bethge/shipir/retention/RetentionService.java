@@ -34,18 +34,20 @@ public class RetentionService {
     @Transactional
     public RetentionSettingsResponse update(RetentionSettingsRequest request, String username) {
         RetentionSettings s = load();
-        s.update(request.auditLogDays(), request.notificationDays(), request.chatSessionDays(), clock.instant(),
+        s.update(request.auditLogDays(), request.notificationDays(), request.chatSessionDays(), request.statsDays(),
+                clock.instant(),
                 users.findByUsername(username).map(u -> u.getId()).orElse(null));
         settings.flush();
         return toResponse(s);
     }
 
-    /** Audit details payload: the three retention periods only. */
+    /** Audit details payload: the retention periods only. */
     public Map<String, Object> auditValues(RetentionSettingsResponse r) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("auditLogDays", r.auditLogDays());
         m.put("notificationDays", r.notificationDays());
         m.put("chatSessionDays", r.chatSessionDays());
+        m.put("statsDays", r.statsDays());
         return m;
     }
 
@@ -56,6 +58,6 @@ public class RetentionService {
 
     private static RetentionSettingsResponse toResponse(RetentionSettings s) {
         return new RetentionSettingsResponse(s.getAuditLogDays(), s.getNotificationDays(), s.getChatSessionDays(),
-                s.getUpdatedAt());
+                s.getStatsDays(), s.getUpdatedAt());
     }
 }

@@ -90,6 +90,51 @@ class RetentionApiTest extends RetentionTestBase {
     }
 
     @Test
+    void statsDaysDefaultsToSevenAndCanBeChanged() throws Exception {
+        Login l = login("admin");
+        mvc.perform(get("/api/settings/retention").session(l.session()))
+                .andExpect(jsonPath("$.statsDays").value(7));
+        mvc.perform(l.write(put("/api/settings/retention")).contentType(APPLICATION_JSON)
+                        .content("{\"auditLogDays\":90,\"notificationDays\":7,\"statsDays\":30}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statsDays").value(30));
+        assertThat(jdbc.queryForObject("SELECT stats_days FROM retention_settings", Integer.class)).isEqualTo(30);
+    }
+
+    @Test
+    void omittedStatsDaysKeepsCurrentValue() throws Exception {
+        jdbc.update("UPDATE retention_settings SET stats_days = 14");
+        Login l = login("admin");
+        mvc.perform(l.write(put("/api/settings/retention")).contentType(APPLICATION_JSON).content(body(90, 7)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statsDays").value(14));
+    }
+
+    @Test
+    void rejectsStatsDaysOutOfRange() throws Exception {
+        Login l = login("admin");
+        for (String bad : new String[]{"0", "3651", "\"x\""}) {
+            mvc.perform(l.write(put("/api/settings/retention")).contentType(APPLICATION_JSON)
+                            .content("{\"auditLogDays\":90,\"notificationDays\":7,\"statsDays\":" + bad + "}"))
+                    .andExpect(status().isBadRequest());
+        }
+        assertThat(jdbc.queryForObject("SELECT stats_days FROM retention_settings", Integer.class)).isEqualTo(7);
+    }
+
+    @Test
+    void putRecordsStatsDaysInAuditDetails() throws Exception {
+        Login l = login("admin");
+        mvc.perform(l.write(put("/api/settings/retention")).contentType(APPLICATION_JSON)
+                .content("{\"auditLogDays\":90,\"notificationDays\":7,\"statsDays\":21}")).andExpect(status().isOk());
+        String details = jdbc.queryForObject(
+                "SELECT details::text FROM audit_log WHERE action = 'RETENTION_UPDATE'", String.class);
+        com.fasterxml.jackson.databind.JsonNode json = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(details);
+        assertThat(json.at("/old/statsDays").asInt()).isEqualTo(7);
+        assertThat(json.at("/new/statsDays").asInt()).isEqualTo(21);
+    }
+
+    @Test
     void operatorAndViewerAreForbidden() throws Exception {
         for (String user : new String[]{"operator", "viewer"}) {
             Login l = login(user);

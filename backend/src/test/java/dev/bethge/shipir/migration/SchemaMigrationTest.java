@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V31 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V33 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To32Successfully() {
+    void flywayAppliedVersions1To33Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33");
     }
 
     @Test
@@ -758,7 +758,7 @@ class SchemaMigrationTest {
         Map<String, Map<String, Object>> byName = columns.stream()
                 .collect(java.util.stream.Collectors.toMap(c -> (String) c.get("column_name"), c -> c));
         assertThat(byName.keySet()).containsExactlyInAnyOrder(
-                "id", "audit_log_days", "notification_days", "chat_session_days", "updated_at", "updated_by");
+                "id", "audit_log_days", "notification_days", "chat_session_days", "stats_days", "updated_at", "updated_by");
         assertThat(byName.get("chat_session_days").get("data_type")).isEqualTo("integer");
         assertThat(byName.get("chat_session_days").get("is_nullable")).isEqualTo("NO");
         assertThat(byName.get("id").get("data_type")).isEqualTo("smallint");
@@ -813,6 +813,90 @@ class SchemaMigrationTest {
         jdbc.update("DELETE FROM users WHERE id = ?", admin);
         UUID updatedBy = jdbc.queryForObject("SELECT updated_by FROM retention_settings WHERE id = 1", UUID.class);
         assertThat(updatedBy).isNull();
+    }
+
+    @Test
+    void retentionStatsDaysDefaultsToSeven() {
+        Integer days = jdbc.queryForObject("SELECT stats_days FROM retention_settings WHERE id = 1", Integer.class);
+        assertThat(days).isEqualTo(7);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 3651, -1})
+    void retentionStatsDaysOutsideRangeIsRejected(int days) {
+        assertThatThrownBy(() -> jdbc.update("UPDATE retention_settings SET stats_days = ? WHERE id = 1", days))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("retention_settings_stats_days_check");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 3650})
+    void retentionStatsDaysBoundariesAreAccepted(int days) {
+        jdbc.update("UPDATE retention_settings SET stats_days = ? WHERE id = 1", days);
+        assertThat(jdbc.queryForObject("SELECT stats_days FROM retention_settings", Integer.class)).isEqualTo(days);
+    }
+
+    @Test
+    void statsSamplesStoreOneRowPerHostContainerAndTimestamp() {
+        UUID host = insertHost(insertUser("stats-owner"));
+        insertStatsSample(host, "c1", "2026-01-01T10:00:00Z", "web");
+        Map<String, Object> row = jdbc.queryForMap("SELECT * FROM stats_samples WHERE host_id = ?", host);
+        assertThat(row.get("container_id")).isEqualTo("c1");
+        assertThat(row.get("compose_project")).isEqualTo("web");
+        assertThat(((Number) row.get("cpu_percent")).doubleValue()).isEqualTo(12.5);
+        assertThat(((Number) row.get("mem_bytes")).longValue()).isEqualTo(1024L);
+        assertThat(jdbc.queryForObject(
+                "SELECT data_type FROM information_schema.columns WHERE table_name = 'stats_samples' AND column_name = 'ts'",
+                String.class)).isEqualTo("timestamp with time zone");
+    }
+
+    @Test
+    void statsSamplesDuplicateHostContainerTimestampIsRejected() {
+        UUID host = insertHost(insertUser("stats-owner"));
+        insertStatsSample(host, "c1", "2026-01-01T10:00:00Z", null);
+        assertThatThrownBy(() -> insertStatsSample(host, "c1", "2026-01-01T10:00:00Z", null))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void statsSamplesAreDeletedWithTheirHost() {
+        UUID host = insertHost(insertUser("stats-owner"));
+        insertStatsSample(host, "c1", "2026-01-01T10:00:00Z", null);
+        insertStatsSample(host, "c2", "2026-01-01T10:00:00Z", null);
+        jdbc.update("DELETE FROM docker_hosts WHERE id = ?", host);
+        assertThat(count("stats_samples")).isZero();
+    }
+
+    @Test
+    void statsSamplesWithUnknownHostAreRejected() {
+        assertThatThrownBy(() -> insertStatsSample(UUID.randomUUID(), "c1", "2026-01-01T10:00:00Z", null))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void statsSamplesNegativeValuesAreRejected() {
+        UUID host = insertHost(insertUser("stats-owner"));
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO stats_samples (host_id, container_id, ts, cpu_percent, mem_bytes, net_rx_bytes,
+                    net_tx_bytes, blk_read_bytes, blk_write_bytes)
+                VALUES (?, 'c1', now(), 1, -1, 0, 0, 0, 0)
+                """, host)).isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("stats_samples_non_negative");
+    }
+
+    @Test
+    void statsSamplesEmptyContainerIdIsRejected() {
+        UUID host = insertHost(insertUser("stats-owner"));
+        assertThatThrownBy(() -> insertStatsSample(host, "", "2026-01-01T10:00:00Z", null))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void statsSamplesHaveTheLookupAndPurgeIndexes() {
+        List<String> indexes = jdbc.queryForList(
+                "SELECT indexdef FROM pg_indexes WHERE tablename = 'stats_samples'", String.class);
+        assertThat(indexes).anyMatch(d -> d.contains("(host_id, container_id, ts)"));
+        assertThat(indexes).anyMatch(d -> d.contains("(ts)"));
     }
 
     @Test
@@ -2191,6 +2275,14 @@ class SchemaMigrationTest {
 
     private int count(String table) {
         return jdbc.queryForObject("SELECT count(*) FROM " + table, Integer.class);
+    }
+
+    private void insertStatsSample(UUID host, String container, String ts, String project) {
+        jdbc.update("""
+                INSERT INTO stats_samples (host_id, container_id, compose_project, ts, cpu_percent, mem_bytes,
+                    net_rx_bytes, net_tx_bytes, blk_read_bytes, blk_write_bytes)
+                VALUES (?, ?, ?, ?::timestamptz, 12.5, 1024, 1, 2, 3, 4)
+                """, host, container, project, ts);
     }
 
     private UUID insertUser(String username) {

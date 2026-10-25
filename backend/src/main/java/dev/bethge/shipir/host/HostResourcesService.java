@@ -60,7 +60,7 @@ import java.util.regex.Pattern;
 @Service
 public class HostResourcesService {
 
-    private static final Pattern RESOURCE_ID = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}");
+    static final Pattern RESOURCE_ID = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}");
 
     private static final Logger log = LoggerFactory.getLogger(HostResourcesService.class);
 

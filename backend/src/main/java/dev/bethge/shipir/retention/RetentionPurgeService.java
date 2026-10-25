@@ -19,7 +19,7 @@ import java.util.Map;
 
 /**
  * Deletes rows strictly older than {@code now - days} (a row exactly at the cutoff is kept; a day is 24 hours).
- * Chat sessions are deleted with native SQL (there is no entity for them here); their messages cascade in the database.
+ * Chat sessions and stats samples are deleted with native SQL (there is no entity for them here); their messages cascade in the database.
  * Only counts are logged and audited.
  */
 @Service
@@ -53,14 +53,18 @@ class RetentionPurgeService {
         int notified = notifications.deleteByCreatedAtBefore(now.minus(Duration.ofDays(s.getNotificationDays())));
         int chats = jdbc.update("DELETE FROM chat_sessions WHERE updated_at < ?",
                 Timestamp.from(now.minus(Duration.ofDays(s.getChatSessionDays()))));
-        log.info("Retention purge deleted {} audit log entries, {} notifications and {} chat sessions",
-                audit, notified, chats);
+        int statsSamples = jdbc.update("DELETE FROM stats_samples WHERE ts < ?",
+                Timestamp.from(now.minus(Duration.ofDays(s.getStatsDays()))));
+        log.info("Retention purge deleted {} audit log entries, {} notifications, {} chat sessions and {} stats samples",
+                audit, notified, chats, statsSamples);
         auditService.record(new AuditRecord(null, "system", "RETENTION_PURGE", AuditLogEntry.Outcome.SUCCESS,
                 "RETENTION_SETTINGS", null, Map.of("auditLogDeleted", audit, "notificationsDeleted", notified,
-                        "chatSessionsDeleted", chats)));
-        return new PurgeResult(audit, notified, chats);
+                        "chatSessionsDeleted", chats,
+                        "statsSamplesDeleted", statsSamples)));
+        return new PurgeResult(audit, notified, chats, statsSamples);
     }
 
-    record PurgeResult(int auditLogDeleted, int notificationsDeleted, int chatSessionsDeleted) {
+    record PurgeResult(int auditLogDeleted, int notificationsDeleted, int chatSessionsDeleted,
+                       int statsSamplesDeleted) {
     }
 }

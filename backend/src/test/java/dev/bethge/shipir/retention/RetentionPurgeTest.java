@@ -125,6 +125,37 @@ class RetentionPurgeTest extends RetentionTestBase {
     }
 
     @Test
+    void deletesStatsSamplesOlderThanStatsDaysAndKeepsRecentOnes() {
+        insertStatsSample("old", NOW.minus(Duration.ofDays(8)));
+        insertStatsSample("recent", NOW.minus(Duration.ofDays(6)));
+        purge.purge();
+        assertThat(count("SELECT count(*) FROM stats_samples WHERE container_id = 'old'")).isZero();
+        assertThat(count("SELECT count(*) FROM stats_samples WHERE container_id = 'recent'")).isEqualTo(1);
+    }
+
+    @Test
+    void statsSampleBoundaryIsKeptAtCutoffAndOneSecondOlderIsDeleted() {
+        insertStatsSample("at-cutoff", NOW.minus(Duration.ofDays(7)));
+        insertStatsSample("before-cutoff", NOW.minus(Duration.ofDays(7)).minusSeconds(1));
+        purge.purge();
+        assertThat(count("SELECT count(*) FROM stats_samples WHERE container_id = 'at-cutoff'")).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM stats_samples WHERE container_id = 'before-cutoff'")).isZero();
+    }
+
+    @Test
+    void usesConfiguredStatsDaysAndReportsTheCount() {
+        jdbc.update("UPDATE retention_settings SET stats_days = 1");
+        insertStatsSample("a", NOW.minus(Duration.ofHours(25)));
+        insertStatsSample("b", NOW.minus(Duration.ofHours(26)));
+        insertStatsSample("c", NOW.minus(Duration.ofHours(23)));
+        RetentionPurgeService.PurgeResult r = purge.purge();
+        assertThat(r.statsSamplesDeleted()).isEqualTo(2);
+        assertThat(count("SELECT count(*) FROM stats_samples")).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT details->>'statsSamplesDeleted' FROM audit_log "
+                + "WHERE action = 'RETENTION_PURGE'", String.class)).isEqualTo("2");
+    }
+
+    @Test
     void purgeJobIsDisabledByPropertyInTests() {
         assertThat(context.getBeanNamesForType(RetentionPurgeJob.class)).isEmpty();
     }

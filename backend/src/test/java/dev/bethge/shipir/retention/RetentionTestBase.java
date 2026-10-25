@@ -64,7 +64,7 @@ abstract class RetentionTestBase {
         jdbc.update("DELETE FROM audit_log");
         jdbc.update("DELETE FROM chat_sessions");
         jdbc.update("UPDATE retention_settings SET audit_log_days = 365, notification_days = 30, "
-                + "chat_session_days = 90, updated_at = now(), updated_by = NULL");
+                + "chat_session_days = 90, stats_days = 7, updated_at = now(), updated_by = NULL");
         for (Role role : Role.values()) {
             String name = role.name().toLowerCase();
             User u = users.findByUsername(name).orElseGet(() -> new User(name, "x", role));
@@ -111,6 +111,14 @@ abstract class RetentionTestBase {
                         + "SELECT ?, id, 'chat', ?, ? FROM users WHERE username = 'admin'",
                 id, java.sql.Timestamp.from(updatedAt), java.sql.Timestamp.from(updatedAt));
         return id;
+    }
+
+    /** Inserts a stats sample of the retention host at {@code ts}. */
+    void insertStatsSample(String containerId, Instant ts) {
+        jdbc.update("INSERT INTO stats_samples (host_id, container_id, ts, cpu_percent, mem_bytes, net_rx_bytes, "
+                        + "net_tx_bytes, blk_read_bytes, blk_write_bytes) "
+                        + "SELECT id, ?, ?, 1, 1, 1, 1, 1, 1 FROM docker_hosts WHERE name = 'Retention host'",
+                containerId, java.sql.Timestamp.from(ts));
     }
 
     void insertChatMessage(UUID sessionId, int seq) {

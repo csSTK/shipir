@@ -17,6 +17,17 @@ shipir:
     read-timeout: 10s
   host:
     overview-timeout: 5s
+  stats:
+    # resource usage history: one sample per running container and tick, kept for retention_settings.stats_days
+    recorder-enabled: true
+    interval: 60s
+    # time one host may take per tick; a slower host is skipped for that tick
+    host-timeout: 20s
+    max-containers: 200
+    # most points per container series of GET /api/hosts/{h}/stats/history
+    max-points: 300
+    # most container series per history request (those with the most recent samples first)
+    max-series: 50
   images:
     update-check-enabled: true
     update-check-interval: 6h
