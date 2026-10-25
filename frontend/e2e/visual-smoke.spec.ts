@@ -61,6 +61,7 @@ test.beforeEach(({ api }) => {
   api.mock('GET', '/api/hosts/a/images', { body: images })
   api.mock('GET', '/api/hosts/a/networks', { body: networks })
   api.mock('GET', '/api/hosts/a/volumes', { body: volumes })
+  api.mock('GET', '/api/hosts/a/volume-backup-schedules', { body: [] })
   api.mock('GET', '/api/notifications/preferences', { body: [] })
 })
 
