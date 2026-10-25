@@ -1,5 +1,6 @@
 package dev.bethge.shipir.docker.client;
 
+import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.model.HealthCheck;
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
@@ -66,25 +67,40 @@ class DockerSystemServiceIntegrationTest {
         assertThat(info.volumes()).isNotNegative();
     }
 
+    /**
+     * Asserts only on the test's own container. The daemon is shared with parallel test runs, so host-wide
+     * counts can rise and fall at any time; only lower bounds implied by our own container are stable.
+     */
     @Test
     void infoCountsRunningAndHealthyContainer() {
-        int runningBefore = service.info(hostId, endpoint).containersRunning();
-        int healthyBefore = service.info(hostId, endpoint).containersHealthy();
+        try (GenericContainer<?> container = healthyContainer()) {
+            container.start();
 
-        try (GenericContainer<?> container = new GenericContainer<>("alpine:3")
+            await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+                assertThat(healthStatusOf(container)).isEqualTo("healthy");
+                DockerSystemInfoDto info = service.info(hostId, endpoint);
+                assertThat(info.containersRunning()).isGreaterThanOrEqualTo(1);
+                assertThat(info.containersHealthy()).isGreaterThanOrEqualTo(1);
+            });
+        }
+    }
+
+    private static GenericContainer<?> healthyContainer() {
+        return new GenericContainer<>("alpine:3")
                 .withCommand("sleep", "120")
                 .withCreateContainerCmdModifier(cmd -> cmd.withHealthcheck(new HealthCheck()
                         .withTest(List.of("CMD-SHELL", "true"))
                         .withInterval(TimeUnit.SECONDS.toNanos(1))
                         .withTimeout(TimeUnit.SECONDS.toNanos(1))
-                        .withRetries(1)))) {
-            container.start();
+                        .withRetries(1)));
+    }
 
-            await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-                DockerSystemInfoDto info = service.info(hostId, endpoint);
-                assertThat(info.containersRunning()).isGreaterThan(runningBefore);
-                assertThat(info.containersHealthy()).isGreaterThan(healthyBefore);
-            });
+    private String healthStatusOf(GenericContainer<?> container) {
+        try (DockerClient client = manager.createClient(endpoint)) {
+            var state = client.inspectContainerCmd(container.getContainerId()).exec().getState();
+            return state.getHealth() == null ? null : state.getHealth().getStatus();
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
         }
     }
 }
