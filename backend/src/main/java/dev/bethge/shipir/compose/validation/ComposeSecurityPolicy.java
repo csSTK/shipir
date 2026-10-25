@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -24,7 +25,10 @@ import java.util.UUID;
  * {@code docker compose config --format json}, never the raw text, so anchors, {@code extends} and {@code include} cannot
  * hide a setting. Denied for non-ADMIN: {@code privileged}, {@code cap_add}, {@code pid}/{@code ipc}/{@code network_mode}
  * {@code host}, {@code devices}, {@code security_opt}, {@code userns_mode}, bind mounts outside the deployment directory
- * (including the Docker socket) and named volumes that are bind mounts in disguise ({@code driver_opts}), plus {@code secrets}/{@code configs} files outside the
+ * (including the Docker socket), {@code use_api_socket}, {@code uts}/{@code cgroup} host, {@code cgroup_parent},
+ * {@code device_cgroup_rules}, {@code gpus}, device reservations, {@code container:} namespaces, {@code volumes_from}, build
+ * {@code privileged}/{@code network: host}/{@code entitlements} and build {@code context}/{@code dockerfile}/{@code additional_contexts}
+ * outside the directory ({@code sysctls} and {@code group_add} are allowed by decision), and named volumes that are bind mounts in disguise ({@code driver_opts}), plus {@code secrets}/{@code configs} files outside the
  * deployment directory and (see {@link ComposeFilePolicy}) {@code env_file}/{@code include}/{@code extends} paths outside it. Named volumes
  * and paths inside the deployment directory stay allowed. Callers decide who is ADMIN; this class only evaluates.
  */
@@ -117,14 +121,26 @@ public class ComposeSecurityPolicy {
             if (nonEmpty(s.path("cap_add"))) {
                 violations.add(service + ": cap_add");
             }
-            for (String key : List.of("pid", "ipc")) {
-                if ("host".equals(s.path(key).asString(""))) {
+            for (String key : List.of("pid", "ipc", "uts", "cgroup", "network_mode")) {
+                String mode = s.path(key).asString("");
+                if ("host".equals(mode)) {
                     violations.add(service + ": " + key + " host");
+                } else if (CONTAINER_NAMESPACE_KEYS.contains(key) && mode.startsWith("container:")) {
+                    violations.add(service + ": " + key + " container:");
                 }
             }
-            if ("host".equals(s.path("network_mode").asString(""))) {
-                violations.add(service + ": network_mode host");
+            for (String key : NON_EMPTY_DENIED_KEYS) {
+                if (nonEmpty(s.path(key))) {
+                    violations.add(service + ": " + key);
+                }
             }
+            if (s.path("use_api_socket").asBoolean(false)) {
+                violations.add(service + ": use_api_socket");
+            }
+            if (nonEmpty(s.path("deploy").path("resources").path("reservations").path("devices"))) {
+                violations.add(service + ": deploy reservations devices");
+            }
+            buildViolations(service, s.path("build"), allowed, violations);
             if (nonEmpty(s.path("devices"))) {
                 violations.add(service + ": devices");
             }
@@ -163,6 +179,57 @@ public class ComposeSecurityPolicy {
             }
         });
         return violations;
+    }
+
+    /** Namespace modes that may also join another container ({@code container:<id>}, possibly one outside Shipir's control). */
+    private static final Set<String> CONTAINER_NAMESPACE_KEYS = Set.of("pid", "ipc", "network_mode");
+
+    /** Keys that are denied as soon as they carry a value (sysctls and group_add are deliberately allowed). */
+    private static final List<String> NON_EMPTY_DENIED_KEYS = List.of("cgroup_parent", "device_cgroup_rules", "gpus", "volumes_from");
+
+    /**
+     * Build section of a service. Compose resolves {@code context} and {@code additional_contexts} paths to absolute ones
+     * (checked with the same inside-directory rule as bind mounts); a relative {@code dockerfile} is relative to the context.
+     * Additional contexts that reference an image or a service are not file reads and stay allowed.
+     */
+    private static void buildViolations(String service, JsonNode build, Path allowed, List<String> violations) {
+        if (!build.isObject()) {
+            return;
+        }
+        if (build.path("privileged").asBoolean(false)) {
+            violations.add(service + ": build privileged");
+        }
+        if ("host".equals(build.path("network").asString(""))) {
+            violations.add(service + ": build network host");
+        }
+        if (nonEmpty(build.path("entitlements"))) {
+            violations.add(service + ": build entitlements");
+        }
+        String context = build.path("context").asString("");
+        if (!context.isEmpty() && !insideOf(allowed, context)) {
+            violations.add(service + ": build context " + context);
+        }
+        String dockerfile = build.path("dockerfile").asString("");
+        if (!dockerfile.isEmpty() && !insideOf(allowed, resolveAgainst(context, dockerfile))) {
+            violations.add(service + ": build dockerfile " + dockerfile);
+        }
+        build.path("additional_contexts").propertyStream().forEach(entry -> {
+            String value = entry.getValue().asString("");
+            if (!value.startsWith("docker-image://") && !value.startsWith("service:") && !insideOf(allowed, value)) {
+                violations.add(service + ": build additional_contexts " + entry.getKey() + " " + value);
+            }
+        });
+    }
+
+    private static String resolveAgainst(String context, String relativeOrAbsolute) {
+        try {
+            if (Path.of(relativeOrAbsolute).isAbsolute() || context.isEmpty()) {
+                return relativeOrAbsolute;
+            }
+            return Path.of(context).resolve(relativeOrAbsolute).normalize().toString();
+        } catch (RuntimeException e) {
+            return "";
+        }
     }
 
     private static boolean nonEmpty(JsonNode node) {

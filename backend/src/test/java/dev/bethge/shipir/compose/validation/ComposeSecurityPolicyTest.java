@@ -41,6 +41,65 @@ class ComposeSecurityPolicyTest {
                 .containsExactly("x: " + expected);
     }
 
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "use_api_socket|true|use_api_socket",
+            "uts|\"host\"|uts host",
+            "cgroup|\"host\"|cgroup host",
+            "cgroup_parent|\"foo\"|cgroup_parent",
+            "device_cgroup_rules|[\"c 1:3 mr\"]|device_cgroup_rules",
+            "gpus|[{\"count\":-1}]|gpus",
+            "volumes_from|[\"b\"]|volumes_from",
+            "network_mode|\"container:abc\"|network_mode container:",
+            "pid|\"container:abc\"|pid container:",
+            "ipc|\"container:abc\"|ipc container:",
+            "deploy|{\"resources\":{\"reservations\":{\"devices\":[{\"capabilities\":[\"gpu\"]}]}}}|deploy reservations devices"})
+    void deniesFurtherHostLevelServiceSetting(String key, String value, String expected) {
+        assertThat(check("{\"services\":{\"x\":{\"image\":\"alpine\",\"%s\":%s}}}".formatted(key, value)))
+                .containsExactly("x: " + expected);
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "privileged|true|build privileged",
+            "network|\"host\"|build network host",
+            "entitlements|[\"network.host\"]|build entitlements"})
+    void deniesBuildSetting(String key, String value, String expected) {
+        assertThat(check("{\"services\":{\"x\":{\"build\":{\"context\":\"%s\",\"%s\":%s}}}}".formatted(dir, key, value)))
+                .containsExactly("x: " + expected);
+    }
+
+    @Test
+    void deniesBuildContextAdditionalContextAndDockerfileOutsideTheDirectory() {
+        String json = """
+                {"services":{"x":{"build":{"context":"/etc","dockerfile":"/etc/passwd",
+                  "additional_contexts":{"a":"/etc","b":"https://example.com/r.git"}}}}}""";
+        assertThat(check(json)).containsExactly("x: build context /etc", "x: build dockerfile /etc/passwd",
+                "x: build additional_contexts a /etc", "x: build additional_contexts b https://example.com/r.git");
+    }
+
+    @Test
+    void deniesRelativeDockerfileEscapingTheDirectory() {
+        String json = "{\"services\":{\"x\":{\"build\":{\"context\":\"%s/sub\",\"dockerfile\":\"../../Dockerfile\"}}}}".formatted(dir);
+        assertThat(check(json)).containsExactly("x: build dockerfile ../../Dockerfile");
+    }
+
+    @Test
+    void allowsBuildInsideTheDirectoryAndSysctlsAndGroupAdd() {
+        String json = """
+                {"services":{"x":{"sysctls":{"net.core.somaxconn":"1"},"group_add":["docker"],"network_mode":"service:y",
+                  "build":{"context":"%1$s/sub","dockerfile":"Dockerfile","network":"none",
+                    "additional_contexts":{"a":"%1$s/other","b":"docker-image://alpine","c":"service:y"}}}}}""".formatted(dir);
+        assertThat(check(json)).isEmpty();
+    }
+
+    @Test
+    void deniesSymlinkedBuildContextPointingOut() throws IOException {
+        Files.createSymbolicLink(dir.resolve("escape"), Path.of("/etc"));
+        assertThat(check("{\"services\":{\"x\":{\"build\":{\"context\":\"%s/escape\"}}}}".formatted(dir)))
+                .containsExactly("x: build context " + dir + "/escape");
+    }
+
     @Test
     void deniesAbsoluteHostBindMountAndDockerSocket() {
         String json = """
