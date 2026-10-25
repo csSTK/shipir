@@ -236,6 +236,35 @@ class TwoFactorApiTest {
     }
 
     @Test
+    void unreadableSecretAnswers409OnVerifyConfirmAndDisableInsteadOf500() throws Exception {
+        Enrolment e = enrol(login("admin", ADMIN_PASSWORD));
+        Session half = login("admin", ADMIN_PASSWORD);
+        // simulates a changed encryption key: stored ciphertext can no longer be decrypted
+        jdbc.update("UPDATE users SET totp_secret_ciphertext = ? WHERE username = 'admin'", new byte[40]);
+        String code = codeJson(Totp.code(e.secret, now() + 1));
+
+        MvcResult verify = send(half, "POST", "/api/auth/2fa/verify", code);
+        assertThat(verify.getResponse().getStatus()).isEqualTo(409);
+        assertThat(body(verify).get("code").asString()).isEqualTo("TWO_FACTOR_SECRET_UNREADABLE");
+        assertThat(status(half, "GET", "/api/auth/me", null)).isEqualTo(401);
+
+        // confirm: an enrolment in progress whose secret is unreadable
+        jdbc.update("UPDATE users SET totp_enabled_at = NULL WHERE username = 'admin'");
+        Session full = login("admin", ADMIN_PASSWORD);
+        MvcResult confirm = send(full, "POST", "/api/auth/2fa/confirm", code);
+        assertThat(confirm.getResponse().getStatus()).isEqualTo(409);
+        assertThat(body(confirm).get("code").asString()).isEqualTo("TWO_FACTOR_SECRET_UNREADABLE");
+
+        // disable: enabled again with an unreadable secret
+        jdbc.update("UPDATE users SET totp_enabled_at = now() WHERE username = 'admin'");
+        Session full2 = new Session(full.session, full.csrf, null, 200);
+        MvcResult disable = send(full2, "POST", "/api/auth/2fa/disable",
+                "{\"password\":\"%s\",\"code\":\"123456\"}".formatted(ADMIN_PASSWORD));
+        assertThat(disable.getResponse().getStatus()).isEqualTo(409);
+        assertThat(body(disable).get("code").asString()).isEqualTo("TWO_FACTOR_SECRET_UNREADABLE");
+    }
+
+    @Test
     void sameCodeCannotBeUsedTwice() throws Exception {
         Enrolment e = enrol(login("admin", ADMIN_PASSWORD));
         // confirm consumed the current step

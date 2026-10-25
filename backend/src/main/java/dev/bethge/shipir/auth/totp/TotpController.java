@@ -9,6 +9,7 @@ import dev.bethge.shipir.auth.totp.dto.RecoveryCodesResponse;
 import dev.bethge.shipir.auth.totp.dto.SetupResponse;
 import dev.bethge.shipir.common.exception.ErrorResponse;
 import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
+import dev.bethge.shipir.common.security.SecretDecryptionException;
 import dev.bethge.shipir.common.security.SetupStatus;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -116,5 +117,12 @@ class TotpController {
     ResponseEntity<ErrorResponse> keyMissing() {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse("ENCRYPTION_KEY_MISSING",
                 "Two-factor authentication needs an encryption key on the server"));
+    }
+
+    /** Stored secret can't be decrypted (encryption key changed): clear 409 instead of 500; an ADMIN resets 2FA. */
+    @ExceptionHandler(SecretDecryptionException.class)
+    ResponseEntity<ErrorResponse> secretUnreadable() {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse("TWO_FACTOR_SECRET_UNREADABLE",
+                "The stored two-factor secret cannot be read (the encryption key changed). Ask an administrator to reset two-factor authentication"));
     }
 }
