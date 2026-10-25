@@ -38,65 +38,65 @@ class ReadToolsConfig {
 
     @Bean
     AiTool listHostsTool(HostService hosts) {
-        return read("list_hosts", "List the Docker environments (hosts) managed by Shipir.",
+        return read("list_hosts", "List environments (hosts).",
                 schema(Map.of()), Role.VIEWER, (a, c) -> hosts.list());
     }
 
     @Bean
     AiTool hostOverviewTool(HostOverviewService overview) {
-        return read("host_overview", "Live status of every environment: up/down, Docker version, container, image and volume counts.",
+        return read("host_overview", "Live status and resource counts of every environment.",
                 schema(Map.of()), Role.VIEWER, (a, c) -> overview.overview());
     }
 
     @Bean
     AiTool listDeploymentsTool(HostResourcesService resources) {
-        return read("list_deployments", "List the Compose deployments running on one environment, and whether Shipir manages them.",
+        return read("list_deployments", "List Compose deployments on an environment.",
                 hostSchema(), Role.VIEWER, (a, c) -> resources.deployments(uuid(a, "hostId")));
     }
 
     @Bean
     AiTool getManagedDeploymentTool(DeploymentService deployments) {
-        return read("get_managed_deployment", "Details of one Shipir-managed deployment: status, Compose YAML and the names (never the values) of its environment variables.",
+        return read("get_managed_deployment", "One managed deployment: status, Compose YAML, env variable names.",
                 deploymentSchema(), Role.VIEWER, (a, c) -> deployments.get(uuid(a, "hostId"), uuid(a, "deploymentId")));
     }
 
     @Bean
     AiTool listDeploymentVersionsTool(DeploymentRunService deployments) {
-        return read("list_deployment_versions", "Version history of a managed deployment (source, commit, who created it, current, deployed).",
+        return read("list_deployment_versions", "Version history of a managed deployment.",
                 deploymentSchema(), Role.VIEWER, (a, c) -> deployments.versions(uuid(a, "hostId"), uuid(a, "deploymentId")));
     }
 
     @Bean
     AiTool listContainersTool(HostResourcesService resources) {
-        return read("list_containers", "List all containers (any state) on one environment.",
+        return read("list_containers", "List containers (any state) on an environment.",
                 hostSchema(), Role.VIEWER, (a, c) -> resources.containers(uuid(a, "hostId")));
     }
 
     @Bean
     AiTool listImagesTool(HostResourcesService resources) {
-        return read("list_images", "List the Docker images on one environment.",
+        return read("list_images", "List images on an environment.",
                 hostSchema(), Role.VIEWER, (a, c) -> resources.images(uuid(a, "hostId")));
     }
 
     @Bean
     AiTool listNetworksTool(HostResourcesService resources) {
-        return read("list_networks", "List the Docker networks on one environment.",
+        return read("list_networks", "List networks on an environment.",
                 hostSchema(), Role.VIEWER, (a, c) -> resources.networks(uuid(a, "hostId")));
     }
 
     @Bean
     AiTool listVolumesTool(HostResourcesService resources) {
-        return read("list_volumes", "List the Docker volumes on one environment.",
+        return read("list_volumes", "List volumes on an environment.",
                 hostSchema(), Role.VIEWER, (a, c) -> resources.volumes(uuid(a, "hostId")));
     }
 
     @Bean
     AiTool listNotificationsTool(NotificationService notifications) {
         Map<String, Object> props = new LinkedHashMap<>();
-        props.put("unreadOnly", Map.of("type", "boolean", "description", "Only unread notifications (default false)."));
-        props.put("page", Map.of("type", "integer", "minimum", 0, "description", "Zero-based page (default 0)."));
-        props.put("size", Map.of("type", "integer", "minimum", 1, "maximum", 100, "description", "Page size (default 20)."));
-        return read("list_notifications", "The current user's notifications, newest first.",
+        props.put("unreadOnly", Map.of("type", "boolean"));
+        props.put("page", Map.of("type", "integer", "minimum", 0));
+        props.put("size", Map.of("type", "integer", "minimum", 1, "maximum", 100));
+        return read("list_notifications", "Own notifications, newest first (page is zero-based).",
                 schema(props), Role.VIEWER, (a, c) -> notifications.list(c.userId(),
                         Boolean.TRUE.equals(a.get("unreadOnly")), intArg(a, "page", 0), intArg(a, "size", 20)));
     }
@@ -104,7 +104,7 @@ class ReadToolsConfig {
     /** Only id and name: an OPERATOR may reference a credential on create but never sees anything secret about it. */
     @Bean
     AiTool listGitCredentialsTool(GitCredentialService credentials) {
-        return read("list_git_credentials", "Names and ids of the stored Git credentials, for create_deployment with source GIT on private repositories.",
+        return read("list_git_credentials", "Git credential ids and names, for create_deployment (GIT, private repos).",
                 schema(Map.of()), Role.OPERATOR, (a, c) -> credentials.list().stream()
                         .map(g -> Map.of("id", g.id(), "name", g.name())).toList());
     }
@@ -112,13 +112,13 @@ class ReadToolsConfig {
     @Bean
     AiTool listAuditLogTool(AuditLogQueryService audit) {
         Map<String, Object> props = new LinkedHashMap<>();
-        props.put("page", Map.of("type", "integer", "minimum", 0, "description", "Zero-based page (default 0)."));
-        props.put("size", Map.of("type", "integer", "minimum", 1, "maximum", 100, "description", "Page size (default 20)."));
-        props.put("action", Map.of("type", "string", "description", "Exact action name, e.g. HOST_CREATE."));
-        props.put("username", Map.of("type", "string", "description", "Only entries of this user."));
-        props.put("from", Map.of("type", "string", "description", "ISO-8601 instant, inclusive."));
-        props.put("to", Map.of("type", "string", "description", "ISO-8601 instant, inclusive."));
-        return read("list_audit_log", "Audit log entries, newest first (administrators only).",
+        props.put("page", Map.of("type", "integer", "minimum", 0));
+        props.put("size", Map.of("type", "integer", "minimum", 1, "maximum", 100));
+        props.put("action", Map.of("type", "string"));
+        props.put("username", Map.of("type", "string"));
+        props.put("from", Map.of("type", "string"));
+        props.put("to", Map.of("type", "string"));
+        return read("list_audit_log", "Audit log, newest first. action e.g. HOST_CREATE; from/to: ISO-8601 instants.",
                 schema(props), Role.ADMIN, (a, c) -> {
                     instant(a, "from");
                     instant(a, "to");
@@ -143,8 +143,9 @@ class ReadToolsConfig {
     }
 
     private static Map<String, Object> schema(Map<String, Object> properties, String... required) {
-        return Map.of("type", "object", "properties", properties, "required", List.of(required),
-                "additionalProperties", false);
+        // No additionalProperties: ArgumentValidator already rejects unknown arguments, and it costs tokens per tool.
+        return required.length == 0 ? Map.of("type", "object", "properties", properties)
+                : Map.of("type", "object", "properties", properties, "required", List.of(required));
     }
 
     private static Map<String, Object> hostSchema() {

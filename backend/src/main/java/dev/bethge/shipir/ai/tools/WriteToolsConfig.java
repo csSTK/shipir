@@ -51,26 +51,26 @@ class WriteToolsConfig {
 
     @Bean
     AiTool deployDeploymentTool(DeploymentRunService deployments) {
-        return write("run_deployment", "Deploy (docker compose up) the current draft of a managed deployment. Runs asynchronously; returns a run id.",
+        return write("run_deployment", "Deploy the current draft of a managed deployment (async, returns run id).",
                 deploymentSchema(), Role.OPERATOR, (a, c) -> deployments.deploy(uuid(a, "hostId"), uuid(a, "deploymentId"), c.username()));
     }
 
     @Bean
     AiTool stopDeploymentTool(DeploymentRunService deployments) {
-        return write("stop_deployment", "Stop a managed deployment (docker compose down).",
+        return write("stop_deployment", "Stop a managed deployment.",
                 deploymentSchema(), Role.OPERATOR, (a, c) -> deployments.stop(uuid(a, "hostId"), uuid(a, "deploymentId")));
     }
 
     @Bean
     AiTool rollbackDeploymentTool(DeploymentRunService deployments) {
-        return write("rollback_deployment", "Redeploy an earlier version of a managed deployment (see list_deployment_versions). Runs asynchronously.",
+        return write("rollback_deployment", "Redeploy an earlier version (see list_deployment_versions). Async.",
                 schema(Map.of("hostId", UUID_PROP, "deploymentId", UUID_PROP, "versionId", UUID_PROP), "hostId", "deploymentId", "versionId"),
                 Role.OPERATOR, (a, c) -> deployments.rollback(uuid(a, "hostId"), uuid(a, "deploymentId"), uuid(a, "versionId"), c.username()));
     }
 
     @Bean
     AiTool gitRedeployDeploymentTool(DeploymentRunService deployments) {
-        return write("git_redeploy_deployment", "Pull the latest commit of a Git-based deployment and redeploy it. Runs asynchronously.",
+        return write("git_redeploy_deployment", "Pull the latest commit of a Git deployment and redeploy. Async.",
                 deploymentSchema(), Role.OPERATOR, (a, c) -> deployments.gitRedeploy(uuid(a, "hostId"), uuid(a, "deploymentId"), c.username()));
     }
 
@@ -78,19 +78,17 @@ class WriteToolsConfig {
     AiTool createDeploymentTool(DeploymentService deployments) {
         Map<String, Object> props = new LinkedHashMap<>();
         props.put("hostId", UUID_PROP);
-        props.put("name", Map.of("type", "string", "description", "Lowercase letters, digits, '-' and '_' (max 63)."));
+        props.put("name", Map.of("type", "string"));
         props.put("source", Map.of("type", "string", "enum", List.of("FILE", "GIT"),
-                "description", "FILE (default): Compose YAML given in 'yaml'. GIT: use this whenever the user names a repository; "
-                        + "needs repoUrl, ref and composePath, 'yaml' is ignored."));
-        props.put("yaml", Map.of("type", "string", "description", "Compose file content. Required for source FILE."));
-        props.put("repoUrl", Map.of("type", "string", "description", "https URL of the Git repository (source GIT)."));
-        props.put("ref", Map.of("type", "string", "description", "Branch, tag or commit SHA (source GIT), e.g. main."));
-        props.put("composePath", Map.of("type", "string", "description", "Path of the Compose file inside the repository (source GIT), e.g. compose.yaml."));
+                "description", "Default FILE. GIT whenever a repository is named."));
+        props.put("yaml", Map.of("type", "string", "description", "Compose YAML (FILE)."));
+        props.put("repoUrl", Map.of("type", "string", "description", "GIT only."));
+        props.put("ref", Map.of("type", "string", "description", "Branch, tag or SHA (GIT only)."));
+        props.put("composePath", Map.of("type", "string", "description", "Compose file path in repo (GIT only)."));
         props.put("credentialId", Map.of("type", "string", "format", "uuid",
-                "description", "Git credential for private repositories (source GIT); id from list_git_credentials. Omit for public repositories."));
+                "description", "Id from list_git_credentials, private repos only."));
         props.put("env", Map.of("type", "string", "description", ENV_DESCRIPTION));
-        return write("create_deployment", "Create a managed deployment, either from Compose YAML (source FILE) or from a Git repository "
-                        + "(source GIT; use this for repositories, never put a repository URL into the YAML). Not deployed yet; use run_deployment afterwards.",
+        return write("create_deployment", "Create a managed deployment from YAML or a Git repo (name: a-z, 0-9, -, _; GIT needs repoUrl, ref, composePath). Not deployed; use run_deployment.",
                 schema(props, "hostId", "name"), Role.OPERATOR, (a, c) -> deployments.create(uuid(a, "hostId"),
                         new DeploymentCreateRequest((String) a.get("name"), (String) a.get("yaml"), env(a),
                                 "GIT".equals(a.get("source")) ? DeploymentSource.GIT : DeploymentSource.FILE,
@@ -103,16 +101,16 @@ class WriteToolsConfig {
         Map<String, Object> props = new LinkedHashMap<>();
         props.put("hostId", UUID_PROP);
         props.put("deploymentId", UUID_PROP);
-        props.put("yaml", Map.of("type", "string", "description", "New Compose file content."));
-        props.put("env", Map.of("type", "string", "description", ENV_DESCRIPTION + " Omit to keep the stored variables."));
-        return write("update_deployment", "Save new Compose YAML (and optionally variables) as a draft of a managed deployment; run_deployment applies it.",
+        props.put("yaml", Map.of("type", "string"));
+        props.put("env", Map.of("type", "string", "description", ENV_DESCRIPTION + " Omit to keep."));
+        return write("update_deployment", "Save new Compose YAML as a draft; run_deployment applies it.",
                 schema(props, "hostId", "deploymentId", "yaml"), Role.OPERATOR, (a, c) -> deployments.update(uuid(a, "hostId"),
                         uuid(a, "deploymentId"), new DeploymentUpdateRequest((String) a.get("yaml"), env(a)), c.username()));
     }
 
     @Bean
     AiTool deleteDeploymentTool(DeploymentService deployments) {
-        return write("delete_deployment", "Delete a managed deployment: runs docker compose down and removes it and its version history from Shipir.",
+        return write("delete_deployment", "Delete a managed deployment (compose down) and its history.",
                 deploymentSchema(), Role.OPERATOR, (a, c) -> {
                     deployments.delete(uuid(a, "hostId"), uuid(a, "deploymentId"));
                     return OK;
@@ -125,8 +123,8 @@ class WriteToolsConfig {
         props.put("hostId", UUID_PROP);
         props.put("deploymentId", UUID_PROP);
         props.put("enabled", Map.of("type", "boolean"));
-        props.put("intervalSeconds", Map.of("type", "integer", "minimum", 60, "description", "Check interval, at least 60."));
-        return write("set_auto_update", "Turn automatic redeploys on or off for a Git-based deployment.",
+        props.put("intervalSeconds", Map.of("type", "integer", "minimum", 60));
+        return write("set_auto_update", "Set auto-redeploy for a Git deployment.",
                 schema(props, "hostId", "deploymentId", "enabled"), Role.OPERATOR, (a, c) -> deployments.configureAutoUpdate(
                         uuid(a, "hostId"), uuid(a, "deploymentId"), new AutoUpdateRequest((Boolean) a.get("enabled"),
                                 a.get("intervalSeconds") instanceof Number n ? n.intValue() : null)));
@@ -135,8 +133,8 @@ class WriteToolsConfig {
     @Bean
     AiTool markNotificationsReadTool(NotificationService notifications) {
         Map<String, Object> props = Map.of("notificationId", Map.of("type", "string", "format", "uuid",
-                "description", "One notification; omit to mark all of the current user's notifications read."));
-        return write("mark_notifications_read", "Mark one or all of the current user's notifications as read.",
+                "description", "Omit for all."));
+        return write("mark_notifications_read", "Mark one or all own notifications read.",
                 schema(props), Role.OPERATOR, (a, c) -> {
                     if (a.get("notificationId") == null) {
                         notifications.markAllRead(c.userId());
@@ -151,8 +149,8 @@ class WriteToolsConfig {
 
     @Bean
     AiTool createHostTool(HostService hosts) {
-        return write("create_host", "Add the local Docker daemon of the Shipir server as an environment. Remote (TCP/TLS) environments need certificates and must be added in the UI.",
-                schema(Map.of("name", Map.of("type", "string", "description", "Display name (max 100).")), "name"), Role.ADMIN,
+        return write("create_host", "Add the server's local Docker daemon as an environment.",
+                schema(Map.of("name", Map.of("type", "string")), "name"), Role.ADMIN,
                 (a, c) -> hosts.create(new CreateHostRequest((String) a.get("name"), ConnectionType.LOCAL, null, null,
                         null, null, null), c.username()));
     }
@@ -160,13 +158,13 @@ class WriteToolsConfig {
     @Bean
     AiTool renameHostTool(HostService hosts) {
         return write("rename_host", "Rename an environment.",
-                schema(Map.of("hostId", UUID_PROP, "name", Map.of("type", "string", "description", "New name (max 100).")), "hostId", "name"),
+                schema(Map.of("hostId", UUID_PROP, "name", Map.of("type", "string")), "hostId", "name"),
                 Role.ADMIN, (a, c) -> hosts.rename(uuid(a, "hostId"), (String) a.get("name")));
     }
 
     @Bean
     AiTool deleteHostTool(HostService hosts) {
-        return write("delete_host", "Delete an environment from Shipir, including its managed deployments' records (containers on the host are not touched).",
+        return write("delete_host", "Delete an environment and its deployment records (host containers untouched).",
                 hostSchema(), Role.ADMIN, (a, c) -> {
                     hosts.delete(uuid(a, "hostId"));
                     return OK;
@@ -175,7 +173,7 @@ class WriteToolsConfig {
 
     @Bean
     AiTool setWebhookEnabledTool(WebhookService webhooks) {
-        return write("set_webhook_enabled", "Enable or disable a notification webhook. Its URL cannot be changed here.",
+        return write("set_webhook_enabled", "Enable or disable a webhook (URL cannot be changed here).",
                 schema(Map.of("webhookId", UUID_PROP, "enabled", Map.of("type", "boolean")), "webhookId", "enabled"), Role.ADMIN, (a, c) -> {
                     UUID id = uuid(a, "webhookId");
                     WebhookResponse current = webhooks.list().stream().filter(w -> w.id().equals(id)).findFirst()
@@ -196,14 +194,14 @@ class WriteToolsConfig {
 
     @Bean
     AiTool deleteGitCredentialTool(GitCredentialService credentials) {
-        return write("delete_git_credential", "Delete a Git credential that no deployment uses.",
+        return write("delete_git_credential", "Delete an unused Git credential.",
                 schema(Map.of("credentialId", UUID_PROP), "credentialId"), Role.ADMIN, (a, c) -> {
                     credentials.delete(uuid(a, "credentialId"));
                     return OK;
                 });
     }
 
-    private static final String ENV_DESCRIPTION = "Variables as .env text, one KEY=VALUE per line. Values are stored encrypted and never shown again.";
+    private static final String ENV_DESCRIPTION = ".env text, KEY=VALUE lines.";
 
     private static List<EnvEntry> env(Map<String, Object> args) {
         return args.get("env") instanceof String text ? EnvFile.parse(text) : null;
@@ -215,8 +213,9 @@ class WriteToolsConfig {
     }
 
     private static Map<String, Object> schema(Map<String, Object> properties, String... required) {
-        return Map.of("type", "object", "properties", properties, "required", List.of(required),
-                "additionalProperties", false);
+        // No additionalProperties: ArgumentValidator already rejects unknown arguments, and it costs tokens per tool.
+        return required.length == 0 ? Map.of("type", "object", "properties", properties)
+                : Map.of("type", "object", "properties", properties, "required", List.of(required));
     }
 
     private static Map<String, Object> hostSchema() {

@@ -28,7 +28,7 @@ class AiToolRegistryTest {
     }
 
     private static Map<String, Object> schema() {
-        return Map.of("type", "object", "required", List.of("hostId"), "additionalProperties", false,
+        return Map.of("type", "object", "required", List.of("hostId"),
                 "properties", Map.of(
                         "hostId", Map.of("type", "string", "format", "uuid"),
                         "size", Map.of("type", "integer", "minimum", 1, "maximum", 100),

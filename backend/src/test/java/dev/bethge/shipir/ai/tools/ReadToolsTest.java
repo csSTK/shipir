@@ -308,6 +308,14 @@ class ReadToolsTest {
     }
 
     @Test
+    void unknownArgumentsAreRejectedAgainstTheRealSchema() {
+        ToolResult result = run("list_containers", "{\"hostId\":\"" + UUID.randomUUID() + "\",\"bogus\":1}", Role.VIEWER);
+
+        assertThat(result.error()).isTrue();
+        assertThat(result.content()).contains("INVALID_ARGUMENTS", "unknown argument");
+    }
+
+    @Test
     void hostToolsRejectNonUuidAndSurfaceUnknownHost() {
         assertThat(run("list_containers", "{\"hostId\":\"1; drop table\"}", Role.VIEWER).content())
                 .contains("INVALID_ARGUMENTS");

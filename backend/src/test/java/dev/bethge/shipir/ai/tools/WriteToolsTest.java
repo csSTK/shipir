@@ -195,6 +195,15 @@ class WriteToolsTest {
     }
 
     @Test
+    void unknownArgumentsAreRejectedWhenProposingAgainstTheRealSchema() {
+        ProposalResult p = registry.propose("delete_deployment",
+                "{\"hostId\":\"" + hostId + "\",\"deploymentId\":\"" + deploymentId + "\",\"bogus\":1}", ctx(Role.ADMIN), SESSION);
+
+        assertThat(p.accepted()).isFalse();
+        assertThat(p.error().content()).contains("INVALID_ARGUMENTS", "unknown argument");
+    }
+
+    @Test
     void operatorAndViewerCannotUseAdminOrWriteTools() {
         UUID other = UUID.randomUUID();
         for (String tool : List.of("delete_host", "rename_host", "create_host", "delete_webhook", "delete_git_credential")) {
