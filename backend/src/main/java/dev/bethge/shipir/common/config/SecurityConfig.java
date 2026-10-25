@@ -1,5 +1,8 @@
 package dev.bethge.shipir.common.config;
 
+import dev.bethge.shipir.auth.token.ApiTokenAuthentication;
+import dev.bethge.shipir.auth.token.ApiTokenAuthenticationFilter;
+import dev.bethge.shipir.auth.token.ApiTokenAuthenticator;
 import dev.bethge.shipir.common.exception.ErrorResponse;
 import dev.bethge.shipir.common.security.SetupGateFilter;
 import dev.bethge.shipir.common.security.SetupStatus;
@@ -13,17 +16,23 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.DeferredSecurityContext;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.session.SessionRegistry;
 import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.AnyRequestMatcher;
 import org.springframework.security.web.authentication.session.RegisterSessionAuthenticationStrategy;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -34,6 +43,7 @@ import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy;
 import org.springframework.security.web.authentication.session.CompositeSessionAuthenticationStrategy;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
+import org.springframework.security.web.context.HttpRequestResponseHolder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
@@ -74,6 +84,7 @@ class SecurityConfig {
                                             AccessDeniedHandler accessDeniedHandler,
                                             SetupStatus setupStatus,
                                             SessionRegistry sessionRegistry,
+                                            ApiTokenAuthenticator apiTokenAuthenticator,
                                             JsonMapper mapper,
                                             @Value("${shipir.security.https:false}") boolean https) throws Exception {
         http
@@ -97,8 +108,14 @@ class SecurityConfig {
                 .securityContext(c -> c.securityContextRepository(securityContextRepository))
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfTokenRepository)
+                        // Token requests carry no cookie-borne credential (CSRF cannot apply); the webhook trigger is
+                        // public and authenticated by the secret in its path. Nothing else is exempt.
+                        .ignoringRequestMatchers(
+                                request -> request.getAttribute(ApiTokenAuthenticationFilter.AUTHENTICATED_ATTRIBUTE) != null,
+                                PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/webhooks/deploy/*"))
                         // plain (non-BREACH) handler: the SPA echoes the cookie value back as header
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
+                .addFilterBefore(new ApiTokenAuthenticationFilter(apiTokenAuthenticator, entryPoint), CsrfFilter.class)
                 .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
                 .addFilterBefore(new SetupGateFilter(setupStatus, mapper), AuthorizationFilter.class)
                 .sessionManagement(sm -> sm.maximumSessions(-1).sessionRegistry(sessionRegistry)
@@ -111,6 +128,10 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/logout",
                                 "/api/auth/password-reset/request", "/api/auth/password-reset/confirm",
                                 "/api/auth/2fa/verify").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/webhooks/deploy/*").permitAll()
+                        // personal API tokens are managed with the session only: a token cannot mint or list tokens
+                        .requestMatchers("/api/account/tokens", "/api/account/tokens/**").access((supplier, context) ->
+                                new AuthorizationDecision(sessionAuthenticated(supplier.get())))
                         .requestMatchers(HttpMethod.GET, "/api/auth/oidc/config", "/api/auth/oidc/authorize",
                                 "/api/auth/oidc/callback").permitAll()
                         // managed deployments: every role reads (env values only ADMIN/OPERATOR), ADMIN/OPERATOR write
@@ -161,6 +182,12 @@ class SecurityConfig {
         return http.build();
     }
 
+    private static boolean sessionAuthenticated(Authentication authentication) {
+        return authentication != null && authentication.isAuthenticated()
+                && !(authentication instanceof AnonymousAuthenticationToken)
+                && !(authentication instanceof ApiTokenAuthentication);
+    }
+
     @Bean
     AuthenticationManager authenticationManager(UserDetailsService userDetailsService, PasswordEncoder encoder) {
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userDetailsService);
@@ -170,7 +197,7 @@ class SecurityConfig {
 
     @Bean
     SecurityContextRepository securityContextRepository() {
-        return new HttpSessionSecurityContextRepository();
+        return new SessionOrTokenSecurityContextRepository(new HttpSessionSecurityContextRepository());
     }
 
     /** Tracks sessions per user so an ADMIN action (disable, reset, delete) can end them. */
@@ -221,6 +248,46 @@ class SecurityConfig {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
         mapper.writeValue(response.getWriter(), body);
+    }
+
+    /**
+     * The HTTP session repository, except for token-authenticated requests: those are never saved, and reported as
+     * already having a context so {@code SessionManagementFilter} does not create and register a session for them.
+     */
+    private static final class SessionOrTokenSecurityContextRepository implements SecurityContextRepository {
+
+        private final SecurityContextRepository session;
+
+        SessionOrTokenSecurityContextRepository(SecurityContextRepository session) {
+            this.session = session;
+        }
+
+        @Override
+        @SuppressWarnings("deprecation")
+        public SecurityContext loadContext(HttpRequestResponseHolder holder) {
+            return session.loadContext(holder);
+        }
+
+        @Override
+        public DeferredSecurityContext loadDeferredContext(HttpServletRequest request) {
+            return session.loadDeferredContext(request);
+        }
+
+        @Override
+        public void saveContext(SecurityContext context, HttpServletRequest request, HttpServletResponse response) {
+            if (!tokenAuthenticated(request)) {
+                session.saveContext(context, request, response);
+            }
+        }
+
+        @Override
+        public boolean containsContext(HttpServletRequest request) {
+            return tokenAuthenticated(request) || session.containsContext(request);
+        }
+
+        private static boolean tokenAuthenticated(HttpServletRequest request) {
+            return request.getAttribute(ApiTokenAuthenticationFilter.AUTHENTICATED_ATTRIBUTE) != null;
+        }
     }
 
     /** Forces the deferred CSRF token to load so the XSRF-TOKEN cookie is set on every response, even a 401. */

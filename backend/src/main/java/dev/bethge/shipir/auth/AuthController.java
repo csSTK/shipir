@@ -10,6 +10,7 @@ import dev.bethge.shipir.auth.dto.PasswordChangeRequest;
 import dev.bethge.shipir.auth.dto.PasswordPolicyErrorResponse;
 import dev.bethge.shipir.auth.dto.PasswordResetConfirmRequest;
 import dev.bethge.shipir.auth.dto.PasswordResetRequest;
+import dev.bethge.shipir.auth.token.ApiTokenAuthentication;
 import dev.bethge.shipir.auth.totp.TotpService;
 import dev.bethge.shipir.auth.totp.dto.MfaRequiredResponse;
 import dev.bethge.shipir.common.exception.ErrorResponse;
@@ -151,7 +152,10 @@ class AuthController {
                                         HttpServletRequest request, HttpServletResponse response) {
         userService.changePassword(authentication.getName(), body.currentPassword(), body.newPassword());
         // Privilege change: rotate the session id and CSRF token; the security context stays in the session.
-        sessionAuthenticationStrategy.onAuthentication(authentication, request, response);
+        // A token request has no session to rotate (the strategy would register an empty one).
+        if (!(authentication instanceof ApiTokenAuthentication)) {
+            sessionAuthenticationStrategy.onAuthentication(authentication, request, response);
+        }
         return ResponseEntity.noContent().build();
     }
 

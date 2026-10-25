@@ -10,6 +10,7 @@ import dev.bethge.shipir.common.security.AiInvocationContext;
 import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
 import dev.bethge.shipir.common.security.SecretCipher;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
+import dev.bethge.shipir.common.security.SystemScope;
 import dev.bethge.shipir.compose.dto.DeploymentRunResponse;
 import dev.bethge.shipir.compose.dto.DeploymentSummaryResponse;
 import dev.bethge.shipir.compose.dto.DeploymentVersionContentResponse;
@@ -126,10 +127,35 @@ public class DeploymentRunService {
     @Auditable(action = "DEPLOYMENT_PULL_UPDATE", targetType = "DEPLOYMENT", targetId = "#id")
     public DeploymentRunResponse pullUpdate(UUID hostId, UUID id, String username) {
         deploymentService.requireOperate(hostId, id);
+        return startPullUpdate(hostId, id, userIdOf(username), username);
+    }
+
+    /**
+     * Redeploy webhook: git redeploy for GIT deployments, pull &amp; update for FILE deployments, as the system (audit
+     * user {@code system}, no user id; a new GIT version is attributed to the deployment's creator like in
+     * {@link #autoUpdate}). The webhook token was verified by the caller, so no permission check applies: nothing here
+     * asks {@code CurrentAccess}, and the unauthenticated request has no user to ask it about.
+     *
+     * @throws DeploymentException 409 DEPLOYMENT_IN_PROGRESS if the deployment is busy
+     */
+    @Auditable(action = "DEPLOYMENT_WEBHOOK_TRIGGER", targetType = "DEPLOYMENT", targetId = "#deploymentId",
+            username = "'system'", details = "{'via': 'webhook'}")
+    public DeploymentRunResponse webhookTrigger(UUID deploymentId) {
+        return SystemScope.call(() -> {
+            Deployment deployment = deployments.findById(deploymentId).orElseThrow(
+                    () -> new DeploymentException(HttpStatus.NOT_FOUND, "WEBHOOK_NOT_FOUND", "Webhook not found"));
+            if (deployment.getSourceType() == DeploymentSource.GIT) {
+                return start(deployment.getHostId(), deploymentId, deployment.getCreatedBy(), SYSTEM_USER, null,
+                        "DEPLOYMENT_GIT_REDEPLOY_RESULT", true);
+            }
+            return startPullUpdate(deployment.getHostId(), deploymentId, null, SYSTEM_USER);
+        });
+    }
+
+    private DeploymentRunResponse startPullUpdate(UUID hostId, UUID id, UUID userId, String username) {
         var host = deploymentService.requireHost(hostId);
         Deployment deployment = deploymentService.requireDeployment(hostId, id);
         DockerEndpoint endpoint = deploymentService.endpointOf(host);
-        UUID userId = userIdOf(username);
         locks.acquire(deployment.getId());
         boolean started = false;
         try {

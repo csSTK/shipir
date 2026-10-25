@@ -13,7 +13,7 @@ import java.util.Set;
  */
 @Component
 @EnableConfigurationProperties(AuthThrottleProperties.class)
-class ClientAddressResolver {
+public class ClientAddressResolver {
 
     private final Set<String> trustedProxies;
 
@@ -21,7 +21,7 @@ class ClientAddressResolver {
         this.trustedProxies = Set.copyOf(properties.trustedProxies());
     }
 
-    String resolve(HttpServletRequest request) {
+    public String resolve(HttpServletRequest request) {
         String peer = request.getRemoteAddr();
         if (peer == null) {
             return "unknown";

@@ -4,6 +4,7 @@ import dev.bethge.shipir.common.exception.ErrorResponse;
 import dev.bethge.shipir.compose.DeploymentRunService;
 import dev.bethge.shipir.compose.DeploymentException;
 import dev.bethge.shipir.compose.DeploymentService;
+import dev.bethge.shipir.compose.DeploymentWebhookService;
 import dev.bethge.shipir.compose.dto.AutoUpdateRequest;
 import dev.bethge.shipir.compose.dto.DeploymentRunResponse;
 import dev.bethge.shipir.compose.dto.DeploymentCreateRequest;
@@ -13,6 +14,8 @@ import dev.bethge.shipir.compose.dto.DeploymentSummaryResponse;
 import dev.bethge.shipir.compose.dto.DeploymentUpdateRequest;
 import dev.bethge.shipir.compose.dto.DeploymentVersionContentResponse;
 import dev.bethge.shipir.compose.dto.DeploymentVersionResponse;
+import dev.bethge.shipir.compose.dto.WebhookIssuedResponse;
+import dev.bethge.shipir.compose.dto.WebhookStatusResponse;
 import dev.bethge.shipir.git.GitOperationException;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -39,10 +42,12 @@ class DeploymentController {
 
     private final DeploymentService service;
     private final DeploymentRunService runs;
+    private final DeploymentWebhookService webhooks;
 
-    DeploymentController(DeploymentService service, DeploymentRunService runs) {
+    DeploymentController(DeploymentService service, DeploymentRunService runs, DeploymentWebhookService webhooks) {
         this.service = service;
         this.runs = runs;
+        this.webhooks = webhooks;
     }
 
     @GetMapping
@@ -125,6 +130,29 @@ class DeploymentController {
     DeploymentRunResponse rollback(@PathVariable UUID hostId, @PathVariable UUID id, @PathVariable UUID versionId,
                                 Authentication authentication) {
         return runs.rollback(hostId, id, versionId, authentication.getName());
+    }
+
+    /** Redeploy webhook state; never the token. */
+    @GetMapping("/{id}/webhook")
+    WebhookStatusResponse webhook(@PathVariable UUID hostId, @PathVariable UUID id) {
+        return webhooks.status(hostId, id);
+    }
+
+    /** Enables the webhook; the token is in the response and never shown again. */
+    @PutMapping("/{id}/webhook")
+    WebhookIssuedResponse enableWebhook(@PathVariable UUID hostId, @PathVariable UUID id) {
+        return webhooks.enable(hostId, id);
+    }
+
+    @PostMapping("/{id}/webhook/rotate")
+    WebhookIssuedResponse rotateWebhook(@PathVariable UUID hostId, @PathVariable UUID id) {
+        return webhooks.rotate(hostId, id);
+    }
+
+    @DeleteMapping("/{id}/webhook")
+    ResponseEntity<Void> disableWebhook(@PathVariable UUID hostId, @PathVariable UUID id) {
+        webhooks.disable(hostId, id);
+        return ResponseEntity.noContent().build();
     }
 
     @ExceptionHandler(DeploymentException.class)

@@ -6,6 +6,11 @@ shipir:
       max-attempts: 5
       window: 15m
       lockout: 15m
+  api-tokens:
+    # longest expiry a personal API token may get, also its default when none is given
+    max-lifetime: 365d
+    # last_used_at is written again only when older than this
+    last-used-resolution: 5m
   docker:
     local-socket: unix:///var/run/docker.sock
     connect-timeout: 3s

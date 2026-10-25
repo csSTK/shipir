@@ -21,9 +21,10 @@ import java.util.Optional;
  * account cannot be used to reset the counter of the address.
  */
 @Component
-class LoginThrottle {
+public class LoginThrottle {
 
-    enum Scope { LOGIN, RESET }
+    /** WEBHOOK: public redeploy webhook, counted per client address on unknown tokens (see {@code DeploymentWebhookService}). */
+    public enum Scope { LOGIN, RESET, WEBHOOK }
 
     private static final int ADDRESS_FACTOR = 4;
     private static final int PURGE_THRESHOLD = 1_000;
@@ -43,7 +44,7 @@ class LoginThrottle {
     }
 
     /** Remaining lock time if the username or the address is locked, else empty. */
-    synchronized Optional<Duration> lockedFor(Scope scope, String username, String address) {
+    public synchronized Optional<Duration> lockedFor(Scope scope, String username, String address) {
         Instant now = clock.instant();
         Duration longest = null;
         for (String key : new String[]{userKey(scope, username), addressKey(scope, address)}) {
@@ -59,7 +60,7 @@ class LoginThrottle {
     }
 
     /** Counts one failed attempt. Returns true if this attempt started a lockout. */
-    synchronized boolean recordFailure(Scope scope, String username, String address) {
+    public synchronized boolean recordFailure(Scope scope, String username, String address) {
         Instant now = clock.instant();
         if (entries.size() > PURGE_THRESHOLD) {
             purge(now);
@@ -70,7 +71,7 @@ class LoginThrottle {
     }
 
     /** A success clears the username counter. */
-    synchronized void recordSuccess(Scope scope, String username) {
+    public synchronized void recordSuccess(Scope scope, String username) {
         entries.remove(userKey(scope, username));
     }
 
