@@ -111,8 +111,12 @@ class WriteToolsTest {
         grant("operator", hostId, "OPERATE");
         grant("viewer", hostId, "VIEW");
         ComposeProcessResult ok = new ComposeProcessResult(0, false, List.of());
-        when(execution.execute(any(), any(), any(), any(), any())).thenReturn(ok);
-        when(execution.execute(any(), any(), any(), any(), any(), any())).thenReturn(ok);
+        // CONFIG_JSON (the ADMIN-gate lookup for non-ADMIN callers) needs a valid, harmless compose config
+        org.mockito.stubbing.Answer<ComposeProcessResult> fake = inv -> inv.getArgument(2) == dev.bethge.shipir.compose.execution.ComposeCommand.CONFIG_JSON
+                ? new ComposeProcessResult(0, false, List.of("{\"name\":\"" + inv.getArgument(1) + "\",\"services\":{}}"))
+                : ok;
+        when(execution.execute(any(), any(), any(), any(), any())).thenAnswer(fake);
+        when(execution.execute(any(), any(), any(), any(), any(), any())).thenAnswer(fake);
         when(git.sync(any(), any(), any(), any(), any())).thenAnswer(inv -> {
             Path file = ((Path) inv.getArgument(0)).resolve((String) inv.getArgument(3));
             Files.createDirectories(file.getParent());

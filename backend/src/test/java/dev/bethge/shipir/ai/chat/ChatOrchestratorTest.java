@@ -175,10 +175,16 @@ class ChatOrchestratorTest {
             users.save(u);
         }
         var ok = new dev.bethge.shipir.compose.execution.ComposeProcessResult(0, false, List.of());
+        // CONFIG_JSON (the ADMIN-gate lookup for non-ADMIN callers) needs a valid, harmless compose config
+        org.mockito.stubbing.Answer<dev.bethge.shipir.compose.execution.ComposeProcessResult> fake =
+                inv -> inv.getArgument(2) == dev.bethge.shipir.compose.execution.ComposeCommand.CONFIG_JSON
+                        ? new dev.bethge.shipir.compose.execution.ComposeProcessResult(0, false,
+                                List.of("{\"name\":\"" + inv.getArgument(1) + "\",\"services\":{}}"))
+                        : ok;
         Mockito.when(execution.execute(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any()))
-                .thenReturn(ok);
+                .thenAnswer(fake);
         Mockito.when(execution.execute(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(),
-                Mockito.any())).thenReturn(ok);
+                Mockito.any())).thenAnswer(fake);
         jdbc.update("DELETE FROM deployments");
         jdbc.update("DELETE FROM docker_hosts");
         jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
