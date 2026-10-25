@@ -107,6 +107,9 @@ public class ContainerServiceImpl implements ContainerService {
         String name = stripSlash(r.getName());
         String project = labels.get(PROJECT_LABEL);
         String service = labels.get(SERVICE_LABEL);
+        List<String> cmd = config == null || config.getCmd() == null ? List.of() : List.of(config.getCmd());
+        boolean privileged = r.getHostConfig() != null && Boolean.TRUE.equals(r.getHostConfig().getPrivileged());
+        boolean hostNetwork = r.getHostConfig() != null && "host".equals(r.getHostConfig().getNetworkMode());
         RestartPolicy policy = r.getHostConfig() == null ? null : r.getHostConfig().getRestartPolicy();
         return new ContainerDetailsDto(r.getId(), name, config == null ? null : config.getImage(),
                 state == null ? null : state.getStatus(),
@@ -114,7 +117,7 @@ public class ContainerServiceImpl implements ContainerService {
                 r.getRestartCount() == null ? 0 : r.getRestartCount(),
                 new ContainerDetailsDto.RestartPolicy(policy == null || policy.getName() == null || policy.getName().isEmpty()
                         ? "no" : policy.getName(), policy == null || policy.getMaximumRetryCount() == null ? 0 : policy.getMaximumRetryCount()),
-                command, env, mounts, labels, networks, ports(settings == null ? null : settings.getPorts()),
+                command, cmd, privileged, hostNetwork, env, mounts, labels, networks, ports(settings == null ? null : settings.getPorts()),
                 state == null ? null : health(state.getHealth()),
                 project == null || project.isBlank() ? null : project, service == null || service.isBlank() ? null : service);
     }

@@ -61,7 +61,7 @@ class HostContainerEditTest extends HostApiTestBase {
 
     private static ContainerDetailsDto details(String project) {
         return new ContainerDetailsDto("id1", "web", "nginx:1", "running", null, null, 0,
-                new ContainerDetailsDto.RestartPolicy("no", 0), List.of("nginx"), List.of(), List.of(), Map.of(),
+                new ContainerDetailsDto.RestartPolicy("no", 0), List.of("nginx"), List.of(), false, false, List.of(), List.of(), Map.of(),
                 List.of(), List.of(), null, project, project == null ? null : "web");
     }
 

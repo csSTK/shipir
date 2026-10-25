@@ -1,18 +1,53 @@
 import { useState, type FormEvent } from 'react'
 import { EnvEditor } from '../deployments/editor/EnvEditor.tsx'
 import { describeCreateError } from '../hosts/createResource.ts'
-import { useCreateContainer, type RestartPolicy } from './api.ts'
-import { buildContainerSpec, INITIAL_CONTAINER_FORM, validateContainerForm, type FormState, type MountRow, type PortRow } from './containerForm.ts'
+import { describeEditError, useContainerSpecMutation, useCreateContainer, type RestartPolicy } from './api.ts'
+import {
+  buildContainerSpec,
+  formFromDetails,
+  INITIAL_CONTAINER_FORM,
+  validateContainerForm,
+  type ContainerFormMode,
+  type FormState,
+  type MountRow,
+  type PortRow,
+} from './containerForm.ts'
+import type { ContainerDetails } from './details/api.ts'
 import './CreateContainerDialog.css'
 import { Button, Dialog } from '../../shared/ui/index.ts'
 
-/** Creates a container (optionally started). ADMIN-only options are not rendered for others. */
-export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: string; isAdmin: boolean; onClose: () => void }) {
-  const [form, setForm] = useState<FormState>(INITIAL_CONTAINER_FORM)
+const SUBMIT: Record<ContainerFormMode, [string, string]> = {
+  create: ['Create', 'Create'],
+  edit: ['Review changes', 'Recreate container'],
+  duplicate: ['Duplicate', 'Duplicate'],
+}
+const TITLES: Record<ContainerFormMode, string> = { create: 'Create container', edit: 'Edit container', duplicate: 'Duplicate container' }
+
+interface Props {
+  hostId: string
+  isAdmin: boolean
+  onClose: () => void
+  /** `create` (default) makes a new container; `edit` recreates `source` with the changes; `duplicate` copies `source` under a new name. */
+  mode?: ContainerFormMode
+  /** Inspect data of the container to edit or duplicate; required for those modes. */
+  source?: ContainerDetails
+  /** Called with the id of the resulting container after an edit or duplicate; the dialog then closes. */
+  onDone?: (containerId: string) => void
+}
+
+/**
+ * Creates, edits (recreates) or duplicates a container. ADMIN-only options are not rendered for others.
+ */
+export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create', source, onDone }: Props) {
+  const [form, setForm] = useState<FormState>(() => (mode !== 'create' && source ? formFromDetails(source, mode) : INITIAL_CONTAINER_FORM))
+  const [confirming, setConfirming] = useState(false)
   const [touched, setTouched] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const create = useCreateContainer(hostId)
-  const problems = validateContainerForm(form, isAdmin)
+  const recreate = useContainerSpecMutation(hostId, source?.id ?? '', 'recreate')
+  const duplicate = useContainerSpecMutation(hostId, source?.id ?? '', 'duplicate')
+  const pending = create.isPending || recreate.isPending || duplicate.isPending
+  const problems = validateContainerForm(form, isAdmin, mode === 'duplicate')
   const show = (key: string) => (touched ? problems[key] : undefined)
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }))
   const setPort = (i: number, patch: Partial<PortRow>) => set('ports', form.ports.map((p, j) => (j === i ? { ...p, ...patch } : p)))
@@ -22,10 +57,26 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
     e.preventDefault()
     setTouched(true)
     if (Object.keys(problems).length > 0) return
+    if (mode === 'edit' && !confirming) {
+      setConfirming(true)
+      return
+    }
     setError(null)
-    create.mutate(buildContainerSpec(form, isAdmin), {
-      onSuccess: onClose,
-      onError: (err) => setError(describeCreateError(err, 'container', 'INVALID_CONTAINER_SPEC')),
+    const spec = buildContainerSpec(form, isAdmin)
+    if (mode === 'create') {
+      create.mutate(spec, { onSuccess: onClose, onError: (err) => setError(describeCreateError(err, 'container', 'INVALID_CONTAINER_SPEC')) })
+      return
+    }
+    const operation = mode === 'edit' ? recreate : duplicate
+    operation.mutate(spec, {
+      onSuccess: (created) => {
+        onDone?.(created.id)
+        onClose()
+      },
+      onError: (err) => {
+        setConfirming(false)
+        setError(describeEditError(err, mode === 'edit' ? 'recreate' : 'duplicate'))
+      },
     })
   }
 
@@ -37,7 +88,7 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
     )
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()} title="Create container">
+    <Dialog open onOpenChange={(open) => !open && onClose()} title={TITLES[mode]}>
       <form className="ui-form ccd" onSubmit={submit} noValidate>
         <div className="ui-form-row">
           <div className="ccd__field">
@@ -58,9 +109,10 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
           </div>
           <div className="ccd__field">
             <label className="ui-form-field">
-            Name (optional)
+            {mode === 'create' ? 'Name (optional)' : 'Name'}
             <input
               value={form.name}
+              disabled={mode === 'edit'}
               onChange={(e) => set('name', e.target.value)}
               aria-invalid={show('name') ? true : undefined}
               autoComplete="off"
@@ -75,6 +127,12 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
           Command (optional)
           <input value={form.command} onChange={(e) => set('command', e.target.value)} placeholder="sleep 3600" autoComplete="off" spellCheck={false} />
         </label>
+        {mode !== 'create' && <p className="ui-hint">The entrypoint of the image is kept. Empty means the image default command. Quote arguments with spaces; inside double quotes use {'\\"'} and {'\\\\'} for a quote or backslash.</p>}
+        {mode !== 'create' && (source?.networks.length ?? 0) > 1 && (
+          <p role="note" className="ui-hint">
+            This container is connected to {source?.networks.length} networks. Only one is kept; reconnect the others afterwards.
+          </p>
+        )}
 
         <fieldset className="ccd__group">
           <legend>Ports</legend>
@@ -197,9 +255,11 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
           </label>
         </div>
 
-        <label className="ccd__check">
-          <input type="checkbox" checked={form.start} onChange={(e) => set('start', e.target.checked)} /> Start after creating
-        </label>
+        {mode !== 'edit' && (
+          <label className="ccd__check">
+            <input type="checkbox" checked={form.start} onChange={(e) => set('start', e.target.checked)} /> Start after creating
+          </label>
+        )}
         {isAdmin && (
           <>
             <label className="ccd__check">
@@ -216,12 +276,18 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose }: { hostId: st
             {error}
           </p>
         )}
+        {confirming && (
+          <p role="status" className="ui-dialog-text">
+            {source?.name} will be recreated from the new settings. It is stopped and started again, so expect a brief downtime. Volumes are kept; changes
+            that are not shown here, such as container-internal files, are lost.
+          </p>
+        )}
         <div className="ui-dialog-actions">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
+          <Button variant="ghost" onClick={confirming ? () => setConfirming(false) : onClose}>
+            {confirming ? 'Back' : 'Cancel'}
           </Button>
-          <Button variant="primary" type="submit" disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create'}
+          <Button variant="primary" type="submit" loading={pending}>
+            {SUBMIT[mode][confirming ? 1 : 0]}
           </Button>
         </div>
       </form>

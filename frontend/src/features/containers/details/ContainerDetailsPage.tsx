@@ -1,10 +1,12 @@
 import { useState, type ReactNode } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { useContainerStats, type StatSample } from '../../../shared/realtime/useContainerStats.ts'
 import { Badge, Button, Card, PageHeader, Sparkline, StatusDot, Tabs } from '../../../shared/ui/index.ts'
 import { formatSize } from '../../hosts/format.ts'
 import { useCurrentUser } from '../../auth/index.ts'
+import { ContainerResourcesDialog } from '../ContainerResourcesDialog.tsx'
+import { CreateContainerDialog } from '../CreateContainerDialog.tsx'
 import { ContainerFilesPanel } from '../files/ContainerFilesPanel.tsx'
 import { describeDetailsError, isNotFound, useContainerDetails, type ContainerDetails, type ContainerPort } from './api.ts'
 import './ContainerDetailsPage.css'
@@ -269,7 +271,11 @@ export function ContainerDetailsPage() {
   const { id: hostId = '', cid = '' } = useParams()
   const { data: user } = useCurrentUser()
   const { data: c, isPending, error, refetch } = useContainerDetails(hostId, cid)
+  const navigate = useNavigate()
+  const [dialog, setDialog] = useState<'edit' | 'duplicate' | 'limits' | null>(null)
   const base = `/environments/${hostId}/containers`
+  const canEdit = user?.role === 'ADMIN' || user?.role === 'OPERATOR'
+  const needsAdmin = !!c && (c.privileged || c.hostNetwork) && user?.role !== 'ADMIN'
 
   const tabs = c
     ? [
@@ -345,7 +351,39 @@ export function ContainerDetailsPage() {
               </nav>
             }
           />
+          {canEdit && (
+            <div className="cdetails__edit">
+              <div className="cdetails__nav" role="group" aria-label="Change container">
+                <Button disabled={!!c.composeProject || needsAdmin} onClick={() => setDialog('edit')}>
+                  Edit
+                </Button>
+                <Button disabled={!!c.composeProject || needsAdmin} onClick={() => setDialog('duplicate')}>
+                  Duplicate
+                </Button>
+                <Button disabled={!!c.composeProject} onClick={() => setDialog('limits')}>
+                  Resource limits
+                </Button>
+              </div>
+              {!c.composeProject && needsAdmin && (
+                <p className="cdetails__muted">This container is privileged or uses the host network, so editing or duplicating it needs an administrator.</p>
+              )}
+              {c.composeProject && (
+                <p className="cdetails__muted">This container is managed by the deployment {c.composeProject}. Change it there.</p>
+              )}
+            </div>
+          )}
           <Tabs label="Container sections" items={tabs} />
+          {(dialog === 'edit' || dialog === 'duplicate') && (
+            <CreateContainerDialog
+              hostId={hostId}
+              isAdmin={user?.role === 'ADMIN'}
+              mode={dialog}
+              source={c}
+              onClose={() => setDialog(null)}
+              onDone={(newId) => void navigate(`${base}/${newId}`)}
+            />
+          )}
+          {dialog === 'limits' && <ContainerResourcesDialog hostId={hostId} container={c} onClose={() => setDialog(null)} />}
         </>
       )}
     </div>

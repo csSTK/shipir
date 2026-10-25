@@ -53,7 +53,7 @@ class HostContainerInspectTest extends HostApiTestBase {
 
     private static ContainerDetailsDto details(String project) {
         return new ContainerDetailsDto("id1", "web", "nginx:1", "running", null, null, 2,
-                new ContainerDetailsDto.RestartPolicy("always", 0), List.of("nginx"),
+                new ContainerDetailsDto.RestartPolicy("always", 0), List.of("nginx"), List.of(), false, false,
                 List.of(new ContainerDetailsDto.EnvVar("SECRET", "hunter2"), new ContainerDetailsDto.EnvVar("A", "b")),
                 List.of(), Map.of(), List.of(), List.of(),
                 new ContainerDetailsDto.Health("unhealthy", 3, List.of()), project, project == null ? null : "web");

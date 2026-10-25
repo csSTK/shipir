@@ -7,7 +7,8 @@ import java.util.Map;
 /**
  * Inspect view of one container. {@code env} values are filled by the docker/ layer; callers that must not
  * expose them replace them via {@link #withoutEnvValues()}. {@code health} is null without a healthcheck,
- * {@code startedAt} null if the container never ran, compose fields null for non-Compose containers.
+ * {@code command} is entrypoint plus cmd as the daemon reports it; {@code cmd} is the configured Cmd only (what create
+ * takes), {@code hostNetwork} means network mode host. {@code startedAt} null if the container never ran, compose fields null for non-Compose containers.
  */
 public record ContainerDetailsDto(
         String id,
@@ -19,6 +20,9 @@ public record ContainerDetailsDto(
         int restartCount,
         RestartPolicy restartPolicy,
         List<String> command,
+        List<String> cmd,
+        boolean privileged,
+        boolean hostNetwork,
         List<EnvVar> env,
         List<Mount> mounts,
         Map<String, String> labels,
@@ -56,7 +60,7 @@ public record ContainerDetailsDto(
 
     public ContainerDetailsDto withoutEnvValues() {
         return new ContainerDetailsDto(id, name, image, state, created, startedAt, restartCount, restartPolicy,
-                command, env.stream().map(e -> new EnvVar(e.key(), null)).toList(), mounts, labels, networks, ports,
+                command, cmd, privileged, hostNetwork, env.stream().map(e -> new EnvVar(e.key(), null)).toList(), mounts, labels, networks, ports,
                 health, composeProject, composeService);
     }
 }

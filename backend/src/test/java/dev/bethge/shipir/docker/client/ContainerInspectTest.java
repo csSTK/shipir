@@ -43,9 +43,9 @@ class ContainerInspectTest {
                  {"Start":"2026-01-02T03:05:30Z","End":"2026-01-02T03:05:31Z","ExitCode":1,"Output":"l4"},
                  {"Start":"2026-01-02T03:05:40Z","End":"2026-01-02T03:05:41Z","ExitCode":1,"Output":"l5"},
                  {"Start":"2026-01-02T03:05:50Z","End":"2026-01-02T03:05:51Z","ExitCode":0,"Output":"l6"}]}},
-             "Config":{"Image":"nginx:1.27","Env":["A=1","SECRET=x=y","EMPTY"],
+             "Config":{"Image":"nginx:1.27","Cmd":["-g","daemon off;"],"Env":["A=1","SECRET=x=y","EMPTY"],
                "Labels":{"com.docker.compose.project":"shop","com.docker.compose.service":"web","z":"1"}},
-             "HostConfig":{"RestartPolicy":{"Name":"on-failure","MaximumRetryCount":5}},
+             "HostConfig":{"Privileged":true,"NetworkMode":"host","RestartPolicy":{"Name":"on-failure","MaximumRetryCount":5}},
              "Mounts":[{"Type":"volume","Name":"data","Source":"/var/lib/docker/volumes/data/_data","Destination":"/data","RW":true},
                        {"Type":"bind","Source":"/srv/conf","Destination":"/etc/conf","RW":false}],
              "NetworkSettings":{"Ports":{"80/tcp":[{"HostIp":"0.0.0.0","HostPort":"8080"}],"443/tcp":null},
@@ -59,9 +59,12 @@ class ContainerInspectTest {
         when(manager.readTimeout()).thenReturn(Duration.ofMillis(300));
         when(manager.client(any(), any())).thenReturn(client);
         service = new ContainerServiceImpl(manager);
-        InspectContainerResponse response = new ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                .readValue(JSON, InspectContainerResponse.class);
-        when(client.inspectContainerCmd("abc").exec()).thenReturn(response);
+        when(client.inspectContainerCmd("abc").exec()).thenReturn(readJson(JSON));
+    }
+
+    private static InspectContainerResponse readJson(String json) throws Exception {
+        return new ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .readValue(json, InspectContainerResponse.class);
     }
 
     @Test
@@ -88,6 +91,28 @@ class ContainerInspectTest {
         assertThat(d.ports()).containsExactly(
                 new ContainerDetailsDto.Port(80, "tcp", "0.0.0.0", 8080),
                 new ContainerDetailsDto.Port(443, "tcp", null, null));
+    }
+
+    @Test
+    void exposesConfiguredCmdSeparatelyFromEntrypointAndTheHostConfigFlags() {
+        ContainerDetailsDto d = service.inspect(hostId, ENDPOINT, "abc");
+
+        assertThat(d.cmd()).containsExactly("-g", "daemon off;");
+        assertThat(d.privileged()).isTrue();
+        assertThat(d.hostNetwork()).isTrue();
+    }
+
+    @Test
+    void flagsAreFalseAndCmdEmptyWhenAbsent() throws Exception {
+        InspectContainerResponse plain = readJson(JSON.replace(",\"Cmd\":[\"-g\",\"daemon off;\"]", "")
+                .replace("\"Privileged\":true,\"NetworkMode\":\"host\",", "\"NetworkMode\":\"bridge\","));
+        when(client.inspectContainerCmd("plain").exec()).thenReturn(plain);
+
+        ContainerDetailsDto d = service.inspect(hostId, ENDPOINT, "plain");
+
+        assertThat(d.cmd()).isEmpty();
+        assertThat(d.privileged()).isFalse();
+        assertThat(d.hostNetwork()).isFalse();
     }
 
     @Test

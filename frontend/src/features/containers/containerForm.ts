@@ -1,6 +1,7 @@
 import { validateEnv } from '../deployments/editor/envFile.ts'
+import type { ContainerDetails } from './details/api.ts'
 import type { EnvEntry } from '../deployments/api.ts'
-import { CONTAINER_NAME_PATTERN, splitCommand, validatePort, type ContainerSpec, type RestartPolicy } from './api.ts'
+import { CONTAINER_NAME_PATTERN, joinCommand, splitCommand, validatePort, type ContainerSpec, type RestartPolicy } from './api.ts'
 
 export interface PortRow {
   hostPort: string
@@ -43,8 +44,9 @@ export const INITIAL_CONTAINER_FORM: FormState = {
 }
 
 /** Field problems keyed by a stable id; empty = valid. Mirrors the server rules. */
-export function validateContainerForm(f: FormState, isAdmin: boolean): Record<string, string> {
+export function validateContainerForm(f: FormState, isAdmin: boolean, requireName = false): Record<string, string> {
   const e: Record<string, string> = {}
+  if (requireName && !f.name.trim()) e.name = 'Enter a name for the copy.'
   if (f.name && !CONTAINER_NAME_PATTERN.test(f.name)) e.name = 'Use letters, digits, _ . - and start with a letter or digit (max 128).'
   if (!f.image.trim()) e.image = 'Enter an image, for example nginx:1.27.'
   if (validateEnv(f.env.filter((r) => r.key !== '' || r.value !== '')).size > 0) e.env = 'Fix the variable names.'
@@ -88,3 +90,42 @@ export function buildContainerSpec(f: FormState, isAdmin: boolean): ContainerSpe
   return spec
 }
 
+
+export type ContainerFormMode = 'create' | 'edit' | 'duplicate'
+
+/**
+ * Prefill from inspect. The command field takes the configured cmd only (not the entrypoint, which the backend
+ * carries over). Anonymous tmpfs mounts (inspect labels them bind without source) are dropped.
+ * A duplicate gets no name and no fixed host ports, as both would collide with the original.
+ */
+export function formFromDetails(d: ContainerDetails, mode: 'edit' | 'duplicate'): FormState {
+  const seen = new Set<string>()
+  const ports: PortRow[] = []
+  for (const p of d.ports) {
+    if (p.hostPort == null) continue
+    const key = `${p.protocol}/${p.containerPort}/${p.hostPort}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    ports.push({ hostPort: mode === 'edit' ? String(p.hostPort) : '', containerPort: String(p.containerPort), protocol: p.protocol === 'udp' ? 'udp' : 'tcp' })
+  }
+  const mounts: MountRow[] = d.mounts.flatMap((m): MountRow[] => {
+    if (m.type === 'volume' && m.name) return [{ type: 'VOLUME', source: m.name, target: m.destination, readOnly: m.readOnly }]
+    if (m.type === 'bind' && m.source) return [{ type: 'BIND', source: m.source, target: m.destination, readOnly: m.readOnly }]
+    return []
+  })
+  const policy = d.restartPolicy.name
+  return {
+    ...INITIAL_CONTAINER_FORM,
+    name: mode === 'edit' ? d.name : '',
+    image: d.image,
+    command: joinCommand(d.cmd),
+    privileged: d.privileged,
+    hostNetwork: d.hostNetwork,
+    env: d.env.map((e) => ({ key: e.key, value: e.value ?? '' })),
+    ports,
+    mounts,
+    network: d.networks.find((n) => n.name !== 'bridge' && n.name !== 'host')?.name ?? '',
+    restartPolicy: policy === 'always' || policy === 'unless-stopped' || policy === 'on-failure' ? policy : 'no',
+    start: mode === 'edit' ? d.state === 'running' : true,
+  }
+}

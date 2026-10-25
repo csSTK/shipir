@@ -3,7 +3,7 @@ import { ApiError, apiFetch } from '../../shared/api/client.ts'
 import { HOSTS_OVERVIEW_KEY } from '../hosts/api.ts'
 import { describeResourceError } from '../hosts/format.ts'
 import { useDeleteResourceMutation } from '../hosts/deleteResource.ts'
-import { useCreateResourceMutation } from '../hosts/createResource.ts'
+import { describeCreateError, useCreateResourceMutation, type CreatedResource } from '../hosts/createResource.ts'
 
 /** One container of `GET /api/hosts/{id}/containers`; compose fields are null outside Compose. */
 export interface Container {
@@ -105,6 +105,69 @@ export function useCreateContainer(hostId: string) {
   return useCreateResourceMutation<ContainerSpec>(hostId, 'containers')
 }
 
+/** POST `/hosts/{h}/containers/{cid}/{recreate|duplicate}` with the edited spec; refreshes all host lists (a recreate changes the container id). */
+export function useContainerSpecMutation(hostId: string, containerId: string, operation: 'recreate' | 'duplicate') {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (spec: ContainerSpec) =>
+      apiFetch<CreatedResource>(`/hosts/${hostId}/containers/${encodeURIComponent(containerId)}/${operation}`, { method: 'POST', body: spec }),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['hosts', hostId] }),
+        queryClient.invalidateQueries({ queryKey: HOSTS_OVERVIEW_KEY }),
+      ]),
+  })
+}
+
+/** Server error of recreate/duplicate to inline text. */
+export function describeEditError(error: unknown, operation: 'recreate' | 'duplicate'): string {
+  if (error instanceof ApiError) {
+    switch (error.code) {
+      case 'CONTAINER_RECREATE_FAILED':
+        return 'The container could not be recreated; the original container was restored. Check the image and settings.'
+      case 'MANAGED_BY_COMPOSE':
+        return 'This container is managed by a Compose deployment. Change it in the deployment instead.'
+      case 'RESOURCE_NOT_FOUND':
+        return 'The container, image or network was not found on this environment.'
+    }
+  }
+  return describeCreateError(error, 'container', 'INVALID_CONTAINER_SPEC').replace(
+    'could not be created',
+    operation === 'recreate' ? 'could not be recreated' : 'could not be duplicated',
+  )
+}
+
+/** Fields of `PATCH /hosts/{h}/containers/{cid}/resources`: null = unchanged, 0 = unlimited. */
+export interface ResourcesSpec {
+  memoryBytes: number | null
+  cpus: number | null
+  restartPolicy: RestartPolicy | null
+}
+
+export function useUpdateContainerResources(hostId: string, containerId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (spec: ResourcesSpec) =>
+      apiFetch<void>(`/hosts/${hostId}/containers/${encodeURIComponent(containerId)}/resources`, { method: 'PATCH', body: spec }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['hosts', hostId] }),
+  })
+}
+
+export function describeResourcesError(error: unknown): string {
+  if (error instanceof ApiError) {
+    switch (error.code) {
+      case 'INVALID_RESOURCES':
+        return ['The limits are invalid.', ...(error.details ?? [])].join(' ')
+      case 'RESOURCES_REJECTED':
+        return 'Docker rejected these limits, for example memory below what the container already uses.'
+      case 'MANAGED_BY_COMPOSE':
+        return 'This container is managed by a Compose deployment. Change it in the deployment instead.'
+    }
+    if (error.status === 403) return 'You are not allowed to do this.'
+  }
+  return 'The limits could not be applied. Try again.'
+}
+
 export const CONTAINER_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/
 
 export function validatePort(value: string, optional: boolean): string | null {
@@ -113,10 +176,40 @@ export function validatePort(value: string, optional: boolean): string | null {
   return Number.isInteger(n) && n >= 1 && n <= 65535 ? null : 'Use 1-65535.'
 }
 
-/** Splits a command line on whitespace; double or single quotes group words. */
+/**
+ * Splits a command line into arguments. Whitespace separates; `"..."` groups with `\"` and `\\` escapes (any other
+ * backslash stays literal); `'...'` groups literally; a quoted empty string is an empty argument. Exact inverse of
+ * {@link joinCommand}.
+ */
 export function splitCommand(text: string): string[] {
   const out: string[] = []
-  const re = /"([^"]*)"|'([^']*)'|(\S+)/g
-  for (let m = re.exec(text); m; m = re.exec(text)) out.push(m[1] ?? m[2] ?? m[3])
+  let current = ''
+  let started = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (/\s/.test(ch)) {
+      if (started) out.push(current)
+      current = ''
+      started = false
+    } else if (ch === '"') {
+      started = true
+      for (i++; i < text.length && text[i] !== '"'; i++) {
+        if (text[i] === '\\' && (text[i + 1] === '"' || text[i + 1] === '\\')) i++
+        current += text[i]
+      }
+    } else if (ch === "'") {
+      started = true
+      for (i++; i < text.length && text[i] !== "'"; i++) current += text[i]
+    } else {
+      started = true
+      current += ch
+    }
+  }
+  if (started) out.push(current)
   return out
+}
+
+/** Writes arguments so that {@link splitCommand} returns them unchanged: anything but plain words is double-quoted with `\"` and `\\` escaped. */
+export function joinCommand(args: string[]): string {
+  return args.map((a) => (/^[^\s"'\\]+$/.test(a) ? a : `"${a.replace(/[\\"]/g, '\\$&')}"`)).join(' ')
 }

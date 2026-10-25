@@ -48,7 +48,13 @@ export interface ContainerDetails {
   startedAt: string | null
   restartCount: number
   restartPolicy: { name: string; maxRetries: number }
+  /** Entrypoint plus cmd as reported by the daemon (display only). */
   command: string[]
+  /** Configured cmd only, what create takes. */
+  cmd: string[]
+  privileged: boolean
+  /** Network mode host. */
+  hostNetwork: boolean
   env: { key: string; value: string | null }[]
   mounts: ContainerMount[]
   labels: Record<string, string>
