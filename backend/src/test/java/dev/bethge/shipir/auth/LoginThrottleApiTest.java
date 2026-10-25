@@ -23,7 +23,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import org.springframework.mock.web.MockHttpSession;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -272,5 +279,169 @@ class LoginThrottleApiTest {
                 "SELECT count(*) FROM audit_log WHERE action = 'LOGIN' AND username = ?", Integer.class, username);
         assertThat(before).isEqualTo(5);
         assertThat(after).isEqualTo(before);
+    }
+
+    private static final String NEW_PASSWORD = "A-brand-new-Passw0rd!";
+
+    private MockHttpSession signIn(String ip) throws Exception {
+        MvcResult r = login(username, PASSWORD, ip);
+        assertThat(r.getResponse().getStatus()).isEqualTo(200);
+        return (MockHttpSession) r.getRequest().getSession(false);
+    }
+
+    private MvcResult changePassword(MockHttpSession session, String current, String ip) throws Exception {
+        MockHttpServletRequestBuilder request = post("/api/auth/password").session(session).cookie(csrf)
+                .header("X-XSRF-TOKEN", csrf.getValue()).contentType(APPLICATION_JSON)
+                .content("{\"currentPassword\":\"%s\",\"newPassword\":\"%s\"}".formatted(current, NEW_PASSWORD))
+                .with(r -> {
+                    r.setRemoteAddr(ip);
+                    return r;
+                });
+        return mvc.perform(request).andReturn();
+    }
+
+    /** Fires the calls at the same moment and returns the HTTP statuses. */
+    private List<Integer> concurrently(int n, java.util.concurrent.Callable<MvcResult> call) throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(n);
+        CountDownLatch ready = new CountDownLatch(n);
+        CountDownLatch go = new CountDownLatch(1);
+        try {
+            List<Future<Integer>> futures = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                futures.add(pool.submit(() -> {
+                    ready.countDown();
+                    go.await();
+                    return call.call().getResponse().getStatus();
+                }));
+            }
+            ready.await();
+            go.countDown();
+            List<Integer> statuses = new ArrayList<>();
+            for (Future<Integer> f : futures) {
+                statuses.add(f.get());
+            }
+            return statuses;
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void wrongCurrentPasswordOnPasswordChangeIsThrottled() throws Exception {
+        String ip = peer();
+        MockHttpSession session = signIn(ip);
+        for (int i = 0; i < 5; i++) {
+            assertThat(changePassword(session, "wrong-current", ip).getResponse().getStatus()).isEqualTo(400);
+        }
+
+        MvcResult sixth = changePassword(session, "wrong-current", ip);
+
+        assertThat(sixth.getResponse().getStatus()).isEqualTo(429);
+        assertThat(sixth.getResponse().getHeader("Retry-After")).isEqualTo("900");
+        // The correct current password does not help while locked, and nothing changed.
+        assertThat(changePassword(session, PASSWORD, ip).getResponse().getStatus()).isEqualTo(429);
+        assertThat(login(username, PASSWORD, peer()).getResponse().getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void successfulPasswordChangeClearsThePasswordCounter() throws Exception {
+        String ip = peer();
+        MockHttpSession session = signIn(ip);
+        for (int i = 0; i < 4; i++) {
+            assertThat(changePassword(session, "wrong-current", ip).getResponse().getStatus()).isEqualTo(400);
+        }
+        assertThat(changePassword(session, PASSWORD, ip).getResponse().getStatus()).isEqualTo(204);
+
+        MockHttpSession again = (MockHttpSession) login(username, NEW_PASSWORD, ip).getRequest().getSession(false);
+        for (int i = 0; i < 5; i++) {
+            assertThat(changePassword(again, "wrong-current", ip).getResponse().getStatus()).isEqualTo(400);
+        }
+        assertThat(changePassword(again, "wrong-current", ip).getResponse().getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    void passwordChangeCounterIsSeparateFromLoginCounter() throws Exception {
+        String ip = peer();
+        MockHttpSession session = signIn(ip);
+        for (int i = 0; i < 5; i++) {
+            changePassword(session, "wrong-current", ip);
+        }
+
+        assertThat(changePassword(session, PASSWORD, ip).getResponse().getStatus()).isEqualTo(429);
+        assertThat(login(username, PASSWORD, ip).getResponse().getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void parallelWrongResetCodesAreEvaluatedAtMostMaxAttemptsTimes() throws Exception {
+        String ip = peer();
+        String body = "{\"username\":\"%s\",\"code\":\"000000\",\"newPassword\":\"A-brand-new-Passw0rd!\"}"
+                .formatted(username);
+
+        List<Integer> statuses = concurrently(60, () -> send("/api/auth/password-reset/confirm", body, ip, null));
+
+        assertThat(statuses).filteredOn(st -> st == 400).hasSize(5);
+        assertThat(statuses).filteredOn(st -> st == 429).hasSize(55);
+    }
+
+    @Test
+    void parallelWrongCurrentPasswordsAreEvaluatedAtMostMaxAttemptsTimes() throws Exception {
+        String ip = peer();
+        MockHttpSession session = signIn(ip);
+
+        List<Integer> statuses = concurrently(60, () -> changePassword(session, "wrong-current", ip));
+
+        assertThat(statuses).filteredOn(st -> st == 400).hasSize(5);
+        assertThat(statuses).filteredOn(st -> st == 429).hasSize(55);
+    }
+
+    @Test
+    void parallelWrongLoginsAreEvaluatedAtMostMaxAttemptsTimes() throws Exception {
+        String ip = peer();
+
+        List<Integer> statuses = concurrently(60, () -> login(username, "wrong", ip));
+
+        assertThat(statuses).filteredOn(st -> st == 401).hasSize(5);
+        assertThat(statuses).filteredOn(st -> st == 429).hasSize(55);
+    }
+
+    @Test
+    void policyViolationsWithTheCorrectCurrentPasswordNeverLockTheAccount() throws Exception {
+        String ip = peer();
+        MockHttpSession session = signIn(ip);
+        for (int i = 0; i < 12; i++) {
+            MockHttpServletRequestBuilder request = post("/api/auth/password").session(session).cookie(csrf)
+                    .header("X-XSRF-TOKEN", csrf.getValue()).contentType(APPLICATION_JSON)
+                    .content("{\"currentPassword\":\"%s\",\"newPassword\":\"short\"}".formatted(PASSWORD))
+                    .with(r -> {
+                        r.setRemoteAddr(ip);
+                        return r;
+                    });
+            assertThat(mvc.perform(request).andReturn().getResponse().getStatus()).isEqualTo(400);
+        }
+    }
+
+    @Test
+    void policyViolationsWithTheCorrectResetCodeNeverLockTheAccount() throws Exception {
+        String ip = peer();
+        String code = "424242";
+        String hash;
+        try {
+            hash = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(code.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+        jdbc.update("""
+                INSERT INTO password_reset_codes (user_id, code_hash, expires_at, failed_attempts, created_at)
+                SELECT id, ?, ?, 0, ? FROM users WHERE username = ?""", hash,
+                java.sql.Timestamp.from(clock.instant().plus(Duration.ofHours(1))),
+                java.sql.Timestamp.from(clock.instant()), username);
+        String body = "{\"username\":\"%s\",\"code\":\"%s\",\"newPassword\":\"short\"}"
+                .formatted(username, code);
+
+        for (int i = 0; i < 12; i++) {
+            assertThat(send("/api/auth/password-reset/confirm", body, ip, null).getResponse().getStatus())
+                    .isEqualTo(400);
+        }
     }
 }

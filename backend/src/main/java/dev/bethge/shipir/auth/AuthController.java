@@ -39,7 +39,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
 import java.util.Map;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -100,29 +99,32 @@ class AuthController {
     ResponseEntity<?> login(@Valid @RequestBody LoginRequest body,
                             HttpServletRequest request, HttpServletResponse response) {
         String address = clientAddress.resolve(request);
-        Optional<Duration> locked = throttle.lockedFor(LoginThrottle.Scope.LOGIN, body.username(), address);
-        if (locked.isPresent()) {
-            return tooManyAttempts(locked.get());
+        // Admitting counts the attempt at once (atomically with the lock check); a success takes it back.
+        LoginThrottle.Admission admission = throttle.admit(LoginThrottle.Scope.LOGIN, body.username(), address);
+        if (!admission.admitted()) {
+            return tooManyAttempts(admission.lockedFor().get());
         }
         Authentication authentication;
         try {
             authentication = authenticationManager.authenticate(
                     UsernamePasswordAuthenticationToken.unauthenticated(body.username(), body.password()));
         } catch (AuthenticationException ex) {
-            recordFailure(LoginThrottle.Scope.LOGIN, body.username(), address);
+            auditLockout(admission, LoginThrottle.Scope.LOGIN, body.username(), address);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(INVALID_CREDENTIALS);
         }
         // Checked after the password: a wrong password stays an ordinary 401 whoever the user is. A refused local
         // login is neither a failure nor a success for the throttle: the counter is left as it is.
         User user = users.findByUsername(authentication.getName()).orElse(null);
         if (user == null) {
+            auditLockout(admission, LoginThrottle.Scope.LOGIN, body.username(), address);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(INVALID_CREDENTIALS);
         }
         if (!localLoginPolicy.allows(user.getRole())) {
+            throttle.release(LoginThrottle.Scope.LOGIN, body.username(), address);
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse("LOCAL_LOGIN_DISABLED",
                     "Password login is disabled; sign in with single sign-on"));
         }
-        throttle.recordSuccess(LoginThrottle.Scope.LOGIN, body.username());
+        throttle.recordSuccess(LoginThrottle.Scope.LOGIN, body.username(), address);
         if (user.isTwoFactorEnabled()) {
             // Password is right, second factor missing: nothing is authenticated yet, the session only remembers
             // who may submit a code to /api/auth/2fa/verify.
@@ -148,9 +150,26 @@ class AuthController {
 
     @PostMapping("/password")
     @Auditable(action = "PASSWORD_CHANGE", targetType = "USER")
-    ResponseEntity<Void> changePassword(@Valid @RequestBody PasswordChangeRequest body, Authentication authentication,
-                                        HttpServletRequest request, HttpServletResponse response) {
-        userService.changePassword(authentication.getName(), body.currentPassword(), body.newPassword());
+    ResponseEntity<?> changePassword(@Valid @RequestBody PasswordChangeRequest body, Authentication authentication,
+                                     HttpServletRequest request, HttpServletResponse response) {
+        // The current-password check is a guessing oracle for a stolen session: throttled like a login.
+        String address = clientAddress.resolve(request);
+        LoginThrottle.Admission admission = throttle.admit(LoginThrottle.Scope.PASSWORD, authentication.getName(), address);
+        if (!admission.admitted()) {
+            return tooManyAttempts(admission.lockedFor().get());
+        }
+        try {
+            userService.changePassword(authentication.getName(), body.currentPassword(), body.newPassword());
+        } catch (UserService.InvalidCurrentPasswordException ex) {
+            auditLockout(admission, LoginThrottle.Scope.PASSWORD, authentication.getName(), address);
+            throw ex;
+        } catch (UserService.PasswordPolicyException ex) {
+            // Current password was right, only the new one breaks the policy: not a guess. Any other failure
+            // keeps the provisional count (fail closed).
+            throttle.recordSuccess(LoginThrottle.Scope.PASSWORD, authentication.getName(), address);
+            throw ex;
+        }
+        throttle.recordSuccess(LoginThrottle.Scope.PASSWORD, authentication.getName(), address);
         // Privilege change: rotate the session id and CSRF token; the security context stays in the session.
         // A token request has no session to rotate (the strategy would register an empty one).
         if (!(authentication instanceof ApiTokenAuthentication)) {
@@ -163,12 +182,12 @@ class AuthController {
     @PostMapping("/password-reset/request")
     ResponseEntity<?> requestPasswordReset(@Valid @RequestBody PasswordResetRequest body, HttpServletRequest request) {
         String address = clientAddress.resolve(request);
-        Optional<Duration> locked = throttle.lockedFor(LoginThrottle.Scope.RESET, body.username(), address);
-        if (locked.isPresent()) {
-            return tooManyAttempts(locked.get());
-        }
         // Every request counts, known user or not, so the limit cannot be used to find accounts.
-        recordFailure(LoginThrottle.Scope.RESET, body.username(), address);
+        LoginThrottle.Admission admission = throttle.admit(LoginThrottle.Scope.RESET, body.username(), address);
+        if (!admission.admitted()) {
+            return tooManyAttempts(admission.lockedFor().get());
+        }
+        auditLockout(admission, LoginThrottle.Scope.RESET, body.username(), address);
         passwordResetService.requestReset(body.username());
         return ResponseEntity.accepted().build();
     }
@@ -179,22 +198,27 @@ class AuthController {
     ResponseEntity<?> confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest body,
                                            HttpServletRequest request) {
         String address = clientAddress.resolve(request);
-        Optional<Duration> locked = throttle.lockedFor(LoginThrottle.Scope.RESET, body.username(), address);
-        if (locked.isPresent()) {
-            return tooManyAttempts(locked.get());
+        LoginThrottle.Admission admission = throttle.admit(LoginThrottle.Scope.RESET, body.username(), address);
+        if (!admission.admitted()) {
+            return tooManyAttempts(admission.lockedFor().get());
         }
         try {
             passwordResetService.confirmReset(body.username(), body.code(), body.newPassword());
         } catch (InvalidResetCodeException ex) {
-            recordFailure(LoginThrottle.Scope.RESET, body.username(), address);
+            auditLockout(admission, LoginThrottle.Scope.RESET, body.username(), address);
+            throw ex;
+        } catch (UserService.PasswordPolicyException ex) {
+            // Code was right, only the new password breaks the policy: not a guess. Any other failure keeps
+            // the provisional count (fail closed).
+            throttle.recordSuccess(LoginThrottle.Scope.RESET, body.username(), address);
             throw ex;
         }
-        throttle.recordSuccess(LoginThrottle.Scope.RESET, body.username());
+        throttle.recordSuccess(LoginThrottle.Scope.RESET, body.username(), address);
         return ResponseEntity.noContent().build();
     }
 
-    private void recordFailure(LoginThrottle.Scope scope, String username, String address) {
-        if (throttle.recordFailure(scope, username, address)) {
+    private void auditLockout(LoginThrottle.Admission admission, LoginThrottle.Scope scope, String username, String address) {
+        if (admission.lockoutStarted()) {
             try {
                 auditService.record(new AuditRecord(null, username, "LOGIN_THROTTLED", AuditLogEntry.Outcome.FAILURE,
                         "USER", username, Map.of("scope", scope.name(), "clientAddress", address)));

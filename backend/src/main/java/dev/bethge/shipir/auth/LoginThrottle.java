@@ -17,14 +17,26 @@ import java.util.Optional;
  * address (sliding window). Reaching the limit locks that key for the lockout period; further attempts get
  * 429 without being evaluated. State is lost on restart and not shared between instances.
  * The address limit is {@value #ADDRESS_FACTOR} times the username limit so one shared address (NAT) is not
- * locked out by a few typos of different users. A success clears only the username key, so a valid own
- * account cannot be used to reset the counter of the address.
+ * locked out by a few typos of different users. {@link #admit} counts an attempt at once, atomically with the
+ * lock check, so parallel guesses cannot all pass the check. A success clears the username key and only takes
+ * back its own slot on the address key (undoing a lockout that this attempt started), so a valid own account
+ * cannot be used to reset the counter of the address.
  */
 @Component
 public class LoginThrottle {
 
-    /** WEBHOOK: public redeploy webhook, counted per client address on unknown tokens (see {@code DeploymentWebhookService}). */
-    public enum Scope { LOGIN, RESET, WEBHOOK }
+    /** PASSWORD: password change of a signed-in user (guards the current-password check). WEBHOOK: public redeploy webhook, counted per client address on unknown tokens (see {@code DeploymentWebhookService}). */
+    public enum Scope { LOGIN, RESET, WEBHOOK, PASSWORD }
+
+    /**
+     * Result of {@link #admit}: {@code lockedFor} is set if the attempt was refused; {@code lockoutStarted} if
+     * admitting it used up the last allowed attempt and started a lockout.
+     */
+    public record Admission(Optional<Duration> lockedFor, boolean lockoutStarted) {
+        public boolean admitted() {
+            return lockedFor.isEmpty();
+        }
+    }
 
     private static final int ADDRESS_FACTOR = 4;
     private static final int PURGE_THRESHOLD = 1_000;
@@ -32,6 +44,8 @@ public class LoginThrottle {
     private static final class Entry {
         final Deque<Instant> failures = new ArrayDeque<>();
         Instant lockedUntil;
+        /** Failures before the lockout started, so a provisional attempt that started it can be taken back. */
+        Deque<Instant> beforeLock;
     }
 
     private final Clock clock;
@@ -59,6 +73,26 @@ public class LoginThrottle {
         return Optional.ofNullable(longest);
     }
 
+    /**
+     * Atomic check-and-count for an attempt whose outcome is not known yet: if neither key is locked, the attempt
+     * is counted as a (provisional) failure under the same lock, so a burst of parallel attempts cannot all pass
+     * the check before any is counted. The caller must then call {@link #recordSuccess} or {@link #release} if
+     * the attempt turns out to be legitimate; a failed attempt needs no further call.
+     */
+    public synchronized Admission admit(Scope scope, String username, String address) {
+        Optional<Duration> locked = lockedFor(scope, username, address);
+        if (locked.isPresent()) {
+            return new Admission(locked, false);
+        }
+        return new Admission(Optional.empty(), recordFailure(scope, username, address));
+    }
+
+    /** Takes back the provisional failure of an admitted attempt that was neither a success nor a failure. */
+    public synchronized void release(Scope scope, String username, String address) {
+        refund(userKey(scope, username));
+        refund(addressKey(scope, address));
+    }
+
     /** Counts one failed attempt. Returns true if this attempt started a lockout. */
     public synchronized boolean recordFailure(Scope scope, String username, String address) {
         Instant now = clock.instant();
@@ -70,9 +104,26 @@ public class LoginThrottle {
         return user || addr;
     }
 
-    /** A success clears the username counter. */
-    public synchronized void recordSuccess(Scope scope, String username) {
+    /** A success of an admitted attempt: clears the username counter and takes back its provisional failure on the address. */
+    public synchronized void recordSuccess(Scope scope, String username, String address) {
         entries.remove(userKey(scope, username));
+        refund(addressKey(scope, address));
+    }
+
+    private void refund(String key) {
+        Entry entry = entries.get(key);
+        if (entry == null) {
+            return;
+        }
+        if (entry.beforeLock != null) {
+            // The attempt being taken back started the lockout: undo it.
+            entry.beforeLock.removeLast();
+            entry.failures.addAll(entry.beforeLock);
+            entry.beforeLock = null;
+            entry.lockedUntil = null;
+        } else if (!entry.failures.isEmpty()) {
+            entry.failures.removeLast();
+        }
     }
 
     private boolean fail(String key, int limit, Instant now) {
@@ -84,8 +135,10 @@ public class LoginThrottle {
         while (!entry.failures.isEmpty() && !entry.failures.peekFirst().isAfter(cutoff)) {
             entry.failures.removeFirst();
         }
+        entry.beforeLock = null;
         entry.failures.addLast(now);
         if (entry.failures.size() >= limit) {
+            entry.beforeLock = new ArrayDeque<>(entry.failures);
             entry.failures.clear();
             entry.lockedUntil = now.plus(settings.lockout());
             return true;
