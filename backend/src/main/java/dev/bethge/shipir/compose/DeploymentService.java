@@ -22,6 +22,7 @@ import dev.bethge.shipir.compose.execution.ComposeExecutionException;
 import dev.bethge.shipir.compose.execution.ComposeExecutionService;
 import dev.bethge.shipir.compose.execution.ComposeProcessResult;
 import dev.bethge.shipir.compose.file.ComposeFileRepository;
+import dev.bethge.shipir.compose.validation.ComposeSecurityPolicy;
 import dev.bethge.shipir.compose.validation.ComposeValidationService;
 import dev.bethge.shipir.compose.validation.ValidationResult;
 import dev.bethge.shipir.docker.DockerEndpoint;
@@ -67,12 +68,13 @@ public class DeploymentService {
     private final DeploymentLocks locks;
     private final GitRepositoryService git;
     private final CurrentAccess access;
+    private final ComposeSecurityPolicy policy;
 
     DeploymentService(DeploymentRepository deployments, DeploymentVersionRepository versions, DockerHostRepository hosts,
                  UserRepository users, HostEndpointResolver endpoints, ComposeFileRepository files,
                  ComposeValidationService validation, ComposeExecutionService execution, SecretCipher cipher,
                  Clock clock, PlatformTransactionManager txManager, DeploymentLocks locks,
-                 GitRepositoryService git, CurrentAccess access) {
+                 GitRepositoryService git, CurrentAccess access, ComposeSecurityPolicy policy) {
         this.deployments = deployments;
         this.versions = versions;
         this.hosts = hosts;
@@ -87,6 +89,7 @@ public class DeploymentService {
         this.locks = locks;
         this.git = git;
         this.access = access;
+        this.policy = policy;
     }
 
     /** Validated on-disk directory of a managed deployment (may not exist before the first write); for the config editor. */
@@ -397,6 +400,29 @@ public class DeploymentService {
         if (!result.valid()) {
             throw new DeploymentException(HttpStatus.BAD_REQUEST, "INVALID_COMPOSE", "The compose file is invalid",
                     result.errors());
+        }
+        enforcePolicy(hostId, name, endpoint, composeFile, access.isAdmin());
+    }
+
+    /**
+     * Non-ADMIN callers may not deploy host-level features (privileged, host namespaces, devices, bind mounts outside the
+     * deployment directory, ...): 403 ADMIN_REQUIRED listing the offending settings. Evaluated on the resolved
+     * {@code docker compose config} output, so it holds for every path that writes or runs a compose file.
+     */
+    void enforcePolicy(UUID hostId, String name, DockerEndpoint endpoint, Path composeFile, boolean unrestricted) {
+        if (unrestricted) {
+            return;
+        }
+        List<String> violations;
+        try {
+            violations = policy.violations(hostId, name, endpoint, composeFile);
+        } catch (ComposeExecutionException e) {
+            throw new DeploymentException(HttpStatus.BAD_GATEWAY, "COMPOSE_UNAVAILABLE", "docker compose could not run");
+        }
+        if (!violations.isEmpty()) {
+            throw new DeploymentException(HttpStatus.FORBIDDEN, "ADMIN_REQUIRED",
+                    "Privileged mode, host namespaces, devices, security options and host bind mounts need the ADMIN role",
+                    violations);
         }
     }
 

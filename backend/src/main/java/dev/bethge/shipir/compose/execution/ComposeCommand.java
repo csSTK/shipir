@@ -8,7 +8,9 @@ public enum ComposeCommand {
     DOWN("down"),
     DOWN_VOLUMES("down", "-v"),
     PULL("pull"),
-    CONFIG("config", "--quiet");
+    CONFIG("config", "--quiet"),
+    /** Fully resolved configuration as JSON, for the ADMIN-only feature check (anchors, extends and include are expanded). */
+    CONFIG_JSON("config", "--format", "json");
 
     private final List<String> args;
 

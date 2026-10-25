@@ -4,6 +4,7 @@ import dev.bethge.shipir.audit.AuditLogEntry;
 import dev.bethge.shipir.audit.AuditRecord;
 import dev.bethge.shipir.audit.AuditService;
 import dev.bethge.shipir.audit.Auditable;
+import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
 import dev.bethge.shipir.common.security.AiInvocationContext;
@@ -180,6 +181,8 @@ public class DeploymentRunService {
             String envText = decryptEnv(version);
             alignCheckout(deployment, version);
             files.write(hostId, deployment.getName(), version.getYamlContent(), envText);
+            deploymentService.enforcePolicy(hostId, deployment.getName(), endpoint, deploymentService.composeFileOf(deployment),
+                    unrestricted(username, userId != null ? userId : version.getCreatedBy()));
             String runId = UUID.randomUUID().toString();
             Map<String, Object> aiMarker = AiInvocationContext.active() ? aiMarker() : Map.of();
             streams.registerRun(runId, hostId, deployment.getId());
@@ -389,6 +392,19 @@ public class DeploymentRunService {
         }
     }
 
+    /**
+     * Whether the run may use host-level compose features (ADMIN only). A signed-in caller counts by their own role. A system
+     * run (webhook, Git/image auto-update; no user) counts by the role of the user who authored the content being run: the
+     * deployed version's author, or the deployment's creator for freshly pulled Git content. Unknown or disabled user: no.
+     */
+    private boolean unrestricted(String username, UUID authorId) {
+        if (!SYSTEM_USER.equals(username)) {
+            return users.findByUsername(username).filter(u -> !u.isDisabled()).map(u -> u.getRole() == Role.ADMIN).orElse(false);
+        }
+        return authorId != null && users.findById(authorId).filter(u -> !u.isDisabled()).map(u -> u.getRole() == Role.ADMIN)
+                .orElse(false);
+    }
+
     private UUID userIdOf(String username) {
         return users.findByUsername(username).orElseThrow().getId();
     }
@@ -411,6 +427,9 @@ public class DeploymentRunService {
             VersionSource versionSource = rollbackTo != null ? VersionSource.ROLLBACK
                     : pullGit ? VersionSource.GIT : source.getSource();
             String commitSha = checkout == null ? source.getCommitSha() : checkout.commitSha();
+            files.write(hostId, deployment.getName(), yaml, envText);
+            deploymentService.enforcePolicy(hostId, deployment.getName(), endpoint, deploymentService.composeFileOf(deployment),
+                    unrestricted(username, userId));
             DeploymentVersion version = tx.execute(status -> {
                 DeploymentVersion v = new DeploymentVersion(deployment.getId(), yaml, source.getEnvCiphertext(), versionSource,
                         userId, clock.instant());
@@ -425,7 +444,6 @@ public class DeploymentRunService {
                 deployments.save(deployment);
                 return v;
             });
-            files.write(hostId, deployment.getName(), version.getYamlContent(), envText);
 
             String runId = UUID.randomUUID().toString();
             // The ScopedValue is not inherited by the worker thread: capture the AI marker now, write it into the result entry.

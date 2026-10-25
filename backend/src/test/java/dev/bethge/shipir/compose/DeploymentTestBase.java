@@ -120,6 +120,16 @@ abstract class DeploymentTestBase {
             UUID h = inv.getArgument(0);
             String name = inv.getArgument(1);
             ComposeCommand command = inv.getArgument(2);
+            if (command == ComposeCommand.CONFIG_JSON) {
+                // the ADMIN-gate lookup, not part of the flow under test: not recorded in `commands`.
+                // Stands in for `docker compose config --format json`: the YAML as JSON (no anchor/path resolution)
+                java.util.Map<String, Object> config = new java.util.LinkedHashMap<>();
+                config.put("name", name);
+                config.putAll(tools.jackson.dataformat.yaml.YAMLMapper.builder().build().readValue(
+                        files.readCompose(h, name).orElse(""), java.util.Map.class));
+                String json = tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(config);
+                return new ComposeProcessResult(0, false, List.of("WARN[0000] a warning on stderr", json));
+            }
             commands.add(command);
             composeFiles.add(inv.getArguments().length > 5 ? inv.getArgument(5) : null);
             if (inv.getArguments().length > 6) {

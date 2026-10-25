@@ -1,0 +1,176 @@
+package dev.bethge.shipir.compose.validation;
+
+import dev.bethge.shipir.compose.execution.ComposeCommand;
+import dev.bethge.shipir.compose.execution.ComposeExecutionException;
+import dev.bethge.shipir.compose.execution.ComposeExecutionService;
+import dev.bethge.shipir.compose.execution.ComposeProcessResult;
+import dev.bethge.shipir.compose.file.ComposeFileRepository;
+import dev.bethge.shipir.docker.DockerEndpoint;
+import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * The central gate that keeps non-ADMIN users from reaching host root through Compose. It mirrors the rules of manual
+ * container creation (privileged, host networking, bind mounts need ADMIN) and evaluates the parsed output of
+ * {@code docker compose config --format json}, never the raw text, so anchors, {@code extends} and {@code include} cannot
+ * hide a setting. Denied for non-ADMIN: {@code privileged}, {@code cap_add}, {@code pid}/{@code ipc}/{@code network_mode}
+ * {@code host}, {@code devices}, {@code security_opt}, {@code userns_mode}, bind mounts outside the deployment directory
+ * (including the Docker socket) and named volumes that are bind mounts in disguise ({@code driver_opts}). Named volumes
+ * and paths inside the deployment directory stay allowed. Callers decide who is ADMIN; this class only evaluates.
+ */
+@Service
+public class ComposeSecurityPolicy {
+
+    private static final ObjectMapper JSON = JsonMapper.builder().build();
+
+    private final ComposeExecutionService execution;
+    private final ComposeFileRepository files;
+
+    public ComposeSecurityPolicy(ComposeExecutionService execution, ComposeFileRepository files) {
+        this.execution = execution;
+        this.files = files;
+    }
+
+    /**
+     * Runs {@code docker compose config --format json} for the stored deployment and returns the violations (empty = allowed).
+     *
+     * @param composeFile compose file inside the deployment directory (Git checkout); null = the default file
+     * @throws ComposeExecutionException if compose cannot run or its output cannot be read (fail closed)
+     */
+    public List<String> violations(UUID hostId, String deploymentName, DockerEndpoint endpoint, Path composeFile) {
+        ComposeProcessResult result = execution.execute(hostId, deploymentName, ComposeCommand.CONFIG_JSON, endpoint,
+                line -> { }, composeFile);
+        if (!result.success()) {
+            throw new ComposeExecutionException("docker compose config failed", null);
+        }
+        Path allowedDir = files.deploymentDir(hostId, deploymentName);
+        return violationsOf(parse(result.output()), allowedDir);
+    }
+
+    /**
+     * Reads the config object out of the merged stdout/stderr lines. Every line starting with {@code {} is tried as the
+     * start; only a complete JSON object that runs to the end of the output (whitespace aside) and looks like a compose
+     * config (an object with {@code name}, which {@code config --format json} always emits) is accepted, so a decoy
+     * {@code {}} line or trailing noise cannot hide the real config. Anything else fails closed.
+     */
+    static JsonNode parse(List<String> output) {
+        for (int start = 0; start < output.size(); start++) {
+            if (!output.get(start).startsWith("{")) {
+                continue;
+            }
+            JsonNode root = tryParse(String.join("\n", output.subList(start, output.size())));
+            if (root != null && root.isObject() && root.has("name") && (!root.has("services") || root.get("services").isObject())) {
+                return root;
+            }
+        }
+        throw new ComposeExecutionException("docker compose config output is not a compose configuration", null);
+    }
+
+    private static JsonNode tryParse(String text) {
+        try (tools.jackson.core.JsonParser parser = JSON.createParser(text)) {
+            JsonNode node = parser.readValueAsTree();
+            return parser.nextToken() == null ? node : null;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /** Pure evaluation of a resolved compose configuration; {@code allowedDir} is where bind mounts may point. */
+    static List<String> violationsOf(JsonNode config, Path allowedDir) {
+        List<String> violations = new ArrayList<>();
+        Path allowed = real(allowedDir);
+        if (allowed == null) {
+            throw new ComposeExecutionException("Deployment directory cannot be resolved", null);
+        }
+        config.path("services").propertyStream().forEach(entry -> {
+            String service = entry.getKey();
+            JsonNode s = entry.getValue();
+            if (s.path("privileged").asBoolean(false)) {
+                violations.add(service + ": privileged");
+            }
+            if (nonEmpty(s.path("cap_add"))) {
+                violations.add(service + ": cap_add");
+            }
+            for (String key : List.of("pid", "ipc")) {
+                if ("host".equals(s.path(key).asString(""))) {
+                    violations.add(service + ": " + key + " host");
+                }
+            }
+            if ("host".equals(s.path("network_mode").asString(""))) {
+                violations.add(service + ": network_mode host");
+            }
+            if (nonEmpty(s.path("devices"))) {
+                violations.add(service + ": devices");
+            }
+            if (nonEmpty(s.path("security_opt"))) {
+                violations.add(service + ": security_opt");
+            }
+            if (nonEmpty(s.path("userns_mode"))) {
+                violations.add(service + ": userns_mode");
+            }
+            for (JsonNode volume : s.path("volumes")) {
+                if (!"bind".equals(volume.path("type").asString(""))) {
+                    continue;
+                }
+                String source = volume.path("source").asString("");
+                if (source.contains("docker.sock")) {
+                    violations.add(service + ": docker.sock mount");
+                } else if (!insideOf(allowed, source)) {
+                    violations.add(service + ": bind mount " + source);
+                }
+            }
+        });
+        config.path("volumes").propertyStream().forEach(entry -> {
+            JsonNode opts = entry.getValue().path("driver_opts");
+            String type = opts.path("type").asString("");
+            String options = opts.path("o").asString("");
+            if ("none".equals(type) || "bind".equals(type) || options.contains("bind")) {
+                violations.add("volume " + entry.getKey() + ": bind mount via driver_opts");
+            }
+        });
+        return violations;
+    }
+
+    private static boolean nonEmpty(JsonNode node) {
+        return !node.isMissingNode() && !node.isNull() && !((node.isArray() || node.isObject()) ? node.isEmpty() : node.asString("").isBlank());
+    }
+
+    /** True when {@code source} is an absolute path inside {@code allowed} (symlinks resolved where the path exists). */
+    private static boolean insideOf(Path allowed, String source) {
+        Path p;
+        try {
+            p = Path.of(source);
+        } catch (RuntimeException e) {
+            return false;
+        }
+        Path resolved = p.isAbsolute() ? real(p) : null;
+        return resolved != null && resolved.startsWith(allowed);
+    }
+
+    /** Symlink-resolved absolute path, or null when it cannot be resolved. */
+    private static Path real(Path path) {
+        Path normalized = path.toAbsolutePath().normalize();
+        try {
+            // resolve symlinks of the longest existing prefix so a link inside the checkout cannot point out of it
+            Path existing = normalized;
+            while (existing != null && !Files.exists(existing, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                existing = existing.getParent();
+            }
+            if (existing == null) {
+                return normalized;
+            }
+            return existing.toRealPath().resolve(existing.relativize(normalized)).normalize();
+        } catch (IOException e) {
+            return null; // unresolvable (e.g. symlink loop): fail closed
+        }
+    }
+}
