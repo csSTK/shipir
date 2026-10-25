@@ -4,7 +4,9 @@ import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
+import dev.bethge.shipir.common.security.UserAccessChangedEvent;
 import dev.bethge.shipir.host.DockerHostRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import dev.bethge.shipir.permission.dto.GrantRequest;
 import dev.bethge.shipir.permission.dto.GrantResponse;
 import dev.bethge.shipir.permission.dto.PermissionsResponse;
@@ -29,15 +31,18 @@ class PermissionGrantService {
     private final DeploymentDirectory deployments;
     private final TeamRepository teams;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
     PermissionGrantService(PermissionRepository grants, UserRepository users, DockerHostRepository hosts,
-                           DeploymentDirectory deployments, TeamRepository teams, Clock clock) {
+                           DeploymentDirectory deployments, TeamRepository teams, Clock clock,
+                           ApplicationEventPublisher events) {
         this.grants = grants;
         this.users = users;
         this.hosts = hosts;
         this.deployments = deployments;
         this.teams = teams;
         this.clock = clock;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -59,6 +64,7 @@ class PermissionGrantService {
         grants.deleteByUserId(userId);
         grants.flush();
         grants.saveAll(entities);
+        events.publishEvent(new UserAccessChangedEvent(user.getUsername()));
         return response(userId);
     }
 

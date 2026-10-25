@@ -33,6 +33,11 @@ class StreamAccess {
         return users.findByUsername(username).filter(u -> !u.isDisabled()).map(PermissionSubject::of);
     }
 
+    /** Enabled ADMIN, read from the database (the principal of an open WebSocket may be stale). */
+    boolean isAdmin(String username) {
+        return subject(username).map(s -> s.role() == Role.ADMIN).orElse(false);
+    }
+
     /** Whole host visible (containers, logs, events). */
     boolean hostFullyVisible(String username, UUID hostId) {
         return subject(username).map(s -> permissions.hostFullyVisible(s, hostId)).orElse(false);

@@ -40,6 +40,9 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -66,6 +69,10 @@ class StreamPermissionTest {
     ContainerLogService logService;
     @MockitoBean
     DockerEventService eventService;
+    @Autowired
+    LogStreamHandler logStreams;
+    @Autowired
+    DockerEventStreamService eventStreams;
 
     private final HttpClient http = HttpClient.newHttpClient();
     private final Map<String, String> jar = new HashMap<>();
@@ -154,6 +161,48 @@ class StreamPermissionTest {
         assertAllowed("/topic/deployments/" + registerHostRun());
     }
 
+    @Test
+    void revokedHostGrantStopsLogAndEventSubscriptions() throws Exception {
+        when(logService.follow(any(), any(dev.bethge.shipir.docker.DockerEndpoint.class), any(), anyInt(), anyBoolean(), any(), any()))
+                .thenReturn(() -> {
+                });
+        when(eventService.stream(any(), any(dev.bethge.shipir.docker.DockerEndpoint.class), any(), any()))
+                .thenReturn(() -> {
+                });
+        jdbc.update("INSERT INTO permissions (user_id, host_id, level) VALUES (?, ?, 'VIEW')", userId, hostId);
+        StompSession s = connect();
+        subscribe(s, "/topic/hosts/" + hostId + "/containers/web/logs");
+        subscribe(s, "/topic/hosts/" + hostId + "/events");
+        var target = new LogStreamHandler.Target(hostId, "web");
+        await().atMost(5, TimeUnit.SECONDS)
+                .until(() -> logStreams.subscriberCount(target) == 1 && eventStreams.subscriberCount(hostId) == 1);
+
+        // an ADMIN replaces the user's grants with none
+        Map<String, String> adminJar = loginAs("streamadmin", Role.ADMIN);
+        var r = callWith(adminJar, HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/users/" + userId + "/permissions"))
+                .header("Content-Type", "application/json").header("X-XSRF-TOKEN", adminJar.get("XSRF-TOKEN"))
+                .PUT(HttpRequest.BodyPublishers.ofString("{\"grants\":[]}")));
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
+
+        await().atMost(5, TimeUnit.SECONDS)
+                .until(() -> logStreams.subscriberCount(target) == 0 && eventStreams.subscriberCount(hostId) == 0);
+        s.disconnect();
+    }
+
+    private Map<String, String> loginAs(String username, Role role) throws Exception {
+        User u = users.findByUsername(username).orElseGet(() -> new User(username, "x", role));
+        u.changePasswordHash(encoder.encode(PASSWORD), Instant.now());
+        users.save(u);
+        Map<String, String> j = new HashMap<>();
+        callWith(j, HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/me")));
+        var r = callWith(j, HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/login"))
+                .header("Content-Type", "application/json").header("X-XSRF-TOKEN", j.get("XSRF-TOKEN"))
+                .POST(HttpRequest.BodyPublishers.ofString("{\"username\":\"" + username + "\",\"password\":\"" + PASSWORD + "\"}")));
+        assertThat(r.statusCode()).isEqualTo(200);
+        callWith(j, HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/me")));
+        return j;
+    }
+
     private void assertRefused(String destination) throws Exception {
         StompSession s = connect();
         subscribe(s, destination);
@@ -193,6 +242,10 @@ class StreamPermissionTest {
     }
 
     private HttpResponse<String> call(HttpRequest.Builder b) throws Exception {
+        return callWith(jar, b);
+    }
+
+    private HttpResponse<String> callWith(Map<String, String> jar, HttpRequest.Builder b) throws Exception {
         if (!jar.isEmpty()) {
             b.header("Cookie", jar.entrySet().stream().map(e -> e.getKey() + "=" + e.getValue())
                     .collect(java.util.stream.Collectors.joining("; ")));

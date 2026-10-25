@@ -282,6 +282,15 @@ public class ExecSessionHandler {
         }
     }
 
+    /** Ends every open console of the user (they lost the ADMIN role, were disabled or deleted). */
+    public void revoke(String username) {
+        for (Session s : List.copyOf(sessions.values())) {
+            if (s.username.equals(username)) {
+                finish(s, ExecMessage.Status.ENDED, "ACCESS_REVOKED");
+            }
+        }
+    }
+
     // public: this bean is proxied for @Auditable, and event/scheduling callbacks only reach the target through public methods
     @EventListener
     public void onHttpSessionDestroyed(HttpSessionDestroyedEvent event) {

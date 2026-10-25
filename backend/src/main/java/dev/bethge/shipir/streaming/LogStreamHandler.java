@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -52,7 +53,7 @@ public class LogStreamHandler {
     private record Key(Target target, Options options) {
     }
 
-    private record Subscription(String sessionId, String subscriptionId) {
+    private record Subscription(String sessionId, String subscriptionId, String username) {
     }
 
     private static final class Stream {
@@ -140,7 +141,7 @@ public class LogStreamHandler {
     }
 
     /** Registers a subscription, replays the buffer and starts the Docker follow for the first subscriber. */
-    void subscribe(Target target, Options options, String sessionId, String subscriptionId) {
+    void subscribe(Target target, Options options, String username, String sessionId, String subscriptionId) {
         Key key = new Key(target, options);
         Stream stream;
         boolean first;
@@ -157,7 +158,7 @@ public class LogStreamHandler {
                 if (stream.closed) {
                     continue; // released concurrently, start over with a fresh stream
                 }
-                Subscription sub = new Subscription(sessionId, subscriptionId);
+                Subscription sub = new Subscription(sessionId, subscriptionId, username);
                 stream.subscribers.add(sub);
                 for (LogStreamMessage m : stream.buffer) {
                     send(stream, sub, m);
@@ -186,6 +187,27 @@ public class LogStreamHandler {
             if (empty) {
                 release(stream);
             }
+        }
+    }
+
+    /**
+     * Drops the user's subscriptions whose host they may no longer follow (role, grant or account changed after
+     * SUBSCRIBE). Nothing is sent to them any more; the STOMP connection itself stays.
+     */
+    void revalidate(String username, Predicate<UUID> hostStillAllowed) {
+        List<Stream> all;
+        synchronized (streams) {
+            all = new ArrayList<>(streams.values());
+        }
+        for (Stream stream : all) {
+            if (hostStillAllowed.test(stream.target.hostId())) {
+                continue;
+            }
+            List<Subscription> revoked;
+            synchronized (stream) {
+                revoked = stream.subscribers.stream().filter(s -> username.equals(s.username)).toList();
+            }
+            revoked.forEach(s -> unsubscribe(s.sessionId, s.subscriptionId));
         }
     }
 

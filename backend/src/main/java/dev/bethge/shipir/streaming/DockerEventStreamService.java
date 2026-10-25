@@ -20,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -47,7 +48,7 @@ public class DockerEventStreamService {
     private static final Pattern TOPIC =
             Pattern.compile("^" + Pattern.quote(TOPIC_PREFIX) + "([0-9a-fA-F-]{36})/events$");
 
-    private record Subscription(String sessionId, String subscriptionId) {
+    private record Subscription(String sessionId, String subscriptionId, String username) {
     }
 
     private record EventKey(DockerEventDto.Type type, String action, String id) {
@@ -123,7 +124,7 @@ public class DockerEventStreamService {
     }
 
     /** Registers a subscription and starts the event worker for the first subscriber of the host. */
-    void subscribe(UUID hostId, String sessionId, String subscriptionId) {
+    void subscribe(UUID hostId, String username, String sessionId, String subscriptionId) {
         HostStream stream;
         boolean first;
         while (true) {
@@ -139,7 +140,7 @@ public class DockerEventStreamService {
                 if (stream.closed) {
                     continue; // released concurrently, start over with a fresh stream
                 }
-                Subscription sub = new Subscription(sessionId, subscriptionId);
+                Subscription sub = new Subscription(sessionId, subscriptionId, username);
                 stream.subscribers.add(sub);
                 if (stream.lastStatus != null) {
                     send(stream, sub, stream.lastStatus);
@@ -168,6 +169,27 @@ public class DockerEventStreamService {
             if (empty) {
                 release(stream);
             }
+        }
+    }
+
+    /**
+     * Drops the user's subscriptions if they may no longer follow the host (role, grant or account changed after
+     * SUBSCRIBE). Nothing is sent to them any more; the STOMP connection itself stays.
+     */
+    void revalidate(String username, Predicate<UUID> hostStillAllowed) {
+        List<HostStream> all;
+        synchronized (streams) {
+            all = new ArrayList<>(streams.values());
+        }
+        for (HostStream stream : all) {
+            if (hostStillAllowed.test(stream.hostId)) {
+                continue;
+            }
+            List<Subscription> revoked;
+            synchronized (stream) {
+                revoked = stream.subscribers.stream().filter(s -> username.equals(s.username)).toList();
+            }
+            revoked.forEach(s -> unsubscribe(s.sessionId, s.subscriptionId));
         }
     }
 

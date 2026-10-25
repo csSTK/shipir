@@ -81,6 +81,8 @@ class ExecSessionTest {
     PasswordEncoder encoder;
     @Autowired
     JdbcTemplate jdbc;
+    @Autowired
+    org.springframework.context.ApplicationEventPublisher publisher;
     @MockitoBean
     ExecService execService;
 
@@ -401,6 +403,63 @@ class ExecSessionTest {
         await().atMost(5, TimeUnit.SECONDS).until(() -> !second.isConnected());
         assertThat(first.isConnected()).isTrue();
         first.disconnect();
+    }
+
+    // --- re-authorization ---
+
+    private void putRole(Client actor, Client target, String role) throws Exception {
+        UUID id = users.findByUsername(target.username).orElseThrow().getId();
+        var r = actor.call(HttpRequest.newBuilder(URI.create(base() + "/api/users/" + id + "/role"))
+                .header("Content-Type", "application/json").header("X-XSRF-TOKEN", actor.jar.get("XSRF-TOKEN"))
+                .PUT(HttpRequest.BodyPublishers.ofString("{\"role\":\"" + role + "\"}")));
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
+    }
+
+    @Test
+    void demotedAdminsConsoleIsClosedAndInputRefused() throws Exception {
+        Client owner = admin();
+        Client other = admin();
+        String id = owner.create("web");
+        StompSession s = owner.connect();
+        BlockingQueue<String> q = subscribe(s, "/topic/exec/" + id);
+        s.send("/app/exec/" + id + "/input", "a".getBytes(StandardCharsets.UTF_8));
+        verify(handle, org.mockito.Mockito.timeout(5000)).write(any());
+
+        putRole(other, owner, "OPERATOR");
+
+        assertThat(q.poll(5, TimeUnit.SECONDS)).contains("\"status\":\"ENDED\"").contains("ACCESS_REVOKED");
+        verify(handle, org.mockito.Mockito.timeout(5000)).close();
+        s.send("/app/exec/" + id + "/input", SECRET_INPUT.getBytes(StandardCharsets.UTF_8));
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !s.isConnected());
+        verify(handle, never()).write(SECRET_INPUT.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void disabledAdminsConsoleIsClosed() throws Exception {
+        Client owner = admin();
+        Client other = admin();
+        String id = owner.create("web");
+        StompSession s = owner.connect();
+        BlockingQueue<String> q = subscribe(s, "/topic/exec/" + id);
+        UUID ownerId = users.findByUsername(owner.username).orElseThrow().getId();
+        var r = other.call(HttpRequest.newBuilder(URI.create(base() + "/api/users/" + ownerId + "/disable"))
+                .header("X-XSRF-TOKEN", other.jar.get("XSRF-TOKEN")).POST(HttpRequest.BodyPublishers.noBody()));
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
+        assertThat(q.poll(5, TimeUnit.SECONDS)).contains("ACCESS_REVOKED");
+        verify(handle, org.mockito.Mockito.timeout(5000)).close();
+    }
+
+    @Test
+    void stillAuthorizedAdminKeepsTheConsoleWhenOnlyTheirPasswordChanges() throws Exception {
+        Client owner = admin();
+        String id = owner.create("web");
+        StompSession s = owner.connect();
+        subscribe(s, "/topic/exec/" + id);
+        publisher.publishEvent(new dev.bethge.shipir.common.security.UserAccessChangedEvent(owner.username));
+        s.send("/app/exec/" + id + "/input", "ok".getBytes(StandardCharsets.UTF_8));
+        verify(handle, org.mockito.Mockito.timeout(5000)).write("ok".getBytes(StandardCharsets.UTF_8));
+        verify(handle, never()).close();
+        s.disconnect();
     }
 
     // --- closing ---

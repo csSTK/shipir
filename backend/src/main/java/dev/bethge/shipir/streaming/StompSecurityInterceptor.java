@@ -95,7 +95,7 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                             || !access.hostFullyVisible(accessor.getUser().getName(), eventHost)) {
                         throw new MessageDeliveryException("Subscription destination not allowed");
                     }
-                    eventStreams.subscribe(eventHost, accessor.getSessionId(), accessor.getSubscriptionId());
+                    eventStreams.subscribe(eventHost, accessor.getUser().getName(), accessor.getSessionId(), accessor.getSubscriptionId());
                     break;
                 }
                 var statsHost = ContainerStatsStreamService.parse(destination);
@@ -121,7 +121,7 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                     } catch (IllegalArgumentException e) {
                         throw new MessageDeliveryException("Invalid log stream option");
                     }
-                    logStreams.subscribe(logTarget, options, accessor.getSessionId(), accessor.getSubscriptionId());
+                    logStreams.subscribe(logTarget, options, accessor.getUser().getName(), accessor.getSessionId(), accessor.getSubscriptionId());
                     break;
                 }
                 var m = DEPLOYMENT_TOPIC.matcher(destination);

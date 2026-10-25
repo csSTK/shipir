@@ -100,8 +100,8 @@ class DockerEventStreamServiceTest {
 
     @Test
     void firstSubscriberStartsOneStreamAndLastStopsIt() {
-        service.subscribe(hostId, "s1", "a");
-        service.subscribe(hostId, "s2", "b");
+        service.subscribe(hostId, "u", "s1", "a");
+        service.subscribe(hostId, "u", "s2", "b");
         await().atMost(5, TimeUnit.SECONDS).until(() -> stub.sinks.size() == 1);
         assertThat(service.subscriberCount(hostId)).isEqualTo(2);
 
@@ -112,13 +112,29 @@ class DockerEventStreamServiceTest {
         assertThat(service.activeStreams()).isZero();
         assertThat(stub.sinks).hasSize(1);
 
-        service.subscribe(hostId, "s3", "c");
+        service.subscribe(hostId, "u", "s3", "c");
         await().atMost(5, TimeUnit.SECONDS).until(() -> stub.sinks.size() == 2);
     }
 
     @Test
+    void revalidateDropsOnlyTheSubscriptionsOfTheUserWhoLostAccess() {
+        service.subscribe(hostId, "alice", "s1", "a");
+        service.subscribe(hostId, "bob", "s2", "b");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> stub.sinks.size() == 1);
+
+        service.revalidate("alice", host -> false);
+        assertThat(service.subscriberCount(hostId)).isEqualTo(1);
+        service.revalidate("bob", host -> true);
+        assertThat(service.subscriberCount(hostId)).isEqualTo(1);
+
+        service.revalidate("bob", host -> false);
+        assertThat(service.subscriberCount(hostId)).isZero();
+        await().atMost(5, TimeUnit.SECONDS).until(() -> stub.closed.get() == 1);
+    }
+
+    @Test
     void connectedStatusThenDebouncedBatchOfDistinctEvents() {
-        service.subscribe(hostId, "s1", "a");
+        service.subscribe(hostId, "u", "s1", "a");
         await().atMost(5, TimeUnit.SECONDS).until(() -> !stub.sinks.isEmpty());
         stub.lastSink().accept(event("start", "c1"));
         stub.lastSink().accept(event("start", "c1")); // duplicate within the window
@@ -136,7 +152,7 @@ class DockerEventStreamServiceTest {
 
     @Test
     void batchBeyondCapIsCountedNotSent() {
-        service.subscribe(hostId, "s1", "a");
+        service.subscribe(hostId, "u", "s1", "a");
         await().atMost(5, TimeUnit.SECONDS).until(() -> !stub.sinks.isEmpty());
         for (int i = 0; i < 5; i++) stub.lastSink().accept(event("start", "c" + i));
         await().atMost(5, TimeUnit.SECONDS).until(() -> frames("s1").size() == 2);
@@ -150,7 +166,7 @@ class DockerEventStreamServiceTest {
         for (int i = 0; i < 3; i++) {
             stub.failures.add(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "down", null));
         }
-        service.subscribe(hostId, "s1", "a");
+        service.subscribe(hostId, "u", "s1", "a");
         await().atMost(10, TimeUnit.SECONDS).until(() -> !stub.sinks.isEmpty());
 
         List<DockerEventMessage> got = frames("s1");
@@ -169,7 +185,7 @@ class DockerEventStreamServiceTest {
 
     @Test
     void droppedStreamIsReportedAndReopened() {
-        service.subscribe(hostId, "s1", "a");
+        service.subscribe(hostId, "u", "s1", "a");
         await().atMost(5, TimeUnit.SECONDS).until(() -> !stub.ends.isEmpty());
         stub.ends.get(0).accept(null); // daemon closed the connection
         await().atMost(5, TimeUnit.SECONDS).until(() -> stub.sinks.size() == 2);
@@ -181,9 +197,9 @@ class DockerEventStreamServiceTest {
 
     @Test
     void lateSubscriberGetsLatestStatusFrame() {
-        service.subscribe(hostId, "s1", "a");
+        service.subscribe(hostId, "u", "s1", "a");
         await().atMost(5, TimeUnit.SECONDS).until(() -> frames("s1").size() == 1);
-        service.subscribe(hostId, "s2", "b");
+        service.subscribe(hostId, "u", "s2", "b");
         assertThat(frames("s2")).extracting(DockerEventMessage::status)
                 .containsExactly(DockerEventMessage.Status.CONNECTED);
         assertThat(stub.sinks).hasSize(1);
@@ -193,7 +209,7 @@ class DockerEventStreamServiceTest {
     void unknownHostSendsNotFoundAndDoesNotRetry() {
         UUID ghost = UUID.randomUUID();
         when(hosts.findById(ghost)).thenReturn(Optional.empty());
-        service.subscribe(ghost, "s1", "a");
+        service.subscribe(ghost, "u", "s1", "a");
         ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
         await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> verify(sender).send(eq("s1"), any(),
                 eq(DockerEventStreamService.destination(ghost)), payload.capture()));
@@ -204,7 +220,7 @@ class DockerEventStreamServiceTest {
 
     @Test
     void noFramesAfterLastUnsubscribe() throws Exception {
-        service.subscribe(hostId, "s1", "a");
+        service.subscribe(hostId, "u", "s1", "a");
         await().atMost(5, TimeUnit.SECONDS).until(() -> !stub.sinks.isEmpty());
         var sink = stub.lastSink();
         sink.accept(event("start", "c1"));
@@ -256,7 +272,7 @@ class DockerEventStreamServiceTest {
     void stopWhileWaitingOnStreamEndsWorkerWithoutInterrupt() throws Exception {
         var probe = new LookupProbe();
         probe.install(false);
-        service.subscribe(hostId, "s1", "a");
+        service.subscribe(hostId, "u", "s1", "a");
         await().atMost(5, TimeUnit.SECONDS).until(() -> !stub.sinks.isEmpty());
 
         boolean interrupted = unsubscribeAndReadInterruptWhileAlive(probe.worker, "s1", "a");
@@ -269,7 +285,7 @@ class DockerEventStreamServiceTest {
     void stopDuringHostLookupLetsLookupFinishAndOpensNoStream() {
         var probe = new LookupProbe();
         probe.install(true);
-        service.subscribe(hostId, "s1", "a");
+        service.subscribe(hostId, "u", "s1", "a");
         await().atMost(5, TimeUnit.SECONDS).until(() -> probe.entered.getCount() == 0);
 
         service.unsubscribe("s1", "a");
@@ -291,7 +307,7 @@ class DockerEventStreamServiceTest {
         var probe = new LookupProbe();
         probe.install(false);
         stub.failures.add(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "down", null));
-        service.subscribe(hostId, "s1", "a");
+        service.subscribe(hostId, "u", "s1", "a");
         await().atMost(5, TimeUnit.SECONDS).until(() -> stub.connectTimes.size() == 1);
         await().atMost(5, TimeUnit.SECONDS).until(() -> frames("s1").size() == 1); // DISCONNECTED, now sleeping
 
