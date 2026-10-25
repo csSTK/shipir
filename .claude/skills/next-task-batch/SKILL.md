@@ -7,7 +7,7 @@ description: Implement several beads epics in one run. Orders them by their depe
 
 A loop over `next-task`. Run on Sonnet (Model Policy in CLAUDE.md); if the session isn't on Sonnet, say so and suggest `/model sonnet`.
 
-**Input:** two or more epic IDs, optionally with the flags `--watch-ci` and `--branch-review` in any order (`$ARGUMENTS`). `--branch-review` is passed to every epic's `next-task` run (whole-branch review before its push); an epic whose review leaves must-fix findings stops as in step 4. If any ID is missing or not an epic (`bd show`), stop and ask before starting anything; point to `/next-task-beads` for non-epic beads. Never add epics yourself.
+**Input:** two or more epic IDs, optionally with the flag `--watch-ci` (`$ARGUMENTS`). Every epic's `next-task` run includes the whole-branch review before its push; an epic whose review leaves must-fix findings stops as in step 4. If any ID is missing or not an epic (`bd show`), stop and ask before starting anything; point to `/next-task-beads` for non-epic beads. Never add epics yourself.
 
 **By invoking this skill the user authorizes** for each listed epic what `next-task` authorizes for one. Nothing more.
 

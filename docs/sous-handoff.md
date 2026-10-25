@@ -55,7 +55,7 @@ Notification list ignores deployment-only grants. Pushed to `dev` as `1278ae0`, 
 Stay on `/next-task*`. Take over Sous's one real advantage instead of the tool:
 
 - `shipr-bby` epic: `.1` red-before-green evidence in implementer reports, `.2` "would this test pass on the old code" in `next-task-review`, `.3` move the Code Map out of always-loaded CLAUDE.md (usage showed 37% of spend on always-on context over 40k).
-- Consider `--branch-review` on by default.
+- Branch review is now always on (flag removed). Findings are filed as children of four standing "Findings: <category>" epics (`fcat:` labels), each with `model:` label and criteria, so `/next-task <findings-epic>` runs a group.
 - Earlier: `shipr-kjl` (review step, retry cap, Sonnet orchestrator, optional branch review), done.
 
 ## Open

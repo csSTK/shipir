@@ -41,7 +41,7 @@ Out-of-scope:
 - **Out-of-scope** = problems outside the child's scope. The orchestrator records them via `next-task-findings`.
 - `Verdict: PASS` only when Must-fix is empty. "None" for empty lists.
 
-## Branch review (only with `--branch-review`)
+## Branch review (always)
 
 Run by `next-task-finish` before the push, once per run. Same reviewer, but the input is the whole branch: diff `origin/dev..HEAD` in `<WT>`, checked against the epic's (or all given beads') description and acceptance criteria as a whole: gaps between children, inconsistent behaviour, missing wiring or `docs/CODE_MAP.md` lines. Same checklist (including the would-pass-on-old-code test check) and same output format. One fix round only, no 3-round loop (see `next-task-finish`).
 
