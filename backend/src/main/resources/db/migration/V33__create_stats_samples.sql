@@ -1,4 +1,3 @@
--- V32 is reserved by another epic (host_tags); this migration deliberately takes V33.
 
 -- One resource sample per running container and recording tick (default 60 s). The primary key doubles as the
 -- lookup index (host, container, time range) and includes the time column, so the table can later be partitioned

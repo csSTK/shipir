@@ -14,6 +14,13 @@ export interface ApiMock {
 
 const key = (method: string, path: string) => `${method.toUpperCase()} ${path}`
 
+/** Empty usage history: the container details page and the dashboard fetch it on every visit; specs override per host. */
+const EMPTY_HISTORY = { range: '24h', from: '2026-10-24T10:00:00Z', to: '2026-10-25T10:00:00Z', bucketSeconds: 60, seriesTotal: 0, truncated: false, series: [] }
+
+function defaultFor(method: string, path: string): MockResponse | undefined {
+  return method === 'GET' && /^\/api\/hosts\/[^/]+\/stats\/history$/.test(path) ? { body: EMPTY_HISTORY } : undefined
+}
+
 /**
  * Intercepts every `/api/**` request of a test. Specs register mocks;
  * a call without a mock answers 501 and fails the test afterwards.
@@ -35,7 +42,7 @@ export const test = base.extend<{ api: ApiMock }>({
         async (route) => {
           const request = route.request()
           const id = key(request.method(), new URL(request.url()).pathname)
-          const mocked = mocks.get(id)
+          const mocked = mocks.get(id) ?? defaultFor(request.method(), new URL(request.url()).pathname)
           if (!mocked) {
             unmocked.push(id)
             await route.fulfill({ status: 501, json: { error: `No e2e mock registered for ${id}` } })

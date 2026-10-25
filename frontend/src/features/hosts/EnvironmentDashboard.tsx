@@ -5,6 +5,7 @@ import { Badge, Button, Card, PageHeader, Skeleton } from '../../shared/ui/index
 import { useCurrentUser } from '../auth/index.ts'
 import { describeError, formatMemory, plural } from './format.ts'
 import { useHostsOverview, type HostOverview } from './api.ts'
+import { HostUsageHistory } from '../usage-history/UsageHistory.tsx'
 import { ENV_RESOURCES, type EnvResourceSlug } from './resources.ts'
 import { EnvironmentActions } from './EnvironmentActions.tsx'
 import { PruneDialog } from './PruneDialog.tsx'
@@ -133,6 +134,7 @@ export function EnvironmentDashboard() {
           <DiskUsageCard hostId={env.id} onCleanUp={canClean ? () => setPruning(true) : undefined} />
         </div>
       )}
+      {up && <HostUsageHistory hostId={env.id} />}
       <PruneDialog hostId={env.id} open={pruning} onClose={() => setPruning(false)} />
     </section>
   )

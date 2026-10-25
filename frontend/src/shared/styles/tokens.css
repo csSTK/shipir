@@ -132,6 +132,9 @@
   --color-series-6: #17693a;
   --color-series-7: #be123c;
   --color-series-8: #7a5a00;
+  /* Chart series (usage history). Validated with the dataviz palette checks against the card surface. */
+  --chart-1: #4f46e5;
+  --chart-2: #c2570c;
 
   /* Elevation */
   --shadow-sm: 0 1px 2px rgb(26 26 36 / 0.06), 0 1px 3px rgb(26 26 36 / 0.08);
@@ -190,6 +193,8 @@
     --color-series-6: #86efac;
     --color-series-7: #fda4af;
     --color-series-8: #fde047;
+    --chart-1: #6d71ee;
+    --chart-2: #d57a30;
 
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
     --shadow-md: 0 4px 14px rgb(0 0 0 / 0.45);
@@ -244,6 +249,9 @@
   --color-cat-2: #2dd4bf;
   --color-cat-3: #f472b6;
   --color-cat-4: #94a3b8;
+
+  --chart-1: #6d71ee;
+  --chart-2: #d57a30;
 
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-md: 0 4px 14px rgb(0 0 0 / 0.45);

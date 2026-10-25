@@ -139,6 +139,7 @@ describe('ContainerResourcesDialog', () => {
 function renderDetails(details: typeof sample) {
   apiFetch.mockImplementation((path: string) => {
     if (path === '/auth/me') return Promise.resolve({ username: 'u', role, setupRequired: false })
+    if (path.includes('/stats/history')) return Promise.resolve({ range: '24h', from: '', to: '', bucketSeconds: 60, seriesTotal: 0, truncated: false, series: [] })
     return Promise.resolve(details)
   })
   render(

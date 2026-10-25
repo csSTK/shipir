@@ -54,6 +54,7 @@ const details = {
 function renderPage(respond: () => unknown) {
   apiFetch.mockImplementation((path: string) => {
     if (path === '/auth/me') return Promise.resolve({ username: 'u', role, setupRequired: false })
+    if (path.includes('/stats/history')) return Promise.resolve({ range: '24h', from: '', to: '', bucketSeconds: 60, seriesTotal: 0, truncated: false, series: [] })
     return Promise.resolve().then(respond)
   })
   render(

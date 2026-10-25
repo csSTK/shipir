@@ -54,6 +54,8 @@ function serve(overview: HostOverview[], role = 'VIEWER') {
   apiFetch.mockImplementation((path: string) => {
     if (path === '/auth/me') return Promise.resolve({ username: 'u', role, setupRequired: false })
     if (path.endsWith('/disk-usage')) return Promise.resolve(usage)
+    if (path.includes('/stats/history'))
+      return Promise.resolve({ range: '24h', from: '', to: '', bucketSeconds: 60, seriesTotal: 0, truncated: false, series: [] })
     return Promise.resolve(overview)
   })
 }

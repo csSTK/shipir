@@ -5,6 +5,7 @@ import { useContainerStats, type StatSample } from '../../../shared/realtime/use
 import { Badge, Button, Card, PageHeader, Sparkline, StatusDot, Tabs } from '../../../shared/ui/index.ts'
 import { formatSize } from '../../hosts/format.ts'
 import { useCurrentUser } from '../../auth/index.ts'
+import { ContainerUsageHistory } from '../../usage-history/UsageHistory.tsx'
 import { ContainerResourcesDialog } from '../ContainerResourcesDialog.tsx'
 import { CreateContainerDialog } from '../CreateContainerDialog.tsx'
 import { ContainerFilesPanel } from '../files/ContainerFilesPanel.tsx'
@@ -286,6 +287,9 @@ export function ContainerDetailsPage() {
             <div className="cdetails__stack">
               <Overview c={c} />
               {c.state === 'running' && <Stats hostId={hostId} containerId={c.id} />}
+              <Section title="Usage history">
+                <ContainerUsageHistory hostId={hostId} containerId={c.id} />
+              </Section>
             </div>
           ),
         },
