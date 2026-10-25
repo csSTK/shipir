@@ -99,7 +99,7 @@ describe('VolumesPage backup', () => {
   it('downloads the archive and warns when the volume is in use', async () => {
     mockApi()
     fetchMock.mockResolvedValue(
-      new Response(new Blob(['tar']), { status: 200, headers: { 'Content-Disposition': 'attachment; filename="pgdata-1.tar"' } }),
+      new Response(new TextEncoder().encode('tar'), { status: 200, headers: { 'Content-Disposition': 'attachment; filename="pgdata-1.tar"' } }),
     )
     render(wrap(<VolumesPage />))
     await openMenu('pgdata', 'Backup')

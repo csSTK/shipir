@@ -12,6 +12,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -311,12 +312,12 @@ class ApiTokenApiTest extends DeploymentTestBase {
         Timestamp first = jdbc.queryForObject("SELECT last_used_at FROM api_tokens", Timestamp.class);
         assertThat(first).isNotNull();
 
-        Timestamp recent = Timestamp.from(Instant.now().minus(Duration.ofMinutes(1)));
+        Timestamp recent = Timestamp.from(Instant.now().minus(Duration.ofMinutes(1)).truncatedTo(ChronoUnit.MICROS));
         jdbc.update("UPDATE api_tokens SET last_used_at = ?", recent);
         mvc.perform(bearer(get("/api/auth/me"), token)).andExpect(status().isOk());
         assertThat(jdbc.queryForObject("SELECT last_used_at FROM api_tokens", Timestamp.class)).isEqualTo(recent);
 
-        Timestamp stale = Timestamp.from(Instant.now().minus(Duration.ofHours(1)));
+        Timestamp stale = Timestamp.from(Instant.now().minus(Duration.ofHours(1)).truncatedTo(ChronoUnit.MICROS));
         jdbc.update("UPDATE api_tokens SET last_used_at = ?", stale);
         mvc.perform(bearer(get("/api/auth/me"), token)).andExpect(status().isOk());
         assertThat(jdbc.queryForObject("SELECT last_used_at FROM api_tokens", Timestamp.class)).isAfter(stale);
