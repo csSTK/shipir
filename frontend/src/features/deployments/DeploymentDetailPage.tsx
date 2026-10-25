@@ -20,6 +20,7 @@ import { VersionDiff } from './diff/index.ts'
 import { ConfirmDialog } from './ConfirmDialog.tsx'
 import { DeploymentRunPanel, type StartedRun } from './DeploymentRunPanel.tsx'
 import { GitSourcePanel } from './GitSourcePanel.tsx'
+import { ImageAutoUpdatePanel } from './ImageAutoUpdatePanel.tsx'
 import { ConfigFilesPanel } from './config-files/index.ts'
 import { WebhookCard } from './webhook/index.ts'
 import { DeploymentContentPanel } from './DeploymentContentPanel.tsx'
@@ -233,6 +234,16 @@ export function DeploymentDetailPage() {
       )}
 
       {data.git && <GitSourcePanel key={`${data.git.autoUpdateEnabled}-${data.git.autoUpdateIntervalSeconds}`} deploymentId={deploymentId} hostId={hostId} git={data.git} canWrite={canWrite} />}
+
+      {data.imageAutoUpdate && (
+        <ImageAutoUpdatePanel
+          key={`${data.imageAutoUpdate.enabled}-${data.imageAutoUpdate.windowStart}-${data.imageAutoUpdate.windowEnd}`}
+          deploymentId={deploymentId}
+          hostId={hostId}
+          info={data.imageAutoUpdate}
+          canWrite={canWrite}
+        />
+      )}
 
       <DeploymentContentPanel deployment={data} hostId={hostId} canWrite={canWrite} />
 

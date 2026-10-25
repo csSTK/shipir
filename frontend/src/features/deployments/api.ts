@@ -53,9 +53,20 @@ export interface GitInfo {
   lastPollError: string | null
 }
 
+/** Scheduled image auto-update of a FILE deployment (`null` for Git deployments). Window times are `HH:mm` UTC. */
+export interface ImageAutoUpdateInfo {
+  enabled: boolean
+  windowStart: string | null
+  windowEnd: string | null
+  lastAttemptAt: string | null
+  /** `APPLIED` or `FAILED` (a failed update was rolled back when possible); null before the first attempt. */
+  lastResult: string | null
+}
+
 export interface ManagedDeploymentDetail extends ManagedDeployment {
   yaml: string
   git?: GitInfo | null
+  imageAutoUpdate?: ImageAutoUpdateInfo | null
   /** Variable names only; values are never part of this response. */
   envKeys: string[]
 }
@@ -257,6 +268,22 @@ export function useSetAutoUpdate(hostId: string) {
         method: 'PUT',
         body: { enabled, intervalSeconds },
       }),
+    onSuccess: () => void invalidate(),
+  })
+}
+
+export interface ImageAutoUpdateInput {
+  deploymentId: string
+  enabled: boolean
+  windowStart: string | null
+  windowEnd: string | null
+}
+
+export function useSetImageAutoUpdate(hostId: string) {
+  const invalidate = useInvalidateDeployments(hostId)
+  return useMutation({
+    mutationFn: ({ deploymentId, ...body }: ImageAutoUpdateInput) =>
+      apiFetch<ManagedDeploymentDetail>(`${managedBase(hostId)}/${deploymentId}/image-auto-update`, { method: 'PUT', body }),
     onSuccess: () => void invalidate(),
   })
 }

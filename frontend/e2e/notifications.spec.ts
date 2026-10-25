@@ -72,3 +72,19 @@ test('a deployment failure is labelled and links to the deployment', async ({ pa
   await expect(page.getByText(/Deployment failed/)).toBeVisible()
   await expect(page.getByRole('link', { name: 'web' })).toHaveAttribute('href', '/environments/h1/deployments/d1')
 })
+
+test('image update notifications render without crashing', async ({ page, api }) => {
+  api.mock('GET', '/api/notifications/unread-count', { body: { count: 2 } })
+  api.mock('GET', '/api/notifications', {
+    body: {
+      content: [
+        { ...item('a', false), type: 'IMAGE_UPDATE_APPLIED', message: 'shop images updated' },
+        { ...item('b', false), type: 'IMAGE_UPDATE_FAILED', message: 'shop image update failed' },
+      ],
+      totalElements: 2,
+    },
+  })
+  await page.goto('/notifications')
+  await expect(page.getByText('shop images updated')).toBeVisible()
+  await expect(page.getByText('Image update failed', { exact: true })).toBeVisible()
+})

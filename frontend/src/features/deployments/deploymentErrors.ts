@@ -36,6 +36,8 @@ export function describeDeploymentError(error: unknown, fallback: string): strin
         return 'This credential no longer exists. Choose another one.'
       case 'NOT_A_GIT_DEPLOYMENT':
         return 'This deployment is not sourced from a Git repository.'
+      case 'NOT_A_FILE_DEPLOYMENT':
+        return 'Automatic image updates are only available for deployments with their own Compose file, not for Git deployments.'
       case 'NOT_DEPLOYED':
         return 'Deploy this deployment once before pulling updates.'
       case 'DEPLOYMENT_NOT_FOUND':

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bell, CircleArrowDown, CircleArrowUp, CircleX, GitBranch, HeartPulse, type LucideIcon } from 'lucide-react'
+import { Bell, CircleArrowDown, CircleArrowUp, CircleX, GitBranch, HeartPulse, PackageCheck, type LucideIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button, EmptyState, PageHeader, Skeleton } from '../../shared/ui/index.ts'
 import {
@@ -36,6 +36,8 @@ const TYPE_STYLE: Record<NotificationType, { icon: LucideIcon; tone: Tone }> = {
   CONTAINER_CRASHED: { icon: CircleX, tone: 'bad' },
   CONTAINER_UNHEALTHY: { icon: HeartPulse, tone: 'warn' },
   GIT_AUTO_UPDATE_FAILED: { icon: GitBranch, tone: 'warn' },
+  IMAGE_UPDATE_APPLIED: { icon: PackageCheck, tone: 'ok' },
+  IMAGE_UPDATE_FAILED: { icon: CircleX, tone: 'bad' },
 }
 
 /** The deployment or container the notification is about; `to` is null when it was removed. */

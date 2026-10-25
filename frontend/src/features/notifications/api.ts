@@ -8,6 +8,8 @@ export const NOTIFICATION_TYPES = [
   'CONTAINER_CRASHED',
   'CONTAINER_UNHEALTHY',
   'GIT_AUTO_UPDATE_FAILED',
+  'IMAGE_UPDATE_APPLIED',
+  'IMAGE_UPDATE_FAILED',
 ] as const
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]
@@ -19,6 +21,8 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   CONTAINER_CRASHED: 'Container crashed',
   CONTAINER_UNHEALTHY: 'Container unhealthy',
   GIT_AUTO_UPDATE_FAILED: 'Git auto-update failed',
+  IMAGE_UPDATE_APPLIED: 'Image update applied',
+  IMAGE_UPDATE_FAILED: 'Image update failed',
 }
 
 export interface AppNotification {

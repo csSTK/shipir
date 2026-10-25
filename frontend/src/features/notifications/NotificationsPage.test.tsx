@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { queryClient } from '../../app/queryClient.ts'
 import { apiFetch } from '../../shared/api/client.ts'
 import { NotificationsPage } from './NotificationsPage.tsx'
-import { useUnreadCount, type NotificationType } from './api.ts'
+import { NOTIFICATION_TYPES, NOTIFICATION_TYPE_LABELS, useUnreadCount, type NotificationType } from './api.ts'
 
 vi.mock('../../shared/api/client.ts', async (importActual) => ({
   ...(await importActual<typeof import('../../shared/api/client.ts')>()),
@@ -53,6 +53,17 @@ const deletedDeployment: N = {
 const gitFailed: N = {
   ...base, id: 'n6', type: 'GIT_AUTO_UPDATE_FAILED', hostId: 'h1', hostName: 'Staging',
   deploymentId: 'd1', deploymentName: 'web', message: 'web auto-update failed', read: true,
+  createdAt: new Date().toISOString(),
+}
+
+const imageApplied: N = {
+  ...base, id: 'n7', type: 'IMAGE_UPDATE_APPLIED', hostId: 'h1', hostName: 'Staging',
+  deploymentId: 'd1', deploymentName: 'web', message: 'web images updated', read: false,
+  createdAt: new Date().toISOString(),
+}
+const imageFailed: N = {
+  ...base, id: 'n8', type: 'IMAGE_UPDATE_FAILED', hostId: 'h1', hostName: 'Staging',
+  deploymentId: 'd1', deploymentName: 'web', message: 'web image update failed', read: false,
   createdAt: new Date().toISOString(),
 }
 
@@ -108,6 +119,21 @@ function renderPage() {
 }
 
 describe('NotificationsPage', () => {
+  it('renders the image update types with labels instead of crashing', async () => {
+    items = [imageApplied, imageFailed]
+    renderPage()
+    expect(await screen.findByText('web images updated')).toBeInTheDocument()
+    expect(screen.getByText('web image update failed')).toBeInTheDocument()
+    expect(screen.getByText('Image update applied')).toBeInTheDocument()
+    expect(screen.getByText('Image update failed')).toBeInTheDocument()
+  })
+
+  it('has a label for every notification type', () => {
+    for (const type of NOTIFICATION_TYPES) expect(NOTIFICATION_TYPE_LABELS[type]).toBeTruthy()
+    expect(NOTIFICATION_TYPES).toContain('IMAGE_UPDATE_APPLIED')
+    expect(NOTIFICATION_TYPES).toContain('IMAGE_UPDATE_FAILED')
+  })
+
   it('lists notifications, linking only hosts that still exist', async () => {
     renderPage()
     expect(await screen.findByText('Staging is unreachable')).toBeInTheDocument()
