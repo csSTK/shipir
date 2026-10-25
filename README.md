@@ -35,7 +35,7 @@ This is a learning and portfolio project focused on Java backend development. Th
   - Optional automatic image updates for deployments from a file: when a newer image exists, Shipir pulls and restarts inside a daily UTC time window, waits for the containers to be healthy and rolls back to the previous image digests if they are not. Notifications: image update applied or failed.
 - **Config editor:** edit a deployment's config files in the browser, with protection against path traversal and an automatic backup before every write.
 - **Live streaming:** container logs, container stats (CPU, memory, network, disk I/O with sparklines), Docker events, Compose output and an exec terminal over WebSocket.
-- **Access control:** users with roles (Admin, Operator, Viewer) plus fine-grained permissions per host and deployment.
+- **Access control:** users with roles (Admin, Operator, Viewer) plus fine-grained permissions per host and deployment, which can also be granted to teams (Settings > Teams); a user gets the best level of their own and their teams' grants.
 - **API tokens and webhooks:** every user can create personal API tokens (Account) and call the API with `Authorization: Bearer shp_...`; a token acts with its owner's role and permissions, is shown once and only stored hashed. Each deployment can have a redeploy webhook (`POST /api/webhooks/deploy/<secret>`) that pulls the new images or Git changes, for CI pipelines.
 - **Audit log:** a record of who did what, and when.
 - **Search:** Cmd/Ctrl+K opens a command palette that finds the environments, deployments and containers you can see, and jumps to any page.
