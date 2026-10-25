@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V29 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V30 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To29Successfully() {
+    void flywayAppliedVersions1To30Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30");
     }
 
     @Test
@@ -1506,6 +1506,114 @@ class SchemaMigrationTest {
     }
 
     @Test
+    void teamNameIsUnique() {
+        insertTeam("platform");
+        assertThatThrownBy(() -> insertTeam("platform"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("teams_name_key");
+    }
+
+    @Test
+    void teamMemberPrimaryKeyRejectsDuplicateMembership() {
+        UUID team = insertTeam("platform");
+        UUID user = insertUser("alice");
+        insertTeamMember(team, user);
+        assertThatThrownBy(() -> insertTeamMember(team, user))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("team_members_pkey");
+    }
+
+    @Test
+    void deletingTeamCascadesToItsMembers() {
+        UUID team = insertTeam("platform");
+        insertTeamMember(team, insertUser("alice"));
+        jdbc.update("DELETE FROM teams WHERE id = ?", team);
+        assertThat(count("team_members")).isZero();
+    }
+
+    @Test
+    void deletingUserCascadesToTheirTeamMemberships() {
+        UUID team = insertTeam("platform");
+        UUID user = insertUser("alice");
+        insertTeamMember(team, user);
+        jdbc.update("DELETE FROM users WHERE id = ?", user);
+        assertThat(count("team_members")).isZero();
+    }
+
+    @Test
+    void teamPermissionOnHostIsAccepted() {
+        UUID host = insertHost(insertUser("owner"));
+        insertTeamPermission(insertTeam("platform"), host, null, "VIEW");
+        assertThat(count("permissions")).isEqualTo(1);
+    }
+
+    @Test
+    void teamPermissionOnDeploymentIsAccepted() {
+        UUID owner = insertUser("owner");
+        UUID host = insertHost(owner);
+        insertTeamPermission(insertTeam("platform"), null, insertDeployment(host, owner, "web"), "OPERATE");
+        assertThat(count("permissions")).isEqualTo(1);
+    }
+
+    @Test
+    void userAndTeamMayBothHoldPermissionOnSameHost() {
+        UUID host = insertHost(insertUser("owner"));
+        insertPermission(insertUser("alice"), host, null, "VIEW");
+        insertTeamPermission(insertTeam("platform"), host, null, "OPERATE");
+        assertThat(count("permissions")).isEqualTo(2);
+    }
+
+    @Test
+    void permissionWithUserAndTeamIsRejected() {
+        UUID host = insertHost(insertUser("owner"));
+        UUID user = insertUser("alice");
+        UUID team = insertTeam("platform");
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO permissions (user_id, team_id, host_id, level) VALUES (?, ?, ?, 'VIEW')", user, team, host))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("permissions_one_subject_check");
+    }
+
+    @Test
+    void permissionWithNeitherUserNorTeamIsRejected() {
+        UUID host = insertHost(insertUser("owner"));
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO permissions (host_id, level) VALUES (?, 'VIEW')", host))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("permissions_one_subject_check");
+    }
+
+    @Test
+    void duplicateTeamHostPermissionIsRejected() {
+        UUID host = insertHost(insertUser("owner"));
+        UUID team = insertTeam("platform");
+        insertTeamPermission(team, host, null, "VIEW");
+        assertThatThrownBy(() -> insertTeamPermission(team, host, null, "OPERATE"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("permissions_team_host_key");
+    }
+
+    @Test
+    void duplicateTeamDeploymentPermissionIsRejected() {
+        UUID owner = insertUser("owner");
+        UUID deployment = insertDeployment(insertHost(owner), owner, "web");
+        UUID team = insertTeam("platform");
+        insertTeamPermission(team, null, deployment, "VIEW");
+        assertThatThrownBy(() -> insertTeamPermission(team, null, deployment, "OPERATE"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("permissions_team_deployment_key");
+    }
+
+    @Test
+    void deletingTeamCascadesItsPermissions() {
+        UUID host = insertHost(insertUser("owner"));
+        UUID team = insertTeam("platform");
+        insertTeamPermission(team, host, null, "VIEW");
+        jdbc.update("DELETE FROM teams WHERE id = ?", team);
+        assertThat(count("permissions")).isZero();
+    }
+
+    @Test
     void usersTotpColumnsAreNullableWithExpectedTypes() {
         List<Map<String, Object>> columns = jdbc.queryForList("""
                 SELECT column_name, data_type, is_nullable FROM information_schema.columns
@@ -2177,5 +2285,18 @@ class SchemaMigrationTest {
     private void insertPermission(UUID user, UUID host, UUID deployment, String level) {
         jdbc.update("INSERT INTO permissions (user_id, host_id, deployment_id, level) VALUES (?, ?, ?, ?)",
                 user, host, deployment, level);
+    }
+
+    private UUID insertTeam(String name) {
+        return jdbc.queryForObject("INSERT INTO teams (name) VALUES (?) RETURNING id", UUID.class, name);
+    }
+
+    private void insertTeamMember(UUID team, UUID user) {
+        jdbc.update("INSERT INTO team_members (team_id, user_id) VALUES (?, ?)", team, user);
+    }
+
+    private void insertTeamPermission(UUID team, UUID host, UUID deployment, String level) {
+        jdbc.update("INSERT INTO permissions (team_id, host_id, deployment_id, level) VALUES (?, ?, ?, ?)",
+                team, host, deployment, level);
     }
 }
