@@ -248,6 +248,47 @@ class ReadToolsTest {
     }
 
     @Test
+    void noAiToolEverReturnsEnvValuesOrEnvLikeFileContentsForAnyRole() throws IOException {
+        String fileSecret = "FILE-CONTENT-SUPERSECRET-456";
+        Path dir = dev.bethge.shipir.common.security.SystemScope.call(() -> deployments.directoryOf(hostId, deploymentId));
+        Files.createDirectories(dir.resolve("repo"));
+        Files.createDirectories(dir.resolve("secrets"));
+        for (String name : List.of("db.env", "repo/.env", ".env.production", "secrets/token.txt", "tls.pem", "tls.key", "Repo/.ENV")) {
+            Path file = dir.resolve(name);
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, "PASSWORD=" + fileSecret + "\n");
+        }
+
+        for (Role role : Role.values()) {
+            for (AiTool tool : registry.toolsFor(role)) {
+                assertThat(tool.name()).as("no AI tool may read files").doesNotContainIgnoringCase("file")
+                        .doesNotContainIgnoringCase("config").doesNotContainIgnoringCase("env_");
+                if (tool.write()) {
+                    continue;
+                }
+                ToolResult result = run(tool.name(), argsFor(tool), role);
+                assertThat(result.content()).as(tool.name() + " as " + role)
+                        .doesNotContain(ENV_SECRET).doesNotContain(fileSecret);
+            }
+        }
+    }
+
+    /** Arguments that satisfy most schemas: the test host and deployment for ids, a plain string otherwise. */
+    @SuppressWarnings("unchecked")
+    private String argsFor(AiTool tool) {
+        Map<String, Object> props = (Map<String, Object>) tool.parameters().getOrDefault("properties", Map.of());
+        Map<String, Object> args = new java.util.LinkedHashMap<>();
+        for (String name : props.keySet()) {
+            args.put(name, switch (name) {
+                case "hostId" -> hostId.toString();
+                case "deploymentId" -> deploymentId.toString();
+                default -> "web";
+            });
+        }
+        return mapper.writeValueAsString(args);
+    }
+
+    @Test
     void unknownStackIsAnErrorResultWithTheServiceCode() {
         ToolResult result = run("get_managed_deployment", stack(hostId, UUID.randomUUID()), Role.VIEWER);
 

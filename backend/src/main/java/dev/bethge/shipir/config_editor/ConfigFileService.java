@@ -3,6 +3,7 @@ package dev.bethge.shipir.config_editor;
 import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.common.util.PathValidationException;
 import dev.bethge.shipir.common.util.PathValidationUtil;
+import dev.bethge.shipir.compose.DeploymentException;
 import dev.bethge.shipir.compose.DeploymentService;
 import dev.bethge.shipir.compose.file.ComposeFileRepository;
 import dev.bethge.shipir.config_editor.dto.ConfigFileBackup;
@@ -50,7 +51,8 @@ import java.util.stream.Stream;
  * goes through {@link PathValidationUtil}; symlinks anywhere on the path are refused. {@code compose.yaml}, {@code .env}
  * and the backup directory at the top level are off limits, the Git checkout {@code repo/} is read-only. Each write,
  * delete and restore copies the current content into {@code .shipir-backups/<sha256(path)>/<id>.bak} first and keeps only
- * the newest N copies per file. File contents are never logged or audited.
+ * the newest N copies per file. Env-like files ({@link EnvLikeFiles}) are listed in the tree but their content is only
+ * readable with OPERATE access. File contents are never logged or audited.
  */
 @Service
 @EnableConfigurationProperties(ConfigFileProperties.class)
@@ -122,6 +124,7 @@ public class ConfigFileService {
 
     public ConfigFileResponse read(UUID hostId, UUID id, String path) {
         Target t = target(hostId, id, path, false);
+        requireEnvReadAccess(hostId, id, t.rel());
         requireFile(t.file());
         return response(t);
     }
@@ -245,6 +248,22 @@ public class ConfigFileService {
             }
         }
         return false;
+    }
+
+    /** Env-like files (see {@link EnvLikeFiles}) are readable only with OPERATE access: view-only users get 403. */
+    private void requireEnvReadAccess(UUID hostId, UUID id, String rel) {
+        if (!EnvLikeFiles.matches(rel)) {
+            return;
+        }
+        try {
+            deployments.requireOperate(hostId, id);
+        } catch (DeploymentException e) {
+            if (e.status() == HttpStatus.FORBIDDEN) {
+                throw new ConfigFileException(HttpStatus.FORBIDDEN, "ENV_FILE_RESTRICTED",
+                        "Environment and secret files can only be read with operate access");
+            }
+            throw e;
+        }
     }
 
     private static boolean readOnly(String rel) {

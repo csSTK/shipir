@@ -44,6 +44,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -244,6 +245,56 @@ class ConfigFileApiTest {
                         .contentType(APPLICATION_JSON).content("{\"backupId\":\"20260101000000000-abcdef12\"}"))
                 .andExpect(status().isForbidden());
         assertThat(Files.readString(dir.resolve("repo/conf/app.conf"))).isEqualTo("a=1\n");
+    }
+
+    // ---- env-like files are not readable by view-only users ----
+
+    @ParameterizedTest
+    @ValueSource(strings = {"repo/.env", "db.env", "app/.env", ".env.production", "app/.ENV", "Config/DB.ENV", "secrets/db.conf",
+            "app/my-Secret.txt", "tls/server.pem", "tls/SERVER.KEY", "repo/deep/.env.local"})
+    void viewerCannotReadEnvLikeFilesButOperatorAndAdminCan(String path) throws Exception {
+        Path file = dir.resolve(path);
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, "TOKEN=hunter2\n");
+        Login viewer = login("viewer");
+        mvc.perform(get(url()).session(viewer.session()).param("path", path))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ENV_FILE_RESTRICTED"))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("hunter2"))));
+        mvc.perform(get(url()).session(login("operator").session()).param("path", path))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content").value("TOKEN=hunter2\n"));
+        mvc.perform(get(url()).session(login("admin").session()).param("path", path)).andExpect(status().isOk());
+    }
+
+    @Test
+    void viewerStillSeesTreeAndOrdinaryFilesButNotEnvContent() throws Exception {
+        Files.createDirectories(dir.resolve("repo"));
+        Files.writeString(dir.resolve("repo/.env"), "TOKEN=hunter2\n");
+        Files.writeString(dir.resolve("repo/app.conf"), "a=1\n");
+        Login viewer = login("viewer");
+        String json = mvc.perform(get(url()).session(viewer.session())).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat((List<String>) JsonPath.read(json, "$[*].path")).contains("repo/.env", "repo/app.conf");
+        assertThat(json).doesNotContain("hunter2");
+        mvc.perform(get(url()).session(viewer.session()).param("path", "repo/app.conf")).andExpect(status().isOk());
+    }
+
+    @Test
+    void viewOnlyGrantOnAnOperatorIsAlsoDeniedEnvFiles() throws Exception {
+        Files.createDirectories(dir.resolve("repo"));
+        Files.writeString(dir.resolve("repo/.env"), "TOKEN=hunter2\n");
+        grantHost("operator", "VIEW");
+        mvc.perform(get(url()).session(login("operator").session()).param("path", "repo/.env"))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ENV_FILE_RESTRICTED"));
+    }
+
+    @Test
+    void symlinkToEnvFileIsRefusedForViewer() throws Exception {
+        Files.createDirectories(dir.resolve("repo"));
+        Files.writeString(dir.resolve("repo/.env"), "TOKEN=hunter2\n");
+        Files.createSymbolicLink(dir.resolve("innocent.txt"), dir.resolve("repo/.env"));
+        mvc.perform(get(url()).session(login("viewer").session()).param("path", "innocent.txt"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("hunter2"))));
     }
 
     // ---- tree / read / write ----
