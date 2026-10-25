@@ -84,6 +84,12 @@ abstract class HostApiTestBase {
         MockHttpServletRequestBuilder write(MockHttpServletRequestBuilder b) {
             return b.session(session).cookie(csrf).header("X-XSRF-TOKEN", csrf.getValue());
         }
+
+        org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder write(
+                org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder b) {
+            return (org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder)
+                    b.session(session).cookie(csrf).header("X-XSRF-TOKEN", csrf.getValue());
+        }
     }
 
     /** When true (default), {@link #login} first grants operator/viewer access to every host that exists. */

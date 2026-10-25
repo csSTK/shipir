@@ -37,5 +37,9 @@ public enum DockerErrorCode {
     /** A volume archive was refused: not a tar, unsafe entry (traversal, absolute, escaping link, device) or empty. */
     INVALID_ARCHIVE,
     /** The daemon answered with an unexpected status, an oversized or unparsable body, or the client has no HTTP transport to call it. */
-    INVALID_RESPONSE
+    INVALID_RESPONSE,
+    /** The daemon rejected an image build (bad Dockerfile, failing step, unknown base image); its text is never passed on. */
+    BUILD_FAILED,
+    /** The registry rejected an image push (denied, unauthorized, unknown image) or could not be reached; the daemon's text is never passed on. */
+    PUSH_FAILED
 }

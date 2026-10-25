@@ -64,14 +64,6 @@ public class HostResourcesService {
 
     private static final Logger log = LoggerFactory.getLogger(HostResourcesService.class);
 
-    private static final String PATH_PART = "[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*";
-    private static final String DOMAIN = "[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?(?::[0-9]{1,5})?";
-    /** {@code [registry[:port]/]path[/path][:tag][@sha256:digest]} - nothing that could be read as a CLI flag or URL. */
-    private static final Pattern IMAGE_REFERENCE = Pattern.compile("(?:" + DOMAIN + "/)?" + PATH_PART + "(?:/" + PATH_PART
-            + ")*(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?(?:@sha256:[a-f0-9]{64})?");
-    private static final java.util.Set<String> DOCKER_HUB_ALIASES =
-            java.util.Set.of("docker.io", "index.docker.io", "registry-1.docker.io", "registry.hub.docker.com");
-
     private static final int DEFAULT_TIMEOUT_SECONDS = 10;
     private static final int MAX_TIMEOUT_SECONDS = 300;
 
@@ -334,7 +326,7 @@ public class HostResourcesService {
     PullImageResponse pullImage(UUID hostId, PullImageRequest request) {
         requireOperate(hostId);
         String reference = request == null || request.reference() == null ? "" : request.reference().trim();
-        if (reference.length() > 255 || !IMAGE_REFERENCE.matcher(reference).matches()) {
+        if (!ImageReferenceRules.isValidReference(reference)) {
             throw new HostException(HttpStatus.BAD_REQUEST, "INVALID_IMAGE_REFERENCE", "Invalid image reference");
         }
         DockerEndpoint endpoint = call(hostId, (id, ep) -> ep);
@@ -364,30 +356,8 @@ public class HostResourcesService {
         }
     }
 
-    /** The stored login for the registry named by the reference (Docker Hub when it names none), or null. */
     private RegistryLogin loginFor(String reference) {
-        String registry = registryOf(reference);
-        return registryAuths.auths().stream()
-                .filter(a -> registry.equals(canonicalRegistry(a.registryHost())))
-                .findFirst()
-                .map(a -> new RegistryLogin(a.registryHost(), a.username(), a.secret()))
-                .orElse(null);
-    }
-
-    private static String registryOf(String reference) {
-        int slash = reference.indexOf('/');
-        if (slash > 0) {
-            String first = reference.substring(0, slash);
-            if (first.contains(".") || first.contains(":") || first.equals("localhost")) {
-                return canonicalRegistry(first);
-            }
-        }
-        return "docker.io";
-    }
-
-    private static String canonicalRegistry(String host) {
-        String lower = host.toLowerCase(java.util.Locale.ROOT);
-        return DOCKER_HUB_ALIASES.contains(lower) ? "docker.io" : lower;
+        return ImageReferenceRules.loginFor(registryAuths, reference);
     }
 
     @Auditable(action = "VOLUME_DELETE", targetType = "VOLUME", targetId = "#name")
@@ -661,7 +631,7 @@ public class HostResourcesService {
             v.add("name: letters, digits, _ . - (max 128), must start with a letter or digit");
         }
         String image = r.image() == null ? "" : r.image().trim();
-        if (image.length() > 255 || !IMAGE_REFERENCE.matcher(image).matches()) {
+        if (!ImageReferenceRules.isValidReference(image)) {
             v.add("image: not a valid image reference");
         }
         List<String> command = r.command() == null ? List.of() : r.command();

@@ -20,6 +20,9 @@ shipir:
   images:
     update-check-enabled: true
     update-check-interval: 6h
+    # uploaded or cloned build context (tar or tar.gz), enforced while streaming; spring.servlet.multipart.* must allow it too
+    max-build-context: 200MB
+    build-timeout: 30m
   image-auto-update:
     # scheduled pull + up of FILE deployments that opted in (per deployment: on/off + daily UTC window)
     enabled: true
@@ -98,10 +101,10 @@ spring:
     password: ${DB_PASSWORD}
   servlet:
     multipart:
-      # container file upload (shipir.container-files.max-bytes = 100MB) plus multipart framing; parsed lazily so the
-      # controller advice can answer a too-large upload with 413
-      max-file-size: 101MB
-      max-request-size: 101MB
+      # image build context (shipir.images.max-build-context = 200MB) and container file upload (100MB, checked again in
+      # the service) plus multipart framing; parsed lazily so the controller advice can answer a too-large upload with 413
+      max-file-size: 201MB
+      max-request-size: 201MB
       resolve-lazily: true
   jpa:
     hibernate:

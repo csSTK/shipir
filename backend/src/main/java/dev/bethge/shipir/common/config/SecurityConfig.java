@@ -156,6 +156,10 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/hosts/*/containers", "/api/hosts/*/networks",
                                 "/api/hosts/*/volumes").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/hosts/*/images/pull").hasAnyRole("ADMIN", "OPERATOR")
+                        // a Dockerfile build runs arbitrary RUN steps on the daemon (root-equivalent): ADMIN only
+                        .requestMatchers(HttpMethod.POST, "/api/hosts/*/images/build").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/hosts/*/images/push", "/api/hosts/*/images/*/tag")
+                        .hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/hosts/*/containers/*/exec").hasRole("ADMIN")
                         .requestMatchers("/api/hosts/*/containers/*/files", "/api/hosts/*/containers/*/files/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/hosts/*/volumes/*/backup").hasAnyRole("ADMIN", "OPERATOR")
