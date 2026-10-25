@@ -32,6 +32,7 @@ This is a learning and portfolio project focused on Java backend development. Th
   - Every deploy is versioned, so you can see history and roll back.
   - Environment variables per deployment, stored encrypted.
   - Deployments from a (private) Git repository with an access token: Pull & redeploy, and optional polling that redeploys on new commits.
+  - Optional automatic image updates for deployments from a file: when a newer image exists, Shipir pulls and restarts inside a daily UTC time window, waits for the containers to be healthy and rolls back to the previous image digests if they are not. Notifications: image update applied or failed.
 - **Config editor:** edit a deployment's config files in the browser, with protection against path traversal and an automatic backup before every write.
 - **Live streaming:** container logs, container stats (CPU, memory, network, disk I/O with sparklines), Docker events, Compose output and an exec terminal over WebSocket.
 - **Access control:** users with roles (Admin, Operator, Viewer) plus fine-grained permissions per host and deployment.
