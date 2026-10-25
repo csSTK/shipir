@@ -1,5 +1,6 @@
 package dev.bethge.shipir.streaming;
 
+import dev.bethge.shipir.common.security.SetupStatus;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -23,6 +24,7 @@ import java.util.regex.Pattern;
  * {@code /topic/chat/{sessionId}} (owner only, via {@link ChatTopicAccess}) and container logs
  * {@code /topic/hosts/{hostId}/containers/{id}/logs} (hosts the user fully sees, see {@link LogStreamHandler}), Docker events {@code /topic/hosts/{hostId}/events} (hosts the user fully sees, see {@link DockerEventStreamService}), container stats {@code /topic/hosts/{hostId}/stats} (visible hosts, frames filtered per user, see {@link ContainerStatsStreamService}), interactive console {@code /topic/exec/{id}} (ADMIN owner, see {@link ExecSessionHandler}); clients may only SEND
  * input/resize frames of their own console to {@code /app/exec/{id}/{input|resize}}.
+ * CONNECT and SUBSCRIBE are refused with SETUP_REQUIRED while the user has a pending {@link SetupStatus} step.
  */
 @Component
 public class StompSecurityInterceptor implements ChannelInterceptor {
@@ -46,11 +48,13 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
     private final DockerEventStreamService eventStreams;
     private final ContainerStatsStreamService statsStreams;
     private final StreamAccess access;
+    private final SetupStatus setupStatus;
 
     StompSecurityInterceptor(ComposeOutputStreamService streams, ChatTopicAccess chatAccess,
                              LogStreamHandler logStreams, ExecSessionHandler execSessions,
                              DockerEventStreamService eventStreams, ContainerStatsStreamService statsStreams,
-                             StreamAccess access) {
+                             StreamAccess access, SetupStatus setupStatus) {
+        this.setupStatus = setupStatus;
         this.statsStreams = statsStreams;
         this.access = access;
         this.eventStreams = eventStreams;
@@ -71,6 +75,7 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
             case CONNECT, STOMP -> checkConnect(accessor);
             case SUBSCRIBE -> {
                 requireUser(accessor);
+                requireSetupDone(accessor);
                 String destination = String.valueOf(accessor.getDestination());
                 var chat = CHAT_TOPIC.matcher(destination);
                 if (chat.matches()) {
@@ -165,12 +170,20 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
 
     private void checkConnect(StompHeaderAccessor accessor) {
         requireUser(accessor);
+        requireSetupDone(accessor);
         var attrs = accessor.getSessionAttributes();
         String expected = attrs == null ? null : (String) attrs.get(CsrfHandshakeInterceptor.CSRF_ATTRIBUTE);
         String given = accessor.getFirstNativeHeader(CSRF_HEADER);
         if (expected == null || given == null || !MessageDigest.isEqual(
                 expected.getBytes(StandardCharsets.UTF_8), given.getBytes(StandardCharsets.UTF_8))) {
             throw new MessageDeliveryException("CSRF token missing or invalid");
+        }
+    }
+
+    /** Same gate as the REST API ({@code SetupGateFilter}): no streams while a setup step is pending. */
+    private void requireSetupDone(StompHeaderAccessor accessor) {
+        if (setupStatus.currentStep(accessor.getUser().getName()).isPresent()) {
+            throw new MessageDeliveryException("SETUP_REQUIRED: complete the pending setup step first");
         }
     }
 

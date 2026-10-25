@@ -47,6 +47,7 @@ class ChatTopicSubscribeTest {
     @LocalServerPort int port;
     @Autowired UserRepository users;
     @Autowired PasswordEncoder encoder;
+    @Autowired dev.bethge.shipir.host.DockerHostRepository hosts;
     @Autowired ChatSessionService sessions;
     @Autowired ChatEventPublisher publisher;
 
@@ -58,7 +59,11 @@ class ChatTopicSubscribeTest {
             Role role = Role.valueOf(name.toUpperCase());
             User u = users.findByUsername(name).orElseGet(() -> new User(name, "x", role));
             u.changePasswordHash(encoder.encode(PASSWORD), Instant.now());
-            users.save(u);
+            var saved = users.save(u);
+            // an ADMIN without any host is still at the setup gate's ENVIRONMENT step and gets no WebSocket
+            if (role == Role.ADMIN && hosts.count() == 0) {
+                hosts.save(dev.bethge.shipir.host.DockerHost.local("chat-env", saved.getId()));
+            }
         }
     }
 

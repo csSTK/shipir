@@ -51,6 +51,8 @@ class ComposeOutputStreamTest {
     UserRepository users;
     @Autowired
     PasswordEncoder encoder;
+    @Autowired
+    dev.bethge.shipir.host.DockerHostRepository hosts;
 
     private final HttpClient http = HttpClient.newHttpClient();
     private final java.util.Map<String, String> jar = new java.util.HashMap<>();
@@ -60,7 +62,11 @@ class ComposeOutputStreamTest {
     void user() {
         User u = users.findByUsername("streamadmin").orElseGet(() -> new User("streamadmin", "x", Role.ADMIN));
         u.changePasswordHash(encoder.encode(PASSWORD), Instant.now());
-        users.save(u);
+        var admin = users.save(u);
+        // an ADMIN without any host is still at the setup gate's ENVIRONMENT step and gets no WebSocket
+        if (hosts.count() == 0) {
+            hosts.save(dev.bethge.shipir.host.DockerHost.local("stream-env", admin.getId()));
+        }
     }
 
     private HttpResponse<String> call(HttpRequest.Builder b) throws Exception {
