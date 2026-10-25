@@ -25,6 +25,7 @@ This is a learning and portfolio project focused on Java backend development. Th
 
 - **Containers:** list, start, stop, inspect and view stats, across one or more Docker hosts. Edit (recreated, with rollback if it fails), duplicate and change resource limits.
 - **Volumes:** download a volume as a `.tar` backup, restore an archive into a volume (overlays existing files; in-use volumes need an explicit confirm; 100 MB limit, `shipir.volume-backup.max-bytes`) and schedule recurring backups with retention (stored under `shipir.volume-backup.dir`, `SHIPIR_VOLUME_BACKUP_DIR`; mount a volume there to keep them).
+- **Disk usage:** the environment dashboard shows how much disk Docker uses (images, containers, volumes, build cache) and what could be reclaimed, with a link to the cleanup dialog. Needs access to the whole environment.
 - **Hosts:** manage multiple Docker hosts (local Unix socket or remote TCP with TLS), with health checks.
 - **Deployments (Compose projects):**
   - Create deployments from a bundled app template (nginx, postgres, wordpress, ...), with a form wizard that generates the YAML, or write it yourself in an advanced editor with schema validation.
