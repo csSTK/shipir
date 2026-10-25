@@ -43,6 +43,8 @@ final class StubOidcProvider implements AutoCloseable {
     private volatile long expiresInMillis = 300_000;
     private volatile boolean signWithForeignKey;
     private volatile String discoveryIssuer;
+    private volatile String tokenEndpointOverride;
+    private volatile String jwksUriOverride;
     private final RSAKey foreignKey;
 
     /** What the token endpoint hands out for one authorization code. */
@@ -92,6 +94,14 @@ final class StubOidcProvider implements AutoCloseable {
         signWithForeignKey = true;
     }
 
+    void advertiseTokenEndpoint(String url) {
+        tokenEndpointOverride = url;
+    }
+
+    void advertiseJwksUri(String url) {
+        jwksUriOverride = url;
+    }
+
     void advertiseIssuer(String issuer) {
         discoveryIssuer = issuer;
     }
@@ -107,6 +117,8 @@ final class StubOidcProvider implements AutoCloseable {
         expiresInMillis = 300_000;
         signWithForeignKey = false;
         discoveryIssuer = null;
+        tokenEndpointOverride = null;
+        jwksUriOverride = null;
         grants.clear();
         discoveryBroken = false;
         issuerOverride = null;
@@ -125,8 +137,10 @@ final class StubOidcProvider implements AutoCloseable {
         }
         String i = issuer();
         respond(ex, 200, """
-                {"issuer":"%s","authorization_endpoint":"%s/authorize","token_endpoint":"%s/token","jwks_uri":"%s/jwks"}
-                """.formatted(discoveryIssuer != null ? discoveryIssuer : i, i, i, i));
+                {"issuer":"%s","authorization_endpoint":"%s/authorize","token_endpoint":"%s","jwks_uri":"%s"}
+                """.formatted(discoveryIssuer != null ? discoveryIssuer : i, i,
+                tokenEndpointOverride != null ? tokenEndpointOverride : i + "/token",
+                jwksUriOverride != null ? jwksUriOverride : i + "/jwks"));
     }
 
     private void token(HttpExchange ex) throws IOException {

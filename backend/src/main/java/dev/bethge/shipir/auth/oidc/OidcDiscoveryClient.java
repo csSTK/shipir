@@ -1,19 +1,27 @@
 package dev.bethge.shipir.auth.oidc;
 
-import org.springframework.http.client.JdkClientHttpRequestFactory;
+import dev.bethge.shipir.common.net.EgressHttpClient;
+import dev.bethge.shipir.common.net.EgressPolicy;
+import org.apache.hc.client5.http.config.ConnectionConfig;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
+import org.apache.hc.core5.util.Timeout;
+import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.util.Map;
 
 /**
  * Fetches and checks {@code {issuer}/.well-known/openid-configuration}: no redirects, bounded time, the document's
  * {@code issuer} must equal the configured one, and every endpoint must be https (unless tests allow http).
+ * All traffic goes through the shared egress policy ({@code common/net}): internal targets, also those named by the
+ * discovery document, fail like an unreachable provider.
  */
 @Component
 class OidcDiscoveryClient {
@@ -21,22 +29,38 @@ class OidcDiscoveryClient {
     record Metadata(String issuer, String authorizationEndpoint, String tokenEndpoint, String jwksUri) {
     }
 
+    private static final Map<String, String> ACCEPT_JSON = Map.of("Accept", "application/json");
+
     private final OidcProperties properties;
     private final JsonMapper mapper;
+    private final EgressPolicy egressPolicy;
+    private final EgressHttpClient egressClient;
+    private final HttpComponentsClientHttpRequestFactory requestFactory;
 
-    OidcDiscoveryClient(OidcProperties properties, JsonMapper mapper) {
+    OidcDiscoveryClient(OidcProperties properties, JsonMapper mapper, EgressPolicy egressPolicy,
+                        EgressHttpClient egressClient) {
         this.properties = properties;
         this.mapper = mapper;
+        this.egressPolicy = egressPolicy;
+        this.egressClient = egressClient;
+        Timeout timeout = Timeout.ofMilliseconds(properties.timeout().toMillis());
+        this.requestFactory = new HttpComponentsClientHttpRequestFactory(HttpClientBuilder.create()
+                .setConnectionManager(PoolingHttpClientConnectionManagerBuilder.create()
+                        .setDnsResolver(egressPolicy.dnsResolver())
+                        .setDefaultConnectionConfig(ConnectionConfig.custom()
+                                .setConnectTimeout(timeout).setSocketTimeout(timeout).build())
+                        .build())
+                .setDefaultRequestConfig(RequestConfig.custom().setResponseTimeout(timeout).build())
+                .disableRedirectHandling().disableAutomaticRetries().disableCookieManagement().build());
     }
 
     Metadata fetch(String issuer) {
         String url = (issuer.endsWith("/") ? issuer.substring(0, issuer.length() - 1) : issuer)
                 + "/.well-known/openid-configuration";
-        try (HttpClient client = httpClient()) {
-            HttpResponse<String> response = client.send(HttpRequest.newBuilder(URI.create(url))
-                    .timeout(properties.timeout()).header("Accept", "application/json").GET().build(),
-                    HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 200) {
+        try {
+            EgressHttpClient.Response response = egressClient.send("GET", URI.create(url), ACCEPT_JSON,
+                    properties.timeout());
+            if (response.status() != 200) {
                 throw unreachable();
             }
             JsonNode doc = mapper.readTree(response.body());
@@ -46,25 +70,18 @@ class OidcDiscoveryClient {
                     || !allowed(metadata.tokenEndpoint()) || !allowed(metadata.jwksUri())) {
                 throw new OidcException("PROVIDER_INVALID", "The provider's discovery document is not usable");
             }
+            // The server calls these two itself. A denied target looks exactly like an unreachable provider.
+            egressPolicy.check(URI.create(metadata.tokenEndpoint()));
+            egressPolicy.check(URI.create(metadata.jwksUri()));
             return metadata;
         } catch (IOException | IllegalArgumentException | tools.jackson.core.JacksonException e) {
-            throw unreachable();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
             throw unreachable();
         }
     }
 
-    /** The shared HTTP client settings of all calls to the provider. */
-    HttpClient httpClient() {
-        return HttpClient.newBuilder().connectTimeout(properties.timeout())
-                .followRedirects(HttpClient.Redirect.NEVER).build();
-    }
-
-    JdkClientHttpRequestFactory requestFactory() {
-        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient());
-        factory.setReadTimeout(properties.timeout());
-        return factory;
+    /** Request factory for the token exchange and the JWKS fetch: egress-checked, no redirects, bounded time. */
+    ClientHttpRequestFactory requestFactory() {
+        return requestFactory;
     }
 
     private boolean allowed(String endpoint) {
