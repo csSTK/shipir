@@ -27,7 +27,7 @@ class StompSecurityInterceptorSetupGateTest {
     private final ComposeOutputStreamService streams = mock(ComposeOutputStreamService.class);
     private final StreamAccess access = mock(StreamAccess.class);
     private final StompSecurityInterceptor interceptor = new StompSecurityInterceptor(streams,
-            mock(ChatTopicAccess.class), mock(LogStreamHandler.class), mock(ExecSessionHandler.class),
+            mock(ChatTopicAccess.class), mock(LogStreamHandler.class), mock(DeploymentLogStreamService.class), mock(ExecSessionHandler.class),
             mock(DockerEventStreamService.class), mock(ContainerStatsStreamService.class), access, setupStatus);
 
     private Message<?> subscribe() {
