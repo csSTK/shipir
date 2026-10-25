@@ -31,6 +31,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -72,12 +73,14 @@ class ChatOrchestratorTest {
     /** Replays queued answers and records every conversation it was given. */
     static class StubLlm implements LlmClient {
         final ConcurrentLinkedQueue<Function<List<LlmMessage>, LlmResponse>> script = new ConcurrentLinkedQueue<>();
+        volatile java.util.function.Consumer<String> onToken;
         final List<List<LlmMessage>> conversations = new CopyOnWriteArrayList<>();
         final List<List<LlmToolDefinition>> toolsOffered = new CopyOnWriteArrayList<>();
 
         @Override
         public LlmResponse chat(String baseUrl, String model, String apiKey, List<LlmMessage> messages,
                                 List<LlmToolDefinition> tools, java.util.function.Consumer<String> onToken) {
+            this.onToken = onToken;
             conversations.add(messages);
             toolsOffered.add(tools);
             Function<List<LlmMessage>, LlmResponse> next = script.poll();
@@ -98,6 +101,12 @@ class ChatOrchestratorTest {
         void fail(LlmException.Code code) {
             script.add(m -> {
                 throw new LlmException(code, "boom");
+            });
+        }
+
+        void rateLimited(java.time.Duration retryAfter) {
+            script.add(m -> {
+                throw new LlmException(LlmException.Code.RATE_LIMITED, "slow down", retryAfter);
             });
         }
 
@@ -138,6 +147,7 @@ class ChatOrchestratorTest {
     @Autowired ChatOrchestrator orchestrator;
     @Autowired AiToolRegistry registry;
     @MockitoBean AiSettingsService settings;
+    @MockitoSpyBean ChatEventPublisher events;
     @MockitoBean dev.bethge.shipir.compose.execution.ComposeExecutionService execution;
     @MockitoBean dev.bethge.shipir.docker.client.DockerSystemService docker;
 
@@ -471,6 +481,178 @@ class ChatOrchestratorTest {
         assertThat(after.get(after.size() - 1).get("content").asString()).isEqualTo("Back again");
     }
 
+    private List<java.time.Duration> recordSleeps() {
+        List<java.time.Duration> sleeps = new CopyOnWriteArrayList<>();
+        ReflectionTestUtils.setField(orchestrator, "sleeper", (ChatOrchestrator.Sleeper) sleeps::add);
+        return sleeps;
+    }
+
+    private void restoreSleeper() {
+        ReflectionTestUtils.setField(orchestrator, "sleeper", (ChatOrchestrator.Sleeper) Thread::sleep);
+    }
+
+    private List<ChatStreamEvent> waitEvents() {
+        var captor = org.mockito.ArgumentCaptor.forClass(ChatStreamEvent.class);
+        Mockito.verify(events, Mockito.atLeast(0)).publish(Mockito.any(), captor.capture());
+        return captor.getAllValues().stream().filter(e -> e.type() == ChatStreamEvent.Type.RATE_LIMIT_WAIT).toList();
+    }
+
+    private String lastContent(JsonNode msgs) {
+        return msgs.get(msgs.size() - 1).get("content").asString();
+    }
+
+    @Test
+    void rateLimitWithinTheCapWaitsAnnouncesAndRetriesTheSameCall() throws Exception {
+        List<java.time.Duration> sleeps = recordSleeps();
+        try {
+            Login l = login("viewer");
+            String id = newSession(l);
+            llm.rateLimited(java.time.Duration.ofMillis(1500));
+            llm.answer("Here you go");
+            say(l, id, "Hello");
+
+            assertThat(llm.conversations).hasSize(2);
+            assertThat(llm.conversations.get(1)).isEqualTo(llm.conversations.get(0));
+            assertThat(sleeps).containsExactly(java.time.Duration.ofSeconds(2));
+            assertThat(waitEvents()).extracting(ChatStreamEvent::seconds).containsExactly(2);
+            JsonNode msgs = messages(l, id);
+            assertThat(msgs).hasSize(2);
+            assertThat(lastContent(msgs)).isEqualTo("Here you go");
+        } finally {
+            restoreSleeper();
+        }
+    }
+
+    @Test
+    void unknownAndZeroRetryAfterUseTheDefaultAndAtLeastOneSecond() throws Exception {
+        List<java.time.Duration> sleeps = recordSleeps();
+        try {
+            Login l = login("viewer");
+            String id = newSession(l);
+            llm.rateLimited(null);
+            llm.rateLimited(java.time.Duration.ZERO);
+            llm.answer("ok");
+            say(l, id, "Hello");
+
+            assertThat(sleeps).containsExactly(java.time.Duration.ofSeconds(5), java.time.Duration.ofSeconds(1));
+            assertThat(lastContent(messages(l, id))).isEqualTo("ok");
+        } finally {
+            restoreSleeper();
+        }
+    }
+
+    @Test
+    void retryAfterAboveTheCapEndsTheRunWithTheRetryTimeAndNeverSleeps() throws Exception {
+        List<java.time.Duration> sleeps = recordSleeps();
+        try {
+            Login l = login("viewer");
+            String id = newSession(l);
+            llm.rateLimited(java.time.Duration.ofSeconds(120));
+            say(l, id, "Hello");
+
+            assertThat(sleeps).isEmpty();
+            assertThat(llm.conversations).hasSize(1);
+            assertThat(lastContent(messages(l, id))).contains("Error (RATE_LIMITED)").contains("retry in about 120s");
+            assertThat(waitEvents()).isEmpty();
+        } finally {
+            restoreSleeper();
+        }
+    }
+
+    @Test
+    void hugeRetryAfterDoesNotOverflowOrWait() throws Exception {
+        List<java.time.Duration> sleeps = recordSleeps();
+        try {
+            Login l = login("viewer");
+            String id = newSession(l);
+            llm.rateLimited(java.time.Duration.ofSeconds(Long.MAX_VALUE));
+            say(l, id, "Hello");
+
+            assertThat(sleeps).isEmpty();
+            assertThat(lastContent(messages(l, id))).contains("Error (RATE_LIMITED)").contains("retry in about");
+        } finally {
+            restoreSleeper();
+        }
+    }
+
+    @Test
+    void retriesAreCappedPerCallThenTheRunEndsWithTheRetryTime() throws Exception {
+        List<java.time.Duration> sleeps = recordSleeps();
+        try {
+            Login l = login("viewer");
+            String id = newSession(l);
+            for (int i = 0; i < 4; i++) {
+                llm.rateLimited(java.time.Duration.ofSeconds(3));
+            }
+            say(l, id, "Hello");
+
+            assertThat(llm.conversations).hasSize(3);
+            assertThat(sleeps).hasSize(2);
+            assertThat(waitEvents()).hasSize(2);
+            assertThat(lastContent(messages(l, id))).contains("Error (RATE_LIMITED)").contains("retry in about 3s");
+        } finally {
+            restoreSleeper();
+        }
+    }
+
+    @Test
+    void noRetryOnceTokensWereStreamed() throws Exception {
+        List<java.time.Duration> sleeps = recordSleeps();
+        try {
+            Login l = login("viewer");
+            String id = newSession(l);
+            llm.script.add(m -> {
+                llm.onToken.accept("partial");
+                throw new LlmException(LlmException.Code.RATE_LIMITED, "slow down", java.time.Duration.ofSeconds(1));
+            });
+            llm.answer("never used");
+            say(l, id, "Hello");
+
+            assertThat(sleeps).isEmpty();
+            assertThat(llm.conversations).hasSize(1);
+            assertThat(lastContent(messages(l, id))).contains("Error (RATE_LIMITED)");
+        } finally {
+            restoreSleeper();
+        }
+    }
+
+    @Test
+    void interruptedWaitStopsTheRunAndReleasesTheSession() throws Exception {
+        ReflectionTestUtils.setField(orchestrator, "sleeper", (ChatOrchestrator.Sleeper) d -> {
+            throw new InterruptedException();
+        });
+        try {
+            Login l = login("viewer");
+            String id = newSession(l);
+            llm.rateLimited(java.time.Duration.ofSeconds(1));
+            llm.answer("never used");
+            say(l, id, "Hello");
+
+            assertThat(llm.conversations).hasSize(1);
+            assertThat(messages(l, id)).hasSize(1);
+            assertThat(orchestrator.isRunning(UUID.fromString(id))).isFalse();
+        } finally {
+            restoreSleeper();
+        }
+    }
+
+    @Test
+    void writeToolStillPausesForConfirmationAfterARateLimitRetry() throws Exception {
+        recordSleeps();
+        try {
+            Login l = login("admin");
+            String id = newSession(l);
+            llm.rateLimited(java.time.Duration.ofSeconds(1));
+            llm.call("call-1", "rename_host", renameArgs());
+            say(l, id, "Rename it");
+
+            assertThat(pendingId(messages(l, id))).isNotEmpty();
+            assertThat(hostName()).isEqualTo("Chat host");
+        } finally {
+            restoreSleeper();
+        }
+    }
+
     @Test
     void notConfiguredIsConflictAndStoresNothing() throws Exception {
         Mockito.when(settings.activeConfig()).thenReturn(Optional.empty());
@@ -583,7 +765,7 @@ class ChatOrchestratorTest {
     @Test
     void aHighLimitDisablesTrimming() throws Exception {
         Object original = ReflectionTestUtils.getField(orchestrator, "properties");
-        ReflectionTestUtils.setField(orchestrator, "properties", new ChatProperties(8, 1000));
+        ReflectionTestUtils.setField(orchestrator, "properties", new ChatProperties(8, 1000, java.time.Duration.ofSeconds(30), 2));
         try {
             Login l = login("viewer");
             String id = newSession(l);

@@ -24,6 +24,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -32,6 +33,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * The agent loop of the chat assistant. A run (virtual thread) feeds the stored history to the model with the
@@ -60,6 +62,8 @@ public class ChatOrchestrator {
             Shipir settings themselves.
             Be concise and say plainly when a tool call failed.""";
 
+    static final Duration DEFAULT_RATE_LIMIT_WAIT = Duration.ofSeconds(5);
+    static final String INTERRUPTED = "INTERRUPTED";
     static final String ENV_CIPHERTEXT = "envCiphertext";
     static final String OMITTED_TOOL_RESULT = "[older tool result omitted]";
     static final String REJECTED_OUTCOME = "The user rejected this action. It was not executed.";
@@ -77,6 +81,8 @@ public class ChatOrchestrator {
     private final SecretCipher cipher;
     private final Set<UUID> running = ConcurrentHashMap.newKeySet();
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+    /** Replaceable in tests so a rate-limit wait does not take real time. */
+    private Sleeper sleeper = Thread::sleep;
 
     ChatOrchestrator(ChatSessionService sessions, AiSettingsService settings, AiToolRegistry tools, LlmClients llm,
                      ChatEventPublisher events, ObjectMapper mapper, ChatProperties properties,
@@ -89,6 +95,19 @@ public class ChatOrchestrator {
         this.mapper = mapper;
         this.properties = properties;
         this.cipher = cipher;
+    }
+
+    /** Interruptible sleep; the production implementation is {@link Thread#sleep(Duration)}. */
+    @FunctionalInterface
+    interface Sleeper {
+        void sleep(Duration duration) throws InterruptedException;
+    }
+
+    /** The run thread was interrupted while waiting (shutdown); the run stops. */
+    private static final class RunInterruptedException extends RuntimeException {
+        RunInterruptedException() {
+            super(null, null, false, false);
+        }
     }
 
     /** Outcome of confirming or rejecting an action; {@code runId} is set when the loop resumed. */
@@ -248,11 +267,14 @@ public class ChatOrchestrator {
             }
             LlmResponse response;
             try {
-                response = llm.forProvider(config.provider()).chat(config.baseUrl(), config.model(), config.apiKey(), llmHistory(sessionId),
-                        tools.definitionsFor(ctx.role()), token -> events.publish(sessionId,
-                                ChatStreamEvent.token(runId, token)));
+                response = chatWithRateLimitRetry(config, ctx, sessionId, runId);
+            } catch (RunInterruptedException e) {
+                return INTERRUPTED;
             } catch (LlmException e) {
-                recordError(sessionId, e.code().name(), "The language model could not be reached or refused the request.");
+                String message = e.code() == LlmException.Code.RATE_LIMITED
+                        ? "The language model is rate limited; retry in about " + waitSeconds(e) + "s."
+                        : "The language model could not be reached or refused the request.";
+                recordError(sessionId, e.code().name(), message);
                 return e.code().name();
             }
             String text = response.content() == null ? "" : response.content();
@@ -269,6 +291,56 @@ public class ChatOrchestrator {
         sessions.appendMessage(sessionId, ChatRole.ASSISTANT,
                 MAX_STEPS_TEXT.formatted(properties.maxIterations()), null, null, null);
         return null;
+    }
+
+    /**
+     * One model call. On RATE_LIMITED the same call is repeated after the provider's wait (default 5 s when
+     * unknown, at least 1 s) if that wait is within {@code maxRateLimitWait}, at most {@code maxRateLimitRetries}
+     * times, and only while no token of the failed attempt was streamed (a retry would repeat text).
+     */
+    private LlmResponse chatWithRateLimitRetry(AiConfig config, ToolContext ctx, UUID sessionId, UUID runId) {
+        List<LlmMessage> history = llmHistory(sessionId);
+        var toolDefinitions = tools.definitionsFor(ctx.role());
+        for (int retry = 0; ; retry++) {
+            AtomicBoolean streamed = new AtomicBoolean();
+            try {
+                return llm.forProvider(config.provider()).chat(config.baseUrl(), config.model(), config.apiKey(),
+                        history, toolDefinitions, token -> {
+                            streamed.set(true);
+                            events.publish(sessionId, ChatStreamEvent.token(runId, token));
+                        });
+            } catch (LlmException e) {
+                if (e.code() != LlmException.Code.RATE_LIMITED || streamed.get()
+                        || retry >= properties.maxRateLimitRetries() || !withinCap(e)) {
+                    throw e;
+                }
+                int seconds = waitSeconds(e);
+                events.publish(sessionId, ChatStreamEvent.rateLimitWait(runId, seconds));
+                try {
+                    sleeper.sleep(Duration.ofSeconds(seconds));
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RunInterruptedException();
+                }
+            }
+        }
+    }
+
+    private static Duration requestedWait(LlmException e) {
+        Duration requested = e.retryAfter();
+        return requested == null ? DEFAULT_RATE_LIMIT_WAIT : requested;
+    }
+
+    private boolean withinCap(LlmException e) {
+        Duration cap = properties.maxRateLimitWait();
+        return cap != null && requestedWait(e).compareTo(cap) <= 0;
+    }
+
+    /** Whole seconds to wait, rounded up and at least 1 (so a zero never becomes a hot retry loop). */
+    private static int waitSeconds(LlmException e) {
+        Duration wait = requestedWait(e);
+        long seconds = wait.toSeconds() + (wait.toNanosPart() > 0 ? 1 : 0);
+        return (int) Math.min(Integer.MAX_VALUE, Math.max(1, seconds));
     }
 
     /** @return true if at least one write call now waits for the user, so the run must pause */
