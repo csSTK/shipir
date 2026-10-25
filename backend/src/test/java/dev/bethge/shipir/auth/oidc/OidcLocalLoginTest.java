@@ -44,4 +44,20 @@ class OidcLocalLoginTest extends OidcTestBase {
                 .get("/api/auth/oidc/config")).andReturn().getResponse().getContentAsString())
                 .contains("\"localLoginEnabled\":false");
     }
+
+    @Test
+    void refusedLocalLoginDoesNotClearTheThrottleCounter() throws Exception {
+        configure(true, false);
+        String wrong = "wrong-password-123!ABC";
+        for (int i = 0; i < 4; i++) {
+            assertThat(loginAttempt("viewer", wrong, anonymousCsrf()).getResponse().getStatus()).isEqualTo(401);
+        }
+        // Right password, but local login is off for this role: refused, and not a success for the throttle.
+        MvcResult refused = loginAttempt("viewer", PASSWORD, anonymousCsrf());
+        assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString()).contains("LOCAL_LOGIN_DISABLED");
+        // The fifth failure still locks the account: the four earlier ones were not forgotten.
+        assertThat(loginAttempt("viewer", wrong, anonymousCsrf()).getResponse().getStatus()).isEqualTo(401);
+        assertThat(loginAttempt("viewer", PASSWORD, anonymousCsrf()).getResponse().getStatus()).isEqualTo(429);
+    }
 }

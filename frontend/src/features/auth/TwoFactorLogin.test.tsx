@@ -26,9 +26,11 @@ function renderWith(node: React.ReactNode) {
 }
 
 async function reachSecondStep() {
-  apiFetchMock.mockResolvedValueOnce({ mfaRequired: true })
   renderWith(<LoginPage />)
-  fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'admin' } })
+  // The form appears once the (public) single sign-on config request has answered.
+  const username = await screen.findByLabelText('Username')
+  apiFetchMock.mockResolvedValueOnce({ mfaRequired: true })
+  fireEvent.change(username, { target: { value: 'admin' } })
   fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'pw' } })
   fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
   await screen.findByLabelText('Authentication code')

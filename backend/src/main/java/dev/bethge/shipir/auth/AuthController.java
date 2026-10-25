@@ -75,7 +75,7 @@ class AuthController {
                    LoginThrottle throttle,
                    ClientAddressResolver clientAddress,
                    AuditService auditService,
-                   TotpService totp) {
+                   TotpService totp,
                    LocalLoginPolicy localLoginPolicy) {
         this.authenticationManager = authenticationManager;
         this.securityContextRepository = securityContextRepository;
