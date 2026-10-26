@@ -3,6 +3,7 @@ package dev.bethge.shipir.compose.validation;
 import dev.bethge.shipir.compose.execution.ComposeCommand;
 import dev.bethge.shipir.compose.execution.ComposeExecutionException;
 import dev.bethge.shipir.compose.execution.ComposeExecutionService;
+import dev.bethge.shipir.compose.execution.ComposeOptions;
 import dev.bethge.shipir.compose.execution.ComposeProcessResult;
 import dev.bethge.shipir.compose.file.ComposeFileRepository;
 import dev.bethge.shipir.docker.DockerEndpoint;
@@ -46,14 +47,15 @@ public class ComposeSecurityPolicy {
     }
 
     /**
-     * Runs {@code docker compose config --format json} for the stored deployment and returns the violations (empty = allowed).
+     * Runs {@code docker compose --profile * config --format json} (services behind a profile are only part of the output
+     * when their profile is enabled, and any run may enable them) for the stored deployment and returns the violations (empty = allowed).
      *
      * @param composeFile compose file inside the deployment directory (Git checkout); null = the default file
      * @throws ComposeExecutionException if compose cannot run or its output cannot be read (fail closed)
      */
     public List<String> violations(UUID hostId, String deploymentName, DockerEndpoint endpoint, Path composeFile) {
         ComposeProcessResult result = execution.execute(hostId, deploymentName, ComposeCommand.CONFIG_JSON, endpoint,
-                line -> { }, composeFile);
+                line -> { }, composeFile, null, ComposeOptions.ofProfiles(List.of(ComposeOptions.ALL_PROFILES)));
         if (!result.success()) {
             throw new ComposeExecutionException("docker compose config failed", null);
         }

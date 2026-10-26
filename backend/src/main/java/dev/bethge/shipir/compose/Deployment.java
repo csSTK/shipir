@@ -8,9 +8,12 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.UUID;
 
 /** A Compose deployment managed by Shipir on one environment. The compose file and .env live on disk, see {@code ComposeFileRepository}. */
@@ -81,6 +84,11 @@ public class Deployment {
     @Column(name = "image_update_last_result", length = 20)
     private String imageUpdateLastResult;
 
+    /** Compose profiles activated for every run, in the order given; empty = none. */
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(nullable = false, columnDefinition = "text[]")
+    private List<String> profiles = List.of();
+
     @Column(name = "created_by", nullable = false, updatable = false)
     private UUID createdBy;
 
@@ -133,6 +141,7 @@ public class Deployment {
     public LocalTime getImageUpdateWindowEnd() { return imageUpdateWindowEnd; }
     public Instant getImageUpdateLastAttemptAt() { return imageUpdateLastAttemptAt; }
     public String getImageUpdateLastResult() { return imageUpdateLastResult; }
+    public List<String> getProfiles() { return profiles; }
     public UUID getCreatedBy() { return createdBy; }
     public Instant getLastDeployedAt() { return lastDeployedAt; }
     public Instant getCreatedAt() { return createdAt; }
@@ -165,6 +174,7 @@ public class Deployment {
         this.lastPollError = error;
     }
 
+    public void setProfiles(List<String> profiles) { this.profiles = List.copyOf(profiles); }
     public void setLastCommitSha(String lastCommitSha) { this.lastCommitSha = lastCommitSha; }
     public void setStatus(DeploymentStatus status) { this.status = status; }
     public void setLastDeployedAt(Instant lastDeployedAt) { this.lastDeployedAt = lastDeployedAt; }

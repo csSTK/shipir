@@ -15,6 +15,8 @@ import dev.bethge.shipir.compose.dto.DeploymentSummaryResponse;
 import dev.bethge.shipir.compose.dto.DeploymentUpdateRequest;
 import dev.bethge.shipir.compose.dto.DeploymentVersionContentResponse;
 import dev.bethge.shipir.compose.dto.DeploymentVersionResponse;
+import dev.bethge.shipir.compose.dto.ProfilesRequest;
+import dev.bethge.shipir.compose.dto.ServicesResponse;
 import dev.bethge.shipir.compose.dto.WebhookIssuedResponse;
 import dev.bethge.shipir.compose.dto.WebhookStatusResponse;
 import dev.bethge.shipir.git.GitOperationException;
@@ -96,6 +98,44 @@ class DeploymentController {
     @ResponseStatus(HttpStatus.ACCEPTED)
     DeploymentRunResponse pullUpdate(@PathVariable UUID hostId, @PathVariable UUID id, Authentication authentication) {
         return runs.pullUpdate(hostId, id, authentication.getName());
+    }
+
+    @PostMapping("/{id}/start")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    DeploymentRunResponse start(@PathVariable UUID hostId, @PathVariable UUID id, Authentication authentication) {
+        return runs.startDeployment(hostId, id, authentication.getName());
+    }
+
+    @PostMapping("/{id}/services/{service}/restart")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    DeploymentRunResponse restartService(@PathVariable UUID hostId, @PathVariable UUID id, @PathVariable String service,
+                                         Authentication authentication) {
+        return runs.restartService(hostId, id, service, authentication.getName());
+    }
+
+    @PostMapping("/{id}/services/{service}/pull")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    DeploymentRunResponse pullService(@PathVariable UUID hostId, @PathVariable UUID id, @PathVariable String service,
+                                      Authentication authentication) {
+        return runs.pullService(hostId, id, service, authentication.getName());
+    }
+
+    @PostMapping("/{id}/services/{service}/up")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    DeploymentRunResponse upService(@PathVariable UUID hostId, @PathVariable UUID id, @PathVariable String service,
+                                    Authentication authentication) {
+        return runs.upService(hostId, id, service, authentication.getName());
+    }
+
+    @GetMapping("/{id}/services")
+    ServicesResponse services(@PathVariable UUID hostId, @PathVariable UUID id) {
+        return service.services(hostId, id);
+    }
+
+    @PutMapping("/{id}/profiles")
+    DeploymentDetailResponse profiles(@PathVariable UUID hostId, @PathVariable UUID id,
+                                      @Valid @RequestBody ProfilesRequest request) {
+        return service.configureProfiles(hostId, id, request);
     }
 
     @PostMapping("/{id}/git/redeploy")

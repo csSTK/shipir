@@ -6,6 +6,7 @@ import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
 import dev.bethge.shipir.compose.execution.ComposeCommand;
 import dev.bethge.shipir.compose.execution.ComposeExecutionService;
+import dev.bethge.shipir.compose.execution.ComposeOptions;
 import dev.bethge.shipir.compose.execution.ComposeProcessResult;
 import dev.bethge.shipir.compose.file.ComposeFileRepository;
 import jakarta.servlet.http.Cookie;
@@ -87,6 +88,8 @@ abstract class DeploymentTestBase {
     protected final List<Path> composeFiles = new CopyOnWriteArrayList<>();
     /** Content of the override file ({@code -f} after the main file) of each execution that had one, read at call time. */
     protected final List<String> overrideYamls = new CopyOnWriteArrayList<>();
+    /** Profiles/services of each recorded execution ({@link ComposeOptions#NONE} for the overloads without options); parallel to {@link #commands}. */
+    protected final List<ComposeOptions> options = new CopyOnWriteArrayList<>();
     protected boolean downFails;
     protected volatile boolean upFails;
     protected volatile boolean pullFails;
@@ -116,6 +119,7 @@ abstract class DeploymentTestBase {
         upGate = new java.util.concurrent.CountDownLatch(0);
         composeFiles.clear();
         overrideYamls.clear();
+        options.clear();
         org.mockito.stubbing.Answer<ComposeProcessResult> fake = inv -> {
             UUID h = inv.getArgument(0);
             String name = inv.getArgument(1);
@@ -127,12 +131,44 @@ abstract class DeploymentTestBase {
                 config.put("name", name);
                 config.putAll(tools.jackson.dataformat.yaml.YAMLMapper.builder().build().readValue(
                         files.readCompose(h, name).orElse(""), java.util.Map.class));
+                // like compose: a service behind a profile is only part of the output when that profile (or `*`) is enabled
+                List<String> active = inv.getArguments().length > 7
+                        ? ((ComposeOptions) inv.getArgument(7)).profiles() : List.of();
+                if (config.get("services") instanceof java.util.Map<?, ?> all) {
+                    java.util.Map<Object, Object> kept = new java.util.LinkedHashMap<>();
+                    all.forEach((k, v) -> {
+                        boolean gated = v instanceof java.util.Map<?, ?> svc && svc.get("profiles") instanceof List<?> ps
+                                && !ps.isEmpty();
+                        boolean enabled = !gated || active.contains("*")
+                                || ((List<?>) ((java.util.Map<?, ?>) v).get("profiles")).stream().anyMatch(active::contains);
+                        if (enabled) {
+                            kept.put(k, v);
+                        }
+                    });
+                    config.put("services", kept);
+                }
                 String json = tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(config);
                 return new ComposeProcessResult(0, false, List.of("WARN[0000] a warning on stderr", json));
             }
+            if (command == ComposeCommand.CONFIG_SERVICES || command == ComposeCommand.CONFIG_PROFILES) {
+                // `docker compose --profile "*" config --services|--profiles`: names from the stored YAML
+                java.util.Map<?, ?> parsed = tools.jackson.dataformat.yaml.YAMLMapper.builder().build().readValue(
+                        files.readCompose(h, name).orElse(""), java.util.Map.class);
+                java.util.Set<String> out = new java.util.TreeSet<>();
+                java.util.Map<?, ?> services = (java.util.Map<?, ?>) parsed.get("services");
+                for (java.util.Map.Entry<?, ?> e : services.entrySet()) {
+                    if (command == ComposeCommand.CONFIG_SERVICES) {
+                        out.add((String) e.getKey());
+                    } else if (e.getValue() instanceof java.util.Map<?, ?> svc && svc.get("profiles") instanceof List<?> ps) {
+                        ps.forEach(p -> out.add((String) p));
+                    }
+                }
+                return new ComposeProcessResult(0, false, new ArrayList<>(out));
+            }
             commands.add(command);
             composeFiles.add(inv.getArguments().length > 5 ? inv.getArgument(5) : null);
-            if (inv.getArguments().length > 6) {
+            options.add(inv.getArguments().length > 7 ? inv.getArgument(7) : ComposeOptions.NONE);
+            if (inv.getArguments().length > 6 && inv.getArgument(6) != null) {
                 Path override = inv.getArgument(6);
                 overrideYamls.add(Files.readString(override));
             }
@@ -146,7 +182,10 @@ abstract class DeploymentTestBase {
                 return pullFails ? new ComposeProcessResult(1, false, List.of("Error: pull denied"))
                         : new ComposeProcessResult(0, false, List.of());
             }
-            if (command == ComposeCommand.UP) {
+            if (command == ComposeCommand.RESTART) {
+                return new ComposeProcessResult(upFails ? 1 : 0, false, List.of());
+            }
+            if (command == ComposeCommand.UP || command == ComposeCommand.UP_SERVICE) {
                 java.util.function.Consumer<String> onLine = inv.getArgument(4);
                 onLine.accept("Container web  Starting");
                 upGate.await();
@@ -162,6 +201,7 @@ abstract class DeploymentTestBase {
         org.mockito.Mockito.doAnswer(fake).when(execution).execute(any(), any(), any(), any(), any());
         org.mockito.Mockito.doAnswer(fake).when(execution).execute(any(), any(), any(), any(), any(), any());
         org.mockito.Mockito.doAnswer(fake).when(execution).execute(any(), any(), any(), any(), any(), any(), any());
+        org.mockito.Mockito.doAnswer(fake).when(execution).execute(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     /** Host-level grant for a seeded user; cascades away with the host. */

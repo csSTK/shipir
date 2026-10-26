@@ -19,6 +19,7 @@ import dev.bethge.shipir.compose.dto.DeploymentVersionResponse;
 import dev.bethge.shipir.compose.execution.ComposeCommand;
 import dev.bethge.shipir.compose.execution.ComposeExecutionException;
 import dev.bethge.shipir.compose.execution.ComposeExecutionService;
+import dev.bethge.shipir.compose.execution.ComposeOptions;
 import dev.bethge.shipir.compose.execution.ComposeProcessResult;
 import dev.bethge.shipir.compose.file.ComposeFileRepository;
 import dev.bethge.shipir.compose.validation.ComposeValidationService;
@@ -163,9 +164,57 @@ public class DeploymentRunService {
         });
     }
 
+    /**
+     * "Start": {@code docker compose up -d} (with the stored profiles) on the latest deployed version, e.g. after a stop.
+     * Creates no new version. 400 NOT_DEPLOYED if the deployment was never deployed.
+     */
+    @Auditable(action = "DEPLOYMENT_START", targetType = "DEPLOYMENT", targetId = "#id")
+    public DeploymentRunResponse startDeployment(UUID hostId, UUID id, String username) {
+        deploymentService.requireOperate(hostId, id);
+        return startSteps(hostId, id, userIdOf(username), username, "DEPLOYMENT_START_RESULT", null, false,
+                List.of(ComposeCommand.UP), null);
+    }
+
+    @Auditable(action = "DEPLOYMENT_SERVICE_RESTART", targetType = "DEPLOYMENT", targetId = "#id", details = "{'service': #service}")
+    public DeploymentRunResponse restartService(UUID hostId, UUID id, String service, String username) {
+        return serviceAction(hostId, id, service, username, ComposeCommand.RESTART, "DEPLOYMENT_SERVICE_RESTART_RESULT");
+    }
+
+    @Auditable(action = "DEPLOYMENT_SERVICE_PULL", targetType = "DEPLOYMENT", targetId = "#id", details = "{'service': #service}")
+    public DeploymentRunResponse pullService(UUID hostId, UUID id, String service, String username) {
+        return serviceAction(hostId, id, service, username, ComposeCommand.PULL, "DEPLOYMENT_SERVICE_PULL_RESULT");
+    }
+
+    @Auditable(action = "DEPLOYMENT_SERVICE_UP", targetType = "DEPLOYMENT", targetId = "#id", details = "{'service': #service}")
+    public DeploymentRunResponse upService(UUID hostId, UUID id, String service, String username) {
+        return serviceAction(hostId, id, service, username, ComposeCommand.UP_SERVICE, "DEPLOYMENT_SERVICE_UP_RESULT");
+    }
+
+    /** One compose command for one service of the latest deployed version; 400 INVALID_SERVICE / UNKNOWN_SERVICE / NOT_DEPLOYED. */
+    private DeploymentRunResponse serviceAction(UUID hostId, UUID id, String service, String username,
+                                                ComposeCommand command, String resultAction) {
+        deploymentService.requireOperate(hostId, id);
+        if (service == null || !ComposeOptions.NAME.matcher(service).matches()) {
+            throw new DeploymentException(HttpStatus.BAD_REQUEST, "INVALID_SERVICE", "Invalid service name");
+        }
+        return startSteps(hostId, id, userIdOf(username), username, resultAction, null, false, List.of(command), service);
+    }
+
     private DeploymentRunResponse startPullUpdate(UUID hostId, UUID id, UUID userId, String username,
                                                   String resultAction, CompletableFuture<PullUpdateOutcome> done,
                                                   boolean lockHeld) {
+        return startSteps(hostId, id, userId, username, resultAction, done, lockHeld,
+                List.of(ComposeCommand.PULL, ComposeCommand.UP), null);
+    }
+
+    /**
+     * Runs {@code steps} on the latest deployed version without creating a version; with {@code service} every step is
+     * restricted to that service, which must exist in the compose file (checked after the policy gate, on the file that
+     * will run).
+     */
+    private DeploymentRunResponse startSteps(UUID hostId, UUID id, UUID userId, String username,
+                                             String resultAction, CompletableFuture<PullUpdateOutcome> done,
+                                             boolean lockHeld, List<ComposeCommand> steps, String service) {
         var host = deploymentService.requireHost(hostId);
         Deployment deployment = deploymentService.requireDeployment(hostId, id);
         DockerEndpoint endpoint = deploymentService.endpointOf(host);
@@ -183,13 +232,19 @@ public class DeploymentRunService {
             files.write(hostId, deployment.getName(), version.getYamlContent(), envText);
             deploymentService.enforcePolicy(hostId, deployment.getName(), endpoint, deploymentService.composeFileOf(deployment),
                     unrestricted(username, userId != null ? userId : version.getCreatedBy()));
+            List<String> services = null;
+            if (service != null) {
+                deploymentService.requireService(deployment, endpoint, service);
+                services = List.of(service);
+            }
             String runId = UUID.randomUUID().toString();
             Map<String, Object> aiMarker = AiInvocationContext.active() ? aiMarker() : Map.of();
             streams.registerRun(runId, hostId, deployment.getId());
             Consumer<String> sink = streams.start(runId);
+            List<String> runServices = services;
             Thread.ofVirtual().name("deploy-" + runId).start(
                     () -> run(deployment, version, endpoint, runId, sink, userId, username,
-                            resultAction, aiMarker, List.of(ComposeCommand.PULL, ComposeCommand.UP), done, lockHeld));
+                            resultAction, aiMarker, steps, done, lockHeld, runServices));
             started = true;
             return new DeploymentRunResponse(runId, version.getId());
         } finally {
@@ -210,8 +265,7 @@ public class DeploymentRunService {
         try {
             ComposeProcessResult result;
             try {
-                result = execution.execute(hostId, deployment.getName(), ComposeCommand.DOWN, endpoint, line -> { },
-                        deploymentService.composeFileOf(deployment));
+                result = deploymentService.runCompose(deployment, ComposeCommand.DOWN, endpoint, line -> { }, null, null);
             } catch (ComposeExecutionException e) {
                 throw new DeploymentException(HttpStatus.BAD_GATEWAY, "COMPOSE_DOWN_FAILED",
                         "docker compose down could not run");
@@ -340,8 +394,8 @@ public class DeploymentRunService {
             try {
                 DockerEndpoint endpoint = deploymentService.endpointOf(deploymentService.requireHost(deployment.getHostId()));
                 Path override = files.writeRollbackOverride(deployment.getHostId(), deployment.getName(), yaml);
-                ComposeProcessResult result = execution.execute(deployment.getHostId(), deployment.getName(),
-                        ComposeCommand.UP, endpoint, line -> { }, null, override);
+                ComposeProcessResult result = deploymentService.runCompose(deployment, ComposeCommand.UP, endpoint,
+                        line -> { }, override, null);
                 tx.executeWithoutResult(status -> deployments.findById(deploymentId).ifPresent(s -> {
                     s.setStatus(result.success() ? DeploymentStatus.RUNNING : DeploymentStatus.ERROR);
                     deployments.save(s);
@@ -517,18 +571,19 @@ public class DeploymentRunService {
     private void run(Deployment deployment, DeploymentVersion version, DockerEndpoint endpoint, String runId,
                      Consumer<String> sink, UUID userId, String username, String resultAction,
                      Map<String, Object> aiMarker) {
-        run(deployment, version, endpoint, runId, sink, userId, username, resultAction, aiMarker, List.of(ComposeCommand.UP), null, false);
+        run(deployment, version, endpoint, runId, sink, userId, username, resultAction, aiMarker, List.of(ComposeCommand.UP), null, false,
+                null);
     }
 
     private void run(Deployment deployment, DeploymentVersion version, DockerEndpoint endpoint, String runId,
                      Consumer<String> sink, UUID userId, String username, String resultAction,
                      Map<String, Object> aiMarker, List<ComposeCommand> steps,
-                     CompletableFuture<PullUpdateOutcome> done, boolean lockHeld) {
+                     CompletableFuture<PullUpdateOutcome> done, boolean lockHeld, List<String> services) {
         boolean[] lockReleased = {false};
         PullUpdateOutcome outcome = new PullUpdateOutcome(false, "ERROR");
         try {
             outcome = runSteps(deployment, version, endpoint, runId, sink, userId, username, resultAction, aiMarker, steps,
-                    done != null, lockHeld, lockReleased);
+                    done != null, lockHeld, lockReleased, services);
         } finally {
             // every path (also an Error) frees the lock and completes the waiting scheduler
             if (!lockHeld && !lockReleased[0]) {
@@ -543,7 +598,8 @@ public class DeploymentRunService {
     private PullUpdateOutcome runSteps(Deployment deployment, DeploymentVersion version, DockerEndpoint endpoint,
                                        String runId, Consumer<String> sink, UUID userId, String username,
                                        String resultAction, Map<String, Object> aiMarker, List<ComposeCommand> steps,
-                                       boolean automatic, boolean lockHeld, boolean[] lockReleased) {
+                                       boolean automatic, boolean lockHeld, boolean[] lockReleased,
+                                       List<String> services) {
         boolean success = false;
         String failedStep = null;
         Integer failedExit = null;
@@ -552,10 +608,12 @@ public class DeploymentRunService {
         Map<String, Object> details = new java.util.LinkedHashMap<>(aiMarker);
         details.put("runId", runId);
         details.put("versionId", version.getId().toString());
+        if (services != null) {
+            details.put("service", services.get(0));
+        }
         try {
             for (ComposeCommand step : steps) {
-                ComposeProcessResult result = execution.execute(deployment.getHostId(), deployment.getName(), step,
-                        endpoint, sink, deploymentService.composeFileOf(deployment));
+                ComposeProcessResult result = deploymentService.runCompose(deployment, step, endpoint, sink, null, services);
                 success = result.success();
                 details.put("exitCode", result.exitCode());
                 details.put("timedOut", result.timedOut());
@@ -576,7 +634,8 @@ public class DeploymentRunService {
         try {
             boolean ok = success;
             // An automatic update whose pull failed touched no container: the deployment keeps its status.
-            boolean untouched = automatic && "PULL".equals(failedStep);
+            // A single-service action says nothing about the deployment as a whole: its status stays as it was.
+            boolean untouched = automatic && "PULL".equals(failedStep) || services != null;
             tx.executeWithoutResult(status -> deployments.findById(deployment.getId()).ifPresent(s -> {
                 if (untouched) {
                     return;

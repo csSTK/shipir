@@ -117,6 +117,8 @@ class WriteToolsTest {
                 : ok;
         when(execution.execute(any(), any(), any(), any(), any())).thenAnswer(fake);
         when(execution.execute(any(), any(), any(), any(), any(), any())).thenAnswer(fake);
+        // the ADMIN-gate lookup passes profiles (8-argument overload)
+        when(execution.execute(any(), any(), any(), any(), any(), any(), any(), any())).thenAnswer(fake);
         when(git.sync(any(), any(), any(), any(), any())).thenAnswer(inv -> {
             Path file = ((Path) inv.getArgument(0)).resolve((String) inv.getArgument(3));
             Files.createDirectories(file.getParent());

@@ -12,6 +12,8 @@ import dev.bethge.shipir.compose.dto.AutoUpdateRequest;
 import dev.bethge.shipir.compose.dto.ImageAutoUpdateInfo;
 import dev.bethge.shipir.compose.dto.ImageAutoUpdateRequest;
 import dev.bethge.shipir.compose.dto.GitInfo;
+import dev.bethge.shipir.compose.dto.ProfilesRequest;
+import dev.bethge.shipir.compose.dto.ServicesResponse;
 import dev.bethge.shipir.compose.dto.DeploymentCreateRequest;
 import dev.bethge.shipir.compose.dto.DeploymentDetailResponse;
 import dev.bethge.shipir.compose.dto.DeploymentEnvResponse;
@@ -20,6 +22,7 @@ import dev.bethge.shipir.compose.dto.DeploymentUpdateRequest;
 import dev.bethge.shipir.compose.execution.ComposeCommand;
 import dev.bethge.shipir.compose.execution.ComposeExecutionException;
 import dev.bethge.shipir.compose.execution.ComposeExecutionService;
+import dev.bethge.shipir.compose.execution.ComposeOptions;
 import dev.bethge.shipir.compose.execution.ComposeProcessResult;
 import dev.bethge.shipir.compose.file.ComposeFileRepository;
 import dev.bethge.shipir.compose.validation.ComposeSecurityPolicy;
@@ -279,6 +282,77 @@ public class DeploymentService {
         return get(hostId, id);
     }
 
+    /**
+     * Sets the compose profiles activated for every run of the deployment (empty list = none; duplicates dropped, order kept).
+     * Takes effect with the next run; running containers are not touched.
+     */
+    @Auditable(action = "DEPLOYMENT_PROFILES_UPDATE", targetType = "DEPLOYMENT", targetId = "#id",
+            details = "{'profiles': #request.profiles()}")
+    public DeploymentDetailResponse configureProfiles(UUID hostId, UUID id, ProfilesRequest request) {
+        requireOperate(hostId, id);
+        requireHost(hostId);
+        Deployment deployment = requireDeployment(hostId, id);
+        deployment.setProfiles(request.profiles().stream().distinct().toList());
+        deployments.save(deployment);
+        return get(hostId, id);
+    }
+
+    /** Services and profiles named in the deployment's compose file; services behind a profile are included. */
+    public ServicesResponse services(UUID hostId, UUID id) {
+        requireView(hostId, id);
+        DockerHost host = requireHost(hostId);
+        Deployment deployment = requireDeployment(hostId, id);
+        DockerEndpoint endpoint = endpointOf(host);
+        return new ServicesResponse(composeNames(deployment, ComposeCommand.CONFIG_SERVICES, endpoint),
+                composeNames(deployment, ComposeCommand.CONFIG_PROFILES, endpoint));
+    }
+
+    /**
+     * 400 UNKNOWN_SERVICE unless {@code service} is in the {@code docker compose config} output of the file on disk. The
+     * name itself was validated by the caller, so it never reaches a command before it is known to the compose file.
+     */
+    void requireService(Deployment deployment, DockerEndpoint endpoint, String service) {
+        if (!composeNames(deployment, ComposeCommand.CONFIG_SERVICES, endpoint).contains(service)) {
+            throw new DeploymentException(HttpStatus.BAD_REQUEST, "UNKNOWN_SERVICE",
+                    "The compose file has no service with this name");
+        }
+    }
+
+    private List<String> composeNames(Deployment deployment, ComposeCommand command, DockerEndpoint endpoint) {
+        ComposeProcessResult result;
+        try {
+            result = execution.execute(deployment.getHostId(), deployment.getName(), command, endpoint, line -> { },
+                    composeFileOf(deployment), null, ComposeOptions.ofProfiles(List.of(ComposeOptions.ALL_PROFILES)));
+        } catch (ComposeExecutionException e) {
+            throw new DeploymentException(HttpStatus.BAD_GATEWAY, "COMPOSE_UNAVAILABLE", "docker compose could not run");
+        }
+        if (!result.success()) {
+            List<String> output = result.output().stream().filter(l -> !l.isBlank()).toList();
+            throw new DeploymentException(HttpStatus.BAD_REQUEST, "INVALID_COMPOSE", "The compose file is invalid",
+                    output.subList(Math.max(0, output.size() - MAX_ERROR_LINES), output.size()));
+        }
+        // stdout and stderr are merged: warnings ("WARN[0000] ...") never match a plain name
+        return result.output().stream().map(String::strip).filter(l -> ComposeOptions.NAME.matcher(l).matches())
+                .distinct().sorted().toList();
+    }
+
+    /**
+     * Runs a compose command for the deployment with its stored profiles (and {@code services}, if any). Without profiles
+     * and services the plain execution overloads are used.
+     */
+    ComposeProcessResult runCompose(Deployment deployment, ComposeCommand command, DockerEndpoint endpoint,
+                                    java.util.function.Consumer<String> onLine, Path overrideFile, List<String> services) {
+        ComposeOptions options = ComposeOptions.ofProfiles(deployment.getProfiles())
+                .withServices(services == null ? List.of() : services);
+        if (options.isEmpty()) {
+            return overrideFile == null
+                    ? execution.execute(deployment.getHostId(), deployment.getName(), command, endpoint, onLine, composeFileOf(deployment))
+                    : execution.execute(deployment.getHostId(), deployment.getName(), command, endpoint, onLine, null, overrideFile);
+        }
+        return execution.execute(deployment.getHostId(), deployment.getName(), command, endpoint, onLine,
+                overrideFile == null ? composeFileOf(deployment) : null, overrideFile, options);
+    }
+
     @Auditable(action = "DEPLOYMENT_UPDATE", targetType = "DEPLOYMENT", targetId = "#id")
     public DeploymentDetailResponse update(UUID hostId, UUID id, DeploymentUpdateRequest request, String username) {
         requireOperate(hostId, id);
@@ -357,8 +431,7 @@ public class DeploymentService {
     private void deleteLocked(UUID hostId, Deployment deployment, DockerEndpoint endpoint) {
         ComposeProcessResult result;
         try {
-            result = execution.execute(hostId, deployment.getName(), ComposeCommand.DOWN, endpoint, line -> { },
-                    composeFileOf(deployment));
+            result = runCompose(deployment, ComposeCommand.DOWN, endpoint, line -> { }, null, null);
         } catch (ComposeExecutionException e) {
             throw new DeploymentException(HttpStatus.BAD_GATEWAY, "COMPOSE_DOWN_FAILED", "docker compose down could not run");
         }
@@ -579,6 +652,6 @@ public class DeploymentService {
                         s.getImageUpdateLastResult())
                 : null;
         return new DeploymentDetailResponse(s.getId(), s.getName(), s.getStatus(), s.getSourceType(),
-                s.getLastDeployedAt(), s.getCreatedAt(), yaml, envKeys, gitInfo, imageInfo);
+                s.getLastDeployedAt(), s.getCreatedAt(), yaml, envKeys, gitInfo, imageInfo, s.getProfiles());
     }
 }

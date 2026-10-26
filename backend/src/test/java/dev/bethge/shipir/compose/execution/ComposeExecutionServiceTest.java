@@ -96,6 +96,51 @@ class ComposeExecutionServiceTest {
         assertThat(argsOf(ComposeCommand.CONFIG)).endsWith(" config --quiet");
     }
 
+    private String argsWith(ComposeCommand cmd, ComposeOptions options) {
+        List<String> lines = new ArrayList<>();
+        service(Duration.ofSeconds(20)).execute(hostId, "web", cmd, local(), lines::add, null, null, options);
+        return line(lines, "ARGS:");
+    }
+
+    @Test
+    void profilesAreGlobalFlagsBeforeTheSubcommand() {
+        Path dir = files.deploymentDir(hostId, "web");
+        assertThat(argsWith(ComposeCommand.UP, ComposeOptions.ofProfiles(List.of("debug", "tools"))))
+                .isEqualTo("ARGS:-p web --project-directory " + dir + " -f " + dir.resolve("compose.yaml")
+                        + " --profile debug --profile tools up -d --remove-orphans");
+    }
+
+    @Test
+    void servicesFollowTheSubcommandArguments() {
+        Path dir = files.deploymentDir(hostId, "web");
+        assertThat(argsWith(ComposeCommand.RESTART, ComposeOptions.NONE.withServices(List.of("api"))))
+                .isEqualTo("ARGS:-p web --project-directory " + dir + " -f " + dir.resolve("compose.yaml") + " restart api");
+        assertThat(argsWith(ComposeCommand.UP_SERVICE, ComposeOptions.ofProfiles(List.of("p")).withServices(List.of("api"))))
+                .endsWith(" --profile p up -d api");
+    }
+
+    @Test
+    void allProfilesLookupUsesQuotedStarAsOneArgument() {
+        assertThat(argsWith(ComposeCommand.CONFIG_SERVICES, ComposeOptions.ofProfiles(List.of("*"))))
+                .endsWith(" --profile * config --services");
+    }
+
+    @Test
+    void noOptionsLeavesTheArgumentListUnchanged() {
+        assertThat(argsWith(ComposeCommand.PULL, ComposeOptions.NONE)).endsWith(" pull").doesNotContain("--profile");
+    }
+
+    @Test
+    void flagLikeOrInjectingProfileAndServiceNamesAreRejectedBeforeProcessStart() {
+        for (String bad : List.of("--privileged", "-v", "a;b", "a b", "$(id)", "../x", "a/b", "", " ", "-", "a\nb", "*x")) {
+            assertThatThrownBy(() -> ComposeOptions.ofProfiles(List.of(bad))).as("profile " + bad)
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> ComposeOptions.NONE.withServices(List.of(bad))).as("service " + bad)
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        assertThatThrownBy(() -> ComposeOptions.NONE.withServices(List.of("*"))).isInstanceOf(IllegalArgumentException.class);
+    }
+
     private String argsOf(ComposeCommand cmd) {
         List<String> lines = new ArrayList<>();
         run(cmd, local(), lines);

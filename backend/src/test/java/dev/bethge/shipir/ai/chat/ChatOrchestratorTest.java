@@ -185,6 +185,9 @@ class ChatOrchestratorTest {
                 .thenAnswer(fake);
         Mockito.when(execution.execute(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(),
                 Mockito.any())).thenAnswer(fake);
+        // the ADMIN-gate lookup passes profiles (8-argument overload)
+        Mockito.when(execution.execute(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(),
+                Mockito.any(), Mockito.any(), Mockito.any())).thenAnswer(fake);
         jdbc.update("DELETE FROM deployments");
         jdbc.update("DELETE FROM docker_hosts");
         jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "

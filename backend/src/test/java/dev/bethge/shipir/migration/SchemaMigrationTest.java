@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V33 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V35 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To34Successfully() {
+    void flywayAppliedVersions1To35Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35");
     }
 
     @Test
@@ -2527,6 +2527,21 @@ class SchemaMigrationTest {
         jdbc.update("DELETE FROM docker_hosts WHERE id = ?", host);
         assertThat(count("host_tags")).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT tag FROM host_tags", String.class)).isEqualTo("staging");
+    }
+
+    @Test
+    void deploymentsProfilesDefaultToEmptyArrayAndStoreNames() {
+        UUID user = insertUser("alice");
+        UUID deployment = insertDeployment(insertHost(user), user, "profiled");
+        assertThat(jdbc.queryForObject("SELECT cardinality(profiles) FROM deployments WHERE id = ?", Integer.class, deployment))
+                .isZero();
+        jdbc.update("UPDATE deployments SET profiles = ARRAY['debug','tools'] WHERE id = ?", deployment);
+        assertThat(jdbc.queryForObject("SELECT profiles[2] FROM deployments WHERE id = ?", String.class, deployment))
+                .isEqualTo("tools");
+        assertThat(jdbc.queryForObject("SELECT data_type FROM information_schema.columns "
+                + "WHERE table_name = 'deployments' AND column_name = 'profiles'", String.class)).isEqualTo("ARRAY");
+        assertThatThrownBy(() -> jdbc.update("UPDATE deployments SET profiles = NULL WHERE id = ?", deployment))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     private void insertHostTag(UUID host, String tag) {

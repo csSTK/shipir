@@ -157,6 +157,16 @@ public class ComposeExecutionService {
     public ComposeProcessResult execute(UUID hostId, String deploymentName, ComposeCommand command,
                                         DockerEndpoint endpoint, Consumer<String> onLine, Path composeFile,
                                         Path overrideFile) {
+        return execute(hostId, deploymentName, command, endpoint, onLine, composeFile, overrideFile, ComposeOptions.NONE);
+    }
+
+    /**
+     * Like the variant with {@code overrideFile}, plus compose profiles ({@code --profile <name>} before the subcommand)
+     * and services (positional arguments after the subcommand's own). Both are validated by {@link ComposeOptions}.
+     */
+    public ComposeProcessResult execute(UUID hostId, String deploymentName, ComposeCommand command,
+                                        DockerEndpoint endpoint, Consumer<String> onLine, Path composeFile,
+                                        Path overrideFile, ComposeOptions options) {
         Path deploymentDir = files.deploymentDir(hostId, deploymentName);
         Path dir = deploymentDir;
         Path file = deploymentDir.resolve(ComposeFileRepository.COMPOSE_FILE);
@@ -174,7 +184,11 @@ public class ComposeExecutionService {
         if (overrideFile != null) {
             cmd.addAll(List.of("-f", requireInside(deploymentDir, overrideFile).toString()));
         }
+        for (String profile : options.profiles()) {
+            cmd.addAll(List.of("--profile", profile));
+        }
         cmd.addAll(command.args());
+        cmd.addAll(options.services());
 
         Path certDir = null;
         Path configDir = null;

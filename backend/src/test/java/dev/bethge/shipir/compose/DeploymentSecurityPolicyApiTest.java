@@ -8,10 +8,12 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -52,6 +54,29 @@ class DeploymentSecurityPolicyApiTest extends DeploymentTestBase {
         mvc.perform(op.write(post(url()).contentType(APPLICATION_JSON).content(body("evil", yaml))))
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ADMIN_REQUIRED"));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM deployments", Integer.class)).isZero();
+    }
+
+    private static final String PROFILED_PRIVILEGED =
+            "services:\n  web:\n    image: nginx\n  x:\n    image: alpine\n    profiles: [x]\n    privileged: true\n";
+
+    @Test
+    void privilegedServiceBehindAProfileIsStillAdminOnly() throws Exception {
+        Login op = login("operator");
+        mvc.perform(op.write(post(url()).contentType(APPLICATION_JSON).content(body("evil", PROFILED_PRIVILEGED))))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ADMIN_REQUIRED"));
+
+        // admin stores and deploys it; an operator may not run it, neither as a whole nor service by service
+        Login admin = login("admin");
+        UUID id = create(admin, "ok", PROFILED_PRIVILEGED);
+        mvc.perform(admin.write(post(url() + "/" + id + "/deploy"))).andExpect(status().isAccepted());
+        await().atMost(10, java.util.concurrent.TimeUnit.SECONDS).untilAsserted(() -> assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM audit_log WHERE action = 'DEPLOYMENT_DEPLOY_RESULT'", Integer.class)).isEqualTo(1));
+        commands.clear();
+        for (String path : List.of("/deploy", "/start", "/services/x/up", "/services/x/restart", "/pull-update")) {
+            mvc.perform(op.write(post(url() + "/" + id + path)))
+                    .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ADMIN_REQUIRED"));
+        }
+        assertThat(commands).isEmpty();
     }
 
     @Test
