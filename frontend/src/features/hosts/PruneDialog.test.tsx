@@ -53,7 +53,7 @@ describe('PruneDialog', () => {
     expect(pv).toHaveTextContent('4 networks')
     expect(pv).not.toHaveTextContent('volumes')
     fireEvent.click(screen.getByLabelText('Unused volumes'))
-    expect(await screen.findByText(/2 volume\(s\) of managed deployments are kept/)).toBeInTheDocument()
+    expect(await screen.findByText(/2 volumes of managed deployments are kept/)).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Images'), { target: { value: 'UNUSED' } })
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/prune/preview?images=UNUSED&includeManagedVolumes=false'))
     fireEvent.click(await screen.findByRole('button', { name: 'Clean up' }))

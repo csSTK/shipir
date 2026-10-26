@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react'
+import { useTranslation } from 'react-i18next'
 import './editor.css'
 
 // Monaco is large: load it only when an editor is shown.
@@ -17,10 +18,11 @@ export interface YamlEditorProps {
 
 /** Compose YAML editor: Monaco with local Compose-spec schema validation, server errors inline. */
 export function YamlEditor({ value, onChange, label, readOnly = false, error, height = '320px' }: YamlEditorProps) {
+  const { t } = useTranslation('deployments')
   return (
     <div className="ed-yaml">
       <div className="ed-yaml__frame" data-invalid={error ? 'true' : undefined} style={{ height }}>
-        <Suspense fallback={<div className="ed-yaml__loading" role="status">Loading editor…</div>}>
+        <Suspense fallback={<div className="ed-yaml__loading" role="status">{t('YamlEditor.loadingEditor')}</div>}>
           <MonacoYamlEditor value={value} onChange={onChange ?? (() => {})} readOnly={readOnly} label={label} height={height} />
         </Suspense>
       </div>

@@ -15,12 +15,15 @@ import {
 } from './api.ts'
 import './ConfigFilesPanel.css'
 import { Button, Card } from '../../../shared/ui/index.ts'
+import { useTranslation } from 'react-i18next'
+import { Trans } from '../../../shared/i18n/Trans.tsx'
+import { formatDateTime, formatNumber, ONE_DECIMAL } from '../../../shared/i18n/format.ts'
 
 // Monaco is large: load it only when a file is opened.
 const MonacoEditor = lazy(() => import('../editor/MonacoYamlEditor.tsx'))
 
 function formatSize(bytes: number): string {
-  return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`
+  return bytes < 1024 ? `${bytes} B` : `${formatNumber(bytes / 1024, ONE_DECIMAL)} KB`
 }
 
 interface Props {
@@ -31,6 +34,7 @@ interface Props {
 
 /** Editable files in the deployment directory: tree, Monaco editor with dirty state, backups with restore. */
 export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
+  const { t } = useTranslation('deployments')
   const tree = useConfigTree(hostId, deploymentId)
   const save = useSaveConfigFile(hostId, deploymentId)
   const [selected, setSelected] = useState<string | null>(null)
@@ -50,7 +54,7 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
   function create() {
     const path = newPath.trim()
     if (!path) {
-      setCreateError('Enter a file path.')
+      setCreateError(t('ConfigFilesPanel.enterAFilePath'))
       return
     }
     setCreateError(null)
@@ -63,7 +67,7 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
           setDirty(false)
           setSelected(path)
         },
-        onError: (err) => setCreateError(describeConfigError(err, 'Could not create the file. Try again.')),
+        onError: (err) => setCreateError(describeConfigError(err, t('ConfigFilesPanel.couldNotCreateTheFile'))),
       },
     )
   }
@@ -74,11 +78,11 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
     <Card className="cf sd-panel" role="region" aria-labelledby={`cf-${deploymentId}`}>
       <div className="sd-panel__head">
         <h3 className="sd-panel__title" id={`cf-${deploymentId}`}>
-          Config files
+          {t('ConfigFilesPanel.configFiles')}
         </h3>
         {canWrite && !creating && (
           <Button variant="secondary" onClick={() => setCreating(true)}>
-            New file
+            {t('ConfigFilesPanel.newFile')}
           </Button>
         )}
       </div>
@@ -91,10 +95,10 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
             create()
           }}
         >
-          <label htmlFor={pathId}>File path</label>
+          <label htmlFor={pathId}>{t('ConfigFilesPanel.filePath')}</label>
           <input id={pathId} value={newPath} placeholder="config/app.conf" onChange={(e) => setNewPath(e.target.value)} autoFocus spellCheck={false} />
           <Button variant="primary" type="submit" disabled={save.isPending}>
-            Create
+            {t('ConfigFilesPanel.create')}
           </Button>
           <Button variant="ghost"
             
@@ -103,7 +107,7 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
               setCreateError(null)
             }}
 >
-            Cancel
+            {t('ConfigFilesPanel.cancel')}
           </Button>
           {createError && (
             <p role="alert" className="ui-error cf-new__error">
@@ -114,21 +118,21 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
       )}
 
       {tree.isPending ? (
-        <p className="sd-muted">Loading files…</p>
+        <p className="sd-muted">{t('ConfigFilesPanel.loadingFiles')}</p>
       ) : tree.error ? (
         <div>
           <p role="alert" className="ui-error">
-            {describeConfigError(tree.error, 'Could not load the files.')}
+            {describeConfigError(tree.error, t('ConfigFilesPanel.couldNotLoadTheFiles'))}
           </p>
           <Button variant="secondary" onClick={() => void tree.refetch()}>
-            Retry
+            {t('ConfigFilesPanel.retry')}
           </Button>
         </div>
       ) : files.length === 0 ? (
-        <p className="sd-muted">No config files yet.{canWrite ? ' Create one with New file.' : ''}</p>
+        <p className="sd-muted">{t('ConfigFilesPanel.noConfigFilesYet')}{canWrite ? t('ConfigFilesPanel.createOneWithNewFile') : ''}</p>
       ) : (
         <div className="cf-body">
-          <ul className="cf-tree" aria-label="Files">
+          <ul className="cf-tree" aria-label={t('ConfigFilesPanel.files')}>
             {tree.data.map((e) => {
               const depth = e.path.split('/').length - 1
               const name = e.path.split('/').pop()
@@ -139,7 +143,7 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
                   ) : (
                     <button type="button" className="cf-file" aria-current={e.path === selected ? 'true' : undefined} title={e.path} onClick={() => choose(e.path)}>
                       {name}
-                      {e.readOnly && <span className="cf-ro"> read-only</span>}
+                      {e.readOnly && <span className="cf-ro"> {t('ConfigFilesPanel.readOnly')}</span>}
                     </button>
                   )}
                 </li>
@@ -161,7 +165,7 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
                 }}
               />
             ) : (
-              <p className="sd-muted">Select a file to view it.</p>
+              <p className="sd-muted">{t('ConfigFilesPanel.selectAFileToView')}</p>
             )}
           </div>
         </div>
@@ -169,8 +173,8 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
 
       {pending && (
         <ConfirmDialog
-          title="Discard changes"
-          confirmLabel="Discard"
+          title={t('ConfigFilesPanel.discardChanges')}
+          confirmLabel={t('ConfigFilesPanel.discard')}
           danger
           onConfirm={() => {
             setDirty(false)
@@ -179,7 +183,7 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
           }}
           onClose={() => setPending(null)}
         >
-          <strong>{selected}</strong> has unsaved changes. Discard them and open another file?
+          <Trans t={t} i18nKey="ConfigFilesPanel.selectedHasUnsavedChangesDiscard" values={{ selected }} components={{ strong: <strong /> }} />
         </ConfirmDialog>
       )}
     </Card>
@@ -201,16 +205,17 @@ function FileView({
   onDirty: (dirty: boolean) => void
   onDeleted: () => void
 }) {
+  const { t } = useTranslation('deployments')
   const file = useConfigFile(hostId, deploymentId, path)
-  if (file.isPending) return <p className="sd-muted">Loading file…</p>
+  if (file.isPending) return <p className="sd-muted">{t('ConfigFilesPanel.loadingFile')}</p>
   if (file.error)
     return (
       <div>
         <p role="alert" className="ui-error">
-          {describeConfigError(file.error, 'Could not load the file.')}
+          {describeConfigError(file.error, t('ConfigFilesPanel.couldNotLoadTheFile'))}
         </p>
         <Button variant="secondary" onClick={() => void file.refetch()}>
-          Retry
+          {t('ConfigFilesPanel.retry')}
         </Button>
       </div>
     )
@@ -232,6 +237,7 @@ function FileEditor({
   onDirty: (dirty: boolean) => void
   onDeleted: () => void
 }) {
+  const { t } = useTranslation('deployments')
   const save = useSaveConfigFile(hostId, deploymentId)
   const remove = useDeleteConfigFile(hostId, deploymentId)
   const restore = useRestoreConfigFile(hostId, deploymentId)
@@ -255,7 +261,7 @@ function FileEditor({
       { path: file.path, content: draft },
       {
         onSuccess: () => onDirty(false),
-        onError: (err) => setProblem(describeConfigError(err, 'Could not save the file. Try again.')),
+        onError: (err) => setProblem(describeConfigError(err, t('ConfigFilesPanel.couldNotSaveTheFile'))),
       },
     )
   }
@@ -264,7 +270,7 @@ function FileEditor({
     setDialogError(null)
     remove.mutate(file.path, {
       onSuccess: onDeleted,
-      onError: (err) => setDialogError(describeConfigError(err, 'Could not delete the file. Try again.')),
+      onError: (err) => setDialogError(describeConfigError(err, t('ConfigFilesPanel.couldNotDeleteTheFile'))),
     })
   }
 
@@ -277,7 +283,7 @@ function FileEditor({
           onDirty(false)
           setDialog(null)
         },
-        onError: (err) => setDialogError(describeConfigError(err, 'Could not restore the backup. Try again.')),
+        onError: (err) => setDialogError(describeConfigError(err, t('ConfigFilesPanel.couldNotRestoreTheBackup'))),
       },
     )
   }
@@ -288,16 +294,16 @@ function FileEditor({
         <div>
           <strong>{file.path}</strong>
           <span className="sd-muted"> · {formatSize(file.size)}</span>
-          {file.readOnly && <span className="cf-ro"> · read-only (Git checkout)</span>}
-          {dirty && <span className="cf-dirty"> · Unsaved changes</span>}
+          {file.readOnly && <span className="cf-ro"> {t('ConfigFilesPanel.readOnlyGitCheckout')}</span>}
+          {dirty && <span className="cf-dirty"> {t('ConfigFilesPanel.unsavedChanges')}</span>}
         </div>
         {!readOnly && (
           <div className="sd-actions">
             <Button variant="primary" onClick={submit} disabled={!dirty || save.isPending}>
-              Save
+              {t('ConfigFilesPanel.save')}
             </Button>
             <Button variant="danger" onClick={() => setDialog('delete')}>
-              Delete
+              {t('ConfigFilesPanel.delete')}
             </Button>
           </div>
         )}
@@ -308,12 +314,12 @@ function FileEditor({
         </p>
       )}
       <div className="ed-yaml__frame cf-editor">
-        <Suspense fallback={<div className="ed-yaml__loading" role="status">Loading editor…</div>}>
+        <Suspense fallback={<div className="ed-yaml__loading" role="status">{t('ConfigFilesPanel.loadingEditor')}</div>}>
           <MonacoEditor
             value={draft}
             onChange={change}
             readOnly={readOnly}
-            label={`Contents of ${file.path}`}
+            label={t('ConfigFilesPanel.contentsOfPath', { path: file.path })}
             height="360px"
             language={languageFor(file.path)}
             path={`inmemory://shipir/config/${file.path}`}
@@ -321,25 +327,25 @@ function FileEditor({
         </Suspense>
       </div>
 
-      <h4 className="cf-sub">Backups</h4>
+      <h4 className="cf-sub">{t('ConfigFilesPanel.backups')}</h4>
       {backups.isPending ? (
-        <p className="sd-muted">Loading backups…</p>
+        <p className="sd-muted">{t('ConfigFilesPanel.loadingBackups')}</p>
       ) : backups.error ? (
         <p role="alert" className="ui-error">
-          {describeConfigError(backups.error, 'Could not load the backups.')}
+          {describeConfigError(backups.error, t('ConfigFilesPanel.couldNotLoadTheBackups'))}
         </p>
       ) : backups.data.length === 0 ? (
-        <p className="sd-muted">No backups yet. Each save keeps the previous content.</p>
+        <p className="sd-muted">{t('ConfigFilesPanel.noBackupsYetEachSave')}</p>
       ) : (
-        <ul className="cf-backups" aria-label="Backups">
+        <ul className="cf-backups" aria-label={t('ConfigFilesPanel.backups')}>
           {backups.data.map((b) => (
             <li key={b.id}>
               <span>
-                {new Date(b.createdAt).toLocaleString()} <span className="sd-muted">· {formatSize(b.size)}</span>
+                {formatDateTime(b.createdAt)} <span className="sd-muted">· {formatSize(b.size)}</span>
               </span>
               {!readOnly && (
-                <Button variant="secondary" aria-label={`Restore backup from ${new Date(b.createdAt).toLocaleString()}`} onClick={() => setDialog({ backup: b })}>
-                  Restore
+                <Button variant="secondary" aria-label={t('ConfigFilesPanel.restoreBackupFromLocalestring', { date: formatDateTime(b.createdAt) })} onClick={() => setDialog({ backup: b })}>
+                  {t('ConfigFilesPanel.restore')}
                 </Button>
               )}
             </li>
@@ -348,20 +354,20 @@ function FileEditor({
       )}
 
       {dialog === 'delete' && (
-        <ConfirmDialog title="Delete file" confirmLabel="Delete" danger pending={remove.isPending} error={dialogError} onConfirm={confirmDelete} onClose={() => { setDialog(null); setDialogError(null) }}>
-          Delete <strong>{file.path}</strong>? A backup of its content is kept.
+        <ConfirmDialog title={t('ConfigFilesPanel.deleteFile')} confirmLabel={t('ConfigFilesPanel.delete')} danger pending={remove.isPending} error={dialogError} onConfirm={confirmDelete} onClose={() => { setDialog(null); setDialogError(null) }}>
+          <Trans t={t} i18nKey="ConfigFilesPanel.deletePathABackupOf" values={{ path: file.path }} components={{ strong: <strong /> }} />
         </ConfirmDialog>
       )}
       {dialog && dialog !== 'delete' && (
         <ConfirmDialog
-          title="Restore backup"
-          confirmLabel="Restore"
+          title={t('ConfigFilesPanel.restoreBackup')}
+          confirmLabel={t('ConfigFilesPanel.restore')}
           pending={restore.isPending}
           error={dialogError}
           onConfirm={() => confirmRestore(dialog.backup)}
           onClose={() => { setDialog(null); setDialogError(null) }}
         >
-          Replace the content of <strong>{file.path}</strong> with the backup from {new Date(dialog.backup.createdAt).toLocaleString()}? Unsaved changes are lost.
+          <Trans t={t} i18nKey="ConfigFilesPanel.replaceTheContentOfPath" values={{ path: file.path }} components={{ strong: <strong /> }} /> {formatDateTime(dialog.backup.createdAt)}{t('ConfigFilesPanel.unsavedChangesAreLost')}
         </ConfirmDialog>
       )}
     </div>

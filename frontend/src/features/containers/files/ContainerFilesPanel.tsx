@@ -12,9 +12,11 @@ import {
   useContainerFiles,
   type ContainerFileEntry,
 } from './api.ts'
+import { useTranslation } from 'react-i18next'
+import { dateTimeFormat } from '../../../shared/i18n/format.ts'
 import './ContainerFilesPanel.css'
 
-const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+const dateFormat = dateTimeFormat({ dateStyle: 'medium', timeStyle: 'short' })
 
 function crumbs(path: string): { label: string; path: string }[] {
   const parts = path.split('/').filter(Boolean)
@@ -28,6 +30,7 @@ function sorted(entries: ContainerFileEntry[]): ContainerFileEntry[] {
 
 /** File browser of a running or stopped container: navigate, download, upload into the current directory. ADMIN only. */
 export function ContainerFilesPanel({ hostId, containerId }: { hostId: string; containerId: string }) {
+  const { t } = useTranslation('containers')
   const [path, setPath] = useState('/')
   const { data, isPending, error, refetch } = useContainerFiles(hostId, containerId, path)
   const queryClient = useQueryClient()
@@ -49,7 +52,7 @@ export function ContainerFilesPanel({ hostId, containerId }: { hostId: string; c
     abort.current = up.abort
     try {
       await up.promise
-      setDone(`Uploaded ${file.name} to ${target}`)
+      setDone(t('ContainerFilesPanel.uploadedNameToTarget', { name: file.name, target }))
       await queryClient.invalidateQueries({ queryKey: filesKey(hostId, containerId, target) })
     } catch (e) {
       setUploadError(describeUploadError(e))
@@ -64,21 +67,21 @@ export function ContainerFilesPanel({ hostId, containerId }: { hostId: string; c
   const uploading = progress !== null
 
   return (
-    <section className="cfiles" aria-label="Files">
+    <section className="cfiles" aria-label={t('ContainerFilesPanel.files')}>
       <div className="cfiles__top">
         <input
           ref={input}
           type="file"
           className="cfiles__input"
-          aria-label="File to upload"
+          aria-label={t('ContainerFilesPanel.fileToUpload')}
           disabled={uploading}
           onChange={(e) => void onPick(e.target.files?.[0])}
         />
         <Button disabled={uploading} onClick={() => input.current?.click()}>
-          Upload here
+          {t('ContainerFilesPanel.uploadHere')}
         </Button>
       </div>
-      <nav aria-label="Path" className="cfiles__crumbs">
+      <nav aria-label={t('ContainerFilesPanel.path')} className="cfiles__crumbs">
         {crumbs(path).map((c, i, all) =>
           i === all.length - 1 ? (
             <span key={c.path} aria-current="page" className="cfiles__crumb cfiles__crumb--current">
@@ -93,12 +96,10 @@ export function ContainerFilesPanel({ hostId, containerId }: { hostId: string; c
       </nav>
       {uploading && (
         <div className="cfiles__upload" role="status">
-          <span>
-            Uploading {uploadName} … {Math.round((progress ?? 0) * 100)}%
-          </span>
-          <progress max={1} value={progress ?? 0} aria-label="Upload progress" />
+          <span>{t('ContainerFilesPanel.uploadingUploadnameRound', { uploadName, round: Math.round((progress ?? 0) * 100) })}</span>
+          <progress max={1} value={progress ?? 0} aria-label={t('ContainerFilesPanel.uploadProgress')} />
           <Button size="sm" onClick={() => abort.current?.()}>
-            Cancel
+            {t('ContainerFilesPanel.cancel')}
           </Button>
         </div>
       )}
@@ -108,16 +109,16 @@ export function ContainerFilesPanel({ hostId, containerId }: { hostId: string; c
         </p>
       )}
       {done && <p role="status" className="cfiles__done">{done}</p>}
-      {isPending && <p role="status">Loading…</p>}
+      {isPending && <p role="status">{t('ContainerFilesPanel.loading')}</p>}
       {error && (
         <div role="alert" className="sk-error">
           <p>{describeListError(error)}</p>
           <Button variant="ghost" size="sm" onClick={() => void refetch()}>
-            Retry
+            {t('ContainerFilesPanel.retry')}
           </Button>
         </div>
       )}
-      {data && entries.length === 0 && <EmptyState icon={Folder} title="This directory is empty." />}
+      {data && entries.length === 0 && <EmptyState icon={Folder} title={t('ContainerFilesPanel.thisDirectoryIsEmpty')} />}
       {entries.length > 0 && (
         <ul className="cfiles__list">
           {entries.map((e) => (
@@ -139,9 +140,9 @@ export function ContainerFilesPanel({ hostId, containerId }: { hostId: string; c
                   className="ui-btn ui-btn--ghost ui-btn--sm"
                   href={downloadUrl(hostId, containerId, e.path)}
                   download
-                  aria-label={`Download ${e.name}`}
+                  aria-label={t('ContainerFilesPanel.downloadName', { name: e.name })}
                 >
-                  Download
+                  {t('ContainerFilesPanel.download')}
                 </a>
               )}
             </li>

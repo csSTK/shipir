@@ -2,6 +2,7 @@ import { LogOut, Settings } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import type { CurrentUser } from '../../features/auth/index.ts'
 import { Menu } from '../../shared/ui/index.ts'
+import { useTranslation } from 'react-i18next'
 import './UserMenu.css'
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 
 /** Top bar user button with a menu (Settings, Sign out). Keyboard and focus handling come from `Menu`. */
 export function UserMenu({ user, onSignOut, signingOut = false }: Props) {
+  const { t } = useTranslation('app')
   const navigate = useNavigate()
   return (
     <Menu
@@ -27,8 +29,8 @@ export function UserMenu({ user, onSignOut, signingOut = false }: Props) {
         </button>
       }
       items={[
-        { label: 'Settings', icon: <Settings size={16} strokeWidth={1.75} />, onSelect: () => navigate('/account') },
-        { label: 'Sign out', icon: <LogOut size={16} strokeWidth={1.75} />, disabled: signingOut, onSelect: onSignOut },
+        { label: t('UserMenu.settings'), icon: <Settings size={16} strokeWidth={1.75} />, onSelect: () => navigate('/account') },
+        { label: t('UserMenu.signOut'), icon: <LogOut size={16} strokeWidth={1.75} />, disabled: signingOut, onSelect: onSignOut },
       ]}
     />
   )

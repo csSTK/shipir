@@ -1,6 +1,8 @@
 import { Button, Badge, type BadgeTone } from '../../shared/ui/index.ts'
 import type { ActionStatus, ToolCall } from './api.ts'
 import { toolLabel } from './toolLabel.ts'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
 
 interface Props {
   call: ToolCall
@@ -16,9 +18,9 @@ interface Props {
 const STATUS_TONE: Record<ActionStatus, BadgeTone> = { PENDING: 'warn', CONFIRMED: 'ok', REJECTED: 'muted' }
 
 const STATUS_LABEL: Record<ActionStatus, string> = {
-  PENDING: 'Waiting for confirmation',
-  CONFIRMED: 'Confirmed',
-  REJECTED: 'Rejected',
+  get PENDING() { return i18n.t('ai-chat:ActionConfirmCard.waitingForConfirmation') },
+  get CONFIRMED() { return i18n.t('ai-chat:ActionConfirmCard.confirmed') },
+  get REJECTED() { return i18n.t('ai-chat:ActionConfirmCard.rejected') },
 }
 
 function argumentEntries(raw: unknown): [string, string][] {
@@ -36,18 +38,18 @@ function argumentEntries(raw: unknown): [string, string][] {
 
 /** A write the assistant wants to run: shows what will happen and asks the user to confirm. */
 export function ActionConfirmCard({ call, status, readOnly = false, busy = false, error = null, onConfirm, onReject }: Props) {
+  const { t } = useTranslation('ai-chat')
   const args = argumentEntries(call.arguments)
   return (
-    <section className={`chat-card chat-card--${status.toLowerCase()}`} aria-label={`Action: ${toolLabel(call.name)}`}>
+    <section className={`chat-card chat-card--${status.toLowerCase()}`} aria-label={t('ActionConfirmCard.actionToollabel', { toolLabel: toolLabel(call.name) })}>
       <div className="chat-card__head">
         <span className="chat-card__tool">{toolLabel(call.name)}</span>
         <Badge tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Badge>
       </div>
-      <p className="chat-card__desc">{call.description ?? `Run ${toolLabel(call.name)}`}</p>
+      <p className="chat-card__desc">{call.description ?? t('ActionConfirmCard.runToollabel', { toolLabel: toolLabel(call.name) })}</p>
       {call.fromToolContent && (
         <p className="chat-card__notice" role="note">
-          This proposal was made after reading data from your environment (names, files, notifications written by
-          others). Check every value below before you confirm.
+          {t('ActionConfirmCard.thisProposalWasMadeAfter')}
         </p>
       )}
       {args.length > 0 && (
@@ -68,10 +70,10 @@ export function ActionConfirmCard({ call, status, readOnly = false, busy = false
       {status === 'PENDING' && !readOnly && (
         <div className="chat-card__actions">
           <Button onClick={onReject} disabled={busy}>
-            Reject
+            {t('ActionConfirmCard.reject')}
           </Button>
           <Button variant="primary" onClick={onConfirm} disabled={busy} loading={busy}>
-            Confirm
+            {t('ActionConfirmCard.confirm')}
           </Button>
         </div>
       )}

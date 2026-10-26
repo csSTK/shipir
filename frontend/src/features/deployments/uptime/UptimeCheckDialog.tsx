@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { ApiError } from '../../../shared/api/client.ts'
 import { Button, Dialog, Switch, TextField } from '../../../shared/ui/index.ts'
 import { useSaveUptimeCheck, type UptimeCheck, type UptimeCheckInput } from './api.ts'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
 
 interface Form {
   name: string
@@ -31,30 +33,30 @@ function inRange(value: string, min: number, max: number): boolean {
 /** Mirrors the server validation (UptimeCheckRequest and the URL rules of the service). */
 export function validate(form: Form): Errors {
   const errors: Errors = {}
-  if (!form.name.trim()) errors.name = 'Enter a name.'
-  else if (form.name.length > 100) errors.name = 'At most 100 characters.'
+  if (!form.name.trim()) errors.name = i18n.t('deployments:UptimeCheckDialog.enterAName')
+  else if (form.name.length > 100) errors.name = i18n.t('deployments:UptimeCheckDialog.atMost100Characters')
   try {
     const url = new URL(form.url.trim())
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') errors.url = 'The URL must use http or https.'
-    else if (url.username || url.password) errors.url = 'The URL must not contain a username or password.'
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') errors.url = i18n.t('deployments:UptimeCheckDialog.theUrlMustUseHttp')
+    else if (url.username || url.password) errors.url = i18n.t('deployments:UptimeCheckDialog.theUrlMustNotContain')
   } catch {
-    errors.url = 'Enter a valid http or https URL.'
+    errors.url = i18n.t('deployments:UptimeCheckDialog.enterAValidHttpOr')
   }
-  if (form.url.length > 2048) errors.url = 'At most 2048 characters.'
-  if (form.expectedStatus.trim() && !inRange(form.expectedStatus, 100, 599)) errors.expectedStatus = 'Use a status between 100 and 599, or leave empty for any 2xx.'
-  if (!inRange(form.intervalSeconds, 30, 86400)) errors.intervalSeconds = 'Use a value between 30 and 86400 seconds.'
-  if (!inRange(form.timeoutSeconds, 1, 30)) errors.timeoutSeconds = 'Use a value between 1 and 30 seconds.'
+  if (form.url.length > 2048) errors.url = i18n.t('deployments:UptimeCheckDialog.atMost2048Characters')
+  if (form.expectedStatus.trim() && !inRange(form.expectedStatus, 100, 599)) errors.expectedStatus = i18n.t('deployments:UptimeCheckDialog.useAStatusBetween100')
+  if (!inRange(form.intervalSeconds, 30, 86400)) errors.intervalSeconds = i18n.t('deployments:UptimeCheckDialog.useAValueBetween30')
+  if (!inRange(form.timeoutSeconds, 1, 30)) errors.timeoutSeconds = i18n.t('deployments:UptimeCheckDialog.useAValueBetween1')
   return errors
 }
 
 function describe(error: unknown): { field?: keyof Form; message: string } {
   if (error instanceof ApiError) {
-    if (error.code === 'UPTIME_CHECK_LIMIT') return { message: 'This deployment already has the maximum of 10 uptime checks.' }
-    if (error.code === 'UPTIME_CHECK_NOT_FOUND') return { message: 'This check no longer exists.' }
-    if (error.status === 403) return { message: 'You are not allowed to change uptime checks.' }
+    if (error.code === 'UPTIME_CHECK_LIMIT') return { message: i18n.t('deployments:UptimeCheckDialog.thisDeploymentAlreadyHasThe') }
+    if (error.code === 'UPTIME_CHECK_NOT_FOUND') return { message: i18n.t('deployments:UptimeCheckDialog.thisCheckNoLongerExists') }
+    if (error.status === 403) return { message: i18n.t('deployments:UptimeCheckDialog.youAreNotAllowedTo') }
     if (error.status === 400 || error.status === 422) return { message: error.details?.join(' ') || error.message }
   }
-  return { message: 'Could not save the check. Please try again.' }
+  return { message: i18n.t('deployments:UptimeCheckDialog.couldNotSaveTheCheck') }
 }
 
 export function UptimeCheckDialog({
@@ -68,6 +70,7 @@ export function UptimeCheckDialog({
   check: UptimeCheck | null
   onClose: () => void
 }) {
+  const { t } = useTranslation('deployments')
   const [form, setForm] = useState<Form>(() => initial(check))
   const [errors, setErrors] = useState<Errors>({})
   const [formError, setFormError] = useState<string | null>(null)
@@ -101,52 +104,52 @@ export function UptimeCheckDialog({
     <Dialog
       open
       onOpenChange={(open) => !open && onClose()}
-      title={check ? 'Edit uptime check' : 'Add uptime check'}
+      title={check ? t('UptimeCheckDialog.editUptimeCheck') : t('UptimeCheckDialog.addUptimeCheck')}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('UptimeCheckDialog.cancel')}
           </Button>
           <Button variant="primary" loading={save.isPending} onClick={onSave}>
-            Save
+            {t('UptimeCheckDialog.save')}
           </Button>
         </>
       }
     >
       <div className="uptime-form">
-        <TextField label="Name" value={form.name} error={errors.name} onChange={(e) => set('name', e.target.value)} />
+        <TextField label={t('UptimeCheckDialog.name')} value={form.name} error={errors.name} onChange={(e) => set('name', e.target.value)} />
         <TextField
-          label="URL"
+          label={t('UptimeCheckDialog.url')}
           type="url"
           inputMode="url"
           value={form.url}
           error={errors.url}
-          help="Shipir requests this URL from the server. Query strings are kept, credentials are not allowed."
+          help={t('UptimeCheckDialog.shipirRequestsThisUrlFrom')}
           onChange={(e) => set('url', e.target.value)}
         />
         <TextField
-          label="Expected status"
+          label={t('UptimeCheckDialog.expectedStatus')}
           inputMode="numeric"
           value={form.expectedStatus}
           error={errors.expectedStatus}
-          help="Leave empty to accept any 2xx."
+          help={t('UptimeCheckDialog.leaveEmptyToAcceptAny')}
           onChange={(e) => set('expectedStatus', e.target.value)}
         />
         <TextField
-          label="Interval (seconds)"
+          label={t('UptimeCheckDialog.intervalSeconds')}
           inputMode="numeric"
           value={form.intervalSeconds}
           error={errors.intervalSeconds}
           onChange={(e) => set('intervalSeconds', e.target.value)}
         />
         <TextField
-          label="Timeout (seconds)"
+          label={t('UptimeCheckDialog.timeoutSeconds')}
           inputMode="numeric"
           value={form.timeoutSeconds}
           error={errors.timeoutSeconds}
           onChange={(e) => set('timeoutSeconds', e.target.value)}
         />
-        <Switch label="Enabled" checked={form.enabled} onChange={(e) => set('enabled', e.target.checked)} />
+        <Switch label={t('UptimeCheckDialog.enabled')} checked={form.enabled} onChange={(e) => set('enabled', e.target.checked)} />
         {formError && (
           <p role="alert" className="ui-error">
             {formError}

@@ -7,9 +7,14 @@ import { Button, Select, Skeleton } from '../../shared/ui/index.ts'
 import { formatSize } from '../hosts/format.ts'
 import { parseRange, RANGES, useStatsHistory, type StatsHistory } from './api.ts'
 import { containerCharts, hostCharts } from './model.ts'
+import { useTranslation } from 'react-i18next'
+import { formatNumber } from '../../shared/i18n/format.ts'
 import './UsageHistory.css'
 
-const percent = (v: number) => `${v > 0 && v < 10 ? v.toFixed(1) : Math.round(v)}%`
+const percent = (v: number) => {
+  const digits = v > 0 && v < 10 ? 1 : 0
+  return `${formatNumber(v, { minimumFractionDigits: digits, maximumFractionDigits: digits })}%`
+}
 const rate = (v: number) => `${formatSize(Math.round(v))}/s`
 
 /** Range kept in the URL so a view can be shared and survives reload. */
@@ -29,9 +34,10 @@ function useRangeParam(param: string): [Range, (r: Range) => void] {
 }
 
 function RangeSelect({ value, onChange }: { value: Range; onChange: (r: Range) => void }) {
+  const { t } = useTranslation('usage-history')
   return (
     <div className="usage__range">
-      <Select label="Time range" hideLabel value={value} onChange={(e) => onChange(e.target.value as Range)}>
+      <Select label={t('UsageHistory.timeRange')} hideLabel value={value} onChange={(e) => onChange(e.target.value as Range)}>
         {RANGES.map((r) => (
           <option key={r.value} value={r.value}>
             {r.label}
@@ -53,27 +59,28 @@ interface FrameProps {
 
 /** Range selector plus the loading, error and empty states shared by both views. */
 function Frame({ query, range, onRange, children, hasData }: FrameProps) {
+  const { t } = useTranslation('usage-history')
   const { data, isPending, isError, error, refetch, isFetching } = query
   return (
     <div className="usage">
       <RangeSelect value={range} onChange={onRange} />
       {isPending && (
-        <div className="usage__grid" role="status" aria-label="Loading usage history" aria-busy="true">
+        <div className="usage__grid" role="status" aria-label={t('UsageHistory.loadingUsageHistory')} aria-busy="true">
           <Skeleton height="10.5rem" />
           <Skeleton height="10.5rem" />
         </div>
       )}
       {isError && !data && (
         <div role="alert" className="ui-error">
-          <p>Could not load usage history.</p>
+          <p>{t('UsageHistory.couldNotLoadUsageHistory')}</p>
           {!(error instanceof ApiError && error.status === 404) && (
             <Button variant="ghost" size="sm" onClick={() => void refetch()}>
-              Retry
+              {t('UsageHistory.retry')}
             </Button>
           )}
         </div>
       )}
-      {data && !hasData(data) && <p className="usage__empty">No history yet: samples are recorded every minute.</p>}
+      {data && !hasData(data) && <p className="usage__empty">{t('UsageHistory.noHistoryYetSamplesAre')}</p>}
       {data && hasData(data) && (
         // The previous render stays (dimmed) while a new range loads, so the layout does not jump.
         <div className={isFetching ? 'usage__body usage__body--busy' : 'usage__body'}>{children(data)}</div>
@@ -99,16 +106,17 @@ function Chart({ title, series, history, format, max, binary }: { title: string;
 }
 
 function ContainerCharts({ history }: { history: StatsHistory }) {
+  const { t } = useTranslation('usage-history')
   const charts = useMemo(() => containerCharts(history), [history])
   if (!charts) return null
   // A multi-threaded container can use more than 100 % (several cores).
   const cpuMax = Math.max(100, ...charts.cpu[0].points.map((p) => p.v ?? 0))
   return (
     <div className="usage__grid">
-      <Chart title="CPU" series={charts.cpu} history={history} format={percent} max={cpuMax} />
-      <Chart title="Memory" series={charts.memory} history={history} format={formatSize} binary />
-      <Chart title="Network" series={charts.network} history={history} format={rate} binary />
-      <Chart title="Disk" series={charts.disk} history={history} format={rate} binary />
+      <Chart title={t('UsageHistory.cpu')} series={charts.cpu} history={history} format={percent} max={cpuMax} />
+      <Chart title={t('UsageHistory.memory')} series={charts.memory} history={history} format={formatSize} binary />
+      <Chart title={t('UsageHistory.network')} series={charts.network} history={history} format={rate} binary />
+      <Chart title={t('UsageHistory.disk')} series={charts.disk} history={history} format={rate} binary />
     </div>
   )
 }
@@ -125,6 +133,7 @@ export function ContainerUsageHistory({ hostId, containerId }: { hostId: string;
 }
 
 function HostCharts({ history }: { history: StatsHistory }) {
+  const { t } = useTranslation('usage-history')
   const charts = useMemo(() => hostCharts(history), [history])
   if (!charts) return null
   // The sum of several containers can pass 100 % on a multi-core host.
@@ -132,10 +141,10 @@ function HostCharts({ history }: { history: StatsHistory }) {
   return (
     <>
       <div className="usage__grid">
-        <Chart title="CPU (all containers)" series={charts.cpu} history={history} format={percent} max={cpuMax} />
-        <Chart title="Memory (all containers)" series={charts.memory} history={history} format={formatSize} binary />
+        <Chart title={t('UsageHistory.cpuAllContainers')} series={charts.cpu} history={history} format={percent} max={cpuMax} />
+        <Chart title={t('UsageHistory.memoryAllContainers')} series={charts.memory} history={history} format={formatSize} binary />
       </div>
-      {history.truncated && <p className="usage__note">Showing the {history.series.length} most recently active containers</p>}
+      {history.truncated && <p className="usage__note">{t('UsageHistory.showingTheLengthMostRecently', { count: history.series.length })}</p>}
     </>
   )
 }
@@ -145,13 +154,14 @@ function HostCharts({ history }: { history: StatsHistory }) {
  * (404), so roles without access see no empty card.
  */
 export function HostUsageHistory({ hostId }: { hostId: string }) {
+  const { t } = useTranslation('usage-history')
   const [range, setRange] = useRangeParam('usageRange')
   const query = useStatsHistory(hostId, range)
   if (query.error instanceof ApiError && query.error.status === 404) return null
   return (
     <section className="usage-card" aria-labelledby="usage-history-title">
       <h2 id="usage-history-title" className="usage__heading">
-        Usage history
+        {t('UsageHistory.usageHistory')}
       </h2>
       <Frame query={query} range={range} onRange={setRange} hasData={(h) => hostCharts(h) !== null}>
         {(h) => <HostCharts history={h} />}

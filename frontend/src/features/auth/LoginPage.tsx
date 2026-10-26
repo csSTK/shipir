@@ -6,33 +6,36 @@ import { throttleMessage } from './throttleErrors.ts'
 import { twoFactorErrorMessage } from './twoFactorErrors.ts'
 import { AuthBrand } from './AuthBrand.tsx'
 import { PasswordResetPage } from './PasswordResetPage.tsx'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
 import './LoginPage.css'
 
 /** Browser-flow failure codes of the backend (`/?oidc_error=<CODE>`); anything else gets the generic text. */
 const OIDC_ERRORS: Record<string, string> = {
-  ROLE_DENIED: 'Your groups do not give you access to Shipir. Ask an administrator.',
-  USER_NOT_PROVISIONED: 'No Shipir account is linked to this identity. Ask an administrator to create one.',
-  USER_DISABLED: 'Your account is disabled. Ask an administrator.',
-  PROVISIONING_FAILED: 'Your account could not be created. Ask an administrator.',
-  PROVIDER_UNREACHABLE: 'The single sign-on provider could not be reached. Try again later.',
-  PROVIDER_INVALID: 'The single sign-on provider answered unexpectedly. Ask an administrator.',
-  OIDC_NOT_CONFIGURED: 'Single sign-on is not configured.',
-  ENCRYPTION_KEY_MISSING: 'Single sign-on is not available. Ask an administrator.',
+  get ROLE_DENIED() { return i18n.t('auth:LoginPage.yourGroupsDoNotGive') },
+  get USER_NOT_PROVISIONED() { return i18n.t('auth:LoginPage.noShipirAccountIsLinked') },
+  get USER_DISABLED() { return i18n.t('auth:LoginPage.yourAccountIsDisabledAsk') },
+  get PROVISIONING_FAILED() { return i18n.t('auth:LoginPage.yourAccountCouldNotBe') },
+  get PROVIDER_UNREACHABLE() { return i18n.t('auth:LoginPage.theSingleSignOnProvider') },
+  get PROVIDER_INVALID() { return i18n.t('auth:LoginPage.theSingleSignOnProvider2') },
+  get OIDC_NOT_CONFIGURED() { return i18n.t('auth:LoginPage.singleSignOnIsNot') },
+  get ENCRYPTION_KEY_MISSING() { return i18n.t('auth:LoginPage.singleSignOnIsNot2') },
 }
-const OIDC_GENERIC_ERROR = 'Single sign-on failed. Please try again.'
+const OIDC_GENERIC_ERROR = () => i18n.t('auth:LoginPage.singleSignOnFailedPlease')
 
 function readOidcError(): string | null {
   try {
     const code = new URLSearchParams(window.location.search).get('oidc_error')
     if (code === null) return null
     window.history.replaceState(null, '', window.location.pathname)
-    return OIDC_ERRORS[code] ?? OIDC_GENERIC_ERROR
+    return OIDC_ERRORS[code] ?? OIDC_GENERIC_ERROR()
   } catch {
     return null
   }
 }
 
 export function LoginPage() {
+  const { t } = useTranslation('auth')
   const [view, setView] = useState<'login' | 'reset'>('login')
   const [notice, setNotice] = useState<string | null>(null)
   const [mfaPending, setMfaPending] = useState(false)
@@ -54,7 +57,7 @@ export function LoginPage() {
       <PasswordResetPage
         onBack={() => setView('login')}
         onDone={() => {
-          setNotice('Your password was reset. Sign in with the new password.')
+          setNotice(t('LoginPage.yourPasswordWasResetSign'))
           setView('login')
         }}
       />
@@ -87,6 +90,7 @@ function SignInForm({
   onForgot: () => void
   onMfaRequired: () => void
 }) {
+  const { t } = useTranslation('auth')
   const login = useLogin()
   const oidcQuery = useOidcConfig()
   const oidc = oidcQuery.data
@@ -123,10 +127,10 @@ function SignInForm({
   const errorMessage = !login.isError
     ? problem
     : throttleMessage(login.error) ?? (login.error instanceof ApiError && login.error.status === 401
-      ? 'Invalid username or password.'
+      ? t('LoginPage.invalidUsernameOrPassword')
       : login.error instanceof ApiError && login.error.code === 'LOCAL_LOGIN_DISABLED'
-        ? 'Local login is disabled. Use single sign-on.'
-      : 'Sign-in failed. Please try again.')
+        ? t('LoginPage.localLoginIsDisabledUse')
+      : t('LoginPage.signInFailedPleaseTry'))
 
   return (
     <main className="login">
@@ -134,7 +138,7 @@ function SignInForm({
         <AuthBrand />
         <Card className="auth-card">
         <form className="login__card" onSubmit={onSubmit}>
-        <h1 className="login__title">Sign in to Shipir</h1>
+        <h1 className="login__title">{t('LoginPage.signInToShipir')}</h1>
         {oidcError && (
           <p className="login__error" role="alert">
             {oidcError}
@@ -147,12 +151,12 @@ function SignInForm({
             variant={showLocal ? 'secondary' : 'primary'}
             onClick={() => window.location.assign('/api/auth/oidc/authorize')}
           >
-            Sign in with {oidc.displayName ?? 'single sign-on'}
+            {t('LoginPage.signInWithDisplayname', { displayName: oidc.displayName ?? 'single sign-on' })}
           </Button>
         )}
         {showOidc && !showLocal && (
           <Button className="login__link" variant="ghost" size="sm" onClick={() => setForceLocal(true)}>
-            Use local login
+            {t('LoginPage.useLocalLogin')}
           </Button>
         )}
         {showLocal && (
@@ -163,7 +167,7 @@ function SignInForm({
           </p>
         )}
         <label className="login__field">
-          <span>Username</span>
+          <span>{t('LoginPage.username')}</span>
           <input
             ref={usernameRef}
             value={username}
@@ -176,7 +180,7 @@ function SignInForm({
           />
         </label>
         <label className="login__field">
-          <span>Password</span>
+          <span>{t('LoginPage.password')}</span>
           <input
             ref={passwordRef}
             type="password"
@@ -191,10 +195,10 @@ function SignInForm({
           {errorMessage}
         </p>
         <Button className="login__submit" variant="primary" type="submit" disabled={login.isPending} loading={login.isPending}>
-          {login.isPending ? 'Signing in…' : 'Sign in'}
+          {login.isPending ? t('LoginPage.signingIn') : t('LoginPage.signIn')}
         </Button>
         <Button className="login__link" variant="ghost" size="sm" onClick={onForgot}>
-          Forgot password?
+          {t('LoginPage.forgotPassword')}
         </Button>
           </>
         )}
@@ -207,6 +211,7 @@ function SignInForm({
 
 /** Second sign-in step for users with 2FA: authenticator code or a recovery code. */
 function CodeStep({ onBack }: { onBack: (notice: string | null) => void }) {
+  const { t } = useTranslation('auth')
   const verify = useVerifyTwoFactor()
   const [code, setCode] = useState('')
   const codeRef = useRef<HTMLInputElement>(null)
@@ -221,7 +226,7 @@ function CodeStep({ onBack }: { onBack: (notice: string | null) => void }) {
     verify.mutate(code.trim(), {
       onError: (error) => {
         if (error instanceof ApiError && error.code === 'UNAUTHENTICATED') {
-          onBack('Your sign-in expired. Enter your username and password again.')
+          onBack(t('LoginPage.yourSignInExpiredEnter'))
           return
         }
         setCode('')
@@ -236,10 +241,10 @@ function CodeStep({ onBack }: { onBack: (notice: string | null) => void }) {
         <AuthBrand />
         <Card className="auth-card">
           <form className="login__card" onSubmit={onSubmit}>
-            <h1 className="login__title">Two-factor authentication</h1>
-            <p className="login__hint">Enter the 6-digit code from your authenticator app, or one of your recovery codes.</p>
+            <h1 className="login__title">{t('LoginPage.twoFactorAuthentication')}</h1>
+            <p className="login__hint">{t('LoginPage.enterThe6DigitCode')}</p>
             <label className="login__field">
-              <span>Authentication code</span>
+              <span>{t('LoginPage.authenticationCode')}</span>
               <input
                 ref={codeRef}
                 value={code}
@@ -252,13 +257,13 @@ function CodeStep({ onBack }: { onBack: (notice: string | null) => void }) {
               />
             </label>
             <p className="login__error" role="alert">
-              {verify.isError && twoFactorErrorMessage(verify.error, 'Verification failed. Please try again.')}
+              {verify.isError && twoFactorErrorMessage(verify.error, t('LoginPage.verificationFailedPleaseTryAgain'))}
             </p>
             <Button className="login__submit" variant="primary" type="submit" disabled={verify.isPending} loading={verify.isPending}>
-              Verify
+              {t('LoginPage.verify')}
             </Button>
             <Button className="login__link" variant="ghost" size="sm" onClick={() => onBack(null)}>
-              Back to sign in
+              {t('LoginPage.backToSignIn')}
             </Button>
           </form>
         </Card>

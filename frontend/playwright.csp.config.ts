@@ -8,7 +8,7 @@ export default defineConfig({
   testDir: './e2e-csp',
   retries: process.env.CI ? 2 : 0,
   reporter: [['list']],
-  use: { baseURL: `http://localhost:${port}` },
+  use: { baseURL: `http://localhost:${port}`, locale: 'en-US' },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     command: `pnpm build && pnpm exec vite preview --port ${port} --strictPort`,

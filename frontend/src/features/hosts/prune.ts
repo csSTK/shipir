@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError, apiFetch } from '../../shared/api/client.ts'
 import { HOSTS_OVERVIEW_KEY } from './api.ts'
 import { describeResourceError } from './format.ts'
+import i18n from 'i18next'
 
 export type ImagePruneMode = 'DANGLING' | 'UNUSED'
 
@@ -75,9 +76,9 @@ export function usePrune(hostId: string) {
 
 export function describePruneError(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.code === 'NOTHING_SELECTED') return 'Select at least one kind of resource to clean up.'
-    if (error.status === 403) return 'You are not allowed to clean up this environment.'
+    if (error.code === 'NOTHING_SELECTED') return i18n.t('hosts:prune.selectAtLeastOneKind')
+    if (error.status === 403) return i18n.t('hosts:prune.youAreNotAllowedTo')
     if (error.status === 502 || error.code === 'HOST_NOT_FOUND') return describeResourceError(error)
   }
-  return 'The cleanup failed. Try again.'
+  return i18n.t('hosts:prune.theCleanupFailedTryAgain')
 }

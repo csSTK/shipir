@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query'
 import { ApiError, apiFetch } from '../../../shared/api/client.ts'
+import i18n from 'i18next'
 
 export type Shell = '/bin/sh' | '/bin/bash'
 
@@ -25,17 +26,17 @@ export function useStartExec(hostId: string, containerId: string) {
 }
 
 const ERROR_TEXT: Record<string, string> = {
-  INVALID_CONTAINER_STATE: 'The container is not running. Start it to open a console.',
-  EXEC_LIMIT_REACHED: 'Too many consoles are open. Close one and try again.',
-  RESOURCE_NOT_FOUND: 'This container no longer exists.',
-  HOST_NOT_FOUND: 'This environment does not exist or was deleted.',
-  INVALID_SHELL: 'This shell is not allowed.',
-  INVALID_SIZE: 'The terminal size is not valid.',
-  UNREACHABLE: 'Could not reach the Docker host.',
-  TIMEOUT: 'The connection to the Docker host timed out.',
+  get INVALID_CONTAINER_STATE() { return i18n.t('containers:api.theContainerIsNotRunning') },
+  get EXEC_LIMIT_REACHED() { return i18n.t('containers:api.tooManyConsolesAreOpen') },
+  get RESOURCE_NOT_FOUND() { return i18n.t('containers:api.thisContainerNoLongerExists') },
+  get HOST_NOT_FOUND() { return i18n.t('containers:api.thisEnvironmentDoesNotExist') },
+  get INVALID_SHELL() { return i18n.t('containers:api.thisShellIsNotAllowed') },
+  get INVALID_SIZE() { return i18n.t('containers:api.theTerminalSizeIsNot') },
+  get UNREACHABLE() { return i18n.t('containers:api.couldNotReachTheDocker') },
+  get TIMEOUT() { return i18n.t('containers:api.theConnectionToTheDocker') },
 }
 
 export function describeExecError(error: unknown): string {
   const code = error instanceof ApiError ? error.code : null
-  return (code && ERROR_TEXT[code]) || 'Could not open the console.'
+  return (code && ERROR_TEXT[code]) || i18n.t('containers:api.couldNotOpenTheConsole')
 }

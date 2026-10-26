@@ -10,9 +10,11 @@ import { ContainerResourcesDialog } from '../ContainerResourcesDialog.tsx'
 import { CreateContainerDialog } from '../CreateContainerDialog.tsx'
 import { ContainerFilesPanel } from '../files/ContainerFilesPanel.tsx'
 import { describeDetailsError, isNotFound, useContainerDetails, type ContainerDetails, type ContainerPort } from './api.ts'
+import { useTranslation } from 'react-i18next'
+import { dateTimeFormat, formatNumber, ONE_DECIMAL } from '../../../shared/i18n/format.ts'
 import './ContainerDetailsPage.css'
 
-const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' })
+const dateFormat = dateTimeFormat({ dateStyle: 'medium', timeStyle: 'medium' })
 const formatDate = (iso: string | null) => (iso ? dateFormat.format(new Date(iso)) : '–')
 
 function stateTone(state: string): 'ok' | 'warn' | 'bad' | 'muted' {
@@ -46,23 +48,24 @@ function Empty({ children }: { children: ReactNode }) {
 }
 
 function Overview({ c }: { c: ContainerDetails }) {
+  const { t } = useTranslation('containers')
   const restart = c.restartPolicy.name
     ? c.restartPolicy.maxRetries > 0
-      ? `${c.restartPolicy.name} (max ${c.restartPolicy.maxRetries})`
+      ? t('ContainerDetailsPage.restartPolicyMax', { policy: c.restartPolicy.name, max: c.restartPolicy.maxRetries })
       : c.restartPolicy.name
     : 'no'
   const rows: [string, ReactNode][] = [
-    ['Image', c.image],
-    ['Created', formatDate(c.created)],
-    ['Started', formatDate(c.startedAt)],
-    ['Restart policy', restart],
-    ['Restarts', String(c.restartCount)],
-    ['Command', c.command.length ? c.command.join(' ') : '–'],
-    ['Deployment', c.composeProject ?? '–'],
-    ['Service', c.composeService ?? '–'],
+    [t('ContainerDetailsPage.image'), c.image],
+    [t('ContainerDetailsPage.created'), formatDate(c.created)],
+    [t('ContainerDetailsPage.started'), formatDate(c.startedAt)],
+    [t('ContainerDetailsPage.restartPolicy'), restart],
+    [t('ContainerDetailsPage.restarts'), String(c.restartCount)],
+    [t('ContainerDetailsPage.command'), c.command.length ? c.command.join(' ') : '–'],
+    [t('ContainerDetailsPage.deployment'), c.composeProject ?? '–'],
+    [t('ContainerDetailsPage.service'), c.composeService ?? '–'],
   ]
   return (
-    <Section title="Overview">
+    <Section title={t('ContainerDetailsPage.overview')}>
       <dl className="cdetails__grid">
         {rows.map(([k, v]) => (
           <div key={k} className="cdetails__row">
@@ -72,7 +75,7 @@ function Overview({ c }: { c: ContainerDetails }) {
         ))}
       </dl>
       {c.ports.length > 0 && (
-        <ul className="cdetails__chips" aria-label="Ports">
+        <ul className="cdetails__chips" aria-label={t('ContainerDetailsPage.ports')}>
           {c.ports.map((p) => (
             <li key={`${p.protocol}${p.containerPort}${p.hostIp}${p.hostPort}`}>{formatPort(p)}</li>
           ))}
@@ -91,17 +94,19 @@ function rates(samples: StatSample[], pick: (s: StatSample) => number): number[]
 }
 
 function Metric({ name, value, values, max }: { name: string; value: string; values: number[]; max?: number }) {
+  const { t } = useTranslation('containers')
   return (
     <div className="cdetails__metric">
       <span className="cdetails__metric-name">{name}</span>
       <span className="cdetails__metric-value">{value}</span>
-      <Sparkline values={values} max={max} width={160} height={36} label={`${name} history`} />
+      <Sparkline values={values} max={max} width={160} height={36} label={t('ContainerDetailsPage.nameHistory', { name })} />
     </div>
   )
 }
 
 /** Live resource usage of a running container, fed by the host stats topic. */
 function Stats({ hostId, containerId }: { hostId: string; containerId: string }) {
+  const { t } = useTranslation('containers')
   const { series, code } = useContainerStats(hostId)
   const samples = series[containerId]
   const now = samples?.[samples.length - 1]
@@ -114,22 +119,22 @@ function Stats({ hostId, containerId }: { hostId: string; containerId: string })
   const read = rate((s) => s.blkRead)
   const write = rate((s) => s.blkWrite)
   return (
-    <Section title="Resource usage">
+    <Section title={t('ContainerDetailsPage.resourceUsage')}>
       {!now ? (
-        <Empty>{code ? 'Live stats are currently unavailable.' : 'Waiting for the first sample…'}</Empty>
+        <Empty>{code ? t('ContainerDetailsPage.liveStatsAreCurrentlyUnavailable') : t('ContainerDetailsPage.waitingForTheFirstSample')}</Empty>
       ) : (
         <div className="cdetails__metrics">
-          <Metric name="CPU" value={`${now.cpu.toFixed(1)}%`} values={samples.map((s) => s.cpu)} max={100} />
+          <Metric name={t('ContainerDetailsPage.cpu')} value={`${formatNumber(now.cpu, ONE_DECIMAL)}%`} values={samples.map((s) => s.cpu)} max={100} />
           <Metric
-            name="Memory"
+            name={t('ContainerDetailsPage.memory')}
             value={now.memLimit > 0 ? `${formatSize(now.memUsed)} / ${formatSize(now.memLimit)}` : formatSize(now.memUsed)}
             values={samples.map((s) => s.memUsed)}
             max={now.memLimit}
           />
-          <Metric name="Network in" value={rx.text} values={rx.values} />
-          <Metric name="Network out" value={tx.text} values={tx.values} />
-          <Metric name="Disk read" value={read.text} values={read.values} />
-          <Metric name="Disk write" value={write.text} values={write.values} />
+          <Metric name={t('ContainerDetailsPage.networkIn')} value={rx.text} values={rx.values} />
+          <Metric name={t('ContainerDetailsPage.networkOut')} value={tx.text} values={tx.values} />
+          <Metric name={t('ContainerDetailsPage.diskRead')} value={read.text} values={read.values} />
+          <Metric name={t('ContainerDetailsPage.diskWrite')} value={write.text} values={write.values} />
         </div>
       )}
     </Section>
@@ -137,17 +142,18 @@ function Stats({ hostId, containerId }: { hostId: string; containerId: string })
 }
 
 function Env({ env }: { env: ContainerDetails['env'] }) {
+  const { t } = useTranslation('containers')
   const [revealed, setRevealed] = useState(false)
   const hasValues = env.some((e) => e.value !== null)
   return (
-    <Section title="Environment">
+    <Section title={t('ContainerDetailsPage.environment')}>
       {env.length === 0 ? (
-        <Empty>No environment variables.</Empty>
+        <Empty>{t('ContainerDetailsPage.noEnvironmentVariables')}</Empty>
       ) : (
         <>
           {hasValues && (
             <Button variant="ghost" size="sm" className="cdetails__btn" onClick={() => setRevealed((r) => !r)}>
-              {revealed ? 'Hide values' : 'Reveal values'}
+              {revealed ? t('ContainerDetailsPage.hideValues') : t('ContainerDetailsPage.revealValues')}
             </Button>
           )}
           <dl className="cdetails__env">
@@ -156,11 +162,11 @@ function Env({ env }: { env: ContainerDetails['env'] }) {
                 <dt>{e.key}</dt>
                 <dd>
                   {e.value === null ? (
-                    <span className="cdetails__muted">Hidden for your role</span>
+                    <span className="cdetails__muted">{t('ContainerDetailsPage.hiddenForYourRole')}</span>
                   ) : revealed ? (
                     <code>{e.value}</code>
                   ) : (
-                    <span aria-label="Masked value">••••••••</span>
+                    <span aria-label={t('ContainerDetailsPage.maskedValue')}>••••••••</span>
                   )}
                 </dd>
               </div>
@@ -173,16 +179,17 @@ function Env({ env }: { env: ContainerDetails['env'] }) {
 }
 
 function Mounts({ mounts }: { mounts: ContainerDetails['mounts'] }) {
+  const { t } = useTranslation('containers')
   return (
-    <Section title="Mounts">
+    <Section title={t('ContainerDetailsPage.mounts')}>
       {mounts.length === 0 ? (
-        <Empty>No mounts.</Empty>
+        <Empty>{t('ContainerDetailsPage.noMounts')}</Empty>
       ) : (
         <ul className="cdetails__list">
           {mounts.map((m) => (
             <li key={m.destination} className="cdetails__item">
               <Badge tone="muted">{m.type}</Badge> <code>{m.source ?? m.name ?? '–'}</code> → <code>{m.destination}</code>
-              {m.readOnly && <span className="cdetails__muted"> read-only</span>}
+              {m.readOnly && <span className="cdetails__muted"> {t('ContainerDetailsPage.readOnly')}</span>}
             </li>
           ))}
         </ul>
@@ -192,10 +199,11 @@ function Mounts({ mounts }: { mounts: ContainerDetails['mounts'] }) {
 }
 
 function Networks({ networks }: { networks: ContainerDetails['networks'] }) {
+  const { t } = useTranslation('containers')
   return (
-    <Section title="Network">
+    <Section title={t('ContainerDetailsPage.network')}>
       {networks.length === 0 ? (
-        <Empty>Not connected to any network.</Empty>
+        <Empty>{t('ContainerDetailsPage.notConnectedToAnyNetwork')}</Empty>
       ) : (
         <ul className="cdetails__list">
           {networks.map((n) => (
@@ -204,10 +212,10 @@ function Networks({ networks }: { networks: ContainerDetails['networks'] }) {
               <dl className="cdetails__grid">
                 {(
                   [
-                    ['IP address', n.ipAddress],
-                    ['Gateway', n.gateway],
-                    ['MAC address', n.macAddress],
-                    ['Aliases', n.aliases.join(', ')],
+                    [t('ContainerDetailsPage.ipAddress'), n.ipAddress],
+                    [t('ContainerDetailsPage.gateway'), n.gateway],
+                    [t('ContainerDetailsPage.macAddress'), n.macAddress],
+                    [t('ContainerDetailsPage.aliases'), n.aliases.join(', ')],
                   ] as const
                 ).map(([k, v]) => (
                   <div key={k} className="cdetails__row">
@@ -225,11 +233,12 @@ function Networks({ networks }: { networks: ContainerDetails['networks'] }) {
 }
 
 function Labels({ labels }: { labels: Record<string, string> }) {
+  const { t } = useTranslation('containers')
   const entries = Object.entries(labels).sort(([a], [b]) => a.localeCompare(b))
   return (
-    <Section title="Labels">
+    <Section title={t('ContainerDetailsPage.labels')}>
       {entries.length === 0 ? (
-        <Empty>No labels.</Empty>
+        <Empty>{t('ContainerDetailsPage.noLabels')}</Empty>
       ) : (
         <dl className="cdetails__env">
           {entries.map(([k, v]) => (
@@ -245,19 +254,18 @@ function Labels({ labels }: { labels: Record<string, string> }) {
 }
 
 function Health({ health }: { health: NonNullable<ContainerDetails['health']> }) {
+  const { t } = useTranslation('containers')
   return (
-    <Section title="Health">
+    <Section title={t('ContainerDetailsPage.health')}>
       <p>
         <Badge tone={healthTone(health.status)}>{health.status}</Badge>
-        {health.failingStreak > 0 && <span className="cdetails__muted"> {health.failingStreak} failing in a row</span>}
+        {health.failingStreak > 0 && <span className="cdetails__muted"> {t('ContainerDetailsPage.failingstreakFailingInARow', { failingStreak: health.failingStreak })}</span>}
       </p>
       {health.recentLogs.length > 0 && (
         <ul className="cdetails__list">
           {health.recentLogs.map((l) => (
             <li key={l.start} className="cdetails__item">
-              <span className="cdetails__muted">
-                {formatDate(l.start)} · exit {l.exitCode}
-              </span>
+              <span className="cdetails__muted">{t('ContainerDetailsPage.dateExitExitcode', { date: formatDate(l.start), exitCode: l.exitCode })}</span>
               <pre className="cdetails__output">{l.output}</pre>
             </li>
           ))}
@@ -269,6 +277,7 @@ function Health({ health }: { health: NonNullable<ContainerDetails['health']> })
 
 /** `/environments/:id/containers/:cid`: inspect data of one container, read-only; links to logs and (ADMIN) console. */
 export function ContainerDetailsPage() {
+  const { t } = useTranslation('containers')
   const { id: hostId = '', cid = '' } = useParams()
   const { data: user } = useCurrentUser()
   const { data: c, isPending, error, refetch } = useContainerDetails(hostId, cid)
@@ -282,21 +291,21 @@ export function ContainerDetailsPage() {
     ? [
         {
           value: 'overview',
-          label: 'Overview',
+          label: t('ContainerDetailsPage.overview'),
           content: (
             <div className="cdetails__stack">
               <Overview c={c} />
               {c.state === 'running' && <Stats hostId={hostId} containerId={c.id} />}
-              <Section title="Usage history">
+              <Section title={t('ContainerDetailsPage.usageHistory')}>
                 <ContainerUsageHistory hostId={hostId} containerId={c.id} />
               </Section>
             </div>
           ),
         },
-        { value: 'environment', label: 'Environment', content: <Env env={c.env} /> },
+        { value: 'environment', label: t('ContainerDetailsPage.environment'), content: <Env env={c.env} /> },
         {
           value: 'storage',
-          label: 'Storage & network',
+          label: t('ContainerDetailsPage.storageNetwork'),
           content: (
             <div className="cdetails__stack">
               <Mounts mounts={c.mounts} />
@@ -304,10 +313,10 @@ export function ContainerDetailsPage() {
             </div>
           ),
         },
-        { value: 'labels', label: 'Labels', content: <Labels labels={c.labels} /> },
-        ...(c.health ? [{ value: 'health', label: 'Health', content: <Health health={c.health} /> }] : []),
+        { value: 'labels', label: t('ContainerDetailsPage.labels'), content: <Labels labels={c.labels} /> },
+        ...(c.health ? [{ value: 'health', label: t('ContainerDetailsPage.health'), content: <Health health={c.health} /> }] : []),
         ...(user?.role === 'ADMIN'
-          ? [{ value: 'files', label: 'Files', content: <ContainerFilesPanel hostId={hostId} containerId={c.id} /> }]
+          ? [{ value: 'files', label: t('ContainerDetailsPage.files'), content: <ContainerFilesPanel hostId={hostId} containerId={c.id} /> }]
           : []),
       ]
     : []
@@ -315,15 +324,15 @@ export function ContainerDetailsPage() {
   return (
     <div className="cdetails">
       <Link to={base} className="cdetails__back">
-        <ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" /> Containers
+        <ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" /> {t('ContainerDetailsPage.containers')}
       </Link>
-      {isPending && <p role="status">Loading…</p>}
+      {isPending && <p role="status">{t('ContainerDetailsPage.loading')}</p>}
       {error && (
         <div role="alert" className="ui-error">
-          <p>{isNotFound(error) ? 'This container no longer exists.' : describeDetailsError(error)}</p>
+          <p>{isNotFound(error) ? t('ContainerDetailsPage.thisContainerNoLongerExists') : describeDetailsError(error)}</p>
           {!isNotFound(error) && (
             <Button variant="ghost" size="sm" onClick={() => void refetch()}>
-              Retry
+              {t('ContainerDetailsPage.retry')}
             </Button>
           )}
         </div>
@@ -343,13 +352,13 @@ export function ContainerDetailsPage() {
               </span>
             }
             actions={
-              <nav className="cdetails__nav" aria-label="Container views">
+              <nav className="cdetails__nav" aria-label={t('ContainerDetailsPage.containerViews')}>
                 <Link className="ui-btn ui-btn--secondary ui-btn--md" to={`${base}/${cid}/logs`}>
-                  Logs
+                  {t('ContainerDetailsPage.logs')}
                 </Link>
                 {user?.role === 'ADMIN' && c.state === 'running' && (
                   <Link className="ui-btn ui-btn--secondary ui-btn--md" to={`${base}/${cid}/console`}>
-                    Console
+                    {t('ContainerDetailsPage.console')}
                   </Link>
                 )}
               </nav>
@@ -357,26 +366,26 @@ export function ContainerDetailsPage() {
           />
           {canEdit && (
             <div className="cdetails__edit">
-              <div className="cdetails__nav" role="group" aria-label="Change container">
+              <div className="cdetails__nav" role="group" aria-label={t('ContainerDetailsPage.changeContainer')}>
                 <Button disabled={!!c.composeProject || needsAdmin} onClick={() => setDialog('edit')}>
-                  Edit
+                  {t('ContainerDetailsPage.edit')}
                 </Button>
                 <Button disabled={!!c.composeProject || needsAdmin} onClick={() => setDialog('duplicate')}>
-                  Duplicate
+                  {t('ContainerDetailsPage.duplicate')}
                 </Button>
                 <Button disabled={!!c.composeProject} onClick={() => setDialog('limits')}>
-                  Resource limits
+                  {t('ContainerDetailsPage.resourceLimits')}
                 </Button>
               </div>
               {!c.composeProject && needsAdmin && (
-                <p className="cdetails__muted">This container is privileged or uses the host network, so editing or duplicating it needs an administrator.</p>
+                <p className="cdetails__muted">{t('ContainerDetailsPage.thisContainerIsPrivilegedOr')}</p>
               )}
               {c.composeProject && (
-                <p className="cdetails__muted">This container is managed by the deployment {c.composeProject}. Change it there.</p>
+                <p className="cdetails__muted">{t('ContainerDetailsPage.thisContainerIsManagedBy', { composeProject: c.composeProject })}</p>
               )}
             </div>
           )}
-          <Tabs label="Container sections" items={tabs} />
+          <Tabs label={t('ContainerDetailsPage.containerSections')} items={tabs} />
           {(dialog === 'edit' || dialog === 'duplicate') && (
             <CreateContainerDialog
               hostId={hostId}

@@ -2,11 +2,14 @@ import { useState } from 'react'
 import { useSetAutoUpdate, type GitInfo } from './api.ts'
 import { describePollError, describeDeploymentError } from './deploymentErrors.ts'
 import { Button, Card, Switch } from '../../shared/ui/index.ts'
+import { useTranslation } from 'react-i18next'
+import { formatDateTime } from '../../shared/i18n/format.ts'
 
 const DEFAULT_INTERVAL_MINUTES = 5
 
 /** Repository, ref, commit and auto-update settings of a Git deployment. Pull & redeploy lives in the header actions. */
 export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploymentId: string; hostId: string; git: GitInfo; canWrite: boolean }) {
+  const { t } = useTranslation('deployments')
   const save = useSetAutoUpdate(hostId)
   const [enabled, setEnabled] = useState(git.autoUpdateEnabled)
   const [minutes, setMinutes] = useState(String(Math.round((git.autoUpdateIntervalSeconds ?? DEFAULT_INTERVAL_MINUTES * 60) / 60)))
@@ -17,7 +20,7 @@ export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploy
     setSaved(false)
     const value = Number(minutes)
     if (!Number.isInteger(value) || value < 1) {
-      setProblem('The interval must be at least 1 minute.')
+      setProblem(t('GitSourcePanel.theIntervalMustBeAt'))
       return
     }
     setProblem(null)
@@ -25,7 +28,7 @@ export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploy
       { deploymentId, enabled, intervalSeconds: value * 60 },
       {
         onSuccess: () => setSaved(true),
-        onError: (err) => setProblem(describeDeploymentError(err, 'Could not save the auto-update settings. Try again.')),
+        onError: (err) => setProblem(describeDeploymentError(err, t('GitSourcePanel.couldNotSaveTheAuto'))),
       },
     )
   }
@@ -33,24 +36,24 @@ export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploy
   return (
     <Card className="sd-panel" role="region" aria-labelledby={`git-${deploymentId}`}>
       <h3 className="sd-panel__title" id={`git-${deploymentId}`}>
-        Git source
+        {t('GitSourcePanel.gitSource')}
       </h3>
       <dl className="sd-git">
-        <dt>Repository</dt>
+        <dt>{t('GitSourcePanel.repository')}</dt>
         <dd>{git.repoUrl}</dd>
-        <dt>Branch or tag</dt>
+        <dt>{t('GitSourcePanel.branchOrTag')}</dt>
         <dd>{git.ref}</dd>
-        <dt>File path</dt>
+        <dt>{t('GitSourcePanel.filePath')}</dt>
         <dd>{git.composePath}</dd>
-        <dt>Commit</dt>
-        <dd>{git.lastCommitSha ? <code>{git.lastCommitSha.slice(0, 7)}</code> : 'Not deployed yet'}</dd>
-        <dt>Credential</dt>
-        <dd>{git.credentialId ? 'Stored credential' : 'None (public repository)'}</dd>
+        <dt>{t('GitSourcePanel.commit')}</dt>
+        <dd>{git.lastCommitSha ? <code>{git.lastCommitSha.slice(0, 7)}</code> : t('GitSourcePanel.notDeployedYet')}</dd>
+        <dt>{t('GitSourcePanel.credential')}</dt>
+        <dd>{git.credentialId ? t('GitSourcePanel.storedCredential') : t('GitSourcePanel.nonePublicRepository')}</dd>
       </dl>
 
       <div className="sd-auto">
         <Switch
-          label="Auto-update"
+          label={t('GitSourcePanel.autoUpdate')}
           checked={enabled}
           disabled={!canWrite}
           onChange={(e) => {
@@ -58,9 +61,9 @@ export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploy
             setSaved(false)
           }}
         />
-        <p className="sd-muted">Checks the repository regularly and redeploys when the branch has a new commit.</p>
+        <p className="sd-muted">{t('GitSourcePanel.checksTheRepositoryRegularlyAnd')}</p>
         <label className="ui-form-field sd-auto__interval">
-          <span>Check every (minutes)</span>
+          <span>{t('GitSourcePanel.checkEveryMinutes')}</span>
           <input
             type="number"
             min={1}
@@ -77,13 +80,13 @@ export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploy
         {canWrite && (
           <div>
             <Button variant="secondary" onClick={submit} disabled={save.isPending}>
-              Save auto-update
+              {t('GitSourcePanel.saveAutoUpdate')}
             </Button>
           </div>
         )}
         {saved && (
           <p role="status" className="sd-muted">
-            Saved.
+            {t('GitSourcePanel.saved')}
           </p>
         )}
         {problem && (
@@ -91,10 +94,10 @@ export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploy
             {problem}
           </p>
         )}
-        {git.lastPolledAt && <p className="sd-muted">Last checked: {new Date(git.lastPolledAt).toLocaleString()}</p>}
+        {git.lastPolledAt && <p className="sd-muted">{t('GitSourcePanel.lastChecked')} {formatDateTime(git.lastPolledAt)}</p>}
         {git.lastPollError && (
           <p role="alert" className="ui-error">
-            Last check failed: {describePollError(git.lastPollError)}
+            {t('GitSourcePanel.lastCheckFailedPollerror', { pollError: describePollError(git.lastPollError) })}
           </p>
         )}
       </div>

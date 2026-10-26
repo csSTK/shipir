@@ -1,4 +1,6 @@
 import { ApiError } from '../../shared/api/client.ts'
+import i18n from 'i18next'
+import { formatNumber } from '../../shared/i18n/format.ts'
 
 const GIB = 1024 ** 3
 const MIB = 1024 ** 2
@@ -9,27 +11,30 @@ export function formatMemory(bytes: number): string {
 }
 
 function trim(value: number): string {
-  return String(Math.round(value * 10) / 10)
+  return formatNumber(value, { maximumFractionDigits: 1, useGrouping: false })
 }
 
-export function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
-  return `${count} ${count === 1 ? singular : pluralForm}`
+export type CountNoun = 'cpu' | 'image' | 'volume' | 'container' | 'entry'
+
+/** "1 image" / "3 images": the plural forms live in the hosts namespace (`count.<noun>_one` / `_other`). */
+export function countOf(count: number, noun: CountNoun): string {
+  return i18n.t(`hosts:count.${noun}`, { count })
 }
 
 /** Short, human explanation for the error codes of the overview endpoint. */
 const ERROR_MESSAGES: Record<string, string> = {
-  UNREACHABLE: 'Could not reach the Docker host.',
-  TIMEOUT: 'The connection timed out.',
-  TLS_ERROR: 'The TLS handshake failed.',
-  PERMISSION_DENIED: 'Permission denied for this Docker endpoint.',
-  INVALID_TLS_MATERIAL: 'The stored certificate or key is invalid.',
-  DECRYPTION_FAILED: 'The stored certificates could not be decrypted.',
-  ENCRYPTION_KEY_MISSING: 'The server has no encryption key configured.',
-  HOST_NOT_FOUND: 'This environment does not exist or was deleted.',
+  get UNREACHABLE() { return i18n.t('hosts:format.couldNotReachTheDocker') },
+  get TIMEOUT() { return i18n.t('hosts:format.theConnectionTimedOut') },
+  get TLS_ERROR() { return i18n.t('hosts:format.theTlsHandshakeFailed') },
+  get PERMISSION_DENIED() { return i18n.t('hosts:format.permissionDeniedForThisDocker') },
+  get INVALID_TLS_MATERIAL() { return i18n.t('hosts:format.theStoredCertificateOrKey') },
+  get DECRYPTION_FAILED() { return i18n.t('hosts:format.theStoredCertificatesCouldNot') },
+  get ENCRYPTION_KEY_MISSING() { return i18n.t('hosts:format.theServerHasNoEncryption') },
+  get HOST_NOT_FOUND() { return i18n.t('hosts:format.thisEnvironmentDoesNotExist') },
 }
 
 export function describeError(code: string | null): string {
-  return (code && ERROR_MESSAGES[code]) || 'The environment is not reachable.'
+  return (code && ERROR_MESSAGES[code]) || i18n.t('hosts:format.theEnvironmentIsNotReachable')
 }
 
 /** Message for a failed resource request (`/api/hosts/{id}/...`): maps the 404/502 error code. */

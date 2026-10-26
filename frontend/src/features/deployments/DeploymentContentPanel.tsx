@@ -4,12 +4,14 @@ import { useLoadDeploymentEnv, useUpdateDeployment, type EnvEntry, type ManagedD
 import { EnvEditor, toPayload, validateEnv, YamlEditor } from './editor/index.ts'
 import { describeDeploymentError } from './deploymentErrors.ts'
 import { Button, Card } from '../../shared/ui/index.ts'
+import { useTranslation } from 'react-i18next'
 
 /**
  * Compose file and environment variables of a deployment. Read-only until "Edit"; saving creates a draft
  * version, it does not deploy. Variable values stay on the server unless the user opens them.
  */
 export function DeploymentContentPanel({ deployment, hostId, canWrite }: { deployment: ManagedDeploymentDetail; hostId: string; canWrite: boolean }) {
+  const { t } = useTranslation('deployments')
   const update = useUpdateDeployment(hostId)
   const loadEnv = useLoadDeploymentEnv(hostId)
   const [editing, setEditing] = useState(false)
@@ -40,7 +42,7 @@ export function DeploymentContentPanel({ deployment, hostId, canWrite }: { deplo
 
   function save() {
     if (env && validateEnv(env).size > 0) {
-      setError({ message: 'Fix the highlighted variables first.' })
+      setError({ message: t('DeploymentContentPanel.fixTheHighlightedVariablesFirst') })
       return
     }
     setError(null)
@@ -55,8 +57,8 @@ export function DeploymentContentPanel({ deployment, hostId, canWrite }: { deplo
           setError({
             message:
               err instanceof ApiError && err.code === 'INVALID_COMPOSE'
-                ? 'The Compose file is not valid.'
-                : describeDeploymentError(err, 'Could not save the changes. Try again.'),
+                ? t('DeploymentContentPanel.theComposeFileIsNot')
+                : describeDeploymentError(err, t('DeploymentContentPanel.couldNotSaveTheChanges')),
             details: err instanceof ApiError && err.code === 'INVALID_COMPOSE' ? err.details : undefined,
           }),
       },
@@ -66,36 +68,36 @@ export function DeploymentContentPanel({ deployment, hostId, canWrite }: { deplo
   return (
     <Card className="sd-panel">
       <div className="sd-panel__head">
-        <h3 className="sd-panel__title">Compose file</h3>
+        <h3 className="sd-panel__title">{t('DeploymentContentPanel.composeFile')}</h3>
         {canWrite && !editing && (
           <Button variant="secondary" onClick={startEdit}>
-            Edit
+            {t('DeploymentContentPanel.edit')}
           </Button>
         )}
       </div>
       {saved && !editing && (
         <p role="status" className="sd-muted">
-          Saved as a draft. Deploy to apply the changes.
+          {t('DeploymentContentPanel.savedAsADraftDeploy')}
         </p>
       )}
-      {gitManaged && editing && <p className="sd-muted">The Compose file comes from the Git repository. Only variables can be edited here.</p>}
+      {gitManaged && editing && <p className="sd-muted">{t('DeploymentContentPanel.theComposeFileComesFrom')}</p>}
       <YamlEditor
-        label="Compose file"
+        label={t('DeploymentContentPanel.composeFile')}
         value={editing ? yaml : deployment.yaml}
         onChange={setYaml}
         readOnly={!editing || gitManaged}
         error={editing && error && error.details ? error : null}
       />
 
-      <h3 className="sd-panel__title">Environment variables</h3>
+      <h3 className="sd-panel__title">{t('DeploymentContentPanel.environmentVariables')}</h3>
       {editing && env ? (
         <EnvEditor value={env} onChange={setEnv} />
       ) : (
         <>
           {deployment.envKeys.length === 0 ? (
-            <p className="sd-muted">No variables.</p>
+            <p className="sd-muted">{t('DeploymentContentPanel.noVariables')}</p>
           ) : (
-            <ul className="sd-keys" aria-label="Environment variable names">
+            <ul className="sd-keys" aria-label={t('DeploymentContentPanel.environmentVariableNames')}>
               {deployment.envKeys.map((k) => (
                 <li key={k}>
                   <code>{k}</code>
@@ -105,15 +107,15 @@ export function DeploymentContentPanel({ deployment, hostId, canWrite }: { deplo
           )}
           {editing && (
             <>
-              <p className="sd-muted">Stored values stay unchanged unless you edit the variables.</p>
+              <p className="sd-muted">{t('DeploymentContentPanel.storedValuesStayUnchangedUnless')}</p>
               {loadEnv.isError && (
                 <p role="alert" className="ui-error">
-                  {describeDeploymentError(loadEnv.error, 'Could not load the variables. Try again.')}
+                  {describeDeploymentError(loadEnv.error, t('DeploymentContentPanel.couldNotLoadTheVariables'))}
                 </p>
               )}
               <div>
                 <Button variant="secondary" onClick={openValues} disabled={loadEnv.isPending}>
-                  Edit variables
+                  {t('DeploymentContentPanel.editVariables')}
                 </Button>
               </div>
             </>
@@ -130,10 +132,10 @@ export function DeploymentContentPanel({ deployment, hostId, canWrite }: { deplo
           )}
           <div className="sd-panel__actions">
             <Button variant="ghost" onClick={cancel} disabled={update.isPending}>
-              Cancel
+              {t('DeploymentContentPanel.cancel')}
             </Button>
             <Button variant="primary" onClick={save} disabled={update.isPending}>
-              Save
+              {t('DeploymentContentPanel.save')}
             </Button>
           </div>
         </>

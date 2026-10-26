@@ -3,14 +3,18 @@ import { Button, TextField } from '../../shared/ui/index.ts'
 import { twoFactorErrorMessage } from './twoFactorErrors.ts'
 import { useConfirmTwoFactor, useTwoFactorSetup, type TwoFactorSetup } from './api.ts'
 import { QrCode } from './QrCode.tsx'
+import { useTranslation } from 'react-i18next'
+import { Trans } from '../../shared/i18n/Trans.tsx'
+import i18n from 'i18next'
 import './TwoFactorEnrollment.css'
 
 function RecoveryCodes({ codes, onDone, doneLabel }: { codes: string[]; onDone: () => void; doneLabel: string }) {
+  const { t } = useTranslation('auth')
   const [copied, setCopied] = useState(false)
   const text = codes.join('\n')
 
   function download() {
-    const url = URL.createObjectURL(new Blob([`Shipir recovery codes\n\n${text}\n`], { type: 'text/plain' }))
+    const url = URL.createObjectURL(new Blob([t('TwoFactorEnrollment.shipirRecoveryCodesText', { text })], { type: 'text/plain' }))
     const link = document.createElement('a')
     link.href = url
     link.download = 'shipir-recovery-codes.txt'
@@ -29,8 +33,7 @@ function RecoveryCodes({ codes, onDone, doneLabel }: { codes: string[]; onDone: 
   return (
     <div className="tfa">
       <p className="tfa__text">
-        Two-factor authentication is on. Store these recovery codes somewhere safe: each works once if you lose your
-        authenticator. They are shown only now.
+        {t('TwoFactorEnrollment.twoFactorAuthenticationIsOn')}
       </p>
       <ul className="tfa__codes">
         {codes.map((code) => (
@@ -41,10 +44,10 @@ function RecoveryCodes({ codes, onDone, doneLabel }: { codes: string[]; onDone: 
       </ul>
       <div className="tfa__actions">
         <Button size="sm" onClick={download}>
-          Download codes
+          {t('TwoFactorEnrollment.downloadCodes')}
         </Button>
         <Button size="sm" onClick={() => void copy()}>
-          {copied ? 'Copied' : 'Copy codes'}
+          {copied ? t('TwoFactorEnrollment.copied') : t('TwoFactorEnrollment.copyCodes')}
         </Button>
       </div>
       <Button variant="primary" onClick={onDone}>
@@ -61,7 +64,7 @@ function RecoveryCodes({ codes, onDone, doneLabel }: { codes: string[]; onDone: 
 export function TwoFactorEnrollment({
   onFinished,
   onConfirmed,
-  finishLabel = 'Done',
+  finishLabel = i18n.t('auth:TwoFactorEnrollment.done'),
   autoStart = false,
 }: {
   onFinished: () => void
@@ -70,6 +73,7 @@ export function TwoFactorEnrollment({
   finishLabel?: string
   autoStart?: boolean
 }) {
+  const { t } = useTranslation('auth')
   const setupMutation = useTwoFactorSetup()
   const confirmMutation = useConfirmTwoFactor()
   const [setup, setSetup] = useState<TwoFactorSetup | null>(null)
@@ -104,16 +108,16 @@ export function TwoFactorEnrollment({
       <div className="tfa">
         {setupMutation.isError && (
           <p role="alert" className="tfa__error">
-            {twoFactorErrorMessage(setupMutation.error, 'Could not start the setup. Try again.')}
+            {twoFactorErrorMessage(setupMutation.error, t('TwoFactorEnrollment.couldNotStartTheSetup'))}
           </p>
         )}
         {setupMutation.isPending ? (
           <p className="tfa__text" role="status">
-            Preparing…
+            {t('TwoFactorEnrollment.preparing')}
           </p>
         ) : (
           <Button variant="primary" onClick={start}>
-            Enable two-factor authentication
+            {t('TwoFactorEnrollment.enableTwoFactorAuthentication')}
           </Button>
         )}
       </div>
@@ -122,13 +126,13 @@ export function TwoFactorEnrollment({
 
   return (
     <form className="tfa" onSubmit={confirm}>
-      <p className="tfa__text">Scan the QR code with an authenticator app, or enter the key by hand. Then enter the 6-digit code it shows.</p>
-      <QrCode value={setup.otpauthUri} label="QR code for two-factor setup" />
+      <p className="tfa__text">{t('TwoFactorEnrollment.scanTheQrCodeWith')}</p>
+      <QrCode value={setup.otpauthUri} label={t('TwoFactorEnrollment.qrCodeForTwoFactor')} />
       <p className="tfa__text">
-        Key: <code className="tfa__secret">{setup.secret}</code>
+        <Trans t={t} i18nKey="TwoFactorEnrollment.keySecret" values={{ secret: setup.secret }} components={{ code: <code className="tfa__secret" /> }} />
       </p>
       <TextField
-        label="Verification code"
+        label={t('TwoFactorEnrollment.verificationCode')}
         value={code}
         onChange={(e) => setCode(e.target.value)}
         inputMode="numeric"
@@ -137,11 +141,11 @@ export function TwoFactorEnrollment({
       />
       {confirmMutation.isError && (
         <p role="alert" className="tfa__error">
-          {twoFactorErrorMessage(confirmMutation.error, 'Could not confirm the code. Try again.')}
+          {twoFactorErrorMessage(confirmMutation.error, t('TwoFactorEnrollment.couldNotConfirmTheCode'))}
         </p>
       )}
       <Button variant="primary" type="submit" loading={confirmMutation.isPending}>
-        Confirm
+        {t('TwoFactorEnrollment.confirm')}
       </Button>
     </form>
   )

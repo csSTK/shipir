@@ -7,12 +7,14 @@ import { describeResourceError } from '../hosts/format.ts'
 import { Badge, Button, PageHeader, ResourceTable, type ResourceColumn } from '../../shared/ui/index.ts'
 import { useDeleteNetwork, useNetworks, type Network } from './api.ts'
 import { CreateNetworkDialog } from './CreateNetworkDialog.tsx'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
 import './NetworksPage.css'
 
 const columns: ResourceColumn<Network>[] = [
   {
     id: 'name',
-    header: 'Name',
+    get header() { return i18n.t('networks:NetworksPage.name') },
     sortValue: (n) => n.name,
     render: (n) => (
       <>
@@ -20,20 +22,21 @@ const columns: ResourceColumn<Network>[] = [
         {n.internal && (
           <>
             {' '}
-            <Badge tone="muted">Internal</Badge>
+            <Badge tone="muted">{i18n.t('networks:NetworksPage.internal')}</Badge>
           </>
         )}
       </>
     ),
   },
-  { id: 'driver', header: 'Driver', sortValue: (n) => n.driver, render: (n) => n.driver },
-  { id: 'scope', header: 'Scope', sortValue: (n) => n.scope, render: (n) => n.scope },
-  { id: 'subnet', header: 'Subnet', sortValue: (n) => n.subnet, render: (n) => n.subnet ?? '–' },
-  { id: 'containers', header: 'Containers', sortValue: (n) => n.containerCount, render: (n) => n.containerCount },
+  { id: 'driver', get header() { return i18n.t('networks:NetworksPage.driver') }, sortValue: (n) => n.driver, render: (n) => n.driver },
+  { id: 'scope', get header() { return i18n.t('networks:NetworksPage.scope') }, sortValue: (n) => n.scope, render: (n) => n.scope },
+  { id: 'subnet', get header() { return i18n.t('networks:NetworksPage.subnet') }, sortValue: (n) => n.subnet, render: (n) => n.subnet ?? '–' },
+  { id: 'containers', get header() { return i18n.t('networks:NetworksPage.containers') }, sortValue: (n) => n.containerCount, render: (n) => n.containerCount },
 ]
 
 /** `/environments/:id/networks`: all networks of one environment. */
 export function NetworksPage() {
+  const { t } = useTranslation('networks')
   const { id = '' } = useParams()
   const { data: user } = useCurrentUser()
   const canWrite = user?.role === 'ADMIN' || user?.role === 'OPERATOR'
@@ -45,23 +48,23 @@ export function NetworksPage() {
   return (
     <section className="networks">
       <PageHeader
-        title="Networks"
+        title={t('NetworksPage.networks')}
         actions={
           canWrite && (
             <Button variant="primary" onClick={() => setCreating(true)}>
-              Create network
+              {t('NetworksPage.createNetwork')}
             </Button>
           )
         }
       />
       <ResourceTable
-        label="networks"
+        label={t('NetworksPage.networks2')}
         columns={columns}
         rows={data}
         rowKey={(n) => n.id}
         searchText={(n) => `${n.name} ${n.driver} ${n.scope} ${n.subnet ?? ''}`}
         defaultSort="name"
-        emptyMessage="No networks in this environment."
+        emptyMessage={t('NetworksPage.noNetworksInThisEnvironment')}
         isPending={isPending}
         error={error ? describeResourceError(error) : null}
         onRetry={() => void refetch()}

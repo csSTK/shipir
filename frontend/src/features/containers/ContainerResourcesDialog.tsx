@@ -2,6 +2,8 @@ import { useState, type FormEvent } from 'react'
 import { Button, Dialog } from '../../shared/ui/index.ts'
 import { describeResourcesError, useUpdateContainerResources, type ResourcesSpec, type RestartPolicy } from './api.ts'
 import type { ContainerDetails } from './details/api.ts'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
 
 const MIB = 1024 * 1024
 const MIN_MEMORY_MIB = 6
@@ -13,16 +15,16 @@ function build(memory: string, cpus: string, policy: RestartPolicy, current: Res
   const spec: ResourcesSpec = { memoryBytes: null, cpus: null, restartPolicy: policy === current ? null : policy }
   if (memory.trim()) {
     const mib = Number(memory)
-    if (!Number.isFinite(mib) || (mib !== 0 && mib < MIN_MEMORY_MIB)) problems.memory = `Use 0 (unlimited) or at least ${MIN_MEMORY_MIB} MiB.`
+    if (!Number.isFinite(mib) || (mib !== 0 && mib < MIN_MEMORY_MIB)) problems.memory = i18n.t('containers:ContainerResourcesDialog.use0UnlimitedOrAt', { MIN_MEMORY_MIB })
     else spec.memoryBytes = Math.round(mib * MIB)
   }
   if (cpus.trim()) {
     const n = Number(cpus)
-    if (!Number.isFinite(n) || (n !== 0 && (n < 0.01 || n > 1024))) problems.cpus = 'Use 0 (unlimited) or 0.01 to 1024.'
+    if (!Number.isFinite(n) || (n !== 0 && (n < 0.01 || n > 1024))) problems.cpus = i18n.t('containers:ContainerResourcesDialog.use0UnlimitedOr0')
     else spec.cpus = n
   }
   if (Object.keys(problems).length === 0 && spec.memoryBytes === null && spec.cpus === null && spec.restartPolicy === null) {
-    problems.form = 'Change at least one value.'
+    problems.form = i18n.t('containers:ContainerResourcesDialog.changeAtLeastOneValue')
   }
   return { spec, problems }
 }
@@ -34,6 +36,7 @@ function currentPolicy(c: ContainerDetails): RestartPolicy {
 
 /** Changes memory, CPU and restart policy of a container in place (no restart). The current limits are not part of inspect, so empty fields stay unchanged. */
 export function ContainerResourcesDialog({ hostId, container, onClose }: { hostId: string; container: ContainerDetails; onClose: () => void }) {
+  const { t } = useTranslation('containers')
   const current = currentPolicy(container)
   const [memory, setMemory] = useState('')
   const [cpus, setCpus] = useState('')
@@ -52,36 +55,36 @@ export function ContainerResourcesDialog({ hostId, container, onClose }: { hostI
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()} title="Resource limits" description={`Applied to ${container.name} without restarting it.`}>
+    <Dialog open onOpenChange={(open) => !open && onClose()} title={t('ContainerResourcesDialog.resourceLimits')} description={t('ContainerResourcesDialog.appliedToNameWithoutRestarting', { name: container.name })}>
       <form className="ui-form" onSubmit={submit} noValidate>
         <div className="ui-form-row">
           <label className="ui-form-field">
-            Memory limit (MiB)
+            {t('ContainerResourcesDialog.memoryLimitMib')}
             <input
               value={memory}
               onChange={(e) => setMemory(e.target.value)}
               inputMode="decimal"
-              placeholder="Unchanged"
+              placeholder={t('ContainerResourcesDialog.unchanged')}
               aria-invalid={touched && problems.memory ? true : undefined}
               autoComplete="off"
               autoFocus
             />
           </label>
           <label className="ui-form-field">
-            CPUs
+            {t('ContainerResourcesDialog.cpus')}
             <input
               value={cpus}
               onChange={(e) => setCpus(e.target.value)}
               inputMode="decimal"
-              placeholder="Unchanged"
+              placeholder={t('ContainerResourcesDialog.unchanged')}
               aria-invalid={touched && problems.cpus ? true : undefined}
               autoComplete="off"
             />
           </label>
         </div>
-        <p className="ui-hint">Leave a field empty to keep its current limit, enter 0 to remove it.</p>
+        <p className="ui-hint">{t('ContainerResourcesDialog.leaveAFieldEmptyTo')}</p>
         <label className="ui-form-field">
-          Restart policy
+          {t('ContainerResourcesDialog.restartPolicy')}
           <select value={policy} onChange={(e) => setPolicy(e.target.value as RestartPolicy)}>
             {POLICIES.map((p) => (
               <option key={p} value={p}>
@@ -102,10 +105,10 @@ export function ContainerResourcesDialog({ hostId, container, onClose }: { hostI
         )}
         <div className="ui-dialog-actions">
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('ContainerResourcesDialog.cancel')}
           </Button>
           <Button variant="primary" type="submit" loading={update.isPending}>
-            Apply limits
+            {t('ContainerResourcesDialog.applyLimits')}
           </Button>
         </div>
       </form>

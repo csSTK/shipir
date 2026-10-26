@@ -3,6 +3,9 @@ import { Button, Card, TextField } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { useCreateBackup } from './api.ts'
 import { SettingsPage } from './SettingsPage.tsx'
+import { useTranslation } from 'react-i18next'
+import { Trans } from '../../shared/i18n/Trans.tsx'
+import i18n from 'i18next'
 import './SettingsPage.css'
 
 const MIN_LENGTH = 12
@@ -10,21 +13,22 @@ const MAX_LENGTH = 128
 
 /** Mirrors the backend rule (12-128 characters) and the confirmation match. Null = valid. */
 function validatePassphrase(passphrase: string, confirm: string): string | null {
-  if (passphrase.length < MIN_LENGTH) return `Use at least ${MIN_LENGTH} characters.`
-  if (passphrase.length > MAX_LENGTH) return `Use at most ${MAX_LENGTH} characters.`
-  if (passphrase !== confirm) return 'The passphrases do not match.'
+  if (passphrase.length < MIN_LENGTH) return i18n.t('settings:BackupSettingsPage.useAtLeastMinLength', { MIN_LENGTH })
+  if (passphrase.length > MAX_LENGTH) return i18n.t('settings:BackupSettingsPage.useAtMostMaxLength', { MAX_LENGTH })
+  if (passphrase !== confirm) return i18n.t('settings:BackupSettingsPage.thePassphrasesDoNotMatch')
   return null
 }
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.status === 403) return 'You are not allowed to create backups.'
+    if (error.status === 403) return i18n.t('settings:BackupSettingsPage.youAreNotAllowedTo')
     if (error.details?.length) return error.details.join(' ')
   }
-  return 'Could not create the backup. Try again.'
+  return i18n.t('settings:BackupSettingsPage.couldNotCreateTheBackup')
 }
 
 function BackupForm() {
+  const { t } = useTranslation('settings')
   const [passphrase, setPassphrase] = useState('')
   const [confirm, setConfirm] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
@@ -55,19 +59,19 @@ function BackupForm() {
     <Card>
       <form className="settings__form" onSubmit={submit} noValidate>
         <TextField
-          label="Passphrase"
+          label={t('BackupSettingsPage.passphrase')}
           type="password"
           autoComplete="new-password"
           maxLength={MAX_LENGTH}
           value={passphrase}
-          help={`At least ${MIN_LENGTH} characters.`}
+          help={t('BackupSettingsPage.atLeastMinLengthCharacters', { MIN_LENGTH })}
           onChange={(e) => {
             setPassphrase(e.target.value)
             setDone(false)
           }}
         />
         <TextField
-          label="Confirm passphrase"
+          label={t('BackupSettingsPage.confirmPassphrase')}
           type="password"
           autoComplete="new-password"
           maxLength={MAX_LENGTH}
@@ -84,12 +88,12 @@ function BackupForm() {
         )}
         {done && (
           <p role="status" className="settings__ok">
-            Backup downloaded.
+            {t('BackupSettingsPage.backupDownloaded')}
           </p>
         )}
         <div className="settings__actions">
           <Button variant="primary" type="submit" loading={backup.isPending}>
-            {backup.isPending ? 'Creating backup…' : 'Download backup'}
+            {backup.isPending ? t('BackupSettingsPage.creatingBackup') : t('BackupSettingsPage.downloadBackup')}
           </Button>
         </div>
       </form>
@@ -99,24 +103,23 @@ function BackupForm() {
 
 /** Settings > Backup: ADMIN downloads an encrypted export of the database and stack files. */
 export function BackupSettingsPage() {
+  const { t } = useTranslation('settings')
   return (
     <SettingsPage
-      title="Backup"
-      subtitle="Download an encrypted copy of the Shipir database and stack files. The passphrase you choose protects the file."
+      title={t('BackupSettingsPage.backup')}
+      subtitle={t('BackupSettingsPage.downloadAnEncryptedCopyOf')}
     >
       <Card role="note" className="settings__form">
         <p className="settings__text">
-          <strong>The passphrase cannot be recovered.</strong> Without it the backup cannot be opened, so store it
-          somewhere safe.
+          <Trans t={t} i18nKey="BackupSettingsPage.thePassphraseCannotBeRecovered" components={{ strong: <strong /> }} />
         </p>
         <p className="settings__muted">
-          The encryption key (<code>SHIPIR_ENCRYPTION_KEY</code>) is not part of the backup. Keep it separately: the
-          encrypted values in the database need it after a restore.
+          <Trans t={t} i18nKey="BackupSettingsPage.theEncryptionKeyShipirEncryption" components={{ code: <code /> }} />
         </p>
       </Card>
       <BackupForm />
       <p className="settings__muted">
-        To restore a backup, follow <em>Backup &amp; restore</em> in the README.
+        <Trans t={t} i18nKey="BackupSettingsPage.toRestoreABackupFollow" components={{ em: <em /> }} />
       </p>
     </SettingsPage>
   )

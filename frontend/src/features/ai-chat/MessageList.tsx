@@ -4,6 +4,7 @@ import './MessageList.css'
 import { ActionConfirmCard } from './ActionConfirmCard.tsx'
 import type { ChatMessage } from './api.ts'
 import { toolLabel } from './toolLabel.ts'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   messages: ChatMessage[]
@@ -24,6 +25,7 @@ function toolNames(messages: ChatMessage[]): Map<string, string> {
 }
 
 export function MessageList({ messages, readOnly = false, busyMessageId = null, actionErrors = {}, onResolve, live }: Props) {
+  const { t } = useTranslation('ai-chat')
   const names = toolNames(messages)
   const end = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -31,7 +33,7 @@ export function MessageList({ messages, readOnly = false, busyMessageId = null, 
   }, [messages, live])
 
   return (
-    <div className="chat-messages" role="log" aria-label="Conversation">
+    <div className="chat-messages" role="log" aria-label={t('MessageList.conversation')}>
       {messages.map((m) => {
         if (m.role === 'USER') {
           return (
@@ -66,7 +68,7 @@ export function MessageList({ messages, readOnly = false, busyMessageId = null, 
         return tool ? (
           <p key={m.id} className="chat-activity">
             <Check size={16} strokeWidth={1.75} aria-hidden="true" />
-            Looked up {toolLabel(tool)}
+            {t('MessageList.lookedUpToollabel', { toolLabel: toolLabel(tool) })}
           </p>
         ) : null
       })}

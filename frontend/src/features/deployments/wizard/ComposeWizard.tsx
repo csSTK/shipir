@@ -16,6 +16,7 @@ import {
 } from './model.ts'
 import './wizard.css'
 import { Button } from '../../../shared/ui/index.ts'
+import { useTranslation } from 'react-i18next'
 
 function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
   return (
@@ -69,30 +70,31 @@ function ResourceList({
   fields: Map<string, string>
   onChange: (next: ResourceForm[]) => void
 }) {
-  const singular = kind === 'networks' ? 'Network' : 'Volume'
+  const { t } = useTranslation('deployments')
+  const singular = kind === 'networks' ? t('ComposeWizard.network') : t('ComposeWizard.volume')
   return (
     <section className="wz-section" aria-label={title}>
       <h3 className="wz-section__title">{title}</h3>
-      {rows.length === 0 && <p className="wz-hint">None declared.</p>}
+      {rows.length === 0 && <p className="wz-hint">{t('ComposeWizard.noneDeclared')}</p>}
       {rows.map((r, i) => (
         <div className="wz-row wz-row--resource" key={i}>
-          <Field label={`${singular} name`} error={fields.get(`${kind}.${i}.name`)}>
-            <input aria-label={`${singular} ${i + 1} name`} value={r.name} onChange={(e) => onChange(patchAt(rows, i, { name: e.target.value }))} autoComplete="off" spellCheck={false} />
+          <Field label={t('ComposeWizard.singularName', { singular })} error={fields.get(`${kind}.${i}.name`)}>
+            <input aria-label={t('ComposeWizard.singularValueName', { singular, value: i + 1 })} value={r.name} onChange={(e) => onChange(patchAt(rows, i, { name: e.target.value }))} autoComplete="off" spellCheck={false} />
           </Field>
-          <Field label="Driver (optional)" error={fields.get(`${kind}.${i}.driver`)}>
-            <input aria-label={`${singular} ${i + 1} driver`} value={r.driver} onChange={(e) => onChange(patchAt(rows, i, { driver: e.target.value }))} autoComplete="off" spellCheck={false} />
+          <Field label={t('ComposeWizard.driverOptional')} error={fields.get(`${kind}.${i}.driver`)}>
+            <input aria-label={t('ComposeWizard.singularValueDriver', { singular, value: i + 1 })} value={r.driver} onChange={(e) => onChange(patchAt(rows, i, { driver: e.target.value }))} autoComplete="off" spellCheck={false} />
           </Field>
           <label className="wz-check">
             <input type="checkbox" checked={r.external} onChange={(e) => onChange(patchAt(rows, i, { external: e.target.checked }))} />
-            <span>Already exists</span>
+            <span>{t('ComposeWizard.alreadyExists')}</span>
           </label>
-          <Button variant="ghost" aria-label={`Remove ${singular.toLowerCase()} ${i + 1}`} onClick={() => onChange(remove(rows, i))}>
-            Remove
+          <Button variant="ghost" aria-label={t('ComposeWizard.removeLowercaseValue', { lowerCase: singular.toLowerCase(), value: i + 1 })} onClick={() => onChange(remove(rows, i))}>
+            {t('ComposeWizard.remove')}
           </Button>
         </div>
       ))}
       <Button variant="secondary" onClick={() => onChange([...rows, { name: '', driver: '', external: false }])}>
-        Add {singular.toLowerCase()}
+        {t('ComposeWizard.addLowercase', { lowerCase: singular.toLowerCase() })}
       </Button>
     </section>
   )
@@ -113,36 +115,37 @@ function ServiceCard({
   onChange: (patch: Partial<ServiceForm>) => void
   onRemove: () => void
 }) {
+  const { t } = useTranslation('deployments')
   const p = `services.${index}`
   const n = index + 1
   const err = (k: string) => fields.get(`${p}.${k}`)
   const others = state.services.filter((_, i) => i !== index).map((s) => s.name.trim()).filter(Boolean)
   const networkNames = state.networks.map((x) => x.name.trim()).filter(Boolean)
   return (
-    <fieldset className="wz-card" aria-label={`Service ${n}`}>
+    <fieldset className="wz-card" aria-label={t('ComposeWizard.serviceN', { n })}>
       <div className="wz-card__head">
-        <h3 className="wz-section__title">Service {n}</h3>
+        <h3 className="wz-section__title">{t('ComposeWizard.serviceN', { n })}</h3>
         {state.services.length > 1 && (
-          <Button variant="danger" aria-label={`Remove service ${n}`} onClick={onRemove}>
-            Remove
+          <Button variant="danger" aria-label={t('ComposeWizard.removeServiceN', { n })} onClick={onRemove}>
+            {t('ComposeWizard.remove')}
           </Button>
         )}
       </div>
       <div className="wz-row wz-row--two">
-        <Field label="Service name" error={err('name')}>
-          <input aria-label={`Service ${n} name`} value={service.name} onChange={(e) => onChange({ name: e.target.value })} autoComplete="off" spellCheck={false} />
+        <Field label={t('ComposeWizard.serviceName')} error={err('name')}>
+          <input aria-label={t('ComposeWizard.serviceNName', { n })} value={service.name} onChange={(e) => onChange({ name: e.target.value })} autoComplete="off" spellCheck={false} />
         </Field>
-        <Field label="Image" error={err('image')}>
-          <input aria-label={`Service ${n} image`} value={service.image} placeholder="nginx:1.27" onChange={(e) => onChange({ image: e.target.value })} autoComplete="off" spellCheck={false} />
+        <Field label={t('ComposeWizard.image')} error={err('image')}>
+          <input aria-label={t('ComposeWizard.serviceNImage', { n })} value={service.image} placeholder="nginx:1.27" onChange={(e) => onChange({ image: e.target.value })} autoComplete="off" spellCheck={false} />
         </Field>
       </div>
       <div className="wz-row wz-row--two">
-        <Field label="Command (optional)">
-          <input aria-label={`Service ${n} command`} value={service.command} onChange={(e) => onChange({ command: e.target.value })} autoComplete="off" spellCheck={false} />
+        <Field label={t('ComposeWizard.commandOptional')}>
+          <input aria-label={t('ComposeWizard.serviceNCommand', { n })} value={service.command} onChange={(e) => onChange({ command: e.target.value })} autoComplete="off" spellCheck={false} />
         </Field>
-        <Field label="Restart">
-          <select aria-label={`Service ${n} restart`} value={service.restart} onChange={(e) => onChange({ restart: e.target.value })}>
-            <option value="">Default</option>
+        <Field label={t('ComposeWizard.restart')}>
+          <select aria-label={t('ComposeWizard.serviceNRestart', { n })} value={service.restart} onChange={(e) => onChange({ restart: e.target.value })}>
+            <option value="">{t('ComposeWizard.default')}</option>
             {RESTART_POLICIES.map((r) => (
               <option key={r} value={r}>
                 {r}
@@ -153,81 +156,81 @@ function ServiceCard({
       </div>
 
       <fieldset className="wz-group">
-        <legend>Ports</legend>
+        <legend>{t('ComposeWizard.ports')}</legend>
         {service.ports.map((r, j) => (
           <div className="wz-row wz-row--port" key={j}>
-            <Field label="Host" error={err(`ports.${j}.host`)}>
-              <input aria-label={`Service ${n} port ${j + 1} host`} inputMode="numeric" placeholder="any" value={r.host} onChange={(e) => onChange({ ports: patchAt(service.ports, j, { host: e.target.value }) })} />
+            <Field label={t('ComposeWizard.host')} error={err(`ports.${j}.host`)}>
+              <input aria-label={t('ComposeWizard.serviceNPortValueHost', { n, value: j + 1 })} inputMode="numeric" placeholder={t('ComposeWizard.any')} value={r.host} onChange={(e) => onChange({ ports: patchAt(service.ports, j, { host: e.target.value }) })} />
             </Field>
-            <Field label="Container" error={err(`ports.${j}.container`)}>
-              <input aria-label={`Service ${n} port ${j + 1} container`} inputMode="numeric" value={r.container} onChange={(e) => onChange({ ports: patchAt(service.ports, j, { container: e.target.value }) })} />
+            <Field label={t('ComposeWizard.container')} error={err(`ports.${j}.container`)}>
+              <input aria-label={t('ComposeWizard.serviceNPortValueContainer', { n, value: j + 1 })} inputMode="numeric" value={r.container} onChange={(e) => onChange({ ports: patchAt(service.ports, j, { container: e.target.value }) })} />
             </Field>
-            <Field label="Protocol">
-              <select aria-label={`Service ${n} port ${j + 1} protocol`} value={r.protocol} onChange={(e) => onChange({ ports: patchAt(service.ports, j, { protocol: e.target.value as 'tcp' | 'udp' }) })}>
-                <option value="tcp">tcp</option>
-                <option value="udp">udp</option>
+            <Field label={t('ComposeWizard.protocol')}>
+              <select aria-label={t('ComposeWizard.serviceNPortValueProtocol', { n, value: j + 1 })} value={r.protocol} onChange={(e) => onChange({ ports: patchAt(service.ports, j, { protocol: e.target.value as 'tcp' | 'udp' }) })}>
+                <option value="tcp">{t('ComposeWizard.tcp')}</option>
+                <option value="udp">{t('ComposeWizard.udp')}</option>
               </select>
             </Field>
-            <Button variant="ghost" aria-label={`Remove service ${n} port ${j + 1}`} onClick={() => onChange({ ports: remove(service.ports, j) })}>
-              Remove
+            <Button variant="ghost" aria-label={t('ComposeWizard.removeServiceNPortValue', { n, value: j + 1 })} onClick={() => onChange({ ports: remove(service.ports, j) })}>
+              {t('ComposeWizard.remove')}
             </Button>
           </div>
         ))}
         <Button variant="secondary" onClick={() => onChange({ ports: [...service.ports, { host: '', container: '', protocol: 'tcp' }] })}>
-          Add port to service {n}
+          {t('ComposeWizard.addPortToServiceN', { n })}
         </Button>
       </fieldset>
 
       <fieldset className="wz-group">
-        <legend>Environment</legend>
+        <legend>{t('ComposeWizard.environment')}</legend>
         {service.env.map((r, j) => (
           <div className="wz-row wz-row--env" key={j}>
-            <Field label="Variable name" error={err(`env.${j}.key`)}>
-              <input aria-label={`Service ${n} env ${j + 1} name`} value={r.key} placeholder="NAME" onChange={(e) => onChange({ env: patchAt(service.env, j, { key: e.target.value }) })} autoComplete="off" spellCheck={false} />
+            <Field label={t('ComposeWizard.variableName')} error={err(`env.${j}.key`)}>
+              <input aria-label={t('ComposeWizard.serviceNEnvValueName', { n, value: j + 1 })} value={r.key} placeholder={t('ComposeWizard.name')} onChange={(e) => onChange({ env: patchAt(service.env, j, { key: e.target.value }) })} autoComplete="off" spellCheck={false} />
             </Field>
-            <Field label={r.ref ? 'Deployment variable' : 'Value'} error={err(`env.${j}.value`)}>
-              <input aria-label={`Service ${n} env ${j + 1} ${r.ref ? 'reference' : 'value'}`} value={r.value} onChange={(e) => onChange({ env: patchAt(service.env, j, { value: e.target.value }) })} autoComplete="off" spellCheck={false} />
+            <Field label={r.ref ? t('ComposeWizard.deploymentVariable') : t('ComposeWizard.value')} error={err(`env.${j}.value`)}>
+              <input aria-label={t('ComposeWizard.serviceNEnvValueValue2', { n, value: j + 1, value2: r.ref ? 'reference' : 'value' })} value={r.value} onChange={(e) => onChange({ env: patchAt(service.env, j, { value: e.target.value }) })} autoComplete="off" spellCheck={false} />
             </Field>
             <label className="wz-check">
               <input type="checkbox" checked={r.ref} onChange={(e) => onChange({ env: patchAt(service.env, j, { ref: e.target.checked }) })} />
-              <span>From deployment variable</span>
+              <span>{t('ComposeWizard.fromDeploymentVariable')}</span>
             </label>
-            <Button variant="ghost" aria-label={`Remove service ${n} env ${j + 1}`} onClick={() => onChange({ env: remove(service.env, j) })}>
-              Remove
+            <Button variant="ghost" aria-label={t('ComposeWizard.removeServiceNEnvValue', { n, value: j + 1 })} onClick={() => onChange({ env: remove(service.env, j) })}>
+              {t('ComposeWizard.remove')}
             </Button>
           </div>
         ))}
         <Button variant="secondary" onClick={() => onChange({ env: [...service.env, { key: '', value: '', ref: false }] })}>
-          Add env var to service {n}
+          {t('ComposeWizard.addEnvVarToService', { n })}
         </Button>
       </fieldset>
 
       <fieldset className="wz-group">
-        <legend>Volumes</legend>
+        <legend>{t('ComposeWizard.volumes')}</legend>
         {service.volumes.map((r, j) => (
           <div className="wz-row wz-row--env" key={j}>
-            <Field label="Volume or path" error={err(`volumes.${j}.source`)}>
-              <input aria-label={`Service ${n} mount ${j + 1} source`} value={r.source} placeholder="data or ./data" onChange={(e) => onChange({ volumes: patchAt(service.volumes, j, { source: e.target.value }) })} autoComplete="off" spellCheck={false} />
+            <Field label={t('ComposeWizard.volumeOrPath')} error={err(`volumes.${j}.source`)}>
+              <input aria-label={t('ComposeWizard.serviceNMountValueSource', { n, value: j + 1 })} value={r.source} placeholder={t('ComposeWizard.dataOrData')} onChange={(e) => onChange({ volumes: patchAt(service.volumes, j, { source: e.target.value }) })} autoComplete="off" spellCheck={false} />
             </Field>
-            <Field label="Path in container" error={err(`volumes.${j}.target`)}>
-              <input aria-label={`Service ${n} mount ${j + 1} target`} value={r.target} placeholder="/data" onChange={(e) => onChange({ volumes: patchAt(service.volumes, j, { target: e.target.value }) })} autoComplete="off" spellCheck={false} />
+            <Field label={t('ComposeWizard.pathInContainer')} error={err(`volumes.${j}.target`)}>
+              <input aria-label={t('ComposeWizard.serviceNMountValueTarget', { n, value: j + 1 })} value={r.target} placeholder="/data" onChange={(e) => onChange({ volumes: patchAt(service.volumes, j, { target: e.target.value }) })} autoComplete="off" spellCheck={false} />
             </Field>
             <label className="wz-check">
               <input type="checkbox" checked={r.readOnly} onChange={(e) => onChange({ volumes: patchAt(service.volumes, j, { readOnly: e.target.checked }) })} />
-              <span>Read only</span>
+              <span>{t('ComposeWizard.readOnly')}</span>
             </label>
-            <Button variant="ghost" aria-label={`Remove service ${n} mount ${j + 1}`} onClick={() => onChange({ volumes: remove(service.volumes, j) })}>
-              Remove
+            <Button variant="ghost" aria-label={t('ComposeWizard.removeServiceNMountValue', { n, value: j + 1 })} onClick={() => onChange({ volumes: remove(service.volumes, j) })}>
+              {t('ComposeWizard.remove')}
             </Button>
           </div>
         ))}
         <Button variant="secondary" onClick={() => onChange({ volumes: [...service.volumes, { source: '', target: '', readOnly: false }] })}>
-          Add volume to service {n}
+          {t('ComposeWizard.addVolumeToServiceN', { n })}
         </Button>
       </fieldset>
 
-      <Toggle name={`${p}-networks`} label="Networks" options={networkNames} selected={service.networks} onChange={(networks) => onChange({ networks })} />
-      <Toggle name={`${p}-depends`} label="Starts after" options={others} selected={service.dependsOn} onChange={(dependsOn) => onChange({ dependsOn })} />
+      <Toggle name={`${p}-networks`} label={t('ComposeWizard.networks')} options={networkNames} selected={service.networks} onChange={(networks) => onChange({ networks })} />
+      <Toggle name={`${p}-depends`} label={t('ComposeWizard.startsAfter')} options={others} selected={service.dependsOn} onChange={(dependsOn) => onChange({ dependsOn })} />
     </fieldset>
   )
 }
@@ -238,6 +241,7 @@ function ServiceCard({
  * `onContinue` receives the YAML and the deployment variables the form references (to be filled in the env editor).
  */
 export function ComposeWizard({ onContinue, initial }: { onContinue: (yaml: string, envKeys: string[]) => void; initial?: WizardState }) {
+  const { t } = useTranslation('deployments')
   const previewId = useId()
   const generate = useGenerateCompose()
   const [state, setState] = useState<WizardState>(() => initial ?? initialState())
@@ -260,8 +264,8 @@ export function ComposeWizard({ onContinue, initial }: { onContinue: (yaml: stri
     generate.mutate(buildSpec(state), {
       onSuccess: (r) => setYaml(r.yaml),
       onError: (err) => {
-        if (err instanceof ApiError && err.code === 'INVALID_COMPOSE_SPEC') setProblems(err.details?.length ? err.details : ['The deployment is not valid.'])
-        else setProblems(['Could not generate the Compose file. Try again.'])
+        if (err instanceof ApiError && err.code === 'INVALID_COMPOSE_SPEC') setProblems(err.details?.length ? err.details : [t('ComposeWizard.theDeploymentIsNotValid')])
+        else setProblems([t('ComposeWizard.couldNotGenerateTheCompose')])
       },
     })
   }
@@ -281,10 +285,10 @@ export function ComposeWizard({ onContinue, initial }: { onContinue: (yaml: stri
         />
       ))}
       <Button variant="secondary" className="wz-add" onClick={() => change({ ...state, services: [...state.services, emptyService()] })}>
-        Add service
+        {t('ComposeWizard.addService')}
       </Button>
-      <ResourceList kind="networks" title="Networks" rows={state.networks} fields={fields} onChange={(networks) => change({ ...state, networks })} />
-      <ResourceList kind="volumes" title="Volumes" rows={state.volumes} fields={fields} onChange={(volumes) => change({ ...state, volumes })} />
+      <ResourceList kind="networks" title={t('ComposeWizard.networks')} rows={state.networks} fields={fields} onChange={(networks) => change({ ...state, networks })} />
+      <ResourceList kind="volumes" title={t('ComposeWizard.volumes')} rows={state.volumes} fields={fields} onChange={(volumes) => change({ ...state, volumes })} />
 
       {shown && validation.general.length > 0 && (
         <p role="alert" className="ui-error">
@@ -293,12 +297,12 @@ export function ComposeWizard({ onContinue, initial }: { onContinue: (yaml: stri
       )}
       {shown && validation.fields.size > 0 && (
         <p role="alert" className="ui-error">
-          Fix the highlighted fields first.
+          {t('ComposeWizard.fixTheHighlightedFieldsFirst')}
         </p>
       )}
       {problems.length > 0 && (
         <div role="alert" className="ui-error">
-          <p>The deployment is not valid.</p>
+          <p>{t('ComposeWizard.theDeploymentIsNotValid')}</p>
           <ul className="wz-list">
             {problems.map((m, i) => (
               <li key={i}>{m}</li>
@@ -309,19 +313,19 @@ export function ComposeWizard({ onContinue, initial }: { onContinue: (yaml: stri
 
       <div className="wz-actions">
         <Button variant="secondary" onClick={preview} disabled={generate.isPending}>
-          Preview YAML
+          {t('ComposeWizard.previewYaml')}
         </Button>
       </div>
 
       {yaml !== null && (
         <section className="wz-preview" aria-labelledby={previewId}>
           <h3 id={previewId} className="wz-section__title">
-            Generated Compose file
+            {t('ComposeWizard.generatedComposeFile')}
           </h3>
-          <YamlEditor label="Generated Compose file" value={yaml} readOnly height="220px" />
+          <YamlEditor label={t('ComposeWizard.generatedComposeFile')} value={yaml} readOnly height="220px" />
           <div className="wz-actions">
             <Button variant="primary" onClick={() => onContinue(yaml, referencedEnvKeys(state))}>
-              Continue in editor
+              {t('ComposeWizard.continueInEditor')}
             </Button>
           </div>
         </section>

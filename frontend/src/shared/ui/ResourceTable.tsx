@@ -16,6 +16,7 @@ import { IconButton } from './IconButton.tsx'
 import { Menu, type MenuEntry } from './Menu.tsx'
 import { SearchField } from './SearchField.tsx'
 import { Skeleton } from './Skeleton.tsx'
+import { useTranslation } from 'react-i18next'
 import './ResourceTable.css'
 
 export interface ResourceColumn<T> {
@@ -147,6 +148,7 @@ export function ResourceTable<T>({
   rowActions,
   rowLabel,
 }: Props<T>) {
+  const { t } = useTranslation('common')
   const tableId = id ?? label
   const [query, setQuery] = useState('')
   const [sorting, setSorting] = useState<SortingState>([{ id: defaultSort, desc: false }])
@@ -237,14 +239,14 @@ export function ResourceTable<T>({
         </div>
         {onRetry && (
           <Button variant="secondary" onClick={onRetry}>
-            Retry
+            {t('ResourceTable.retry')}
           </Button>
         )}
       </div>
     )
   } else if (isPending) {
     body = (
-      <div className="rtable__skeleton" role="status" aria-label={`Loading ${label}`} aria-busy="true">
+      <div className="rtable__skeleton" role="status" aria-label={t('ResourceTable.loadingLabel', { label })} aria-busy="true">
         {[0, 1, 2, 3].map((i) => (
           <Skeleton key={i} height="2.5rem" />
         ))}
@@ -253,7 +255,7 @@ export function ResourceTable<T>({
   } else if ((rows ?? []).length === 0) {
     body = <EmptyState title={emptyMessage} />
   } else if (filtered.length === 0) {
-    body = <EmptyState title={`No matches for "${query.trim()}".`} />
+    body = <EmptyState title={t('ResourceTable.noMatchesForTrim', { query: query.trim() })} />
   } else {
     body = (
       <div className="rtable__scroll">
@@ -305,7 +307,7 @@ export function ResourceTable<T>({
                 <th className="rtable__filler" aria-hidden="true" />
                 {hasActions && (
                   <th scope="col" className="rtable__actions-cell">
-                    <span className="rtable__sr">Actions</span>
+                    <span className="rtable__sr">{t('ResourceTable.actions')}</span>
                   </th>
                 )}
               </tr>
@@ -338,7 +340,7 @@ export function ResourceTable<T>({
                         ))}
                         {actions?.menu && actions.menu.length > 0 && (
                           <Menu
-                            trigger={<IconButton icon={Ellipsis} aria-label={name ? `More actions for ${name}` : 'More actions'} />}
+                            trigger={<IconButton icon={Ellipsis} aria-label={name ? t('ResourceTable.moreActionsForName', { name }) : t('ResourceTable.moreActions')} />}
                             items={actions.menu}
                           />
                         )}
@@ -358,8 +360,8 @@ export function ResourceTable<T>({
     <div className="rtable" data-density={density}>
       <div className="rtable__toolbar">
         <SearchField
-          aria-label={`Search ${label}`}
-          placeholder={`Search ${label}`}
+          aria-label={t('ResourceTable.searchLabel', { label })}
+          placeholder={t('ResourceTable.searchLabel', { label })}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -367,7 +369,7 @@ export function ResourceTable<T>({
         <span className="rtable__spacer" />
         {hideableColumns.length > 0 && (
           <Menu
-            trigger={<IconButton icon={Columns3} aria-label="Columns" />}
+            trigger={<IconButton icon={Columns3} aria-label={t('ResourceTable.columns')} />}
             items={hideableColumns.map((c) => ({
               label: String(c.columnDef.header),
               icon: c.getIsVisible() ? <Check size={16} strokeWidth={2} /> : <span className="rtable__nocheck" />,
@@ -379,7 +381,7 @@ export function ResourceTable<T>({
         )}
         <IconButton
           icon={density === 'compact' ? Rows4 : Rows3}
-          aria-label={density === 'compact' ? 'Use comfortable density' : 'Use compact density'}
+          aria-label={density === 'compact' ? t('ResourceTable.useComfortableDensity') : t('ResourceTable.useCompactDensity')}
           onClick={() => setDensity((d) => (d === 'compact' ? 'comfortable' : 'compact'))}
         />
       </div>
@@ -399,6 +401,7 @@ interface HandleProps {
 
 /** Drag/keyboard handle on a column's right edge. Pointer capture keeps the edge under the cursor 1:1. */
 function ResizeHandle({ name, width, min, max, onResize, onAutofit }: HandleProps) {
+  const { t } = useTranslation('common')
   const drag = useRef<{ x: number; width: number } | null>(null)
 
   function down(e: PointerEvent<HTMLDivElement>) {
@@ -427,7 +430,7 @@ function ResizeHandle({ name, width, min, max, onResize, onAutofit }: HandleProp
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label={`Resize ${name} column`}
+      aria-label={t('ResourceTable.resizeNameColumn', { name })}
       aria-valuenow={width}
       aria-valuemin={min}
       aria-valuemax={max}

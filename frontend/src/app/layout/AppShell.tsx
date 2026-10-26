@@ -9,6 +9,7 @@ import { EnvironmentSwitcher } from './EnvironmentSwitcher.tsx'
 import { Sidebar } from './Sidebar.tsx'
 import { UserMenu } from './UserMenu.tsx'
 import { useMediaQuery } from './useMediaQuery.ts'
+import { useTranslation } from 'react-i18next'
 import './AppShell.css'
 
 interface Props {
@@ -20,6 +21,7 @@ interface Props {
 
 /** Translucent top bar (brand, environment switcher, search, user menu), sidebar (drawer on narrow screens) and the routed content. */
 export function AppShell({ user, onSignOut, signingOut, children }: Props) {
+  const { t } = useTranslation('app')
   const [paletteOpen, setPaletteOpen] = useState(false)
   const narrow = useMediaQuery('(max-width: 720px)')
   const reduced = useReducedMotion()
@@ -48,7 +50,7 @@ export function AppShell({ user, onSignOut, signingOut, children }: Props) {
         {narrow && (
           <IconButton
             icon={MenuIcon}
-            aria-label="Navigation"
+            aria-label={t('AppShell.navigation')}
             aria-expanded={navOpen}
             aria-controls="app-sidebar"
             onClick={() => setNavOpen((value) => !value)}
@@ -56,14 +58,14 @@ export function AppShell({ user, onSignOut, signingOut, children }: Props) {
         )}
         <Link to="/" className="shell__brand">
           <Ship size={20} strokeWidth={1.75} aria-hidden="true" />
-          Shipir
+          {t('AppShell.shipir')}
         </Link>
         <EnvironmentSwitcher />
         <span className="shell__spacer" />
-        <button type="button" className="shell__search" aria-label="Search" onClick={() => setPaletteOpen(true)}>
+        <button type="button" className="shell__search" aria-label={t('AppShell.search')} onClick={() => setPaletteOpen(true)}>
           <Search size={16} strokeWidth={1.75} aria-hidden="true" />
-          <span className="shell__search-label">Search</span>
-          <kbd aria-hidden="true">{/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K'}</kbd>
+          <span className="shell__search-label">{t('AppShell.search2')}</span>
+          <kbd aria-hidden="true">{/Mac|iPhone|iPad/.test(navigator.platform) ? t('AppShell.k') : t('AppShell.ctrlK')}</kbd>
         </button>
         <UserMenu user={user} onSignOut={onSignOut} signingOut={signingOut} />
       </header>

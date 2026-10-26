@@ -2,13 +2,17 @@ import { useState } from 'react'
 import { Badge, Button, Card, Switch } from '../../shared/ui/index.ts'
 import { useSetImageAutoUpdate, type ImageAutoUpdateInfo } from './api.ts'
 import { describeDeploymentError } from './deploymentErrors.ts'
+import { useTranslation } from 'react-i18next'
+import { Trans } from '../../shared/i18n/Trans.tsx'
+import i18n from 'i18next'
+import { formatDateTime } from '../../shared/i18n/format.ts'
 import './ImageAutoUpdatePanel.css'
 
 /** Validates the optional daily window: both or neither, and different. Returns an error text or null. */
 function validateWindow(start: string, end: string): string | null {
   if (!start && !end) return null
-  if (!start || !end) return 'Set both a start and an end time, or clear both for any time.'
-  if (start === end) return 'Start and end must be different.'
+  if (!start || !end) return i18n.t('deployments:ImageAutoUpdatePanel.setBothAStartAnd')
+  if (start === end) return i18n.t('deployments:ImageAutoUpdatePanel.startAndEndMustBe')
   return null
 }
 
@@ -24,6 +28,7 @@ export function ImageAutoUpdatePanel({
   info: ImageAutoUpdateInfo
   canWrite: boolean
 }) {
+  const { t } = useTranslation('deployments')
   const save = useSetImageAutoUpdate(hostId)
   const [enabled, setEnabled] = useState(info.enabled)
   const [start, setStart] = useState(info.windowStart ?? '')
@@ -44,7 +49,7 @@ export function ImageAutoUpdatePanel({
       { deploymentId, enabled, windowStart: start || null, windowEnd: end || null },
       {
         onSuccess: () => setSaved(true),
-        onError: (err) => setProblem(describeDeploymentError(err, 'Could not save the settings. Try again.')),
+        onError: (err) => setProblem(describeDeploymentError(err, t('ImageAutoUpdatePanel.couldNotSaveTheSettings'))),
       },
     )
   }
@@ -52,17 +57,14 @@ export function ImageAutoUpdatePanel({
   return (
     <Card className="sd-panel" role="region" aria-labelledby={titleId}>
       <h3 className="sd-panel__title" id={titleId}>
-        Automatic image updates
+        {t('ImageAutoUpdatePanel.automaticImageUpdates')}
       </h3>
       <p className="sd-muted">
-        When enabled, Shipir pulls new images for this deployment and restarts it, but only when an update is available
-        and only inside the update window. If the new containers are not healthy, the update is rolled back
-        automatically. The deployment is locked while this runs, so a manual deploy meanwhile is rejected with a
-        conflict.
+        {t('ImageAutoUpdatePanel.whenEnabledShipirPullsNew')}
       </p>
       <div className="ia-form">
         <Switch
-          label="Automatic image updates"
+          label={t('ImageAutoUpdatePanel.automaticImageUpdates')}
           checked={enabled}
           disabled={!canWrite}
           onChange={(e) => {
@@ -71,10 +73,10 @@ export function ImageAutoUpdatePanel({
           }}
         />
         <fieldset className="ia-window" disabled={!canWrite}>
-          <legend>Update window (UTC)</legend>
+          <legend>{t('ImageAutoUpdatePanel.updateWindowUtc')}</legend>
           <div className="ia-window__times">
             <label className="ui-form-field">
-              <span>Window start (UTC)</span>
+              <span>{t('ImageAutoUpdatePanel.windowStartUtc')}</span>
               <input
                 type="time"
                 value={start}
@@ -85,7 +87,7 @@ export function ImageAutoUpdatePanel({
               />
             </label>
             <label className="ui-form-field">
-              <span>Window end (UTC)</span>
+              <span>{t('ImageAutoUpdatePanel.windowEndUtc')}</span>
               <input
                 type="time"
                 value={end}
@@ -98,22 +100,22 @@ export function ImageAutoUpdatePanel({
           </div>
           {!start && !end ? (
             <p className="sd-muted">
-              <strong>Any time</strong>: updates may run whenever one is available.
+              <Trans t={t} i18nKey="ImageAutoUpdatePanel.anyTimeUpdatesMayRun" components={{ strong: <strong /> }} />
             </p>
           ) : (
-            <p className="sd-muted">All times are UTC. An end before the start spans midnight; the end time is excluded.</p>
+            <p className="sd-muted">{t('ImageAutoUpdatePanel.allTimesAreUtcAn')}</p>
           )}
         </fieldset>
         {canWrite && (
           <div>
             <Button variant="secondary" onClick={submit} disabled={save.isPending}>
-              Save
+              {t('ImageAutoUpdatePanel.save')}
             </Button>
           </div>
         )}
         {saved && (
           <p role="status" className="sd-muted">
-            Saved.
+            {t('ImageAutoUpdatePanel.saved')}
           </p>
         )}
         {problem && (
@@ -123,9 +125,9 @@ export function ImageAutoUpdatePanel({
         )}
         {info.lastAttemptAt && (
           <p className="sd-muted ia-last">
-            <span>Last attempt: {new Date(info.lastAttemptAt).toLocaleString()}</span>
-            {info.lastResult === 'APPLIED' && <Badge tone="ok">Applied</Badge>}
-            {info.lastResult === 'FAILED' && <Badge tone="bad">Failed, rolled back if possible</Badge>}
+            <span>{t('ImageAutoUpdatePanel.lastAttempt')} {formatDateTime(info.lastAttemptAt)}</span>
+            {info.lastResult === 'APPLIED' && <Badge tone="ok">{t('ImageAutoUpdatePanel.applied')}</Badge>}
+            {info.lastResult === 'FAILED' && <Badge tone="bad">{t('ImageAutoUpdatePanel.failedRolledBackIfPossible')}</Badge>}
           </p>
         )}
       </div>

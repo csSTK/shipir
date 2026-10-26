@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { DeployOutput } from '../deployments/deploy-output/DeployOutput.tsx'
 import { Button, Dialog, Select } from '../../shared/ui/index.ts'
 import { describePushError, usePushImage, useRefreshAfterPull, type Image } from './api.ts'
+import { useTranslation } from 'react-i18next'
 import './ImagesPage.css'
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 
 /** Confirms which tag to push, then shows the live push output. The stored registry login is applied by the server. */
 export function PushImageDialog({ hostId, image, onClose }: Props) {
+  const { t: tr } = useTranslation('images')
   const [reference, setReference] = useState(image.repoTags[0] ?? '')
   const [runId, setRunId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -30,21 +32,21 @@ export function PushImageDialog({ hostId, image, onClose }: Props) {
     <Dialog
       open
       onOpenChange={(open) => !open && onClose()}
-      title="Push image"
-      description={runId ? undefined : 'Uploads the image to its registry using the stored login for that registry, if any.'}
+      title={tr('PushImageDialog.pushImage')}
+      description={runId ? undefined : tr('PushImageDialog.uploadsTheImageToIts')}
     >
       {runId ? (
         <>
-          <DeployOutput title={`Pushing ${reference}`} runId={runId} onFinished={() => void refresh()} />
+          <DeployOutput title={tr('PushImageDialog.pushingReference', { reference })} runId={runId} onFinished={() => void refresh()} />
           <div className="ui-dialog-actions">
             <Button variant="primary" onClick={onClose}>
-              Close
+              {tr('PushImageDialog.close')}
             </Button>
           </div>
         </>
       ) : (
         <div className="ui-form">
-          <Select label="Reference to push" value={reference} onChange={(e) => setReference(e.target.value)}>
+          <Select label={tr('PushImageDialog.referenceToPush')} value={reference} onChange={(e) => setReference(e.target.value)}>
             {image.repoTags.map((t) => (
               <option key={t} value={t}>
                 {t}
@@ -58,10 +60,10 @@ export function PushImageDialog({ hostId, image, onClose }: Props) {
           )}
           <div className="ui-dialog-actions">
             <Button variant="ghost" onClick={onClose}>
-              Cancel
+              {tr('PushImageDialog.cancel')}
             </Button>
             <Button variant="primary" loading={push.isPending} disabled={!reference} onClick={submit}>
-              Push
+              {tr('PushImageDialog.push')}
             </Button>
           </div>
         </div>

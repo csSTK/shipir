@@ -4,6 +4,9 @@ import { Badge, Button, Card, ResourceTable, Select, TextField, type ResourceCol
 import { AUDIT_ACTION_LABELS, useAuditLog, type AuditLogEntry } from './api.ts'
 import { Pager } from './Pager.tsx'
 import { SettingsPage } from './SettingsPage.tsx'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
+import { formatDateTime } from '../../shared/i18n/format.ts'
 
 const PAGE_SIZE = 20
 
@@ -25,16 +28,17 @@ function target(entry: AuditLogEntry): string {
 }
 
 const formatTime = (iso: string) =>
-  new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'medium' })
+  formatDateTime(iso, { dateStyle: 'medium', timeStyle: 'medium' })
 
 /** Settings > Audit log: ADMIN browses the audit trail; filters live in the URL. */
 /** A password-only LOGIN that still awaits the second factor reads as such. */
 function actionLabel(e: AuditLogEntry): string {
-  if (e.action === 'LOGIN' && e.details?.mfaPending === true) return 'Login (awaiting 2FA)'
+  if (e.action === 'LOGIN' && e.details?.mfaPending === true) return i18n.t('settings:AuditLogPage.loginAwaiting2fa')
   return AUDIT_ACTION_LABELS[e.action] ?? e.action
 }
 
 export function AuditLogPage() {
+  const { t } = useTranslation('settings')
   const [params, setParams] = useSearchParams()
   const action = params.get('action') ?? ''
   const username = params.get('username') ?? ''
@@ -73,52 +77,52 @@ export function AuditLogPage() {
   const pages = data ? Math.max(1, Math.ceil(data.totalElements / data.size)) : 1
 
   const columns: ResourceColumn<AuditLogEntry>[] = [
-    { id: 'time', header: 'Time', defaultWidth: 200, hideable: false, render: (e) => formatTime(e.occurredAt) },
-    { id: 'user', header: 'User', defaultWidth: 140, render: (e) => e.username },
-    { id: 'action', header: 'Action', defaultWidth: 220, render: (e) => actionLabel(e) },
+    { id: 'time', header: t('AuditLogPage.time'), defaultWidth: 200, hideable: false, render: (e) => formatTime(e.occurredAt) },
+    { id: 'user', header: t('AuditLogPage.user'), defaultWidth: 140, render: (e) => e.username },
+    { id: 'action', header: t('AuditLogPage.action'), defaultWidth: 220, render: (e) => actionLabel(e) },
     {
       id: 'outcome',
-      header: 'Outcome',
+      header: t('AuditLogPage.outcome'),
       defaultWidth: 110,
-      render: (e) => <Badge tone={e.outcome === 'FAILURE' ? 'bad' : 'ok'}>{e.outcome === 'FAILURE' ? 'Failure' : 'Success'}</Badge>,
+      render: (e) => <Badge tone={e.outcome === 'FAILURE' ? 'bad' : 'ok'}>{e.outcome === 'FAILURE' ? t('AuditLogPage.failure') : t('AuditLogPage.success')}</Badge>,
     },
-    { id: 'target', header: 'Target', defaultWidth: 280, render: (e) => <span className="settings__mono">{target(e)}</span> },
+    { id: 'target', header: t('AuditLogPage.target'), defaultWidth: 280, render: (e) => <span className="settings__mono">{target(e)}</span> },
   ]
 
   return (
-    <SettingsPage wide title="Audit log" subtitle="Who did what, newest first.">
+    <SettingsPage wide title={t('AuditLogPage.auditLog')} subtitle={t('AuditLogPage.whoDidWhatNewestFirst')}>
       <Card>
         <form className="settings__filters" onSubmit={apply}>
-          <Select label="Action" value={draft.action} onChange={(e) => setDraft({ ...draft, action: e.target.value })}>
-            <option value="">All actions</option>
+          <Select label={t('AuditLogPage.action')} value={draft.action} onChange={(e) => setDraft({ ...draft, action: e.target.value })}>
+            <option value="">{t('AuditLogPage.allActions')}</option>
             {Object.entries(AUDIT_ACTION_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
           </Select>
-          <TextField label="User" value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })} />
-          <TextField label="From" type="date" value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })} />
-          <TextField label="To" type="date" value={draft.to} onChange={(e) => setDraft({ ...draft, to: e.target.value })} />
+          <TextField label={t('AuditLogPage.user')} value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })} />
+          <TextField label={t('AuditLogPage.from')} type="date" value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })} />
+          <TextField label={t('AuditLogPage.to')} type="date" value={draft.to} onChange={(e) => setDraft({ ...draft, to: e.target.value })} />
           <div className="settings__filters-actions">
             <Button variant="primary" type="submit">
-              Apply
+              {t('AuditLogPage.apply')}
             </Button>
-            <Button onClick={reset}>Reset</Button>
+            <Button onClick={reset}>{t('AuditLogPage.reset')}</Button>
           </div>
         </form>
       </Card>
 
       <ResourceTable
-        label="audit log"
+        label={t('AuditLogPage.auditLog2')}
         columns={columns}
         rows={data?.items}
         rowKey={(e) => e.id}
         searchText={(e) => `${e.username} ${e.action} ${target(e)}`}
         defaultSort="time"
-        emptyMessage="No entries match."
+        emptyMessage={t('AuditLogPage.noEntriesMatch')}
         isPending={isPending}
-        error={isError ? 'Could not load the audit log.' : null}
+        error={isError ? t('AuditLogPage.couldNotLoadTheAudit') : null}
         onRetry={() => void refetch()}
       />
       {data && data.items.length > 0 && <Pager page={pageNumber} pages={pages} onPage={go} />}

@@ -4,20 +4,23 @@ import { ApiError } from '../../shared/api/client.ts'
 import { Button, ConfirmDialog, Dialog, IconButton, Menu } from '../../shared/ui/index.ts'
 import { useDeleteHost, useRenameHost, type HostOverview } from './api.ts'
 import { EditTagsDialog } from './EditTagsDialog.tsx'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
 import './EnvironmentActions.css'
 
 const NAME_MAX = 100
 
 function renameMessage(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.code === 'HOST_NAME_TAKEN') return 'This name is already in use.'
-    if (error.code === 'HOST_NOT_FOUND') return 'This environment no longer exists.'
+    if (error.code === 'HOST_NAME_TAKEN') return i18n.t('hosts:EnvironmentActions.thisNameIsAlreadyIn')
+    if (error.code === 'HOST_NOT_FOUND') return i18n.t('hosts:EnvironmentActions.thisEnvironmentNoLongerExists')
     if (error.code === 'VALIDATION_ERROR' && error.details?.length) return error.details.join(' ')
   }
-  return 'Could not rename the environment. Try again.'
+  return i18n.t('hosts:EnvironmentActions.couldNotRenameTheEnvironment')
 }
 
 function RenameDialog({ env, open, onClose }: { env: HostOverview; open: boolean; onClose: () => void }) {
+  const { t } = useTranslation('hosts')
   const formId = useId()
   const [name, setName] = useState(env.name)
   const [problem, setProblem] = useState<string | null>(null)
@@ -27,7 +30,7 @@ function RenameDialog({ env, open, onClose }: { env: HostOverview; open: boolean
     e.preventDefault()
     const trimmed = name.trim()
     if (trimmed.length < 1 || trimmed.length > NAME_MAX) {
-      setProblem(`The name must be 1 to ${NAME_MAX} characters.`)
+      setProblem(t('EnvironmentActions.theNameMustBe1', { NAME_MAX }))
       return
     }
     setProblem(null)
@@ -38,21 +41,21 @@ function RenameDialog({ env, open, onClose }: { env: HostOverview; open: boolean
     <Dialog
       open={open}
       onOpenChange={(next) => !next && onClose()}
-      title="Rename environment"
+      title={t('EnvironmentActions.renameEnvironment')}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('EnvironmentActions.cancel')}
           </Button>
           <Button variant="primary" type="submit" form={formId} loading={rename.isPending}>
-            Save
+            {t('EnvironmentActions.save')}
           </Button>
         </>
       }
     >
       <form id={formId} onSubmit={submit} className="env-form-field">
         <label className="env-form-field__label">
-          <span>Name</span>
+          <span>{t('EnvironmentActions.name')}</span>
           <input className="env-form-field__input" value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
         </label>
         {problem && (
@@ -66,6 +69,7 @@ function RenameDialog({ env, open, onClose }: { env: HostOverview; open: boolean
 }
 
 function DeleteDialog({ env, open, onClose, onDeleted }: { env: HostOverview; open: boolean; onClose: () => void; onDeleted?: () => void }) {
+  const { t } = useTranslation('hosts')
   const [problem, setProblem] = useState<string | null>(null)
   const remove = useDeleteHost()
 
@@ -79,8 +83,8 @@ function DeleteDialog({ env, open, onClose, onDeleted }: { env: HostOverview; op
       onError: (err) =>
         setProblem(
           err instanceof ApiError && err.code === 'HOST_NOT_FOUND'
-            ? 'This environment no longer exists.'
-            : 'Could not delete the environment. Try again.',
+            ? t('EnvironmentActions.thisEnvironmentNoLongerExists')
+            : t('EnvironmentActions.couldNotDeleteTheEnvironment'),
         ),
     })
   }
@@ -89,9 +93,9 @@ function DeleteDialog({ env, open, onClose, onDeleted }: { env: HostOverview; op
     <ConfirmDialog
       open={open}
       onOpenChange={(next) => !next && onClose()}
-      title="Delete environment"
-      description={`Delete ${env.name}? Its deployments are removed from Shipir as well. Containers already running on the Docker host are not touched.`}
-      confirmLabel="Delete"
+      title={t('EnvironmentActions.deleteEnvironment')}
+      description={t('EnvironmentActions.deleteNameItsDeploymentsAre', { name: env.name })}
+      confirmLabel={t('EnvironmentActions.delete')}
       danger
       loading={remove.isPending}
       onConfirm={confirm}
@@ -110,6 +114,7 @@ function DeleteDialog({ env, open, onClose, onDeleted }: { env: HostOverview; op
  * they animate out; `session` gives every opening fresh form state.
  */
 export function EnvironmentActions({ env, onDeleted }: { env: HostOverview; onDeleted?: () => void }) {
+  const { t } = useTranslation('hosts')
   const [dialog, setDialog] = useState<'rename' | 'tags' | 'delete' | null>(null)
   const [session, setSession] = useState(0)
   const show = (which: 'rename' | 'tags' | 'delete') => {
@@ -120,12 +125,12 @@ export function EnvironmentActions({ env, onDeleted }: { env: HostOverview; onDe
   return (
     <>
       <Menu
-        trigger={<IconButton icon={MoreHorizontal} aria-label={`Actions for ${env.name}`} />}
+        trigger={<IconButton icon={MoreHorizontal} aria-label={t('EnvironmentActions.actionsForName', { name: env.name })} />}
         items={[
-          { label: 'Rename', icon: <Pencil size={16} strokeWidth={1.75} />, onSelect: () => show('rename') },
-          { label: 'Edit tags', icon: <Tag size={16} strokeWidth={1.75} />, onSelect: () => show('tags') },
+          { label: t('EnvironmentActions.rename'), icon: <Pencil size={16} strokeWidth={1.75} />, onSelect: () => show('rename') },
+          { label: t('EnvironmentActions.editTags'), icon: <Tag size={16} strokeWidth={1.75} />, onSelect: () => show('tags') },
           { type: 'separator' },
-          { label: 'Delete', icon: <Trash2 size={16} strokeWidth={1.75} />, danger: true, onSelect: () => show('delete') },
+          { label: t('EnvironmentActions.delete'), icon: <Trash2 size={16} strokeWidth={1.75} />, danger: true, onSelect: () => show('delete') },
         ]}
       />
       <RenameDialog key={`rename-${session}`} env={env} open={dialog === 'rename'} onClose={close} />

@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom/vitest'
 import { createElement } from 'react'
 import { vi } from 'vitest'
+// Tests always run in English: initialises i18next with lng=en and the bundled English texts.
+import '../shared/i18n/index.ts'
 
 // Monaco does not run in jsdom (and is slow to load): tests get a plain textarea with the same contract.
 vi.mock('../features/deployments/editor/MonacoYamlEditor.tsx', () => ({

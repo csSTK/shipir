@@ -3,19 +3,22 @@ import { ApiError } from '../../../shared/api/client.ts'
 import { Badge, Button, Card, Dialog, Skeleton } from '../../../shared/ui/index.ts'
 import { OneTimeSecret } from '../../one-time-secret/index.ts'
 import { useDisableWebhook, useIssueWebhook, useWebhookStatus, type WebhookIssued } from './api.ts'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
+import { formatDateTime } from '../../../shared/i18n/format.ts'
 import './webhook.css'
 
 type Confirm = 'rotate' | 'disable' | null
 
 function formatDate(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleString() : ''
+  return iso ? formatDateTime(iso) : ''
 }
 
 function describe(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
-    if (error.code === 'WEBHOOK_ALREADY_ENABLED') return 'The webhook is already enabled. Rotate it to get a new URL.'
-    if (error.code === 'WEBHOOK_NOT_FOUND') return 'The webhook is not enabled.'
-    if (error.status === 403) return 'You are not allowed to change this webhook.'
+    if (error.code === 'WEBHOOK_ALREADY_ENABLED') return i18n.t('deployments:WebhookCard.theWebhookIsAlreadyEnabled')
+    if (error.code === 'WEBHOOK_NOT_FOUND') return i18n.t('deployments:WebhookCard.theWebhookIsNotEnabled')
+    if (error.status === 403) return i18n.t('deployments:WebhookCard.youAreNotAllowedTo')
   }
   return fallback
 }
@@ -25,6 +28,7 @@ function describe(error: unknown, fallback: string): string {
  * (component state) while the one-time reveal is open: never in a list, the route, storage or a log.
  */
 export function WebhookCard({ hostId, deploymentId, canOperate }: { hostId: string; deploymentId: string; canOperate: boolean }) {
+  const { t } = useTranslation('deployments')
   const status = useWebhookStatus(hostId, deploymentId, canOperate)
   const enable = useIssueWebhook(hostId, deploymentId, 'enable')
   const rotate = useIssueWebhook(hostId, deploymentId, 'rotate')
@@ -50,7 +54,7 @@ export function WebhookCard({ hostId, deploymentId, canOperate }: { hostId: stri
         setIssued(result)
         enable.reset() // the secret lives only in `issued`, not in the mutation observer
       },
-      onError: (err) => setMessage(describe(err, 'Could not enable the webhook. Please try again.')),
+      onError: (err) => setMessage(describe(err, t('WebhookCard.couldNotEnableTheWebhook'))),
     })
   }
 
@@ -62,7 +66,7 @@ export function WebhookCard({ hostId, deploymentId, canOperate }: { hostId: stri
         setIssued(result)
         rotate.reset()
       },
-      onError: (err) => setDialogError(describe(err, 'Could not rotate the webhook. Please try again.')),
+      onError: (err) => setDialogError(describe(err, t('WebhookCard.couldNotRotateTheWebhook'))),
     })
   }
 
@@ -70,7 +74,7 @@ export function WebhookCard({ hostId, deploymentId, canOperate }: { hostId: stri
     setDialogError(null)
     disable.mutate(undefined, {
       onSuccess: closeConfirm,
-      onError: (err) => setDialogError(describe(err, 'Could not disable the webhook. Please try again.')),
+      onError: (err) => setDialogError(describe(err, t('WebhookCard.couldNotDisableTheWebhook'))),
     })
   }
 
@@ -80,26 +84,24 @@ export function WebhookCard({ hostId, deploymentId, canOperate }: { hostId: stri
     <Card className="webhook" role="region" aria-labelledby={`webhook-${deploymentId}`}>
       <div className="webhook__head">
         <h3 className="webhook__title" id={`webhook-${deploymentId}`}>
-          Redeploy webhook
+          {t('WebhookCard.redeployWebhook')}
         </h3>
-        {status.data && <Badge tone={enabled ? 'ok' : 'muted'}>{enabled ? 'Enabled' : 'Disabled'}</Badge>}
+        {status.data && <Badge tone={enabled ? 'ok' : 'muted'}>{enabled ? t('WebhookCard.enabled') : t('WebhookCard.disabled')}</Badge>}
       </div>
       <p className="webhook__text">
-        A POST to the webhook URL updates this deployment without signing in: it pulls newer images and recreates the
-        containers (Git deployments pull the repository and redeploy). It runs as the system and answers 409 while a
-        deployment is running. The URL is a secret, so Shipir shows it only once.
+        {t('WebhookCard.aPostToTheWebhook')}
       </p>
 
       {status.isPending && <Skeleton height="var(--space-6)" />}
       {status.isError && (
         <p role="alert" className="ui-error">
-          Could not load the webhook status.
+          {t('WebhookCard.couldNotLoadTheWebhook')}
         </p>
       )}
       {status.data && enabled && (
         <p className="webhook__meta">
-          Enabled {formatDate(status.data.createdAt)}
-          {status.data.rotatedAt ? ` · Rotated ${formatDate(status.data.rotatedAt)}` : ''}
+          {t('WebhookCard.enabledDate', { date: formatDate(status.data.createdAt) })}
+          {status.data.rotatedAt ? t('WebhookCard.rotatedDate', { date: formatDate(status.data.rotatedAt) }) : ''}
         </p>
       )}
       {message && (
@@ -111,14 +113,14 @@ export function WebhookCard({ hostId, deploymentId, canOperate }: { hostId: stri
         <div className="webhook__actions">
           {enabled ? (
             <>
-              <Button onClick={() => setConfirm('rotate')}>Rotate</Button>
+              <Button onClick={() => setConfirm('rotate')}>{t('WebhookCard.rotate')}</Button>
               <Button variant="danger" onClick={() => setConfirm('disable')}>
-                Disable
+                {t('WebhookCard.disable')}
               </Button>
             </>
           ) : (
             <Button variant="primary" onClick={onEnable} loading={enable.isPending}>
-              Enable webhook
+              {t('WebhookCard.enableWebhook')}
             </Button>
           )}
         </div>
@@ -128,19 +130,19 @@ export function WebhookCard({ hostId, deploymentId, canOperate }: { hostId: stri
         <Dialog
           open
           onOpenChange={(open) => !open && closeConfirm()}
-          title="Rotate webhook"
+          title={t('WebhookCard.rotateWebhook')}
           footer={
             <>
               <Button variant="ghost" onClick={closeConfirm}>
-                Cancel
+                {t('WebhookCard.cancel')}
               </Button>
               <Button variant="primary" loading={rotate.isPending} onClick={onRotate}>
-                Rotate
+                {t('WebhookCard.rotate')}
               </Button>
             </>
           }
         >
-          <p className="ui-dialog-text">The old URL stops working immediately. You get a new URL, shown once.</p>
+          <p className="ui-dialog-text">{t('WebhookCard.theOldUrlStopsWorking')}</p>
           {dialogError && (
             <p role="alert" className="ui-error">
               {dialogError}
@@ -152,19 +154,19 @@ export function WebhookCard({ hostId, deploymentId, canOperate }: { hostId: stri
         <Dialog
           open
           onOpenChange={(open) => !open && closeConfirm()}
-          title="Disable webhook"
+          title={t('WebhookCard.disableWebhook')}
           footer={
             <>
               <Button variant="ghost" onClick={closeConfirm}>
-                Cancel
+                {t('WebhookCard.cancel')}
               </Button>
               <Button variant="danger" loading={disable.isPending} onClick={onDisable}>
-                Disable
+                {t('WebhookCard.disable')}
               </Button>
             </>
           }
         >
-          <p className="ui-dialog-text">The webhook URL stops working. You can enable it again later with a new URL.</p>
+          <p className="ui-dialog-text">{t('WebhookCard.theWebhookUrlStopsWorking')}</p>
           {dialogError && (
             <p role="alert" className="ui-error">
               {dialogError}
@@ -176,17 +178,17 @@ export function WebhookCard({ hostId, deploymentId, canOperate }: { hostId: stri
         <Dialog
           open
           onOpenChange={(open) => !open && setIssued(null)}
-          title="Your webhook URL"
+          title={t('WebhookCard.yourWebhookUrl')}
           footer={
             <Button variant="primary" onClick={() => setIssued(null)}>
-              Done
+              {t('WebhookCard.done')}
             </Button>
           }
         >
-          <p className="otsecret-notice">This URL is shown only once. Store it now, anyone with it can trigger a redeploy.</p>
-          <OneTimeSecret label="Webhook URL" value={url} />
-          <p className="webhook__text">Trigger it from a CI job or a registry hook:</p>
-          <pre className="otsecret-code">{`curl -X POST ${url}`}</pre>
+          <p className="otsecret-notice">{t('WebhookCard.thisUrlIsShownOnly')}</p>
+          <OneTimeSecret label={t('WebhookCard.webhookUrl')} value={url} />
+          <p className="webhook__text">{t('WebhookCard.triggerItFromACi')}</p>
+          <pre className="otsecret-code">{t('WebhookCard.curlXPostUrl', { url })}</pre>
         </Dialog>
       )}
     </Card>

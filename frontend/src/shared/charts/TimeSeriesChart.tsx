@@ -1,5 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { RANGE_WORDS, formatTick, nearestIndex, niceTicks, splitSegments, summarize, timeTicks, type Range, type TimePoint } from './series.ts'
+import { useTranslation } from 'react-i18next'
+import { dateTimeFormat } from '../i18n/format.ts'
 import './TimeSeriesChart.css'
 
 export interface ChartSeries {
@@ -28,7 +30,7 @@ const HEIGHT = 168
 const FALLBACK_WIDTH = 560
 const MARGIN = { top: 10, right: 12, bottom: 24, left: 76 }
 const SERIES_VARS = ['--chart-1', '--chart-2']
-const tooltipTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+const tooltipTime = dateTimeFormat({ dateStyle: 'medium', timeStyle: 'short' })
 
 /** Width of an element, kept in sync by a ResizeObserver (a fallback where there is none, e.g. jsdom). */
 function useWidth(ref: React.RefObject<HTMLElement | null>): number {
@@ -47,6 +49,7 @@ function useWidth(ref: React.RefObject<HTMLElement | null>): number {
 
 /** Dependency-free SVG line chart: shared time axis, crosshair tooltip on hover and arrow keys, gaps for missing data. */
 export function TimeSeriesChart({ title, series, from, to, range, bucketSeconds, format, max, binary = false }: TimeSeriesChartProps) {
+  const { t: tr } = useTranslation('common')
   const wrapRef = useRef<HTMLDivElement>(null)
   const width = useWidth(wrapRef)
   const [cursor, setCursor] = useState<number | null>(null)
@@ -73,8 +76,8 @@ export function TimeSeriesChart({ title, series, from, to, range, bucketSeconds,
   const color = (i: number) => `var(${SERIES_VARS[i % SERIES_VARS.length]})`
 
   const label = summary
-    ? `${title}, ${RANGE_WORDS[range]}: min ${format(summary.min)}, avg ${format(summary.avg)}, max ${format(summary.max)}`
-    : `${title}: no data`
+    ? tr('TimeSeriesChart.summary', { title, range: RANGE_WORDS[range], min: format(summary.min), avg: format(summary.avg), max: format(summary.max) })
+    : tr('TimeSeriesChart.noData', { title })
 
   const cursorTime = cursor === null ? null : times[cursor]
 
@@ -165,9 +168,7 @@ export function TimeSeriesChart({ title, series, from, to, range, bucketSeconds,
           </g>
         )}
       </svg>
-      <span id={descId} hidden>
-        Use the left and right arrow keys to read values, Escape to leave.
-      </span>
+      <span id={descId} hidden>{tr('TimeSeriesChart.useTheLeftAndRight')}</span>
       <div
         role="status"
         className={['tschart__tip', cursorTime !== null && tooltipLeft > width / 2 && 'tschart__tip--left'].filter(Boolean).join(' ')}
@@ -181,7 +182,7 @@ export function TimeSeriesChart({ title, series, from, to, range, bucketSeconds,
               return (
                 <span key={s.key} className="tschart__tip-row">
                   <span className="tschart__key" style={{ background: color(i) }} aria-hidden="true" />
-                  <strong>{v === null ? 'No data' : format(v)}</strong>
+                  <strong>{v === null ? tr('TimeSeriesChart.noData') : format(v)}</strong>
                   <span className="tschart__tip-label">{s.label}</span>
                 </span>
               )
@@ -190,7 +191,7 @@ export function TimeSeriesChart({ title, series, from, to, range, bucketSeconds,
         )}
       </div>
       {series.length > 1 && (
-        <ul className="tschart__legend" aria-label="Legend">
+        <ul className="tschart__legend" aria-label={tr('TimeSeriesChart.legend')}>
           {series.map((s, i) => (
             <li key={s.key}>
               <span className="tschart__key" style={{ background: color(i) }} aria-hidden="true" />

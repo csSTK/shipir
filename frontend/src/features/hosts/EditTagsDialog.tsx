@@ -3,9 +3,11 @@ import { Button, Dialog } from '../../shared/ui/index.ts'
 import { TagInput, type TagInputHandle } from './TagInput.tsx'
 import { useSetHostTags, type HostOverview } from './api.ts'
 import { describeTagError, envTags } from './tags.ts'
+import { useTranslation } from 'react-i18next'
 
 /** ADMIN dialog that replaces the whole tag set. A pending draft is added on Save. */
 export function EditTagsDialog({ env, open, onClose }: { env: HostOverview; open: boolean; onClose: () => void }) {
+  const { t } = useTranslation('hosts')
   const formId = useId()
   const [tags, setTags] = useState(() => envTags(env))
   const [problem, setProblem] = useState<string | null>(null)
@@ -25,21 +27,21 @@ export function EditTagsDialog({ env, open, onClose }: { env: HostOverview; open
     <Dialog
       open={open}
       onOpenChange={(next) => !next && onClose()}
-      title="Edit tags"
-      description={`Tags help you find ${env.name} in the list.`}
+      title={t('EditTagsDialog.editTags')}
+      description={t('EditTagsDialog.tagsHelpYouFindName', { name: env.name })}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('EditTagsDialog.cancel')}
           </Button>
           <Button variant="primary" type="submit" form={formId} loading={save.isPending}>
-            Save
+            {t('EditTagsDialog.save')}
           </Button>
         </>
       }
     >
       <form id={formId} onSubmit={submit} className="ui-form">
-        <TagInput tags={tags} onChange={setTags} label="Tags" ref={inputRef} />
+        <TagInput tags={tags} onChange={setTags} label={t('EditTagsDialog.tags')} ref={inputRef} />
         {problem && (
           <p role="alert" className="ui-error">
             {problem}

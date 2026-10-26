@@ -15,13 +15,15 @@ import {
 import type { ContainerDetails } from './details/api.ts'
 import './CreateContainerDialog.css'
 import { Button, Dialog } from '../../shared/ui/index.ts'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
 
 const SUBMIT: Record<ContainerFormMode, [string, string]> = {
-  create: ['Create', 'Create'],
-  edit: ['Review changes', 'Recreate container'],
-  duplicate: ['Duplicate', 'Duplicate'],
+  get create(): [string, string] { return [i18n.t('containers:CreateContainerDialog.create'), i18n.t('containers:CreateContainerDialog.create')] },
+  get edit(): [string, string] { return [i18n.t('containers:CreateContainerDialog.reviewChanges'), i18n.t('containers:CreateContainerDialog.recreateContainer')] },
+  get duplicate(): [string, string] { return [i18n.t('containers:CreateContainerDialog.duplicate'), i18n.t('containers:CreateContainerDialog.duplicate')] },
 }
-const TITLES: Record<ContainerFormMode, string> = { create: 'Create container', edit: 'Edit container', duplicate: 'Duplicate container' }
+const TITLES: Record<ContainerFormMode, string> = { get create() { return i18n.t('containers:CreateContainerDialog.createContainer') }, get edit() { return i18n.t('containers:CreateContainerDialog.editContainer') }, get duplicate() { return i18n.t('containers:CreateContainerDialog.duplicateContainer') } }
 
 interface Props {
   hostId: string
@@ -39,6 +41,7 @@ interface Props {
  * Creates, edits (recreates) or duplicates a container. ADMIN-only options are not rendered for others.
  */
 export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create', source, onDone }: Props) {
+  const { t } = useTranslation('containers')
   const [form, setForm] = useState<FormState>(() => (mode !== 'create' && source ? formFromDetails(source, mode) : INITIAL_CONTAINER_FORM))
   const [confirming, setConfirming] = useState(false)
   const [touched, setTouched] = useState(false)
@@ -93,7 +96,7 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
         <div className="ui-form-row">
           <div className="ccd__field">
             <label className="ui-form-field">
-            Image
+            {t('CreateContainerDialog.image')}
             <input
               value={form.image}
               onChange={(e) => set('image', e.target.value)}
@@ -109,7 +112,7 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
           </div>
           <div className="ccd__field">
             <label className="ui-form-field">
-            {mode === 'create' ? 'Name (optional)' : 'Name'}
+            {mode === 'create' ? t('CreateContainerDialog.nameOptional') : t('CreateContainerDialog.name')}
             <input
               value={form.name}
               disabled={mode === 'edit'}
@@ -124,42 +127,42 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
           </div>
         </div>
         <label className="ui-form-field">
-          Command (optional)
-          <input value={form.command} onChange={(e) => set('command', e.target.value)} placeholder="sleep 3600" autoComplete="off" spellCheck={false} />
+          {t('CreateContainerDialog.commandOptional')}
+          <input value={form.command} onChange={(e) => set('command', e.target.value)} placeholder={t('CreateContainerDialog.sleep3600')} autoComplete="off" spellCheck={false} />
         </label>
-        {mode !== 'create' && <p className="ui-hint">The entrypoint of the image is kept. Empty means the image default command. Quote arguments with spaces; inside double quotes use {'\\"'} and {'\\\\'} for a quote or backslash.</p>}
+        {mode !== 'create' && <p className="ui-hint">{t('CreateContainerDialog.theEntrypointOfTheImage')}</p>}
         {mode !== 'create' && (source?.networks.length ?? 0) > 1 && (
           <p role="note" className="ui-hint">
-            This container is connected to {source?.networks.length} networks. Only one is kept; reconnect the others afterwards.
+            {t('CreateContainerDialog.thisContainerIsConnectedTo', { count: source?.networks.length ?? 0 })}
           </p>
         )}
 
         <fieldset className="ccd__group">
-          <legend>Ports</legend>
+          <legend>{t('CreateContainerDialog.ports')}</legend>
           {form.ports.map((p, i) => (
             <div className="ccd__row" key={i}>
               <input
-                aria-label={`Port ${i + 1} host port`}
-                placeholder="Host (random)"
+                aria-label={t('CreateContainerDialog.portValueHostPort', { value: i + 1 })}
+                placeholder={t('CreateContainerDialog.hostRandom')}
                 inputMode="numeric"
                 value={p.hostPort}
                 onChange={(e) => setPort(i, { hostPort: e.target.value })}
                 aria-invalid={show(`port${i}host`) ? true : undefined}
               />
               <input
-                aria-label={`Port ${i + 1} container port`}
-                placeholder="Container"
+                aria-label={t('CreateContainerDialog.portValueContainerPort', { value: i + 1 })}
+                placeholder={t('CreateContainerDialog.container')}
                 inputMode="numeric"
                 value={p.containerPort}
                 onChange={(e) => setPort(i, { containerPort: e.target.value })}
                 aria-invalid={show(`port${i}container`) ? true : undefined}
               />
-              <select aria-label={`Port ${i + 1} protocol`} value={p.protocol} onChange={(e) => setPort(i, { protocol: e.target.value as 'tcp' | 'udp' })}>
-                <option value="tcp">tcp</option>
-                <option value="udp">udp</option>
+              <select aria-label={t('CreateContainerDialog.portValueProtocol', { value: i + 1 })} value={p.protocol} onChange={(e) => setPort(i, { protocol: e.target.value as 'tcp' | 'udp' })}>
+                <option value="tcp">{t('CreateContainerDialog.tcp')}</option>
+                <option value="udp">{t('CreateContainerDialog.udp')}</option>
               </select>
-              <Button variant="ghost" aria-label={`Remove port ${i + 1}`} onClick={() => set('ports', form.ports.filter((_, j) => j !== i))}>
-                Remove
+              <Button variant="ghost" aria-label={t('CreateContainerDialog.removePortValue', { value: i + 1 })} onClick={() => set('ports', form.ports.filter((_, j) => j !== i))}>
+                {t('CreateContainerDialog.remove')}
               </Button>
               {(show(`port${i}host`) || show(`port${i}container`)) && (
                 <span role="alert" className="ui-error ccd__row-error">
@@ -171,26 +174,26 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
           {fieldError('ports')}
           <div>
             <Button variant="ghost" onClick={() => set('ports', [...form.ports, { hostPort: '', containerPort: '', protocol: 'tcp' }])}>
-              Add port
+              {t('CreateContainerDialog.addPort')}
             </Button>
           </div>
         </fieldset>
 
         <fieldset className="ccd__group">
-          <legend>Mounts</legend>
+          <legend>{t('CreateContainerDialog.mounts')}</legend>
           {form.mounts.map((m, i) => (
             <div className="ccd__row ccd__row--mount" key={i}>
               {isAdmin ? (
-                <select aria-label={`Mount ${i + 1} type`} value={m.type} onChange={(e) => setMount(i, { type: e.target.value as 'VOLUME' | 'BIND' })}>
-                  <option value="VOLUME">Volume</option>
-                  <option value="BIND">Bind path</option>
+                <select aria-label={t('CreateContainerDialog.mountValueType', { value: i + 1 })} value={m.type} onChange={(e) => setMount(i, { type: e.target.value as 'VOLUME' | 'BIND' })}>
+                  <option value="VOLUME">{t('CreateContainerDialog.volume')}</option>
+                  <option value="BIND">{t('CreateContainerDialog.bindPath')}</option>
                 </select>
               ) : (
-                <span className="ui-hint">Volume</span>
+                <span className="ui-hint">{t('CreateContainerDialog.volume')}</span>
               )}
               <input
-                aria-label={`Mount ${i + 1} source`}
-                placeholder={m.type === 'VOLUME' ? 'Volume name' : '/host/path'}
+                aria-label={t('CreateContainerDialog.mountValueSource', { value: i + 1 })}
+                placeholder={m.type === 'VOLUME' ? t('CreateContainerDialog.volumeName') : '/host/path'}
                 value={m.source}
                 onChange={(e) => setMount(i, { source: e.target.value })}
                 aria-invalid={show(`mount${i}source`) ? true : undefined}
@@ -198,7 +201,7 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
                 spellCheck={false}
               />
               <input
-                aria-label={`Mount ${i + 1} target`}
+                aria-label={t('CreateContainerDialog.mountValueTarget', { value: i + 1 })}
                 placeholder="/container/path"
                 value={m.target}
                 onChange={(e) => setMount(i, { target: e.target.value })}
@@ -207,10 +210,10 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
                 spellCheck={false}
               />
               <label className="ccd__check">
-                <input type="checkbox" checked={m.readOnly} onChange={(e) => setMount(i, { readOnly: e.target.checked })} aria-label={`Mount ${i + 1} read-only`} /> Read-only
+                <input type="checkbox" checked={m.readOnly} onChange={(e) => setMount(i, { readOnly: e.target.checked })} aria-label={t('CreateContainerDialog.mountValueReadOnly', { value: i + 1 })} /> {t('CreateContainerDialog.readOnly')}
               </label>
-              <Button variant="ghost" aria-label={`Remove mount ${i + 1}`} onClick={() => set('mounts', form.mounts.filter((_, j) => j !== i))}>
-                Remove
+              <Button variant="ghost" aria-label={t('CreateContainerDialog.removeMountValue', { value: i + 1 })} onClick={() => set('mounts', form.mounts.filter((_, j) => j !== i))}>
+                {t('CreateContainerDialog.remove')}
               </Button>
               {(show(`mount${i}source`) || show(`mount${i}target`)) && (
                 <span role="alert" className="ui-error ccd__row-error">
@@ -221,7 +224,7 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
           ))}
           <div>
             <Button variant="ghost" onClick={() => set('mounts', [...form.mounts, { type: 'VOLUME', source: '', target: '', readOnly: false }])}>
-              Add mount
+              {t('CreateContainerDialog.addMount')}
             </Button>
           </div>
         </fieldset>
@@ -232,11 +235,11 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
         <div className="ui-form-row">
           <div className="ccd__field">
             <label className="ui-form-field">
-            Network (optional)
+            {t('CreateContainerDialog.networkOptional')}
             <input
               value={form.network}
               onChange={(e) => set('network', e.target.value)}
-              placeholder="bridge"
+              placeholder={t('CreateContainerDialog.bridge')}
               aria-invalid={show('network') ? true : undefined}
               autoComplete="off"
               spellCheck={false}
@@ -245,28 +248,28 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
             {fieldError('network')}
           </div>
           <label className="ui-form-field">
-            Restart policy
+            {t('CreateContainerDialog.restartPolicy')}
             <select value={form.restartPolicy} onChange={(e) => set('restartPolicy', e.target.value as RestartPolicy)}>
-              <option value="no">no</option>
-              <option value="always">always</option>
-              <option value="unless-stopped">unless-stopped</option>
-              <option value="on-failure">on-failure</option>
+              <option value="no">{t('CreateContainerDialog.no')}</option>
+              <option value="always">{t('CreateContainerDialog.always')}</option>
+              <option value="unless-stopped">{t('CreateContainerDialog.unlessStopped')}</option>
+              <option value="on-failure">{t('CreateContainerDialog.onFailure')}</option>
             </select>
           </label>
         </div>
 
         {mode !== 'edit' && (
           <label className="ccd__check">
-            <input type="checkbox" checked={form.start} onChange={(e) => set('start', e.target.checked)} /> Start after creating
+            <input type="checkbox" checked={form.start} onChange={(e) => set('start', e.target.checked)} /> {t('CreateContainerDialog.startAfterCreating')}
           </label>
         )}
         {isAdmin && (
           <>
             <label className="ccd__check">
-              <input type="checkbox" checked={form.hostNetwork} onChange={(e) => set('hostNetwork', e.target.checked)} /> Use the host network
+              <input type="checkbox" checked={form.hostNetwork} onChange={(e) => set('hostNetwork', e.target.checked)} /> {t('CreateContainerDialog.useTheHostNetwork')}
             </label>
             <label className="ccd__check">
-              <input type="checkbox" checked={form.privileged} onChange={(e) => set('privileged', e.target.checked)} /> Privileged (full access to the host)
+              <input type="checkbox" checked={form.privileged} onChange={(e) => set('privileged', e.target.checked)} /> {t('CreateContainerDialog.privilegedFullAccessToThe')}
             </label>
           </>
         )}
@@ -278,13 +281,12 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
         )}
         {confirming && (
           <p role="status" className="ui-dialog-text">
-            {source?.name} will be recreated from the new settings. It is stopped and started again, so expect a brief downtime. Volumes are kept; changes
-            that are not shown here, such as container-internal files, are lost.
+            {t('CreateContainerDialog.nameWillBeRecreatedFrom', { name: source?.name })}
           </p>
         )}
         <div className="ui-dialog-actions">
           <Button variant="ghost" onClick={confirming ? () => setConfirming(false) : onClose}>
-            {confirming ? 'Back' : 'Cancel'}
+            {confirming ? t('CreateContainerDialog.back') : t('CreateContainerDialog.cancel')}
           </Button>
           <Button variant="primary" type="submit" loading={pending}>
             {SUBMIT[mode][confirming ? 1 : 0]}

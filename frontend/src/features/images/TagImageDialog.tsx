@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Button, Dialog, TextField } from '../../shared/ui/index.ts'
 import { describeTagError, useTagImage, type Image } from './api.ts'
 import { isValidRepository, isValidTag, splitReference } from './buildRules.ts'
+import { useTranslation } from 'react-i18next'
 import './ImagesPage.css'
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 
 /** Adds another repository:tag name to an image; prefilled from its first tag. */
 export function TagImageDialog({ hostId, image, onClose }: Props) {
+  const { t } = useTranslation('images')
   const initial = image.repoTags[0] ? splitReference(image.repoTags[0]) : { repository: '', tag: '' }
   const [repository, setRepository] = useState(initial.repository)
   const [tag, setTag] = useState(initial.tag)
@@ -20,9 +22,9 @@ export function TagImageDialog({ hostId, image, onClose }: Props) {
 
   const repositoryError =
     repository.trim() && !isValidRepository(repository.trim())
-      ? 'Lowercase letters, digits, . _ - and / only; an optional registry host first.'
+      ? t('TagImageDialog.lowercaseLettersDigitsAndOnly')
       : null
-  const tagError = tag.trim() && !isValidTag(tag.trim()) ? 'Letters, digits, . _ - only, up to 128 characters.' : null
+  const tagError = tag.trim() && !isValidTag(tag.trim()) ? t('TagImageDialog.lettersDigitsOnlyUpTo') : null
   const canSubmit = !!repository.trim() && !!tag.trim() && !repositoryError && !tagError
 
   function submit(e: FormEvent) {
@@ -36,10 +38,10 @@ export function TagImageDialog({ hostId, image, onClose }: Props) {
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()} title="Tag image">
+    <Dialog open onOpenChange={(open) => !open && onClose()} title={t('TagImageDialog.tagImage')}>
       <form className="ui-form" onSubmit={submit}>
         <TextField
-          label="Repository"
+          label={t('TagImageDialog.repository')}
           value={repository}
           onChange={(e) => setRepository(e.target.value)}
           placeholder="registry.example.com/team/app"
@@ -50,10 +52,10 @@ export function TagImageDialog({ hostId, image, onClose }: Props) {
           autoFocus
         />
         <TextField
-          label="Tag"
+          label={t('TagImageDialog.tag')}
           value={tag}
           onChange={(e) => setTag(e.target.value)}
-          placeholder="latest"
+          placeholder={t('TagImageDialog.latest')}
           error={tagError}
           autoComplete="off"
           autoCapitalize="off"
@@ -66,10 +68,10 @@ export function TagImageDialog({ hostId, image, onClose }: Props) {
         )}
         <div className="ui-dialog-actions">
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('TagImageDialog.cancel')}
           </Button>
           <Button variant="primary" type="submit" loading={tagImage.isPending} disabled={!canSubmit}>
-            Tag
+            {t('TagImageDialog.tag')}
           </Button>
         </div>
       </form>

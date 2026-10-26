@@ -4,6 +4,7 @@ import { HOSTS_OVERVIEW_KEY } from '../hosts/api.ts'
 import { describeResourceError } from '../hosts/format.ts'
 import { useDeleteResourceMutation } from '../hosts/deleteResource.ts'
 import { describeCreateError, useCreateResourceMutation, type CreatedResource } from '../hosts/createResource.ts'
+import i18n from 'i18next'
 
 /** One container of `GET /api/hosts/{id}/containers`; compose fields are null outside Compose. */
 export interface Container {
@@ -60,16 +61,16 @@ export function describeActionError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case 'INVALID_CONTAINER_STATE':
-        return 'The container is not in a state that allows this action. The list was refreshed.'
+        return i18n.t('containers:api.theContainerIsNotIn')
       case 'RESOURCE_NOT_FOUND':
-        return 'This container no longer exists. The list was refreshed.'
+        return i18n.t('containers:api.thisContainerNoLongerExists')
       case 'INVALID_RESOURCE_ID':
-        return 'The container identifier is invalid.'
+        return i18n.t('containers:api.theContainerIdentifierIsInvalid')
     }
-    if (error.status === 403) return 'You are not allowed to do this.'
+    if (error.status === 403) return i18n.t('containers:api.youAreNotAllowedTo')
     if (error.status === 502 || error.code === 'HOST_NOT_FOUND') return describeResourceError(error)
   }
-  return 'The action failed. Try again.'
+  return i18n.t('containers:api.theActionFailedTryAgain')
 }
 
 export interface PortSpec {
@@ -124,17 +125,14 @@ export function describeEditError(error: unknown, operation: 'recreate' | 'dupli
   if (error instanceof ApiError) {
     switch (error.code) {
       case 'CONTAINER_RECREATE_FAILED':
-        return 'The container could not be recreated; the original container was restored. Check the image and settings.'
+        return i18n.t('containers:api.theContainerCouldNotBe')
       case 'MANAGED_BY_COMPOSE':
-        return 'This container is managed by a Compose deployment. Change it in the deployment instead.'
+        return i18n.t('containers:api.thisContainerIsManagedBy')
       case 'RESOURCE_NOT_FOUND':
-        return 'The container, image or network was not found on this environment.'
+        return i18n.t('containers:api.theContainerImageOrNetwork')
     }
   }
-  return describeCreateError(error, 'container', 'INVALID_CONTAINER_SPEC').replace(
-    'could not be created',
-    operation === 'recreate' ? 'could not be recreated' : 'could not be duplicated',
-  )
+  return describeCreateError(error, 'container', 'INVALID_CONTAINER_SPEC', operation)
 }
 
 /** Fields of `PATCH /hosts/{h}/containers/{cid}/resources`: null = unchanged, 0 = unlimited. */
@@ -157,23 +155,23 @@ export function describeResourcesError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case 'INVALID_RESOURCES':
-        return ['The limits are invalid.', ...(error.details ?? [])].join(' ')
+        return [i18n.t('containers:api.theLimitsAreInvalid'), ...(error.details ?? [])].join(' ')
       case 'RESOURCES_REJECTED':
-        return 'Docker rejected these limits, for example memory below what the container already uses.'
+        return i18n.t('containers:api.dockerRejectedTheseLimitsFor')
       case 'MANAGED_BY_COMPOSE':
-        return 'This container is managed by a Compose deployment. Change it in the deployment instead.'
+        return i18n.t('containers:api.thisContainerIsManagedBy')
     }
-    if (error.status === 403) return 'You are not allowed to do this.'
+    if (error.status === 403) return i18n.t('containers:api.youAreNotAllowedTo')
   }
-  return 'The limits could not be applied. Try again.'
+  return i18n.t('containers:api.theLimitsCouldNotBe')
 }
 
 export const CONTAINER_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/
 
 export function validatePort(value: string, optional: boolean): string | null {
-  if (!value.trim()) return optional ? null : 'Required.'
+  if (!value.trim()) return optional ? null : i18n.t('containers:api.required')
   const n = Number(value)
-  return Number.isInteger(n) && n >= 1 && n <= 65535 ? null : 'Use 1-65535.'
+  return Number.isInteger(n) && n >= 1 && n <= 65535 ? null : i18n.t('containers:api.use165535')
 }
 
 /**

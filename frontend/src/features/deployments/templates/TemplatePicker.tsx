@@ -3,9 +3,11 @@ import { describeDeploymentError } from '../deploymentErrors.ts'
 import { useTemplates, type AppTemplate } from './api.ts'
 import './templates.css'
 import { Button } from '../../../shared/ui/index.ts'
+import { useTranslation } from 'react-i18next'
 
 /** Searchable grid of bundled app templates; choosing one hands it to `onSelect`. */
 export function TemplatePicker({ onSelect, selectedId }: { onSelect: (template: AppTemplate) => void; selectedId?: string | null }) {
+  const { t: tr } = useTranslation('deployments')
   const searchId = useId()
   const { data, isPending, error, refetch } = useTemplates()
   const [query, setQuery] = useState('')
@@ -15,25 +17,25 @@ export function TemplatePicker({ onSelect, selectedId }: { onSelect: (template: 
   return (
     <div className="tp">
       <label className="ui-form-field" htmlFor={searchId}>
-        <span>Search templates</span>
+        <span>{tr('TemplatePicker.searchTemplates')}</span>
         <input id={searchId} type="search" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" spellCheck={false} />
       </label>
       {isPending && (
         <p className="tp__hint" role="status">
-          Loading templates…
+          {tr('TemplatePicker.loadingTemplates')}
         </p>
       )}
       {error && (
         <div role="alert" className="ui-error">
-          <p>{describeDeploymentError(error, 'Could not load the templates.')}</p>
+          <p>{describeDeploymentError(error, tr('TemplatePicker.couldNotLoadTheTemplates'))}</p>
           <Button variant="secondary" onClick={() => void refetch()}>
-            Retry
+            {tr('TemplatePicker.retry')}
           </Button>
         </div>
       )}
-      {data && shown.length === 0 && <p className="tp__hint">{data.length === 0 ? 'No templates available.' : 'No template matches your search.'}</p>}
+      {data && shown.length === 0 && <p className="tp__hint">{data.length === 0 ? tr('TemplatePicker.noTemplatesAvailable') : tr('TemplatePicker.noTemplateMatchesYourSearch')}</p>}
       {shown.length > 0 && (
-        <ul className="tp__grid" aria-label="Templates">
+        <ul className="tp__grid" aria-label={tr('TemplatePicker.templates')}>
           {shown.map((t) => (
             <li key={t.id}>
               <button type="button" className="tp__card" aria-pressed={selectedId === t.id} onClick={() => onSelect(t)}>

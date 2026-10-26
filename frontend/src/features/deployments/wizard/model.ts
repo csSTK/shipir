@@ -1,5 +1,7 @@
 /** Form state of the Compose wizard and its mapping to the `POST /api/compose/generate` spec. */
 
+import i18n from 'i18next'
+
 export const RESTART_POLICIES = ['no', 'always', 'on-failure', 'unless-stopped'] as const
 
 export interface PortRow {
@@ -106,8 +108,8 @@ export function isBindSource(source: string): boolean {
 
 export function validatePort(value: string, required: boolean): string | null {
   const v = value.trim()
-  if (v === '') return required ? 'Enter a port.' : null
-  if (!/^\d+$/.test(v) || Number(v) < 1 || Number(v) > 65535) return 'Use a port from 1 to 65535.'
+  if (v === '') return required ? i18n.t('deployments:model.enterAPort') : null
+  if (!/^\d+$/.test(v) || Number(v) < 1 || Number(v) > 65535) return i18n.t('deployments:model.useAPortFrom1')
   return null
 }
 
@@ -124,19 +126,19 @@ export function validateWizard(state: WizardState): WizardProblems {
   const set = (key: string, msg: string) => {
     if (!fields.has(key)) fields.set(key, msg)
   }
-  const nameMsg = 'Use lowercase letters, digits, hyphens and underscores.'
+  const nameMsg = i18n.t('deployments:model.useLowercaseLettersDigitsHyphens')
   const declaredVolumes = new Set(state.volumes.map((v) => v.name.trim()))
   const names = new Set<string>()
 
-  if (state.services.length === 0) general.push('Add at least one service.')
+  if (state.services.length === 0) general.push(i18n.t('deployments:model.addAtLeastOneService'))
 
   state.services.forEach((s, i) => {
     const p = `services.${i}`
     const name = s.name.trim()
     if (!NAME.test(name)) set(`${p}.name`, nameMsg)
-    else if (names.has(name)) set(`${p}.name`, 'Service names must be unique.')
+    else if (names.has(name)) set(`${p}.name`, i18n.t('deployments:model.serviceNamesMustBeUnique'))
     names.add(name)
-    if (!IMAGE.test(s.image.trim())) set(`${p}.image`, 'Enter an image such as nginx:1.27.')
+    if (!IMAGE.test(s.image.trim())) set(`${p}.image`, i18n.t('deployments:model.enterAnImageSuchAs'))
     s.ports.forEach((r, j) => {
       const c = validatePort(r.container, true)
       if (c) set(`${p}.ports.${j}.container`, c)
@@ -146,18 +148,18 @@ export function validateWizard(state: WizardState): WizardProblems {
     const keys = new Set<string>()
     s.env.forEach((r, j) => {
       const key = r.key.trim()
-      if (!ENV_KEY.test(key)) set(`${p}.env.${j}.key`, 'Use letters, digits and underscores; do not start with a digit.')
-      else if (keys.has(key)) set(`${p}.env.${j}.key`, 'This name is used more than once.')
+      if (!ENV_KEY.test(key)) set(`${p}.env.${j}.key`, i18n.t('deployments:model.useLettersDigitsAndUnderscores'))
+      else if (keys.has(key)) set(`${p}.env.${j}.key`, i18n.t('deployments:model.thisNameIsUsedMore'))
       keys.add(key)
-      if (r.ref && !ENV_KEY.test(r.value.trim())) set(`${p}.env.${j}.value`, 'Enter the name of a deployment variable.')
+      if (r.ref && !ENV_KEY.test(r.value.trim())) set(`${p}.env.${j}.value`, i18n.t('deployments:model.enterTheNameOfA'))
     })
     s.volumes.forEach((r, j) => {
       const source = r.source.trim()
       const target = r.target.trim()
-      if (source === '') set(`${p}.volumes.${j}.source`, 'Enter a volume name or a path like ./data.')
-      else if (source.startsWith('/') || source.split('/').includes('..')) set(`${p}.volumes.${j}.source`, 'Use a path inside the deployment folder, like ./data.')
-      else if (!isBindSource(source) && !declaredVolumes.has(source)) set(`${p}.volumes.${j}.source`, 'Declare this volume under Volumes first.')
-      if (!target.startsWith('/')) set(`${p}.volumes.${j}.target`, 'Enter an absolute path inside the container.')
+      if (source === '') set(`${p}.volumes.${j}.source`, i18n.t('deployments:model.enterAVolumeNameOr'))
+      else if (source.startsWith('/') || source.split('/').includes('..')) set(`${p}.volumes.${j}.source`, i18n.t('deployments:model.useAPathInsideThe'))
+      else if (!isBindSource(source) && !declaredVolumes.has(source)) set(`${p}.volumes.${j}.source`, i18n.t('deployments:model.declareThisVolumeUnderVolumes'))
+      if (!target.startsWith('/')) set(`${p}.volumes.${j}.target`, i18n.t('deployments:model.enterAnAbsolutePathInside'))
     })
   })
 
@@ -166,11 +168,11 @@ export function validateWizard(state: WizardState): WizardProblems {
     list.forEach((r, i) => {
       const name = r.name.trim()
       if (!NAME.test(name)) set(`${kind}.${i}.name`, nameMsg)
-      else if (seen.has(name)) set(`${kind}.${i}.name`, 'Names must be unique.')
+      else if (seen.has(name)) set(`${kind}.${i}.name`, i18n.t('deployments:model.namesMustBeUnique'))
       seen.add(name)
       const driver = r.driver.trim()
-      if (driver !== '' && !DRIVER.test(driver)) set(`${kind}.${i}.driver`, 'Enter a driver name such as bridge.')
-      else if (driver !== '' && r.external) set(`${kind}.${i}.driver`, 'External resources have no driver.')
+      if (driver !== '' && !DRIVER.test(driver)) set(`${kind}.${i}.driver`, i18n.t('deployments:model.enterADriverNameSuch'))
+      else if (driver !== '' && r.external) set(`${kind}.${i}.driver`, i18n.t('deployments:model.externalResourcesHaveNoDriver'))
     })
   }
   return { fields, general }

@@ -4,15 +4,18 @@ import { Card, ResourceTable, Skeleton, type ResourceColumn } from '../../shared
 import { useSharedChatSession, useSharedChatSessions, type SharedChatSessionPage } from './api.ts'
 import { Pager } from './Pager.tsx'
 import { SettingsPage } from './SettingsPage.tsx'
+import { useTranslation } from 'react-i18next'
+import { formatDateTime } from '../../shared/i18n/format.ts'
 import './SharedChatSessionsPage.css'
 
 const PAGE_SIZE = 20
 
 const formatTime = (iso: string) =>
-  new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+  formatDateTime(iso, { dateStyle: 'medium', timeStyle: 'short' })
 
 /** Settings > AI assistant > Shared chats: ADMIN reads chats users shared, never acts on them. */
 export function SharedChatSessionsPage() {
+  const { t } = useTranslation('settings')
   const [params, setParams] = useSearchParams()
   const pageNumber = Math.max(1, Number(params.get('page')) || 1)
   const selected = params.get('session')
@@ -38,7 +41,7 @@ export function SharedChatSessionsPage() {
   const columns: ResourceColumn<SharedChatSessionPage['items'][number]>[] = [
     {
       id: 'title',
-      header: 'Chat',
+      header: t('SharedChatSessionsPage.chat'),
       defaultWidth: 360,
       hideable: false,
       render: (session) => (
@@ -52,22 +55,22 @@ export function SharedChatSessionsPage() {
         </button>
       ),
     },
-    { id: 'owner', header: 'Owner', defaultWidth: 160, render: (session) => session.ownerUsername },
-    { id: 'updated', header: 'Updated', defaultWidth: 200, render: (session) => formatTime(session.updatedAt) },
+    { id: 'owner', header: t('SharedChatSessionsPage.owner'), defaultWidth: 160, render: (session) => session.ownerUsername },
+    { id: 'updated', header: t('SharedChatSessionsPage.updated'), defaultWidth: 200, render: (session) => formatTime(session.updatedAt) },
   ]
 
   return (
-    <SettingsPage wide title="Shared chats" subtitle="Read-only copies of chats users shared with admins for debugging.">
+    <SettingsPage wide title={t('SharedChatSessionsPage.sharedChats')} subtitle={t('SharedChatSessionsPage.readOnlyCopiesOfChats')}>
       <ResourceTable
-        label="shared chats"
+        label={t('SharedChatSessionsPage.sharedChats2')}
         columns={columns}
         rows={list.data?.items}
         rowKey={(session) => session.id}
         searchText={(session) => `${session.title} ${session.ownerUsername}`}
         defaultSort="title"
-        emptyMessage="No shared chats."
+        emptyMessage={t('SharedChatSessionsPage.noSharedChats')}
         isPending={list.isPending}
-        error={list.isError ? 'Could not load shared chats.' : null}
+        error={list.isError ? t('SharedChatSessionsPage.couldNotLoadSharedChats') : null}
         onRetry={() => void list.refetch()}
       />
       {list.data && list.data.items.length > 0 && <Pager page={pageNumber} pages={pages} onPage={go} />}
@@ -77,7 +80,7 @@ export function SharedChatSessionsPage() {
           {detail.isPending && <Skeleton width="100%" height="var(--space-8)" />}
           {detail.isError && (
             <p role="alert" className="settings__error">
-              Could not load this chat.
+              {t('SharedChatSessionsPage.couldNotLoadThisChat')}
             </p>
           )}
           {detail.data && (

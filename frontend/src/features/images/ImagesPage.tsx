@@ -11,9 +11,12 @@ import { BuildImageDialog } from './BuildImageDialog.tsx'
 import { PullImageDialog } from './PullImageDialog.tsx'
 import { PushImageDialog } from './PushImageDialog.tsx'
 import { TagImageDialog } from './TagImageDialog.tsx'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
+import { dateTimeFormat } from '../../shared/i18n/format.ts'
 import './ImagesPage.css'
 
-const dateFormat = new Intl.DateTimeFormat(undefined, {
+const dateFormat = dateTimeFormat({
   dateStyle: 'medium',
   timeStyle: 'short',
 })
@@ -26,7 +29,7 @@ function shortId(id: string): string {
 const columns: ResourceColumn<Image>[] = [
   {
     id: 'tags',
-    header: 'Tags',
+    get header() { return i18n.t('images:ImagesPage.tags') },
     sortValue: (i) => i.repoTags[0] ?? null,
     render: (i) =>
       i.repoTags.length ? (
@@ -36,7 +39,7 @@ const columns: ResourceColumn<Image>[] = [
           ))}
         </ul>
       ) : (
-        <span>&lt;none&gt;</span>
+        <span>{i18n.t('images:ImagesPage.text')}</span>
       ),
   },
   {
@@ -47,21 +50,21 @@ const columns: ResourceColumn<Image>[] = [
   },
   {
     id: 'size',
-    header: 'Size',
+    get header() { return i18n.t('images:ImagesPage.size') },
     sortValue: (i) => i.size,
     render: (i) => (i.size === null ? '–' : formatSize(i.size)),
   },
   {
     id: 'created',
-    header: 'Created',
+    get header() { return i18n.t('images:ImagesPage.created') },
     sortValue: (i) => Date.parse(i.created),
     render: (i) => dateFormat.format(new Date(i.created)),
   },
   {
     id: 'usage',
-    header: 'Usage',
+    get header() { return i18n.t('images:ImagesPage.usage') },
     sortValue: (i) => (i.inUse ? 1 : 0),
-    render: (i) => <Badge tone={i.inUse ? 'ok' : 'muted'}>{i.inUse ? 'In use' : 'Unused'}</Badge>,
+    render: (i) => <Badge tone={i.inUse ? 'ok' : 'muted'}>{i.inUse ? i18n.t('images:ImagesPage.inUse') : i18n.t('images:ImagesPage.unused')}</Badge>,
   },
 ]
 
@@ -69,15 +72,15 @@ const columns: ResourceColumn<Image>[] = [
 function updateColumn(onPull: ((i: Image) => void) | null): ResourceColumn<Image> {
   return {
     id: 'update',
-    header: 'Update',
+    header: i18n.t('images:ImagesPage.update'),
     sortValue: (i) => (i.updateAvailable ? 1 : 0),
     render: (i) => {
       if (!i.updateAvailable) return '–'
-      if (!onPull || !i.repoTags.length) return <Badge tone="warn">Update available</Badge>
+      if (!onPull || !i.repoTags.length) return <Badge tone="warn">{i18n.t('images:ImagesPage.updateAvailable')}</Badge>
       return (
-        <Button variant="ghost" className="images__update" aria-label={`Pull & update ${i.repoTags[0]}`} onClick={() => onPull(i)}>
-          <Badge tone="warn">Update available</Badge>
-          <span>Pull &amp; update</span>
+        <Button variant="ghost" className="images__update" aria-label={i18n.t('images:ImagesPage.pullUpdateValue', { value: i.repoTags[0] })} onClick={() => onPull(i)}>
+          <Badge tone="warn">{i18n.t('images:ImagesPage.updateAvailable')}</Badge>
+          <span>{i18n.t('images:ImagesPage.pullUpdate')}</span>
         </Button>
       )
     },
@@ -86,6 +89,7 @@ function updateColumn(onPull: ((i: Image) => void) | null): ResourceColumn<Image
 
 /** `/environments/:id/images`: all images of one environment. */
 export function ImagesPage() {
+  const { t: tr } = useTranslation('images')
   const { id = '' } = useParams()
   const { data: user } = useCurrentUser()
   const isAdmin = user?.role === 'ADMIN'
@@ -102,26 +106,26 @@ export function ImagesPage() {
   return (
     <section className="images">
       <PageHeader
-        title="Images"
+        title={tr('ImagesPage.images')}
         actions={
           canWrite && (
             <>
-              {isAdmin && <Button onClick={() => setBuilding(true)}>Build image</Button>}
+              {isAdmin && <Button onClick={() => setBuilding(true)}>{tr('ImagesPage.buildImage')}</Button>}
               <Button variant="primary" onClick={() => setPulling({ reference: '' })}>
-                Pull image
+                {tr('ImagesPage.pullImage')}
               </Button>
             </>
           )
         }
       />
       <ResourceTable
-        label="images"
+        label={tr('ImagesPage.images2')}
         columns={withUpdate}
         rows={data}
         rowKey={(i) => i.id}
         searchText={(i) => `${i.repoTags.join(' ')} ${shortId(i.id)}`}
         defaultSort="tags"
-        emptyMessage="No images in this environment."
+        emptyMessage={tr('ImagesPage.noImagesInThisEnvironment')}
         isPending={isPending}
         error={error ? describeResourceError(error) : null}
         onRetry={() => void refetch()}
@@ -131,12 +135,12 @@ export function ImagesPage() {
             ? (i) => ({
                 menu: [
                   {
-                    label: 'Tag…',
+                    label: tr('ImagesPage.tag'),
                     icon: <Tag size={16} strokeWidth={1.75} />,
                     onSelect: () => setTagging(i),
                   },
                   {
-                    label: 'Push…',
+                    label: tr('ImagesPage.push'),
                     icon: <Upload size={16} strokeWidth={1.75} />,
                     disabled: !i.repoTags.length,
                     onSelect: () => setPushing(i),

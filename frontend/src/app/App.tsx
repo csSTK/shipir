@@ -14,6 +14,7 @@ import { AppShell } from './layout/AppShell.tsx'
 import { NotAllowedPage } from './layout/PlaceholderPages.tsx'
 import { useHostEvents } from '../shared/realtime/useHostEvents.ts'
 import { Providers } from './providers.tsx'
+import { useTranslation } from 'react-i18next'
 
 /** Subscribes to docker events of the environment in the URL; leaving `/environments/:id/*` unsubscribes. */
 function HostEventsBridge() {
@@ -28,11 +29,12 @@ function LegacyStacksRedirect() {
 }
 
 function AuthGate() {
+  const { t } = useTranslation('app')
   const { data: user, isPending, isError } = useCurrentUser()
   const logout = useLogout()
 
   if (isPending) return <div aria-busy="true" />
-  if (isError) return <p role="alert">Could not reach the server.</p>
+  if (isError) return <p role="alert">{t('App.couldNotReachTheServer')}</p>
   if (user === null) return <LoginPage />
   // setupStep is authoritative; older responses only carry setupRequired (= password step).
   const setupStep = user.setupStep ?? (user.setupRequired ? 'PASSWORD' : null)

@@ -2,6 +2,7 @@ import { validateEnv } from '../deployments/editor/envFile.ts'
 import type { ContainerDetails } from './details/api.ts'
 import type { EnvEntry } from '../deployments/api.ts'
 import { CONTAINER_NAME_PATTERN, joinCommand, splitCommand, validatePort, type ContainerSpec, type RestartPolicy } from './api.ts'
+import i18n from 'i18next'
 
 export interface PortRow {
   hostPort: string
@@ -46,10 +47,10 @@ export const INITIAL_CONTAINER_FORM: FormState = {
 /** Field problems keyed by a stable id; empty = valid. Mirrors the server rules. */
 export function validateContainerForm(f: FormState, isAdmin: boolean, requireName = false): Record<string, string> {
   const e: Record<string, string> = {}
-  if (requireName && !f.name.trim()) e.name = 'Enter a name for the copy.'
-  if (f.name && !CONTAINER_NAME_PATTERN.test(f.name)) e.name = 'Use letters, digits, _ . - and start with a letter or digit (max 128).'
-  if (!f.image.trim()) e.image = 'Enter an image, for example nginx:1.27.'
-  if (validateEnv(f.env.filter((r) => r.key !== '' || r.value !== '')).size > 0) e.env = 'Fix the variable names.'
+  if (requireName && !f.name.trim()) e.name = i18n.t('containers:containerForm.enterANameForThe')
+  if (f.name && !CONTAINER_NAME_PATTERN.test(f.name)) e.name = i18n.t('containers:containerForm.useLettersDigitsAndStart')
+  if (!f.image.trim()) e.image = i18n.t('containers:containerForm.enterAnImageForExample')
+  if (validateEnv(f.env.filter((r) => r.key !== '' || r.value !== '')).size > 0) e.env = i18n.t('containers:containerForm.fixTheVariableNames')
   const hostMode = f.hostNetwork || f.network.trim() === 'host'
   f.ports.forEach((p, i) => {
     const hp = validatePort(p.hostPort, true)
@@ -58,12 +59,12 @@ export function validateContainerForm(f: FormState, isAdmin: boolean, requireNam
     if (cp) e[`port${i}container`] = cp
   })
   f.mounts.forEach((m, i) => {
-    if (!m.source.trim()) e[`mount${i}source`] = 'Required.'
-    if (!m.target.startsWith('/')) e[`mount${i}target`] = 'Use an absolute path.'
+    if (!m.source.trim()) e[`mount${i}source`] = i18n.t('containers:containerForm.required')
+    if (!m.target.startsWith('/')) e[`mount${i}target`] = i18n.t('containers:containerForm.useAnAbsolutePath')
   })
-  if (hostMode && f.ports.length > 0) e.ports = 'Host networking cannot publish ports.'
-  if (f.hostNetwork && f.network.trim()) e.network = 'Host networking cannot be combined with a network.'
-  if (!isAdmin && f.network.trim() === 'host') e.network = 'Only administrators may use the host network.'
+  if (hostMode && f.ports.length > 0) e.ports = i18n.t('containers:containerForm.hostNetworkingCannotPublishPorts')
+  if (f.hostNetwork && f.network.trim()) e.network = i18n.t('containers:containerForm.hostNetworkingCannotBeCombined')
+  if (!isAdmin && f.network.trim() === 'host') e.network = i18n.t('containers:containerForm.onlyAdministratorsMayUseThe')
   return e
 }
 

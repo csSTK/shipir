@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router-dom'
 import type { CurrentUser } from '../../features/auth/index.ts'
 import { MIN_QUERY_LENGTH, routeFor, useSearch, type SearchResult } from './useSearch.ts'
 import { springSmooth, usePopMotion } from '../../shared/ui/motion.ts'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
 import './CommandPalette.css'
 
 interface Props {
@@ -27,25 +29,25 @@ interface Group {
 }
 
 const NAV: { label: string; to: string; admin?: boolean }[] = [
-  { label: 'Environments', to: '/' },
-  { label: 'Assistant', to: '/assistant' },
-  { label: 'Notifications', to: '/notifications' },
-  { label: 'Account', to: '/account' },
-  { label: 'Users', to: '/settings/users', admin: true },
-  { label: 'Teams', to: '/settings/teams', admin: true },
-  { label: 'Notification webhooks', to: '/settings/notifications', admin: true },
-  { label: 'Retention', to: '/settings/retention', admin: true },
-  { label: 'Git credentials', to: '/settings/git', admin: true },
-  { label: 'Registries', to: '/settings/registries', admin: true },
-  { label: 'AI assistant settings', to: '/settings/ai', admin: true },
-  { label: 'Shared chats', to: '/settings/ai/shared', admin: true },
-  { label: 'Audit log', to: '/settings/audit-log', admin: true },
+  { get label() { return i18n.t('app:CommandPalette.environments') }, to: '/' },
+  { get label() { return i18n.t('app:CommandPalette.assistant') }, to: '/assistant' },
+  { get label() { return i18n.t('app:CommandPalette.notifications') }, to: '/notifications' },
+  { get label() { return i18n.t('app:CommandPalette.account') }, to: '/account' },
+  { get label() { return i18n.t('app:CommandPalette.users') }, to: '/settings/users', admin: true },
+  { get label() { return i18n.t('app:CommandPalette.teams') }, to: '/settings/teams', admin: true },
+  { get label() { return i18n.t('app:CommandPalette.notificationWebhooks') }, to: '/settings/notifications', admin: true },
+  { get label() { return i18n.t('app:CommandPalette.retention') }, to: '/settings/retention', admin: true },
+  { get label() { return i18n.t('app:CommandPalette.gitCredentials') }, to: '/settings/git', admin: true },
+  { get label() { return i18n.t('app:CommandPalette.registries') }, to: '/settings/registries', admin: true },
+  { get label() { return i18n.t('app:CommandPalette.aiAssistantSettings') }, to: '/settings/ai', admin: true },
+  { get label() { return i18n.t('app:CommandPalette.sharedChats') }, to: '/settings/ai/shared', admin: true },
+  { get label() { return i18n.t('app:CommandPalette.auditLog') }, to: '/settings/audit-log', admin: true },
 ]
 
 const TYPE_GROUPS: { type: SearchResult['type']; label: string; icon: LucideIcon }[] = [
-  { type: 'HOST', label: 'Environments', icon: Server },
-  { type: 'DEPLOYMENT', label: 'Deployments', icon: Layers },
-  { type: 'CONTAINER', label: 'Containers', icon: Box },
+  { type: 'HOST', get label() { return i18n.t('app:CommandPalette.environments') }, icon: Server },
+  { type: 'DEPLOYMENT', get label() { return i18n.t('app:CommandPalette.deployments') }, icon: Layers },
+  { type: 'CONTAINER', get label() { return i18n.t('app:CommandPalette.containers') }, icon: Box },
 ]
 
 function toItem(r: SearchResult, index: number, icon: LucideIcon): Item {
@@ -62,6 +64,7 @@ export function CommandPalette({ role, open, onClose }: Props) {
 }
 
 function PaletteDialog({ role, onClose }: { role: Props['role']; onClose: () => void }) {
+  const { t } = useTranslation('app')
   const navigate = useNavigate()
   const pop = usePopMotion(springSmooth, 0.97)
   const id = useId()
@@ -82,7 +85,7 @@ function PaletteDialog({ role, onClose }: { role: Props['role']; onClose: () => 
     const commands = NAV.filter((c) => (!c.admin || role === 'ADMIN') && c.label.toLowerCase().includes(needle))
     const out: Group[] = []
     if (commands.length) {
-      out.push({ label: 'Go to', items: commands.map((c) => ({ icon: ArrowRight, key: `nav-${c.to}`, label: c.label, to: c.to })) })
+      out.push({ label: t('CommandPalette.goTo'), items: commands.map((c) => ({ icon: ArrowRight, key: `nav-${c.to}`, label: c.label, to: c.to })) })
     }
     const results = search.data?.results ?? []
     for (const { type, label, icon } of TYPE_GROUPS) {
@@ -90,7 +93,7 @@ function PaletteDialog({ role, onClose }: { role: Props['role']; onClose: () => 
       if (items.length) out.push({ label, items })
     }
     return out
-  }, [query, role, search.data])
+  }, [query, role, search.data, t])
 
   const flat = groups.flatMap((g) => g.items)
   const current = Math.min(active, Math.max(flat.length - 1, 0))
@@ -132,7 +135,7 @@ function PaletteDialog({ role, onClose }: { role: Props['role']; onClose: () => 
 
   return (
     <motion.div className="palette__scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.12 }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <motion.div className="palette" role="dialog" aria-modal="true" aria-label="Command palette" onKeyDown={onKeyDown} initial={pop.initial} animate={pop.animate} transition={pop.transition}>
+      <motion.div className="palette" role="dialog" aria-modal="true" aria-label={t('CommandPalette.commandPalette')} onKeyDown={onKeyDown} initial={pop.initial} animate={pop.animate} transition={pop.transition}>
         <div className="palette__field">
           <Search size={20} strokeWidth={1.75} aria-hidden="true" />
         <input
@@ -143,8 +146,8 @@ function PaletteDialog({ role, onClose }: { role: Props['role']; onClose: () => 
           aria-controls={listId}
           aria-autocomplete="list"
           aria-activedescendant={activeItem ? optionId(activeItem.key) : undefined}
-          aria-label="Search or jump to"
-          placeholder="Search environments, deployments, containers…"
+          aria-label={t('CommandPalette.searchOrJumpTo')}
+          placeholder={t('CommandPalette.searchEnvironmentsDeploymentsContainers')}
           autoComplete="off"
           spellCheck={false}
           value={query}
@@ -154,7 +157,7 @@ function PaletteDialog({ role, onClose }: { role: Props['role']; onClose: () => 
           }}
         />
         </div>
-        <div id={listId} role="listbox" aria-label="Results" className="palette__list">
+        <div id={listId} role="listbox" aria-label={t('CommandPalette.results')} className="palette__list">
           {groups.map((group) => (
             <div key={group.label} role="group" aria-label={group.label} className="palette__group">
               <div className="palette__heading" aria-hidden="true">
@@ -185,15 +188,15 @@ function PaletteDialog({ role, onClose }: { role: Props['role']; onClose: () => 
         </div>
         <div className="palette__status" aria-live="polite">
           {search.isError ? (
-            <span role="alert">Search failed. Try again.</span>
+            <span role="alert">{t('CommandPalette.searchFailedTryAgain')}</span>
           ) : search.isSearching ? (
-            'Searching…'
+            t('CommandPalette.searching')
           ) : needsMore ? (
-            'Type at least 2 characters to search.'
+            t('CommandPalette.typeAtLeast2Characters')
           ) : noResults ? (
-            'No results.'
+            t('CommandPalette.noResults')
           ) : search.data?.truncated ? (
-            'Showing the first results. Refine your search.'
+            t('CommandPalette.showingTheFirstResultsRefine')
           ) : null}
         </div>
       </motion.div>

@@ -4,6 +4,8 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { Button } from './Button.tsx'
 import { springSmooth, useFadeMotion, usePopMotion } from './motion.ts'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
 import './Dialog.css'
 
 interface DialogProps {
@@ -18,6 +20,7 @@ interface DialogProps {
 
 /** Modal dialog: scrim, focus trapped and restored, Esc/scrim close, spring (fade under reduced motion). */
 export function Dialog({ open, onOpenChange, title, description, children, footer }: DialogProps) {
+  const { t } = useTranslation('common')
   const pop = usePopMotion(springSmooth, 0.96)
   const fade = useFadeMotion()
   // Controlled dialogs have no Radix Trigger, so remember the opener to restore focus on close.
@@ -45,7 +48,7 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
                 <motion.div className="ui-dialog" {...pop}>
                   <div className="ui-dialog__head">
                     <RadixDialog.Title className="ui-dialog__title">{title}</RadixDialog.Title>
-                    <RadixDialog.Close className="ui-dialog__close" aria-label="Close">
+                    <RadixDialog.Close className="ui-dialog__close" aria-label={t('Dialog.close')}>
                       <X size={20} strokeWidth={1.75} aria-hidden="true" />
                     </RadixDialog.Close>
                   </div>
@@ -82,8 +85,8 @@ export function ConfirmDialog({
   onOpenChange,
   title,
   description,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel = i18n.t('common:Dialog.confirm'),
+  cancelLabel = i18n.t('common:Dialog.cancel'),
   danger = false,
   loading = false,
   onConfirm,

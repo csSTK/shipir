@@ -1,23 +1,24 @@
 import { ApiError } from '../../shared/api/client.ts'
+import i18n from 'i18next'
 
 /** User-facing text for 2FA API errors; unknown errors get `fallback`. */
 export function twoFactorErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case 'INVALID_CODE':
-        return 'That code is not valid. Check your authenticator app and try again.'
+        return i18n.t('auth:twoFactorErrors.thatCodeIsNotValid')
       case 'TOO_MANY_ATTEMPTS':
-        return 'Too many attempts. Wait a few minutes and try again.'
+        return i18n.t('auth:twoFactorErrors.tooManyAttemptsWaitA')
       case 'NO_SETUP_IN_PROGRESS':
-        return 'The setup expired. Start again.'
+        return i18n.t('auth:twoFactorErrors.theSetupExpiredStartAgain')
       case 'TWO_FACTOR_ALREADY_ENABLED':
-        return 'Two-factor authentication is already enabled.'
+        return i18n.t('auth:twoFactorErrors.twoFactorAuthenticationIsAlready')
       case 'ENCRYPTION_KEY_MISSING':
-        return 'The server has no encryption key configured, so two-factor authentication cannot be enabled.'
+        return i18n.t('auth:twoFactorErrors.theServerHasNoEncryption')
       case 'INVALID_CURRENT_PASSWORD':
-        return 'The password is incorrect.'
+        return i18n.t('auth:twoFactorErrors.thePasswordIsIncorrect')
       case 'TWO_FACTOR_REQUIRED':
-        return 'Two-factor authentication is required for administrators and cannot be disabled.'
+        return i18n.t('auth:twoFactorErrors.twoFactorAuthenticationIsRequired')
     }
   }
   return fallback

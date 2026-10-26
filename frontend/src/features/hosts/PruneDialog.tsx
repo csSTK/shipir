@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Button, Dialog } from '../../shared/ui/index.ts'
 import { formatSize } from './format.ts'
 import { describePruneError, usePrune, usePrunePreview, type ImagePruneMode, type PruneGroup, type PruneResult } from './prune.ts'
+import { useTranslation } from 'react-i18next'
+import { Trans } from '../../shared/i18n/Trans.tsx'
 import './PruneDialog.css'
 
 function Summary({ label, group }: { label: string; group: PruneGroup }) {
@@ -14,6 +16,7 @@ function Summary({ label, group }: { label: string; group: PruneGroup }) {
 }
 
 function Result({ result }: { result: PruneResult }) {
+  const { t } = useTranslation('hosts')
   const rows: [string, PruneResult['containers']][] = [
     ['containers', result.containers],
     ['images', result.images],
@@ -23,12 +26,12 @@ function Result({ result }: { result: PruneResult }) {
   return (
     <div role="status">
       <p className="prune__text">
-        Cleanup finished. About <strong>{formatSize(result.reclaimedBytes)}</strong> reclaimed (estimate).
+        <Trans t={t} i18nKey="PruneDialog.cleanupFinishedAboutSizeReclaimed" values={{ size: formatSize(result.reclaimedBytes) }} components={{ strong: <strong /> }} />
       </p>
       <ul className="prune__list">
         {rows.map(([label, r]) => (
           <li key={label}>
-            {r.removed} {label} removed{r.skipped > 0 && `, ${r.skipped} skipped`}
+            {t('PruneDialog.removedLabelRemoved', { removed: r.removed, label })}{r.skipped > 0 && t('PruneDialog.skippedSkipped', { skipped: r.skipped })}
           </li>
         ))}
       </ul>
@@ -38,6 +41,7 @@ function Result({ result }: { result: PruneResult }) {
 
 /** Choose what to prune, see the preview, confirm. */
 function PruneContent({ hostId, onClose }: { hostId: string; onClose: () => void }) {
+  const { t } = useTranslation('hosts')
   const [containers, setContainers] = useState(true)
   const [images, setImages] = useState<ImagePruneMode | 'NONE'>('DANGLING')
   const [volumes, setVolumes] = useState(false)
@@ -75,54 +79,53 @@ function PruneContent({ hostId, onClose }: { hostId: string; onClose: () => void
       ) : (
         <>
           <fieldset className="prune__options">
-            <legend className="prune__legend">Remove</legend>
+            <legend className="prune__legend">{t('PruneDialog.remove')}</legend>
             <label className="prune__check">
-              <input type="checkbox" checked={containers} onChange={(e) => setContainers(e.target.checked)} /> Stopped containers
+              <input type="checkbox" checked={containers} onChange={(e) => setContainers(e.target.checked)} /> {t('PruneDialog.stoppedContainers')}
             </label>
             <label className="prune__check">
-              Images
-              <select value={images} onChange={(e) => setImages(e.target.value as ImagePruneMode | 'NONE')} aria-label="Images">
-                <option value="NONE">None</option>
-                <option value="DANGLING">Dangling only</option>
-                <option value="UNUSED">All unused</option>
+              {t('PruneDialog.images')}
+              <select value={images} onChange={(e) => setImages(e.target.value as ImagePruneMode | 'NONE')} aria-label={t('PruneDialog.images')}>
+                <option value="NONE">{t('PruneDialog.none')}</option>
+                <option value="DANGLING">{t('PruneDialog.danglingOnly')}</option>
+                <option value="UNUSED">{t('PruneDialog.allUnused')}</option>
               </select>
             </label>
             <label className="prune__check">
-              <input type="checkbox" checked={volumes} onChange={(e) => setVolumes(e.target.checked)} /> Unused volumes
+              <input type="checkbox" checked={volumes} onChange={(e) => setVolumes(e.target.checked)} /> {t('PruneDialog.unusedVolumes')}
             </label>
             {volumes && (
               <label className="prune__check prune__check--nested">
-                <input type="checkbox" checked={includeManaged} onChange={(e) => setIncludeManaged(e.target.checked)} /> Include volumes of
-                managed deployments
+                <input type="checkbox" checked={includeManaged} onChange={(e) => setIncludeManaged(e.target.checked)} /> {t('PruneDialog.includeVolumesOfManagedDeployments')}
               </label>
             )}
             <label className="prune__check">
-              <input type="checkbox" checked={networks} onChange={(e) => setNetworks(e.target.checked)} /> Unused networks
+              <input type="checkbox" checked={networks} onChange={(e) => setNetworks(e.target.checked)} /> {t('PruneDialog.unusedNetworks')}
             </label>
           </fieldset>
-          {preview.isPending && <p className="prune__text">Calculating preview…</p>}
+          {preview.isPending && <p className="prune__text">{t('PruneDialog.calculatingPreview')}</p>}
           {preview.isError && (
             <p role="alert" className="prune__error">
               {describePruneError(preview.error)}
             </p>
           )}
           {data && (
-            <div aria-label="Preview">
+            <div aria-label={t('PruneDialog.preview')}>
               <ul className="prune__list">
-                {containers && <Summary label="containers" group={data.containers} />}
-                {images !== 'NONE' && <Summary label="images" group={data.images} />}
-                {volumes && <Summary label="volumes" group={data.volumes} />}
-                {networks && <Summary label="networks" group={data.networks} />}
+                {containers && <Summary label={t('PruneDialog.containers')} group={data.containers} />}
+                {images !== 'NONE' && <Summary label={t('PruneDialog.images2')} group={data.images} />}
+                {volumes && <Summary label={t('PruneDialog.volumes')} group={data.volumes} />}
+                {networks && <Summary label={t('PruneDialog.networks')} group={data.networks} />}
               </ul>
               {volumes && !includeManaged && data.managedVolumesExcluded > 0 && (
                 <p className="prune__note" role="note">
-                  {data.managedVolumesExcluded} volume(s) of managed deployments are kept.
+                  {t('PruneDialog.managedVolumesKept', { count: data.managedVolumesExcluded })}
                 </p>
               )}
             </div>
           )}
           <p className="prune__note">
-            Removing containers can free more images and volumes than listed. Removed data cannot be restored.
+            {t('PruneDialog.removingContainersCanFreeMore')}
           </p>
           {error && (
             <p role="alert" className="prune__error">
@@ -133,11 +136,11 @@ function PruneContent({ hostId, onClose }: { hostId: string; onClose: () => void
       )}
       <div className="prune__actions">
         <Button variant="ghost" onClick={onClose}>
-          {result ? 'Close' : 'Cancel'}
+          {result ? t('PruneDialog.close') : t('PruneDialog.cancel')}
         </Button>
         {!result && (
           <Button variant="danger" onClick={() => void confirm()} loading={prune.isPending} disabled={nothing || preview.isPending}>
-            {prune.isPending ? 'Cleaning up…' : 'Clean up'}
+            {prune.isPending ? t('PruneDialog.cleaningUp') : t('PruneDialog.cleanUp')}
           </Button>
         )}
       </div>
@@ -147,8 +150,9 @@ function PruneContent({ hostId, onClose }: { hostId: string; onClose: () => void
 
 /** Dialog shell; the content (and its preview request) exists only while open, so a fresh one mounts per opening. */
 export function PruneDialog({ hostId, open = true, onClose }: { hostId: string; open?: boolean; onClose: () => void }) {
+  const { t } = useTranslation('hosts')
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onClose()} title="Clean up unused resources">
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()} title={t('PruneDialog.cleanUpUnusedResources')}>
       <PruneContent hostId={hostId} onClose={onClose} />
     </Dialog>
   )

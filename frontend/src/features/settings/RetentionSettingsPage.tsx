@@ -3,11 +3,13 @@ import { Button, Card, Skeleton, TextField } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { useRetentionSettings, useSaveRetentionSettings, type RetentionSettings } from './api.ts'
 import { SettingsPage } from './SettingsPage.tsx'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
 import './SettingsPage.css'
 
 const MIN_DAYS = 1
 const MAX_DAYS = 3650
-const RANGE_MESSAGE = `Enter a value from ${MIN_DAYS} to ${MAX_DAYS} days.`
+const RANGE_MESSAGE = () => i18n.t('settings:RetentionSettingsPage.enterAValueFromMin', { MIN_DAYS, MAX_DAYS })
 
 /** Whole number inside the range; mirrors the backend bounds. */
 function parseDays(raw: string): number | null {
@@ -18,10 +20,11 @@ function parseDays(raw: string): number | null {
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError && error.details?.length) return error.details.join(' ')
-  return 'Could not save the retention settings. Try again.'
+  return i18n.t('settings:RetentionSettingsPage.couldNotSaveTheRetention')
 }
 
 function RetentionForm({ initial }: { initial: RetentionSettings }) {
+  const { t } = useTranslation('settings')
   const [audit, setAudit] = useState(String(initial.auditLogDays))
   const [notification, setNotification] = useState(String(initial.notificationDays))
   const [chat, setChat] = useState(String(initial.chatSessionDays))
@@ -38,7 +41,7 @@ function RetentionForm({ initial }: { initial: RetentionSettings }) {
     const statsDays = parseDays(stats)
     if (auditLogDays === null || notificationDays === null || chatSessionDays === null || statsDays === null) {
       setSaved(false)
-      return setProblem(RANGE_MESSAGE)
+      return setProblem(RANGE_MESSAGE())
     }
     setProblem(null)
     setSaved(false)
@@ -70,11 +73,11 @@ function RetentionForm({ initial }: { initial: RetentionSettings }) {
   return (
     <Card>
       <form className="settings__form" onSubmit={submit} noValidate>
-        {field('Audit log retention (days)', audit, setAudit)}
-        {field('Notification retention (days)', notification, setNotification)}
-        {field('Chat session retention (days)', chat, setChat)}
-        {field('Stats history (days)', stats, setStats)}
-        <p className="settings__muted">Older entries are removed once a day. Values from 1 to 3650 days.</p>
+        {field(t('RetentionSettingsPage.auditLogRetentionDays'), audit, setAudit)}
+        {field(t('RetentionSettingsPage.notificationRetentionDays'), notification, setNotification)}
+        {field(t('RetentionSettingsPage.chatSessionRetentionDays'), chat, setChat)}
+        {field(t('RetentionSettingsPage.statsHistoryDays'), stats, setStats)}
+        <p className="settings__muted">{t('RetentionSettingsPage.olderEntriesAreRemovedOnce')}</p>
         {problem && (
           <p role="alert" className="settings__error">
             {problem}
@@ -82,12 +85,12 @@ function RetentionForm({ initial }: { initial: RetentionSettings }) {
         )}
         {saved && (
           <p role="status" className="settings__ok">
-            Retention settings saved.
+            {t('RetentionSettingsPage.retentionSettingsSaved')}
           </p>
         )}
         <div className="settings__actions">
           <Button variant="primary" type="submit" loading={save.isPending}>
-            Save
+            {t('RetentionSettingsPage.save')}
           </Button>
         </div>
       </form>
@@ -97,14 +100,15 @@ function RetentionForm({ initial }: { initial: RetentionSettings }) {
 
 /** Settings > Retention: ADMIN sets how long audit log, notification, chat session and stats history entries are kept. */
 export function RetentionSettingsPage() {
+  const { t } = useTranslation('settings')
   const { data, isPending, isError } = useRetentionSettings()
 
   return (
-    <SettingsPage title="Retention" subtitle="How long audit log, notification, chat session and stats history entries are kept.">
+    <SettingsPage title={t('RetentionSettingsPage.retention')} subtitle={t('RetentionSettingsPage.howLongAuditLogNotification')}>
       {isPending && <Skeleton width="100%" height="var(--space-8)" />}
       {isError && (
         <p role="alert" className="settings__error">
-          Could not load the retention settings.
+          {t('RetentionSettingsPage.couldNotLoadTheRetention')}
         </p>
       )}
       {data && <RetentionForm initial={data} />}

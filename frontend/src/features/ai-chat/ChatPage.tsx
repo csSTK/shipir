@@ -3,10 +3,12 @@ import { useParams } from 'react-router-dom'
 import { EmptyState } from '../../shared/ui/index.ts'
 import { ChatPane } from './ChatPane.tsx'
 import { SessionList } from './SessionList.tsx'
+import { useTranslation } from 'react-i18next'
 import './ChatPage.css'
 
 /** `/assistant` and `/assistant/:sessionId`: chat history on the left, the open chat on the right. */
 export function ChatPage({ role }: { role: string }) {
+  const { t } = useTranslation('ai-chat')
   const { sessionId } = useParams()
   return (
     <div className="chat">
@@ -17,8 +19,8 @@ export function ChatPage({ role }: { role: string }) {
         ) : (
           <EmptyState
             icon={Sparkles}
-            title="Assistant"
-            description="Ask questions about your environments or let the assistant propose changes. You confirm every change before it runs. Start a new chat or open an earlier one."
+            title={t('ChatPage.assistant')}
+            description={t('ChatPage.askQuestionsAboutYourEnvironments')}
           />
         )}
       </main>

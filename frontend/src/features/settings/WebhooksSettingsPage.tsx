@@ -14,6 +14,10 @@ import {
   type WebhookEventType,
 } from './api.ts'
 import { SettingsPage } from './SettingsPage.tsx'
+import { useTranslation } from 'react-i18next'
+import { Trans } from '../../shared/i18n/Trans.tsx'
+import i18n from 'i18next'
+import { formatDateTime } from '../../shared/i18n/format.ts'
 import './SettingsPage.css'
 
 const NAME_MAX = 100
@@ -21,18 +25,19 @@ const EVENT_TYPES = Object.keys(WEBHOOK_EVENT_LABELS) as WebhookEventType[]
 
 function errorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
-    if (error.code === 'WEBHOOK_NAME_TAKEN' || error.status === 409) return 'This name is already in use.'
+    if (error.code === 'WEBHOOK_NAME_TAKEN' || error.status === 409) return i18n.t('settings:WebhooksSettingsPage.thisNameIsAlreadyIn')
     if (error.code === 'ENCRYPTION_KEY_MISSING')
-      return 'The server has no encryption key. Set SHIPIR_ENCRYPTION_KEY to store webhook URLs.'
-    if (error.code === 'INVALID_WEBHOOK_URL') return 'The URL must be an absolute http or https address.'
-    if (error.code === 'WEBHOOK_NOT_FOUND') return 'This webhook no longer exists.'
+      return i18n.t('settings:WebhooksSettingsPage.theServerHasNoEncryption')
+    if (error.code === 'INVALID_WEBHOOK_URL') return i18n.t('settings:WebhooksSettingsPage.theUrlMustBeAn')
+    if (error.code === 'WEBHOOK_NOT_FOUND') return i18n.t('settings:WebhooksSettingsPage.thisWebhookNoLongerExists')
     if (error.status === 400 && error.details?.length) return error.details.join(' ')
-    if (error.status === 400) return 'Check the entered values. The URL must be an absolute http(s) address.'
+    if (error.status === 400) return i18n.t('settings:WebhooksSettingsPage.checkTheEnteredValuesThe')
   }
   return fallback
 }
 
 function WebhookDialog({ webhook, onClose }: { webhook: Webhook | null; onClose: () => void }) {
+  const { t: tr } = useTranslation('settings')
   const [name, setName] = useState(webhook?.name ?? '')
   const [url, setUrl] = useState('')
   const [events, setEvents] = useState<WebhookEventType[]>(webhook?.eventTypes ?? [])
@@ -49,9 +54,9 @@ function WebhookDialog({ webhook, onClose }: { webhook: Webhook | null; onClose:
   function submit(e: FormEvent) {
     e.preventDefault()
     const trimmed = name.trim()
-    if (trimmed.length < 1 || trimmed.length > NAME_MAX) return setProblem(`The name must be 1 to ${NAME_MAX} characters.`)
-    if (!webhook && url.trim() === '') return setProblem('Enter the webhook URL.')
-    if (events.length === 0) return setProblem('Select at least one event.')
+    if (trimmed.length < 1 || trimmed.length > NAME_MAX) return setProblem(tr('WebhooksSettingsPage.theNameMustBe1', { NAME_MAX }))
+    if (!webhook && url.trim() === '') return setProblem(tr('WebhooksSettingsPage.enterTheWebhookUrl'))
+    if (events.length === 0) return setProblem(tr('WebhooksSettingsPage.selectAtLeastOneEvent'))
     setProblem(null)
     const input = {
       name: trimmed,
@@ -59,7 +64,7 @@ function WebhookDialog({ webhook, onClose }: { webhook: Webhook | null; onClose:
       eventTypes: events,
       enabled,
     }
-    const options = { onSuccess: onClose, onError: (err: unknown) => setProblem(errorMessage(err, 'Could not save the webhook. Try again.')) }
+    const options = { onSuccess: onClose, onError: (err: unknown) => setProblem(errorMessage(err, tr('WebhooksSettingsPage.couldNotSaveTheWebhook'))) }
     if (webhook) update.mutate({ id: webhook.id, input }, options)
     else create.mutate(input, options)
   }
@@ -68,31 +73,31 @@ function WebhookDialog({ webhook, onClose }: { webhook: Webhook | null; onClose:
     <Dialog
       open
       onOpenChange={(open) => !open && onClose()}
-      title={webhook ? 'Edit webhook' : 'Add webhook'}
+      title={webhook ? tr('WebhooksSettingsPage.editWebhook') : tr('WebhooksSettingsPage.addWebhook')}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {tr('WebhooksSettingsPage.cancel')}
           </Button>
           <Button variant="primary" type="submit" form="webhook-form" loading={pending}>
-            Save
+            {tr('WebhooksSettingsPage.save')}
           </Button>
         </>
       }
     >
       <form id="webhook-form" onSubmit={submit} className="settings__form">
-        <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
+        <TextField label={tr('WebhooksSettingsPage.name')} value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
         <TextField
-          label="Webhook URL"
+          label={tr('WebhooksSettingsPage.webhookUrl')}
           type="password"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           autoComplete="off"
-          placeholder={webhook ? 'Leave empty to keep the current URL' : 'https://'}
-          help={webhook ? `Current: ${webhook.urlHint}` : undefined}
+          placeholder={webhook ? tr('WebhooksSettingsPage.leaveEmptyToKeepThe') : 'https://'}
+          help={webhook ? tr('WebhooksSettingsPage.currentUrlhint', { urlHint: webhook.urlHint }) : undefined}
         />
         <fieldset className="settings__group">
-          <legend className="settings__legend">Events</legend>
+          <legend className="settings__legend">{tr('WebhooksSettingsPage.events')}</legend>
           {EVENT_TYPES.map((type) => (
             <label key={type} className="settings__check">
               <input type="checkbox" checked={events.includes(type)} onChange={() => toggle(type)} />
@@ -100,7 +105,7 @@ function WebhookDialog({ webhook, onClose }: { webhook: Webhook | null; onClose:
             </label>
           ))}
         </fieldset>
-        <Switch label="Enabled" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+        <Switch label={tr('WebhooksSettingsPage.enabled')} checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
         {problem && (
           <p role="alert" className="settings__error">
             {problem}
@@ -112,20 +117,21 @@ function WebhookDialog({ webhook, onClose }: { webhook: Webhook | null; onClose:
 }
 
 function statusText(status: string): string {
-  if (status === 'TIMEOUT') return 'the receiver timed out'
-  if (status === 'FAILED') return 'the receiver could not be reached'
-  if (status.startsWith('HTTP_')) return `the receiver answered HTTP ${status.slice(5)}`
+  if (status === 'TIMEOUT') return i18n.t('settings:WebhooksSettingsPage.theReceiverTimedOut')
+  if (status === 'FAILED') return i18n.t('settings:WebhooksSettingsPage.theReceiverCouldNotBe')
+  if (status.startsWith('HTTP_')) return i18n.t('settings:WebhooksSettingsPage.theReceiverAnsweredHttpStatus', { status: status.slice(5) })
   return status
 }
 
 function deliveryText(w: Webhook): string {
-  if (!w.lastDeliveryAt || !w.lastDeliveryStatus) return 'No delivery yet'
-  const when = new Date(w.lastDeliveryAt).toLocaleString()
-  return `${w.lastDeliveryStatus === 'SUCCESS' ? 'Delivered' : `Failed, ${statusText(w.lastDeliveryStatus)}`} · ${when}`
+  if (!w.lastDeliveryAt || !w.lastDeliveryStatus) return i18n.t('settings:WebhooksSettingsPage.noDeliveryYet')
+  const when = formatDateTime(w.lastDeliveryAt)
+  return `${w.lastDeliveryStatus === 'SUCCESS' ? i18n.t('settings:WebhooksSettingsPage.delivered') : i18n.t('settings:WebhooksSettingsPage.failedStatustext', { statusText: statusText(w.lastDeliveryStatus) })} · ${when}`
 }
 
 /** Settings > Notifications: ADMIN webhook management. The caller restricts access to ADMIN. */
 export function WebhooksSettingsPage() {
+  const { t: tr } = useTranslation('settings')
   const { data, isPending, isError, refetch } = useWebhooks()
   const [dialog, setDialog] = useState<{ kind: 'edit'; webhook: Webhook | null } | { kind: 'delete'; webhook: Webhook } | null>(null)
   const [deleteProblem, setDeleteProblem] = useState<string | null>(null)
@@ -137,30 +143,30 @@ export function WebhooksSettingsPage() {
   }
 
   const columns: ResourceColumn<Webhook>[] = [
-    { id: 'name', header: 'Name', sortValue: (w) => w.name, defaultWidth: 200, hideable: false, render: (w) => <strong>{w.name}</strong> },
+    { id: 'name', header: tr('WebhooksSettingsPage.name'), sortValue: (w) => w.name, defaultWidth: 200, hideable: false, render: (w) => <strong>{w.name}</strong> },
     { id: 'url', header: 'URL', defaultWidth: 240, render: (w) => <span className="settings__mono">{w.urlHint}</span> },
     {
       id: 'events',
-      header: 'Events',
+      header: tr('WebhooksSettingsPage.events'),
       defaultWidth: 240,
       render: (w) => w.eventTypes.map((t) => WEBHOOK_EVENT_LABELS[t]).join(', '),
     },
     {
       id: 'status',
-      header: 'Status',
+      header: tr('WebhooksSettingsPage.status'),
       sortValue: (w) => (w.enabled ? 0 : 1),
       defaultWidth: 110,
-      render: (w) => <Badge tone={w.enabled ? 'ok' : 'muted'}>{w.enabled ? 'Enabled' : 'Disabled'}</Badge>,
+      render: (w) => <Badge tone={w.enabled ? 'ok' : 'muted'}>{w.enabled ? tr('WebhooksSettingsPage.enabled') : tr('WebhooksSettingsPage.disabled')}</Badge>,
     },
-    { id: 'delivery', header: 'Last delivery', defaultWidth: 260, render: (w) => deliveryText(w) },
+    { id: 'delivery', header: tr('WebhooksSettingsPage.lastDelivery'), defaultWidth: 260, render: (w) => deliveryText(w) },
   ]
 
   function rowActions(w: Webhook): RowActions {
     return {
       primary: [
-        { label: 'Send test to', icon: Send, disabled: test.isPending, onSelect: () => test.mutate(w.id) },
-        { label: 'Edit', icon: Pencil, onSelect: () => setDialog({ kind: 'edit', webhook: w }) },
-        { label: 'Delete', icon: Trash2, danger: true, onSelect: () => setDialog({ kind: 'delete', webhook: w }) },
+        { label: tr('WebhooksSettingsPage.sendTestTo'), icon: Send, disabled: test.isPending, onSelect: () => test.mutate(w.id) },
+        { label: tr('WebhooksSettingsPage.edit'), icon: Pencil, onSelect: () => setDialog({ kind: 'edit', webhook: w }) },
+        { label: tr('WebhooksSettingsPage.delete'), icon: Trash2, danger: true, onSelect: () => setDialog({ kind: 'delete', webhook: w }) },
       ],
     }
   }
@@ -168,35 +174,35 @@ export function WebhooksSettingsPage() {
   return (
     <SettingsPage
       wide
-      title="Notification webhooks"
-      subtitle="Notifications are sent as JSON to each enabled webhook. Saved URLs are never shown again."
+      title={tr('WebhooksSettingsPage.notificationWebhooks')}
+      subtitle={tr('WebhooksSettingsPage.notificationsAreSentAsJson')}
       actions={
         <Button variant="primary" onClick={() => setDialog({ kind: 'edit', webhook: null })}>
-          Add webhook
+          {tr('WebhooksSettingsPage.addWebhook')}
         </Button>
       }
     >
-      {test.isPending && <p className="settings__muted">Sending test…</p>}
+      {test.isPending && <p className="settings__muted">{tr('WebhooksSettingsPage.sendingTest')}</p>}
       {!test.isPending && test.data && (
         <p role="status" className={test.data.ok ? 'settings__ok' : 'settings__error'}>
-          {test.data.ok ? 'Test delivered.' : `Test failed: ${statusText(test.data.status)}.`}
+          {test.data.ok ? tr('WebhooksSettingsPage.testDelivered') : tr('WebhooksSettingsPage.testFailedStatustext', { statusText: statusText(test.data.status) })}
         </p>
       )}
       {!test.isPending && test.isError && (
         <p role="status" className="settings__error">
-          {`Test failed: ${errorMessage(test.error, 'could not reach the server.')}`}
+          {tr('WebhooksSettingsPage.testFailedErrormessage', { errorMessage: errorMessage(test.error, i18n.t('settings:WebhooksSettingsPage.couldNotReachTheServer')) })}
         </p>
       )}
       <ResourceTable
-        label="webhooks"
+        label={tr('WebhooksSettingsPage.webhooks')}
         columns={columns}
         rows={data}
         rowKey={(w) => w.id}
         searchText={(w) => `${w.name} ${w.urlHint}`}
         defaultSort="name"
-        emptyMessage="No webhooks yet."
+        emptyMessage={tr('WebhooksSettingsPage.noWebhooksYet')}
         isPending={isPending}
-        error={isError ? 'Could not load webhooks.' : null}
+        error={isError ? tr('WebhooksSettingsPage.couldNotLoadWebhooks') : null}
         onRetry={() => void refetch()}
         rowActions={rowActions}
         rowLabel={(w) => w.name}
@@ -206,19 +212,19 @@ export function WebhooksSettingsPage() {
         <ConfirmDialog
           open
           onOpenChange={(open) => !open && close()}
-          title="Delete webhook"
-          confirmLabel="Delete"
+          title={tr('WebhooksSettingsPage.deleteWebhook')}
+          confirmLabel={tr('WebhooksSettingsPage.delete')}
           danger
           loading={remove.isPending}
           onConfirm={() =>
             remove.mutate(dialog.webhook.id, {
               onSuccess: close,
-              onError: (err) => setDeleteProblem(errorMessage(err, 'Could not delete the webhook. Try again.')),
+              onError: (err) => setDeleteProblem(errorMessage(err, tr('WebhooksSettingsPage.couldNotDeleteTheWebhook'))),
             })
           }
         >
           <p className="settings__text">
-            Delete <strong>{dialog.webhook.name}</strong>? It will no longer receive notifications.
+            <Trans t={tr} i18nKey="WebhooksSettingsPage.deleteNameItWillNo" values={{ name: dialog.webhook.name }} components={{ strong: <strong /> }} />
           </p>
           {deleteProblem && (
             <p role="alert" className="settings__error">

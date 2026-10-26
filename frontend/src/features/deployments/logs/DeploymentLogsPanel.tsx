@@ -2,14 +2,16 @@ import { useState } from 'react'
 import { Badge, Button, Card } from '../../../shared/ui/index.ts'
 import { useContainers } from '../../containers/api.ts'
 import { LogOptions, LogView, logDownloadHref, useDeploymentLogs, type ProjectTailOption } from '../../containers/logs/index.ts'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
 import './DeploymentLogsPanel.css'
 
 const TAILS: readonly ProjectTailOption[] = ['100', '500', '1000', 'all']
 
 const NOTICE_TEXT: Record<string, string> = {
-  CONTAINER_LIMIT: 'This deployment has too many containers to follow all of them; only the first ones are shown.',
-  UNAVAILABLE: 'The environment is not reachable. Logs resume when it is back.',
-  NOT_FOUND: 'No containers found for this deployment. Deploy it first.',
+  get CONTAINER_LIMIT() { return i18n.t('deployments:DeploymentLogsPanel.thisDeploymentHasTooMany') },
+  get UNAVAILABLE() { return i18n.t('deployments:DeploymentLogsPanel.theEnvironmentIsNotReachable') },
+  get NOT_FOUND() { return i18n.t('deployments:DeploymentLogsPanel.noContainersFoundForThis') },
 }
 
 interface Props {
@@ -20,13 +22,14 @@ interface Props {
 
 /** 'Logs' section of the deployment detail page: combined live log of all containers, off until the user asks for it. */
 export function DeploymentLogsPanel({ hostId, project }: Props) {
+  const { t } = useTranslation('deployments')
   const [shown, setShown] = useState(false)
   return (
     <Card className="sd-panel dlogs">
       <div className="sd-panel__head">
-        <h3 className="sd-panel__title">Logs</h3>
+        <h3 className="sd-panel__title">{t('DeploymentLogsPanel.logs')}</h3>
         <Button variant="secondary" size="sm" onClick={() => setShown((v) => !v)}>
-          {shown ? 'Hide logs' : 'Show logs'}
+          {shown ? t('DeploymentLogsPanel.hideLogs') : t('DeploymentLogsPanel.showLogs')}
         </Button>
       </div>
       {shown && <ProjectLogs hostId={hostId} project={project} />}
@@ -35,6 +38,7 @@ export function DeploymentLogsPanel({ hostId, project }: Props) {
 }
 
 function ProjectLogs({ hostId, project }: Props) {
+  const { t } = useTranslation('deployments')
   const [tail, setTail] = useState<ProjectTailOption>('100')
   const [timestamps, setTimestamps] = useState(false)
   const [chosen, setChosen] = useState<string | null>(null)
@@ -45,7 +49,7 @@ function ProjectLogs({ hostId, project }: Props) {
   const downloadId = options.find((c) => c.id === chosen)?.id ?? options[0]?.id
 
   const connectionLabel =
-    connection === 'connected' ? 'Live' : connection === 'connecting' ? 'Connecting…' : 'Connection lost, reconnecting…'
+    connection === 'connected' ? t('DeploymentLogsPanel.live') : connection === 'connecting' ? t('DeploymentLogsPanel.connecting') : t('DeploymentLogsPanel.connectionLostReconnecting')
 
   return (
     <div className="dlogs__body">
@@ -59,7 +63,7 @@ function ProjectLogs({ hostId, project }: Props) {
       >
         {options.length > 0 && (
           <label className="logv__field">
-            <span>Download container</span>
+            <span>{t('DeploymentLogsPanel.downloadContainer')}</span>
             <select value={downloadId} onChange={(e) => setChosen(e.target.value)} className="logv__select">
               {options.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -73,22 +77,22 @@ function ProjectLogs({ hostId, project }: Props) {
       </LogOptions>
       {refused && (
         <p role="alert" className="ui-error">
-          You are not allowed to follow the logs of this deployment, or the stream is not available.
+          {t('DeploymentLogsPanel.youAreNotAllowedTo')}
         </p>
       )}
       {notices.length > 0 && (
-        <div role="status" aria-label="Log notices" className="dlogs__notices">
+        <div role="status" aria-label={t('DeploymentLogsPanel.logNotices')} className="dlogs__notices">
           {notices.map((code) => (
             <p key={code} className="dlogs__notice">
-              {NOTICE_TEXT[code] ?? `Log stream problem (${code}).`}
+              {NOTICE_TEXT[code] ?? t('DeploymentLogsPanel.logStreamProblemCode', { code })}
             </p>
           ))}
         </div>
       )}
       <LogView
         lines={lines}
-        label="Deployment log"
-        emptyText="Waiting for output…"
+        label={t('DeploymentLogsPanel.deploymentLog')}
+        emptyText={t('DeploymentLogsPanel.waitingForOutput')}
         truncated={truncated}
         services={services}
         serviceEnds={serviceEnds}

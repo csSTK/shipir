@@ -8,6 +8,7 @@ import { openTopicChannel, type ConnectionState, type TopicChannel } from '../..
 import { Badge, Button, PageHeader, Toolbar } from '../../../shared/ui/index.ts'
 import { useContainers } from '../api.ts'
 import { describeExecError, useStartExec, type ExecSession, type Shell } from './api.ts'
+import { useTranslation } from 'react-i18next'
 import './ContainerConsolePage.css'
 
 type Phase = 'idle' | 'starting' | 'connecting' | 'live' | 'ended'
@@ -43,6 +44,7 @@ function decodeBase64(data: string): Uint8Array {
 
 /** `/environments/:id/containers/:cid/console` (ADMIN): interactive shell in a running container. */
 export function ContainerConsolePage() {
+  const { t } = useTranslation('containers')
   const { id: hostId = '', cid = '' } = useParams()
   const containers = useContainers(hostId)
   const name = containers.data?.find((c) => c.id === cid)?.name ?? cid.slice(0, 12)
@@ -148,7 +150,7 @@ export function ContainerConsolePage() {
               } else if (s === 'reconnecting') {
                 // The server ends the console with the connection, so a new socket would be a new session.
                 ended = true
-                finish('Connection lost. The console was closed.', 'error')
+                finish(t('ContainerConsolePage.connectionLostTheConsoleWas'), 'error')
               }
             },
             onMessage: (body) => {
@@ -159,10 +161,10 @@ export function ContainerConsolePage() {
                 if (frame.data) term.write(decodeBase64(frame.data))
               } else if (frame.status === 'ENDED') {
                 ended = true
-                finish('The session ended.')
+                finish(t('ContainerConsolePage.theSessionEnded'))
               } else if (frame.status === 'ERROR') {
                 ended = true
-                finish(`The session failed${frame.reason ? ` (${frame.reason})` : ''}.`, 'error')
+                finish(t('ContainerConsolePage.theSessionFailedValue', { value: frame.reason ? ` (${frame.reason})` : '' }), 'error')
               }
             },
           })
@@ -175,22 +177,22 @@ export function ContainerConsolePage() {
   const open = busy || phase === 'live'
   const badge =
     phase === 'live' ? (
-      <Badge tone="ok">Connected</Badge>
+      <Badge tone="ok">{t('ContainerConsolePage.connected')}</Badge>
     ) : busy ? (
-      <Badge tone="muted">Connecting…</Badge>
+      <Badge tone="muted">{t('ContainerConsolePage.connecting')}</Badge>
     ) : (
-      <Badge tone="muted">{phase === 'ended' ? 'Disconnected' : 'Not connected'}</Badge>
+      <Badge tone="muted">{phase === 'ended' ? t('ContainerConsolePage.disconnected') : t('ContainerConsolePage.notConnected')}</Badge>
     )
 
   return (
     <section className="cconsole">
       <Link to={`/environments/${hostId}/containers`} className="cconsole__back">
-        <ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" /> Containers
+        <ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" /> {t('ContainerConsolePage.containers')}
       </Link>
-      <PageHeader title={`Console: ${name}`} />
-      <Toolbar label="Console options">
+      <PageHeader title={t('ContainerConsolePage.consoleName', { name })} />
+      <Toolbar label={t('ContainerConsolePage.consoleOptions')}>
         <label className="cconsole__field">
-          <span>Shell</span>
+          <span>{t('ContainerConsolePage.shell')}</span>
           <select value={shell} onChange={(e) => setShell(e.target.value as Shell)} disabled={open} className="cconsole__select">
             {SHELLS.map((s) => (
               <option key={s} value={s}>
@@ -200,12 +202,12 @@ export function ContainerConsolePage() {
           </select>
         </label>
         {open ? (
-          <Button variant="ghost" onClick={() => finish('Disconnected.')}>
-            Disconnect
+          <Button variant="ghost" onClick={() => finish(t('ContainerConsolePage.disconnected2'))}>
+            {t('ContainerConsolePage.disconnect')}
           </Button>
         ) : (
           <Button variant="primary" onClick={connect}>
-            Connect
+            {t('ContainerConsolePage.connect')}
           </Button>
         )}
         <div role="status" className="cconsole__state">
@@ -218,7 +220,7 @@ export function ContainerConsolePage() {
         </p>
       )}
       <div className="cconsole__frame">
-        <div ref={hostRef} className="cconsole__term" role="group" aria-label="Terminal" />
+        <div ref={hostRef} className="cconsole__term" role="group" aria-label={t('ContainerConsolePage.terminal')} />
       </div>
     </section>
   )

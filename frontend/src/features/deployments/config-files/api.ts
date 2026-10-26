@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch, ApiError } from '../../../shared/api/client.ts'
+import i18n from 'i18next'
 
 export interface ConfigFileEntry {
   path: string
@@ -86,26 +87,26 @@ export function describeConfigError(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case 'INVALID_PATH':
-        return 'This path is not valid. Use a relative path inside the deployment folder.'
+        return i18n.t('deployments:api.thisPathIsNotValid')
       case 'EXCLUDED_PATH':
-        return 'This file is managed by Shipir (compose.yaml, .env) and cannot be edited here.'
+        return i18n.t('deployments:api.thisFileIsManagedBy')
       case 'NOT_TEXT':
-        return 'This file is not a text file and cannot be edited here.'
+        return i18n.t('deployments:api.thisFileIsNotA')
       case 'NOT_A_FILE':
-        return 'This path is not a file.'
+        return i18n.t('deployments:api.thisPathIsNotA')
       case 'INVALID_BACKUP_ID':
       case 'BACKUP_NOT_FOUND':
-        return 'This backup no longer exists.'
+        return i18n.t('deployments:api.thisBackupNoLongerExists')
       case 'READ_ONLY_PATH':
-        return 'Files from the Git checkout are read-only.'
+        return i18n.t('deployments:api.filesFromTheGitCheckout')
       case 'FILE_NOT_FOUND':
-        return 'This file no longer exists.'
+        return i18n.t('deployments:api.thisFileNoLongerExists')
       case 'DEPLOYMENT_NOT_FOUND':
-        return 'This deployment no longer exists.'
+        return i18n.t('deployments:api.thisDeploymentNoLongerExists')
       case 'FILE_TOO_LARGE':
-        return 'This file is too large to edit here.'
+        return i18n.t('deployments:api.thisFileIsTooLarge')
     }
-    if (error.status === 403) return 'You are not allowed to do this.'
+    if (error.status === 403) return i18n.t('deployments:api.youAreNotAllowedTo')
   }
   return fallback
 }

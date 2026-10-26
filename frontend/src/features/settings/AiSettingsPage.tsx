@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
 import { useState, type FormEvent } from "react";
 import { Badge, Button, Card, Skeleton, Switch, TextField } from "../../shared/ui/index.ts";
 import { ApiError } from "../../shared/api/client.ts";
@@ -17,28 +19,28 @@ import "./AiSettingsPage.css";
 function errorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
     if (error.code === "INVALID_BASE_URL")
-      return "This is not a valid base URL.";
+      return i18n.t('settings:AiSettingsPage.thisIsNotAValid');
     if (error.code === "ENCRYPTION_KEY_MISSING")
-      return "The server has no encryption key. Set SHIPIR_ENCRYPTION_KEY to store the API key.";
+      return i18n.t('settings:AiSettingsPage.theServerHasNoEncryption');
     if (error.code === "API_KEY_REQUIRED")
-      return "Save an API key first, then test the connection.";
+      return i18n.t('settings:AiSettingsPage.saveAnApiKeyFirst');
     if (error.status === 400 && error.details?.length)
       return error.details.join(" ");
-    if (error.status === 400) return "Check the entered values.";
+    if (error.status === 400) return i18n.t('settings:AiSettingsPage.checkTheEnteredValues');
   }
   return fallback;
 }
 
 const TEST_MESSAGES: Record<AiConnectionStatus, { ok: boolean; text: string }> =
   {
-    OK: { ok: true, text: "Connection successful." },
-    AUTH_FAILED: { ok: false, text: "The provider rejected the API key." },
-    UNREACHABLE: { ok: false, text: "The provider could not be reached." },
+    OK: { ok: true, get text() { return i18n.t('settings:AiSettingsPage.connectionSuccessful') } },
+    AUTH_FAILED: { ok: false, get text() { return i18n.t('settings:AiSettingsPage.theProviderRejectedTheApi') } },
+    UNREACHABLE: { ok: false, get text() { return i18n.t('settings:AiSettingsPage.theProviderCouldNotBe') } },
   };
 
 const PROVIDER_LABELS: Record<AiProvider, string> = {
-  OPENAI_COMPATIBLE: "OpenAI-compatible",
-  GEMINI: "Google Gemini",
+  get OPENAI_COMPATIBLE() { return i18n.t('settings:AiSettingsPage.openaiCompatible') },
+  get GEMINI() { return i18n.t('settings:AiSettingsPage.googleGemini') },
 };
 
 interface Draft {
@@ -58,6 +60,7 @@ function draftOf(config: AiProviderConfig): Draft {
 }
 
 function AiForm({ initial }: { initial: AiSettings }) {
+  const { t } = useTranslation('settings')
   const [selected, setSelected] = useState<AiProvider>(initial.activeProvider);
   const [drafts, setDrafts] = useState<Record<AiProvider, Draft>>(() => {
     const byProvider = {} as Record<AiProvider, Draft>;
@@ -97,7 +100,7 @@ function AiForm({ initial }: { initial: AiSettings }) {
     const m = model.trim();
     setSaved(false);
     if (url === "" || m === "")
-      return setProblem("Enter the base URL and the model.");
+      return setProblem(t('AiSettingsPage.enterTheBaseUrlAnd'));
     setProblem(null);
     const key = apiKey.trim();
     const body = {
@@ -129,7 +132,7 @@ function AiForm({ initial }: { initial: AiSettings }) {
       },
       onError: (err) =>
         setProblem(
-          errorMessage(err, "Could not save the AI settings. Try again."),
+          errorMessage(err, t('AiSettingsPage.couldNotSaveTheAi')),
         ),
     });
   }
@@ -138,21 +141,21 @@ function AiForm({ initial }: { initial: AiSettings }) {
     setTestProblem(null);
     test.mutate(selected, {
       onError: (err) =>
-        setTestProblem(errorMessage(err, "Could not run the test. Try again.")),
+        setTestProblem(errorMessage(err, t('AiSettingsPage.couldNotRunTheTest'))),
     });
   }
 
   const keyHelp = clearKey
-    ? 'The stored key is removed when you save.'
+    ? t('AiSettingsPage.theStoredKeyIsRemoved')
     : config.keyConfigured
-      ? `Current key: ${config.apiKeyHint ?? 'stored'}`
-      : 'No key stored.'
+      ? t('AiSettingsPage.currentKeyApikeyhint', { apiKeyHint: config.apiKeyHint ?? 'stored' })
+      : t('AiSettingsPage.noKeyStored')
 
   return (
     <Card>
       <form className="settings__form" onSubmit={submit} noValidate>
         <div className="ai-provider">
-          <div role="radiogroup" aria-label="Provider" className="ai-segmented">
+          <div role="radiogroup" aria-label={t('AiSettingsPage.provider')} className="ai-segmented">
             {initial.providers.map((p) => (
               <button
                 key={p.provider}
@@ -163,40 +166,40 @@ function AiForm({ initial }: { initial: AiSettings }) {
                 onClick={() => choose(p.provider)}
               >
                 {PROVIDER_LABELS[p.provider]}
-                {p.provider === initial.activeProvider && <Badge tone="ok">Active</Badge>}
+                {p.provider === initial.activeProvider && <Badge tone="ok">{t('AiSettingsPage.active')}</Badge>}
               </button>
             ))}
           </div>
-          <p className="settings__muted">Saving makes {PROVIDER_LABELS[selected]} the active provider.</p>
+          <p className="settings__muted">{t('AiSettingsPage.savingMakesProviderLabelsThe', { PROVIDER_LABELS: PROVIDER_LABELS[selected] })}</p>
         </div>
         <TextField
-          label="Base URL"
+          label={t('AiSettingsPage.baseUrl')}
           type="url"
           value={baseUrl}
           onChange={(e) => update({ baseUrl: e.target.value })}
           autoComplete="off"
           placeholder={selected === 'GEMINI' ? 'https://generativelanguage.googleapis.com' : 'https://api.openai.com/v1'}
         />
-        <TextField label="Model" value={model} onChange={(e) => update({ model: e.target.value })} autoComplete="off" />
+        <TextField label={t('AiSettingsPage.model')} value={model} onChange={(e) => update({ model: e.target.value })} autoComplete="off" />
         <TextField
-          label="API key"
+          label={t('AiSettingsPage.apiKey')}
           type="password"
           value={apiKey}
           disabled={clearKey}
           onChange={(e) => update({ apiKey: e.target.value })}
           autoComplete="off"
-          placeholder={config.keyConfigured ? 'Leave empty to keep the current key' : ''}
+          placeholder={config.keyConfigured ? t('AiSettingsPage.leaveEmptyToKeepThe') : ''}
           help={keyHelp}
         />
         {(config.keyConfigured || clearKey) && (
           <div>
             <Button size="sm" variant="ghost" onClick={() => update({ clearKey: !clearKey, apiKey: '' })}>
-              {clearKey ? 'Keep stored key' : 'Remove stored key'}
+              {clearKey ? t('AiSettingsPage.keepStoredKey') : t('AiSettingsPage.removeStoredKey')}
             </Button>
           </div>
         )}
         <Switch
-          label="Enable assistant"
+          label={t('AiSettingsPage.enableAssistant')}
           checked={enabled}
           onChange={(e) => {
             setEnabled(e.target.checked)
@@ -210,18 +213,18 @@ function AiForm({ initial }: { initial: AiSettings }) {
         )}
         {saved && (
           <p role="status" className="settings__ok">
-            AI settings saved.
+            {t('AiSettingsPage.aiSettingsSaved')}
           </p>
         )}
         <div className="settings__actions">
           <Button onClick={runTest} loading={test.isPending}>
-            Test connection
+            {t('AiSettingsPage.testConnection')}
           </Button>
           <Button variant="primary" type="submit" loading={save.isPending}>
-            Save
+            {t('AiSettingsPage.save')}
           </Button>
         </div>
-        <p className="settings__muted">The test uses the saved settings of the selected provider. Save changes first.</p>
+        <p className="settings__muted">{t('AiSettingsPage.theTestUsesTheSaved')}</p>
         {testResult && (
           <p role="status" className={testResult.ok ? 'settings__ok' : 'settings__error'}>
             {testResult.text}
@@ -239,17 +242,18 @@ function AiForm({ initial }: { initial: AiSettings }) {
 
 /** Settings > AI assistant: ADMIN configures the AI providers. The caller restricts access to ADMIN. */
 export function AiSettingsPage() {
+  const { t } = useTranslation('settings')
   const { data, isPending, isError } = useAiSettings()
 
   return (
     <SettingsPage
-      title="AI assistant"
-      subtitle="Connect an OpenAI-compatible provider or Google Gemini. The API key is stored encrypted and never shown again."
+      title={t('AiSettingsPage.aiAssistant')}
+      subtitle={t('AiSettingsPage.connectAnOpenaiCompatibleProvider')}
     >
       {isPending && <Skeleton width="100%" height="var(--space-8)" />}
       {isError && (
         <p role="alert" className="settings__error">
-          Could not load the AI settings.
+          {t('AiSettingsPage.couldNotLoadTheAi')}
         </p>
       )}
       {data && <AiForm initial={data} />}

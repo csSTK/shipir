@@ -2,6 +2,8 @@ import { useSyncExternalStore } from 'react'
 import { useDeploymentVersionDetail } from '../api.ts'
 import { describeDeploymentError } from '../deploymentErrors.ts'
 import { YamlDiffEditor } from '../editor/index.ts'
+import { useTranslation } from 'react-i18next'
+import { Trans } from '../../../shared/i18n/Trans.tsx'
 import './VersionDiff.css'
 
 const NARROW = '(max-width: 720px)'
@@ -20,6 +22,7 @@ interface Props {
 
 /** Diff of one version against the newest deployed version (what runs now): YAML plus env key changes, never values. */
 export function VersionDiff({ hostId, deploymentId, versionId }: Props) {
+  const { t } = useTranslation('deployments')
   const narrow = useSyncExternalStore(subscribeNarrow, () => narrowQuery?.matches ?? false)
   const target = useDeploymentVersionDetail(hostId, deploymentId, versionId)
   const baselineId = target.data?.baselineVersionId ?? null
@@ -29,19 +32,19 @@ export function VersionDiff({ hostId, deploymentId, versionId }: Props) {
   if (error) {
     return (
       <p role="alert" className="vd-note vd-note--error">
-        {describeDeploymentError(error, 'Could not load the changes.')} You can still continue.
+        {t('VersionDiff.deploymenterrorYouCanStillContinue', { deploymentError: describeDeploymentError(error, t('VersionDiff.couldNotLoadTheChanges')) })}
       </p>
     )
   }
   if (target.isPending || (baselineId && baseline.isPending)) {
     return (
       <p role="status" className="vd-note">
-        Loading changes…
+        {t('VersionDiff.loadingChanges')}
       </p>
     )
   }
   if (!baselineId || baselineId === versionId || !baseline.data || !target.data) {
-    return <p className="vd-note">There is no other deployed version to compare with.</p>
+    return <p className="vd-note">{t('VersionDiff.thereIsNoOtherDeployed')}</p>
   }
 
   const before = baseline.data
@@ -54,47 +57,43 @@ export function VersionDiff({ hostId, deploymentId, versionId }: Props) {
   const yamlSame = before.yaml === after.yaml
 
   if (yamlSame && envSame) {
-    return <p className="vd-note">No changes compared with the running version.</p>
+    return <p className="vd-note">{t('VersionDiff.noChangesComparedWithThe')}</p>
   }
 
   return (
     <div className="vd">
-      <section className="vd-section" aria-label="Compose file changes">
-        <h3 className="vd-heading">Compose file</h3>
+      <section className="vd-section" aria-label={t('VersionDiff.composeFileChanges')}>
+        <h3 className="vd-heading">{t('VersionDiff.composeFile')}</h3>
         {yamlSame ? (
-          <p className="vd-note">Unchanged.</p>
+          <p className="vd-note">{t('VersionDiff.unchanged')}</p>
         ) : (
           <>
             <div className="vd-legend" aria-hidden="true">
-              <span>Running now</span>
-              <span>After this action</span>
+              <Trans t={t} i18nKey="VersionDiff.runningNowAfterThisAction" components={{ span: <span /> }} />
             </div>
-            <YamlDiffEditor original={before.yaml} modified={after.yaml} label="Compose file changes" sideBySide={!narrow} />
+            <YamlDiffEditor original={before.yaml} modified={after.yaml} label={t('VersionDiff.composeFileChanges')} sideBySide={!narrow} />
           </>
         )}
       </section>
-      <section className="vd-section" aria-label="Environment changes">
-        <h3 className="vd-heading">Environment variables</h3>
+      <section className="vd-section" aria-label={t('VersionDiff.environmentChanges')}>
+        <h3 className="vd-heading">{t('VersionDiff.environmentVariables')}</h3>
         {envSame ? (
-          <p className="vd-note">Unchanged. Values are never shown.</p>
+          <p className="vd-note">{t('VersionDiff.unchangedValuesAreNeverShown')}</p>
         ) : (
           <ul className="vd-env">
             {added.map((k) => (
               <li key={`a-${k}`} className="vd-env__item vd-env__item--added">
-                <span className="vd-env__tag">Added</span>
-                <code>{k}</code>
+                <Trans t={t} i18nKey="VersionDiff.addedK" values={{ k }} components={{ span: <span className="vd-env__tag" />, code: <code /> }} />
               </li>
             ))}
             {changed.map((k) => (
               <li key={`c-${k}`} className="vd-env__item vd-env__item--changed">
-                <span className="vd-env__tag">Changed</span>
-                <code>{k}</code>
+                <Trans t={t} i18nKey="VersionDiff.changedK" values={{ k }} components={{ span: <span className="vd-env__tag" />, code: <code /> }} />
               </li>
             ))}
             {removed.map((k) => (
               <li key={`r-${k}`} className="vd-env__item vd-env__item--removed">
-                <span className="vd-env__tag">Removed</span>
-                <code>{k}</code>
+                <Trans t={t} i18nKey="VersionDiff.removedK" values={{ k }} components={{ span: <span className="vd-env__tag" />, code: <code /> }} />
               </li>
             ))}
           </ul>

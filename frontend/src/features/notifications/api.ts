@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../shared/api/client.ts'
+import i18n from 'i18next'
 
 export const NOTIFICATION_TYPES = [
   'HOST_DOWN',
@@ -17,16 +18,16 @@ export const NOTIFICATION_TYPES = [
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]
 
 export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
-  HOST_DOWN: 'Host down',
-  HOST_UP: 'Host up',
-  DEPLOYMENT_FAILED: 'Deployment failed',
-  CONTAINER_CRASHED: 'Container crashed',
-  CONTAINER_UNHEALTHY: 'Container unhealthy',
-  GIT_AUTO_UPDATE_FAILED: 'Git auto-update failed',
-  IMAGE_UPDATE_APPLIED: 'Image update applied',
-  IMAGE_UPDATE_FAILED: 'Image update failed',
-  UPTIME_DOWN: 'Uptime check down',
-  UPTIME_UP: 'Uptime check up',
+  get HOST_DOWN() { return i18n.t('notifications:api.hostDown') },
+  get HOST_UP() { return i18n.t('notifications:api.hostUp') },
+  get DEPLOYMENT_FAILED() { return i18n.t('notifications:api.deploymentFailed') },
+  get CONTAINER_CRASHED() { return i18n.t('notifications:api.containerCrashed') },
+  get CONTAINER_UNHEALTHY() { return i18n.t('notifications:api.containerUnhealthy') },
+  get GIT_AUTO_UPDATE_FAILED() { return i18n.t('notifications:api.gitAutoUpdateFailed') },
+  get IMAGE_UPDATE_APPLIED() { return i18n.t('notifications:api.imageUpdateApplied') },
+  get IMAGE_UPDATE_FAILED() { return i18n.t('notifications:api.imageUpdateFailed') },
+  get UPTIME_DOWN() { return i18n.t('notifications:api.uptimeCheckDown') },
+  get UPTIME_UP() { return i18n.t('notifications:api.uptimeCheckUp') },
 }
 
 export interface AppNotification {

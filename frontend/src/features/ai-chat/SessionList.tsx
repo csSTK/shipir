@@ -2,13 +2,16 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { Button, Skeleton } from '../../shared/ui/index.ts'
 import { useChatSessions, useCreateChatSession } from './api.ts'
+import { useTranslation } from 'react-i18next'
+import { formatDateTime } from '../../shared/i18n/format.ts'
 
 function when(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+  return formatDateTime(iso, { day: 'numeric', month: 'short' })
 }
 
 /** The user's own chats, newest first, plus the New chat button. */
 export function SessionList() {
+  const { t } = useTranslation('ai-chat')
   const sessions = useChatSessions()
   const create = useCreateChatSession()
   const navigate = useNavigate()
@@ -20,14 +23,14 @@ export function SessionList() {
     <aside className="chat-sessions">
       <Button variant="primary" className="chat-sessions__new" onClick={newChat} disabled={create.isPending} loading={create.isPending}>
         <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
-        New chat
+        {t('SessionList.newChat')}
       </Button>
       {create.isError && (
         <p role="alert" className="chat-error">
-          Could not start a chat. Try again.
+          {t('SessionList.couldNotStartAChat')}
         </p>
       )}
-      <nav aria-label="Chats">
+      <nav aria-label={t('SessionList.chats')}>
         {sessions.isPending && (
           <div aria-busy="true" className="chat-loading">
             <Skeleton height="2.25rem" />
@@ -36,10 +39,10 @@ export function SessionList() {
         )}
         {sessions.isError && (
           <p role="alert" className="chat-error">
-            Could not load your chats.
+            {t('SessionList.couldNotLoadYourChats')}
           </p>
         )}
-        {sessions.data?.items.length === 0 && <p className="chat-muted">No chats yet.</p>}
+        {sessions.data?.items.length === 0 && <p className="chat-muted">{t('SessionList.noChatsYet')}</p>}
         <ul>
           {sessions.data?.items.map((s) => (
             <li key={s.id}>

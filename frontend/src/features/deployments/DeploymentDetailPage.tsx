@@ -28,24 +28,29 @@ import { UptimeCard } from './uptime/index.ts'
 import { WebhookCard } from './webhook/index.ts'
 import { DeploymentContentPanel } from './DeploymentContentPanel.tsx'
 import { describeDeploymentError } from './deploymentErrors.ts'
+import { useTranslation } from 'react-i18next'
+import { Trans } from '../../shared/i18n/Trans.tsx'
+import i18n from 'i18next'
+import { formatDateTime } from '../../shared/i18n/format.ts'
 import './DeploymentDetailPage.css'
 
 const STATUS: Record<ManagedDeploymentStatus, { label: string; tone: 'ok' | 'bad' | 'muted' }> = {
-  RUNNING: { label: 'Running', tone: 'ok' },
-  STOPPED: { label: 'Stopped', tone: 'muted' },
-  ERROR: { label: 'Error', tone: 'bad' },
+  RUNNING: { get label() { return i18n.t('deployments:DeploymentDetailPage.running') }, tone: 'ok' },
+  STOPPED: { get label() { return i18n.t('deployments:DeploymentDetailPage.stopped') }, tone: 'muted' },
+  ERROR: { get label() { return i18n.t('deployments:DeploymentDetailPage.error') }, tone: 'bad' },
 }
 
-const SOURCE_LABEL = { MANUAL: 'Manual', GIT: 'Git', ROLLBACK: 'Rollback' } as const
+const SOURCE_LABEL = { get MANUAL() { return i18n.t('deployments:DeploymentDetailPage.manual') }, get GIT() { return i18n.t('deployments:DeploymentDetailPage.git') }, get ROLLBACK() { return i18n.t('deployments:DeploymentDetailPage.rollback') } } as const
 
 function formatDate(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleString() : 'Never'
+  return iso ? formatDateTime(iso) : i18n.t('deployments:DeploymentDetailPage.never')
 }
 
 type Dialog = { kind: 'delete' } | { kind: 'stop' } | { kind: 'deploy'; draftId: string } | { kind: 'rollback'; version: DeploymentVersion } | null
 
 /** `/environments/:id/deployments/:deploymentId`: status, actions, content and version history of a managed deployment. */
 export function DeploymentDetailPage() {
+  const { t } = useTranslation('deployments')
   const { id: hostId = '', deploymentId = '' } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -75,7 +80,7 @@ export function DeploymentDetailPage() {
   if (deployment.isPending) {
     return (
       <section className="sd" aria-busy="true">
-        <div role="status" aria-label="Loading deployment" className="sd-skeleton">
+        <div role="status" aria-label={t('DeploymentDetailPage.loadingDeployment')} className="sd-skeleton">
           <Skeleton height="2rem" width="40%" />
           <Skeleton height="10rem" />
         </div>
@@ -88,16 +93,16 @@ export function DeploymentDetailPage() {
     return (
       <section className="sd">
         <Link className="sd-back" to={listPath}>
-          Deployments
+          {t('DeploymentDetailPage.deployments')}
         </Link>
-        <PageHeader title={notFound ? 'Deployment not found' : 'Could not load the deployment'} />
+        <PageHeader title={notFound ? t('DeploymentDetailPage.deploymentNotFound') : t('DeploymentDetailPage.couldNotLoadTheDeployment')} />
         <p role="alert" className="sd-muted">
-          {notFound ? 'This deployment does not exist or was deleted.' : describeDeploymentError(deployment.error, 'Something went wrong. Try again.')}
+          {notFound ? t('DeploymentDetailPage.thisDeploymentDoesNotExist') : describeDeploymentError(deployment.error, t('DeploymentDetailPage.somethingWentWrongTryAgain'))}
         </p>
         {!notFound && (
           <div>
             <Button variant="secondary" onClick={() => void deployment.refetch()}>
-              Retry
+              {t('DeploymentDetailPage.retry')}
             </Button>
           </div>
         )}
@@ -112,8 +117,8 @@ export function DeploymentDetailPage() {
   function startDeploy() {
     setActionError(null)
     deploy.mutate(deploymentId, {
-      onSuccess: (d) => setStarted({ kind: 'Deploy', runId: d.runId }),
-      onError: (err) => setActionError(describeDeploymentError(err, 'Could not start the deployment. Try again.')),
+      onSuccess: (d) => setStarted({ kind: 'deploy', runId: d.runId }),
+      onError: (err) => setActionError(describeDeploymentError(err, t('DeploymentDetailPage.couldNotStartTheDeployment'))),
     })
   }
 
@@ -132,16 +137,16 @@ export function DeploymentDetailPage() {
   function startRedeploy() {
     setActionError(null)
     redeploy.mutate(deploymentId, {
-      onSuccess: (d) => setStarted({ kind: 'Pull & redeploy', runId: d.runId }),
-      onError: (err) => setActionError(describeDeploymentError(err, 'Could not start the redeployment. Try again.')),
+      onSuccess: (d) => setStarted({ kind: 'redeploy', runId: d.runId }),
+      onError: (err) => setActionError(describeDeploymentError(err, t('DeploymentDetailPage.couldNotStartTheRedeployment'))),
     })
   }
 
   function startPullUpdate() {
     setActionError(null)
     pullUpdate.mutate(deploymentId, {
-      onSuccess: (d) => setStarted({ kind: 'Pull & update', runId: d.runId }),
-      onError: (err) => setActionError(describeDeploymentError(err, 'Could not start the update. Try again.')),
+      onSuccess: (d) => setStarted({ kind: 'update', runId: d.runId }),
+      onError: (err) => setActionError(describeDeploymentError(err, t('DeploymentDetailPage.couldNotStartTheUpdate'))),
     })
   }
 
@@ -149,7 +154,7 @@ export function DeploymentDetailPage() {
     setDialogError(null)
     stop.mutate(deploymentId, {
       onSuccess: closeDialog,
-      onError: (err) => setDialogError(describeDeploymentError(err, 'Could not stop the deployment. Try again.')),
+      onError: (err) => setDialogError(describeDeploymentError(err, t('DeploymentDetailPage.couldNotStopTheDeployment'))),
     })
   }
 
@@ -159,10 +164,10 @@ export function DeploymentDetailPage() {
       { deploymentId, versionId: version.id },
       {
         onSuccess: (d) => {
-          setStarted({ kind: 'Rollback', runId: d.runId })
+          setStarted({ kind: 'rollback', runId: d.runId })
           closeDialog()
         },
-        onError: (err) => setDialogError(describeDeploymentError(err, 'Could not start the rollback. Try again.')),
+        onError: (err) => setDialogError(describeDeploymentError(err, t('DeploymentDetailPage.couldNotStartTheRollback'))),
       },
     )
   }
@@ -171,7 +176,7 @@ export function DeploymentDetailPage() {
     setDialogError(null)
     remove.mutate(deploymentId, {
       onSuccess: () => navigate(listPath),
-      onError: (err) => setDialogError(describeDeploymentError(err, 'Could not delete the deployment. Try again.')),
+      onError: (err) => setDialogError(describeDeploymentError(err, t('DeploymentDetailPage.couldNotDeleteTheDeployment'))),
     })
   }
 
@@ -180,26 +185,26 @@ export function DeploymentDetailPage() {
   return (
     <section className="sd">
       <Link className="sd-back" to={listPath}>
-        Deployments
+        {t('DeploymentDetailPage.deployments')}
       </Link>
       <PageHeader
         title={data.name}
         subtitle={
           <span className="sd-meta">
             <Badge tone={status.tone}>{status.label}</Badge>
-            <span>{data.source === 'GIT' ? 'From Git' : 'Compose file'}</span>
-            <span>Last deployed: {formatDate(data.lastDeployedAt)}</span>
+            <span>{data.source === 'GIT' ? t('DeploymentDetailPage.fromGit') : t('DeploymentDetailPage.composeFile')}</span>
+            <span>{t('DeploymentDetailPage.lastDeployedDate', { date: formatDate(data.lastDeployedAt) })}</span>
           </span>
         }
         actions={
           canWrite ? (
             <div className="sd-actions">
               <Button variant="primary" onClick={onDeployClick} disabled={busy || versions.isPending}>
-                Deploy
+                {t('DeploymentDetailPage.deploy')}
               </Button>
               {data.source === 'GIT' && (
                 <Button variant="secondary" onClick={startRedeploy} disabled={busy}>
-                  Pull &amp; redeploy
+                  {t('DeploymentDetailPage.pullRedeploy')}
                 </Button>
               )}
               {data.source === 'FILE' && (
@@ -207,16 +212,16 @@ export function DeploymentDetailPage() {
                   variant="secondary"
                   onClick={startPullUpdate}
                   disabled={busy || !hasDeployed}
-                  title={hasDeployed ? 'Pull newer images and recreate the containers' : 'Deploy once first'}
+                  title={hasDeployed ? t('DeploymentDetailPage.pullNewerImagesAndRecreate') : t('DeploymentDetailPage.deployOnceFirst')}
                 >
-                  {pullUpdate.isPending ? 'Updating…' : 'Pull & update'}
+                  {pullUpdate.isPending ? t('DeploymentDetailPage.updating') : t('DeploymentDetailPage.pullUpdate')}
                 </Button>
               )}
               <Button variant="secondary" onClick={() => setDialog({ kind: 'stop' })} disabled={busy}>
-                Stop
+                {t('DeploymentDetailPage.stop')}
               </Button>
               <Button variant="danger" onClick={() => setDialog({ kind: 'delete' })} disabled={busy}>
-                Delete
+                {t('DeploymentDetailPage.delete')}
               </Button>
             </div>
           ) : undefined
@@ -269,17 +274,17 @@ export function DeploymentDetailPage() {
       <UptimeCard hostId={hostId} deploymentId={deploymentId} canOperate={canWrite} />
 
       <Card className="sd-panel">
-        <h3 className="sd-panel__title">Versions</h3>
+        <h3 className="sd-panel__title">{t('DeploymentDetailPage.versions')}</h3>
         {versions.isPending ? (
-          <p className="sd-muted">Loading versions…</p>
+          <p className="sd-muted">{t('DeploymentDetailPage.loadingVersions')}</p>
         ) : versions.error ? (
           <p role="alert" className="ui-error">
-            {describeDeploymentError(versions.error, 'Could not load the versions.')}
+            {describeDeploymentError(versions.error, t('DeploymentDetailPage.couldNotLoadTheVersions'))}
           </p>
         ) : versions.data.length === 0 ? (
-          <p className="sd-muted">No versions yet. Deploy the deployment to create one.</p>
+          <p className="sd-muted">{t('DeploymentDetailPage.noVersionsYetDeployThe')}</p>
         ) : (
-          <ul className="sd-versions" aria-label="Versions">
+          <ul className="sd-versions" aria-label={t('DeploymentDetailPage.versions')}>
             {versions.data.map((v) => (
               <li key={v.id} className="sd-version">
                 <div className="sd-version__main">
@@ -293,12 +298,12 @@ export function DeploymentDetailPage() {
                   </span>
                 </div>
                 <div className="sd-version__tags">
-                  {v.current && <Badge tone="ok">Current</Badge>}
-                  {!v.deployed && <Badge tone="muted">Draft</Badge>}
+                  {v.current && <Badge tone="ok">{t('DeploymentDetailPage.current')}</Badge>}
+                  {!v.deployed && <Badge tone="muted">{t('DeploymentDetailPage.draft')}</Badge>}
                 </div>
                 {canWrite && v.deployed && !v.current && (
-                  <Button variant="secondary" aria-label={`Roll back to ${formatDate(v.createdAt)}`} onClick={() => setDialog({ kind: 'rollback', version: v })} disabled={busy}>
-                    Rollback
+                  <Button variant="secondary" aria-label={t('DeploymentDetailPage.rollBackToDate', { date: formatDate(v.createdAt) })} onClick={() => setDialog({ kind: 'rollback', version: v })} disabled={busy}>
+                    {t('DeploymentDetailPage.rollback')}
                   </Button>
                 )}
               </li>
@@ -308,38 +313,38 @@ export function DeploymentDetailPage() {
       </Card>
 
       {dialog?.kind === 'stop' && (
-        <ConfirmDialog title="Stop deployment" confirmLabel="Stop" pending={stop.isPending} error={dialogError} onConfirm={confirmStop} onClose={closeDialog}>
-          Stop <strong>{data.name}</strong>? Its containers are stopped and removed. The deployment and its versions stay in Shipir.
+        <ConfirmDialog title={t('DeploymentDetailPage.stopDeployment')} confirmLabel={t('DeploymentDetailPage.stop')} pending={stop.isPending} error={dialogError} onConfirm={confirmStop} onClose={closeDialog}>
+          <Trans t={t} i18nKey="DeploymentDetailPage.stopNameItsContainersAre" values={{ name: data.name }} components={{ strong: <strong /> }} />
         </ConfirmDialog>
       )}
       {dialog?.kind === 'deploy' && (
         <ConfirmDialog
-          title="Deploy changes"
-          confirmLabel="Deploy"
+          title={t('DeploymentDetailPage.deployChanges')}
+          confirmLabel={t('DeploymentDetailPage.deploy')}
           error={dialogError}
           onConfirm={confirmDeploy}
           onClose={closeDialog}
           details={<VersionDiff hostId={hostId} deploymentId={deploymentId} versionId={dialog.draftId} />}
         >
-          Deploy <strong>{data.name}</strong> with these changes? The running containers are replaced.
+          <Trans t={t} i18nKey="DeploymentDetailPage.deployNameWithTheseChanges" values={{ name: data.name }} components={{ strong: <strong /> }} />
         </ConfirmDialog>
       )}
       {dialog?.kind === 'delete' && (
-        <ConfirmDialog title="Delete deployment" confirmLabel="Delete" danger pending={remove.isPending} error={dialogError} onConfirm={confirmDelete} onClose={closeDialog}>
-          Delete <strong>{data.name}</strong>? Its containers are stopped and the deployment with all its versions is removed from Shipir. This cannot be undone.
+        <ConfirmDialog title={t('DeploymentDetailPage.deleteDeployment')} confirmLabel={t('DeploymentDetailPage.delete')} danger pending={remove.isPending} error={dialogError} onConfirm={confirmDelete} onClose={closeDialog}>
+          <Trans t={t} i18nKey="DeploymentDetailPage.deleteNameItsContainersAre" values={{ name: data.name }} components={{ strong: <strong /> }} />
         </ConfirmDialog>
       )}
       {dialog?.kind === 'rollback' && (
         <ConfirmDialog
-          title="Roll back deployment"
-          confirmLabel="Roll back"
+          title={t('DeploymentDetailPage.rollBackDeployment')}
+          confirmLabel={t('DeploymentDetailPage.rollBack')}
           pending={rollback.isPending}
           error={dialogError}
           onConfirm={() => confirmRollback(dialog.version)}
           onClose={closeDialog}
           details={<VersionDiff hostId={hostId} deploymentId={deploymentId} versionId={dialog.version.id} />}
         >
-          Redeploy <strong>{data.name}</strong> with the version from {formatDate(dialog.version.createdAt)}? The running containers are replaced.
+          <Trans t={t} i18nKey="DeploymentDetailPage.redeployNameWithTheVersion" values={{ name: data.name, date: formatDate(dialog.version.createdAt) }} components={{ strong: <strong /> }} />
         </ConfirmDialog>
       )}
     </section>

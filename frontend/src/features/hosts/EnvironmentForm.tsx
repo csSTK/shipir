@@ -10,34 +10,36 @@ import {
   type Host,
   type HostRequest,
 } from './api.ts'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
 import './EnvironmentForm.css'
 
 const DEFAULT_PORT = '2376'
 
 const CONNECTION_MESSAGES: Record<ConnectionErrorCode, string> = {
-  UNREACHABLE: 'Could not reach the Docker host. Check the address and port.',
-  TIMEOUT: 'The connection timed out. Check that the host is online and the port is open.',
-  TLS_ERROR: 'The TLS handshake failed. Check that the certificates belong to this host.',
-  PERMISSION_DENIED: 'Permission denied. Shipir is not allowed to use this Docker endpoint.',
-  INVALID_TLS_MATERIAL: 'The certificate or key could not be read. Choose valid PEM files.',
+  get UNREACHABLE() { return i18n.t('hosts:EnvironmentForm.couldNotReachTheDocker') },
+  get TIMEOUT() { return i18n.t('hosts:EnvironmentForm.theConnectionTimedOutCheck') },
+  get TLS_ERROR() { return i18n.t('hosts:EnvironmentForm.theTlsHandshakeFailedCheck') },
+  get PERMISSION_DENIED() { return i18n.t('hosts:EnvironmentForm.permissionDeniedShipirIsNot') },
+  get INVALID_TLS_MATERIAL() { return i18n.t('hosts:EnvironmentForm.theCertificateOrKeyCould') },
 }
 
 function connectionMessage(code: string | null | undefined): string {
   return code && code in CONNECTION_MESSAGES
     ? CONNECTION_MESSAGES[code as ConnectionErrorCode]
-    : 'The connection failed.'
+    : i18n.t('hosts:EnvironmentForm.theConnectionFailed')
 }
 
 function submitMessages(error: unknown): string[] {
   if (error instanceof ApiError) {
     switch (error.code) {
       case 'HOST_NAME_TAKEN':
-        return ['This name is already in use. Choose another one.']
+        return [i18n.t('hosts:EnvironmentForm.thisNameIsAlreadyIn')]
       case 'LOCAL_HOST_EXISTS':
-        return ['A local Docker environment already exists.']
+        return [i18n.t('hosts:EnvironmentForm.aLocalDockerEnvironmentAlready')]
       case 'ENCRYPTION_KEY_MISSING':
         return [
-          "The server has no encryption key configured, so TLS certificates can't be stored securely. Ask the administrator to set one.",
+          i18n.t('hosts:EnvironmentForm.theServerHasNoEncryption'),
         ]
       case 'INVALID_TLS_MATERIAL':
         return [CONNECTION_MESSAGES.INVALID_TLS_MATERIAL]
@@ -47,14 +49,14 @@ function submitMessages(error: unknown): string[] {
         if (error.details && error.details.length > 0) return error.details
     }
   }
-  return ['Could not add the environment. Please try again.']
+  return [i18n.t('hosts:EnvironmentForm.couldNotAddTheEnvironment')]
 }
 
 function testErrorMessage(error: unknown): string {
   if (error instanceof ApiError && error.code === 'INVALID_TLS_MATERIAL') {
     return CONNECTION_MESSAGES.INVALID_TLS_MATERIAL
   }
-  return 'Could not run the connection test. Please try again.'
+  return i18n.t('hosts:EnvironmentForm.couldNotRunTheConnection')
 }
 
 type PemKey = 'tlsCaPem' | 'tlsCertPem' | 'tlsKeyPem'
@@ -63,8 +65,8 @@ type PemFile = { name: string; content: string }
 
 const PEM_FIELDS: { key: PemKey; label: string }[] = [
   { key: 'tlsCaPem', label: 'CA certificate' },
-  { key: 'tlsCertPem', label: 'Client certificate' },
-  { key: 'tlsKeyPem', label: 'Client key' },
+  { key: 'tlsCertPem', get label() { return i18n.t('hosts:EnvironmentForm.clientCertificate') } },
+  { key: 'tlsKeyPem', get label() { return i18n.t('hosts:EnvironmentForm.clientKey') } },
 ]
 
 interface EnvironmentFormProps {
@@ -74,7 +76,8 @@ interface EnvironmentFormProps {
 }
 
 /** Adds a Docker environment: the local socket or a remote engine over TCP + TLS, with a connection test. */
-export function EnvironmentForm({ onCreated, submitLabel = 'Add environment' }: EnvironmentFormProps) {
+export function EnvironmentForm({ onCreated, submitLabel = i18n.t('hosts:EnvironmentForm.addEnvironment') }: EnvironmentFormProps) {
+  const { t } = useTranslation('hosts')
   const createHost = useCreateHost()
   const testConnection = useTestConnection()
   const [type, setType] = useState<ConnectionType>('LOCAL')
@@ -126,11 +129,11 @@ export function EnvironmentForm({ onCreated, submitLabel = 'Add environment' }: 
   const result = testConnection.data
   return (
     <form className="env-form" onSubmit={onSubmit}>
-      <div className="env-form__segments" role="radiogroup" aria-label="Connection type">
+      <div className="env-form__segments" role="radiogroup" aria-label={t('EnvironmentForm.connectionType')}>
         {(
           [
-            ['LOCAL', 'Local Docker socket'],
-            ['TCP', 'Remote (TCP + TLS)'],
+            ['LOCAL', t('EnvironmentForm.localDockerSocket')],
+            ['TCP', t('EnvironmentForm.remoteTcpTls')],
           ] as const
         ).map(([value, label]) => (
           <label key={value} className="env-form__segment">
@@ -150,7 +153,7 @@ export function EnvironmentForm({ onCreated, submitLabel = 'Add environment' }: 
       </div>
 
       <label className="env-form__field">
-        <span>Name</span>
+        <span>{t('EnvironmentForm.name')}</span>
         <input
           type="text"
           value={name}
@@ -166,7 +169,7 @@ export function EnvironmentForm({ onCreated, submitLabel = 'Add environment' }: 
         <>
           <div className="env-form__row">
             <label className="env-form__field env-form__field--grow">
-              <span>Host</span>
+              <span>{t('EnvironmentForm.host')}</span>
               <input
                 type="text"
                 value={host}
@@ -181,7 +184,7 @@ export function EnvironmentForm({ onCreated, submitLabel = 'Add environment' }: 
               />
             </label>
             <label className="env-form__field env-form__field--port">
-              <span>Port</span>
+              <span>{t('EnvironmentForm.port')}</span>
               <input
                 type="text"
                 inputMode="numeric"
@@ -204,7 +207,7 @@ export function EnvironmentForm({ onCreated, submitLabel = 'Add environment' }: 
                     <span>{pems[key].name}</span>
                   </>
                 ) : (
-                  <span>Choose file…</span>
+                  <span>{t('EnvironmentForm.chooseFile')}</span>
                 )}
               </span>
               <input
@@ -219,9 +222,9 @@ export function EnvironmentForm({ onCreated, submitLabel = 'Add environment' }: 
       )}
 
       <div className="env-form__status" role="status">
-        {testConnection.isPending && 'Testing…'}
+        {testConnection.isPending && t('EnvironmentForm.testing')}
         {result?.ok && (
-          <p className="env-form__ok">Connected. Docker {result.dockerVersion ?? ''}</p>
+          <p className="env-form__ok">{t('EnvironmentForm.connectedDockerDockerversion', { dockerVersion: result.dockerVersion ?? '' })}</p>
         )}
         {result && !result.ok && <p className="env-form__error">{connectionMessage(result.errorCode)}</p>}
         {testConnection.isError && (
@@ -235,10 +238,10 @@ export function EnvironmentForm({ onCreated, submitLabel = 'Add environment' }: 
 
       <div className="env-form__actions">
         <Button disabled={!connectable || testConnection.isPending} onClick={() => testConnection.mutate(buildRequest())}>
-          Test connection
+          {t('EnvironmentForm.testConnection')}
         </Button>
         <Button variant="primary" type="submit" disabled={!canSubmit} loading={createHost.isPending}>
-          {createHost.isPending ? 'Adding…' : submitLabel}
+          {createHost.isPending ? t('EnvironmentForm.adding') : submitLabel}
         </Button>
       </div>
     </form>

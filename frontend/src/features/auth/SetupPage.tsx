@@ -7,33 +7,36 @@ import { AuthBrand } from './AuthBrand.tsx'
 import { TwoFactorEnrollment } from './TwoFactorEnrollment.tsx'
 import { CURRENT_USER_KEY, useChangePassword, type SetupStep } from './api.ts'
 import { checkPassword, isPasswordValid, violationMessage } from './passwordPolicy.ts'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
 import './LoginPage.css'
 import './SetupPage.css'
 
 function errorMessages(error: unknown): string[] {
   if (error instanceof ApiError && error.status === 400) {
-    if (error.code === 'INVALID_CURRENT_PASSWORD') return ['The current password is incorrect.']
+    if (error.code === 'INVALID_CURRENT_PASSWORD') return [i18n.t('auth:SetupPage.theCurrentPasswordIsIncorrect')]
     if (error.code === 'PASSWORD_POLICY') {
       const violations = error.violations ?? []
       return violations.length > 0
         ? violations.map(violationMessage)
-        : ['The password does not meet the requirements.']
+        : [i18n.t('auth:SetupPage.thePasswordDoesNotMeet')]
     }
   }
-  return ['Could not set the password. Please try again.']
+  return [i18n.t('auth:SetupPage.couldNotSetThePassword')]
 }
 
 const STEPS: { id: SetupStep; label: string }[] = [
-  { id: 'PASSWORD', label: 'Password' },
-  { id: 'TWO_FACTOR', label: 'Two-factor' },
-  { id: 'ENVIRONMENT', label: 'Environment' },
+  { id: 'PASSWORD', get label() { return i18n.t('auth:SetupPage.password') } },
+  { id: 'TWO_FACTOR', get label() { return i18n.t('auth:SetupPage.twoFactor') } },
+  { id: 'ENVIRONMENT', get label() { return i18n.t('auth:SetupPage.environment') } },
 ]
 
 function StepIndicator({ step }: { step: SetupStep }) {
+  const { t } = useTranslation('auth')
   // Two-factor only appears once the server asks for it (an admin requirement).
   const steps = step === 'TWO_FACTOR' ? STEPS : STEPS.filter((s) => s.id !== 'TWO_FACTOR')
   return (
-    <ol className="setup__steps" aria-label="Setup steps">
+    <ol className="setup__steps" aria-label={t('SetupPage.setupSteps')}>
       {steps.map(({ id, label }, index) => {
         const current = steps.findIndex((s) => s.id === step)
         return (
@@ -56,14 +59,15 @@ function StepIndicator({ step }: { step: SetupStep }) {
 
 /** Admins must enrol a second factor before the app opens when the server requires it. */
 function TwoFactorStep() {
+  const { t } = useTranslation('auth')
   const queryClient = useQueryClient()
   return (
     <Card className="setup__card setup__panel auth-card">
-      <h1 className="setup__title">Set up two-factor authentication</h1>
-      <p className="setup__intro">An administrator requires two-factor authentication for admin accounts. Set it up to continue.</p>
+      <h1 className="setup__title">{t('SetupPage.setUpTwoFactorAuthentication')}</h1>
+      <p className="setup__intro">{t('SetupPage.anAdministratorRequiresTwoFactor')}</p>
       <TwoFactorEnrollment
         autoStart
-        finishLabel="Continue"
+        finishLabel={t('SetupPage.continue')}
         onFinished={() => void queryClient.refetchQueries({ queryKey: CURRENT_USER_KEY })}
       />
     </Card>
@@ -72,17 +76,17 @@ function TwoFactorStep() {
 
 /** Second first-start step: an admin adds the first Docker environment before the app opens. */
 function EnvironmentStep() {
+  const { t } = useTranslation('auth')
   const queryClient = useQueryClient()
   const [finishing, setFinishing] = useState(false)
   return (
     <Card className="setup__card setup__panel auth-card">
-      <h1 className="setup__title">Add your first environment</h1>
+      <h1 className="setup__title">{t('SetupPage.addYourFirstEnvironment')}</h1>
       <p className="setup__intro">
-        An environment is a Docker engine Shipir manages: this machine or a remote host. You can add more
-        later.
+        {t('SetupPage.anEnvironmentIsADocker')}
       </p>
       <EnvironmentForm
-        submitLabel="Continue"
+        submitLabel={t('SetupPage.continue')}
         onCreated={() => {
           setFinishing(true)
           // The gate leaves the setup once /auth/me reports no pending step.
@@ -90,7 +94,7 @@ function EnvironmentStep() {
         }}
       />
       <div className="setup__success" role="status">
-        {finishing && 'Environment added. Opening Shipir…'}
+        {finishing && t('SetupPage.environmentAddedOpeningShipir')}
       </div>
     </Card>
   )
@@ -116,6 +120,7 @@ export function SetupPage({ username, step = 'PASSWORD' }: { username: string; s
 }
 
 function PasswordStep({ username }: { username: string }) {
+  const { t } = useTranslation('auth')
   const changePassword = useChangePassword()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
@@ -150,13 +155,12 @@ function PasswordStep({ username }: { username: string }) {
     <>
       <Card className="setup__panel auth-card">
       <form className="setup__card" onSubmit={onSubmit}>
-        <h1 className="setup__title">Set your password</h1>
+        <h1 className="setup__title">{t('SetupPage.setYourPassword')}</h1>
         <p className="setup__intro">
-          This is the first start of Shipir. The initial password is known to whoever installed it, so
-          replace it with one only you know before you continue.
+          {t('SetupPage.thisIsTheFirstStart')}
         </p>
         <label className="setup__field">
-          <span>Current password</span>
+          <span>{t('SetupPage.currentPassword')}</span>
           <input
             ref={currentRef}
             type="password"
@@ -167,7 +171,7 @@ function PasswordStep({ username }: { username: string }) {
           />
         </label>
         <label className="setup__field">
-          <span>New password</span>
+          <span>{t('SetupPage.newPassword')}</span>
           <input
             type="password"
             value={next}
@@ -177,7 +181,7 @@ function PasswordStep({ username }: { username: string }) {
           />
         </label>
         <label className="setup__field">
-          <span>Confirm new password</span>
+          <span>{t('SetupPage.confirmNewPassword')}</span>
           <input
             type="password"
             value={confirmation}
@@ -201,10 +205,10 @@ function PasswordStep({ username }: { username: string }) {
             errorMessages(changePassword.error).map((message) => <p key={message}>{message}</p>)}
         </div>
         <div className="setup__success" role="status">
-          {changePassword.isSuccess && 'Password set. Opening Shipir…'}
+          {changePassword.isSuccess && t('SetupPage.passwordSetOpeningShipir')}
         </div>
         <Button className="setup__submit" variant="primary" type="submit" disabled={!canSubmit} loading={changePassword.isPending}>
-          {changePassword.isPending ? 'Saving…' : 'Set password'}
+          {changePassword.isPending ? t('SetupPage.saving') : t('SetupPage.setPassword')}
         </Button>
       </form>
       </Card>

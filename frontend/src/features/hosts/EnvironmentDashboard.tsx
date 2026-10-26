@@ -3,13 +3,14 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ChevronLeft, Sparkles } from 'lucide-react'
 import { Badge, Button, Card, PageHeader, Skeleton } from '../../shared/ui/index.ts'
 import { useCurrentUser } from '../auth/index.ts'
-import { describeError, formatMemory, plural } from './format.ts'
+import { describeError, countOf, formatMemory } from './format.ts'
 import { useHostsOverview, type HostOverview } from './api.ts'
 import { HostUsageHistory } from '../usage-history/UsageHistory.tsx'
 import { ENV_RESOURCES, type EnvResourceSlug } from './resources.ts'
 import { EnvironmentActions } from './EnvironmentActions.tsx'
 import { PruneDialog } from './PruneDialog.tsx'
 import { DiskUsageCard } from './DiskUsageCard.tsx'
+import { useTranslation } from 'react-i18next'
 import './EnvironmentsOverview.css'
 import './EnvironmentDashboard.css'
 
@@ -28,15 +29,17 @@ function countFor(env: HostOverview, slug: EnvResourceSlug): number | null {
 }
 
 function Back() {
+  const { t } = useTranslation('hosts')
   return (
     <Link className="envs__back" to="/">
-      <ChevronLeft size={16} strokeWidth={1.75} aria-hidden="true" /> Environments
+      <ChevronLeft size={16} strokeWidth={1.75} aria-hidden="true" /> {t('EnvironmentDashboard.environments')}
     </Link>
   )
 }
 
 /** `/environments/:id`: live status and resource counts of one environment. */
 export function EnvironmentDashboard() {
+  const { t } = useTranslation('hosts')
   const { id } = useParams()
   const navigate = useNavigate()
   const { data, isPending, isError } = useHostsOverview()
@@ -47,7 +50,7 @@ export function EnvironmentDashboard() {
 
   if (isPending) {
     return (
-      <section className="envs" role="status" aria-label="Loading environment" aria-busy="true">
+      <section className="envs" role="status" aria-label={t('EnvironmentDashboard.loadingEnvironment')} aria-busy="true">
         <Skeleton height="2rem" width="12rem" />
         <div className="dash__tiles">
           {ENV_RESOURCES.map(({ slug }) => (
@@ -62,7 +65,7 @@ export function EnvironmentDashboard() {
       <section className="envs">
         <Back />
         <p role="alert" className="envs__message">
-          Could not load the environment.
+          {t('EnvironmentDashboard.couldNotLoadTheEnvironment')}
         </p>
       </section>
     )
@@ -71,15 +74,15 @@ export function EnvironmentDashboard() {
     return (
       <section className="envs">
         <Back />
-        <PageHeader title="Environment not found" subtitle="This environment does not exist or was deleted." />
+        <PageHeader title={t('EnvironmentDashboard.environmentNotFound')} subtitle={t('EnvironmentDashboard.thisEnvironmentDoesNotExist')} />
       </section>
     )
   }
 
   const up = env.status === 'UP'
   const meta = [
-    env.dockerVersion && `Docker ${env.dockerVersion}`,
-    env.cpus !== null && plural(env.cpus, 'CPU'),
+    env.dockerVersion && t('EnvironmentDashboard.dockerDockerversion', { dockerVersion: env.dockerVersion }),
+    env.cpus !== null && countOf(env.cpus, 'cpu'),
     env.memoryBytes !== null && formatMemory(env.memoryBytes),
   ]
     .filter(Boolean)
@@ -91,7 +94,7 @@ export function EnvironmentDashboard() {
         title={env.name}
         subtitle={
           <span className="dash__subtitle">
-            <Badge tone={up ? 'ok' : 'bad'}>{up ? 'Up' : 'Down'}</Badge>
+            <Badge tone={up ? 'ok' : 'bad'}>{up ? t('EnvironmentDashboard.up') : t('EnvironmentDashboard.down')}</Badge>
             {up && meta && <span className="dash__meta">{meta}</span>}
           </span>
         }
@@ -99,7 +102,7 @@ export function EnvironmentDashboard() {
           <>
             {up && canClean && (
               <Button onClick={() => setPruning(true)}>
-                <Sparkles size={16} strokeWidth={1.75} aria-hidden="true" /> Clean up
+                <Sparkles size={16} strokeWidth={1.75} aria-hidden="true" /> {t('EnvironmentDashboard.cleanUp')}
               </Button>
             )}
             {user?.role === 'ADMIN' && <EnvironmentActions env={env} onDeleted={() => navigate('/')} />}

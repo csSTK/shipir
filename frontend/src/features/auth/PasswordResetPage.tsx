@@ -5,10 +5,12 @@ import { AuthBrand } from './AuthBrand.tsx'
 import { useConfirmPasswordReset, useRequestPasswordReset } from './api.ts'
 import { checkPassword, isPasswordValid, violationMessage } from './passwordPolicy.ts'
 import { throttleMessage } from './throttleErrors.ts'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
 import './LoginPage.css'
 import './PasswordResetPage.css'
 
-const NEUTRAL_MESSAGE = 'If the account exists, a code has been issued.'
+const NEUTRAL_MESSAGE = () => i18n.t('auth:PasswordResetPage.ifTheAccountExistsA')
 const CODE_PATTERN = /^\d{6}$/
 
 interface Props {
@@ -21,17 +23,17 @@ function confirmErrors(error: unknown): { invalidCode: boolean; messages: string
   if (throttled) return { invalidCode: false, messages: [throttled] }
   if (error instanceof ApiError && error.status === 400) {
     if (error.code === 'INVALID_RESET_CODE') {
-      return { invalidCode: true, messages: ['The code is invalid or expired.'] }
+      return { invalidCode: true, messages: [i18n.t('auth:PasswordResetPage.theCodeIsInvalidOr')] }
     }
     if (error.code === 'PASSWORD_POLICY') {
       const violations = error.violations ?? []
       return {
         invalidCode: false,
-        messages: violations.length > 0 ? violations.map(violationMessage) : ['The password does not meet the requirements.'],
+        messages: violations.length > 0 ? violations.map(violationMessage) : [i18n.t('auth:PasswordResetPage.thePasswordDoesNotMeet')],
       }
     }
   }
-  return { invalidCode: false, messages: ['Could not reset the password. Please try again.'] }
+  return { invalidCode: false, messages: [i18n.t('auth:PasswordResetPage.couldNotResetThePassword')] }
 }
 
 /** Self-service reset: request a one-time code for a username, then set a new password with it. */
@@ -57,6 +59,7 @@ function RequestStep({
   onBack: () => void
   onRequested: () => void
 }) {
+  const { t } = useTranslation('auth')
   const request = useRequestPasswordReset()
   const ref = useRef<HTMLInputElement>(null)
   useEffect(() => ref.current?.focus(), [])
@@ -73,10 +76,10 @@ function RequestStep({
         <AuthBrand />
         <Card className="auth-card">
         <form className="login__card" onSubmit={onSubmit}>
-        <h1 className="login__title">Reset your password</h1>
-        <p className="reset__intro">Enter your username. If the account exists, a one-time code is issued.</p>
+        <h1 className="login__title">{t('PasswordResetPage.resetYourPassword')}</h1>
+        <p className="reset__intro">{t('PasswordResetPage.enterYourUsernameIfThe')}</p>
         <label className="login__field">
-          <span>Username</span>
+          <span>{t('PasswordResetPage.username')}</span>
           <input
             ref={ref}
             value={username}
@@ -89,13 +92,13 @@ function RequestStep({
           />
         </label>
         <p className="login__error" role="alert">
-          {request.isError && (throttleMessage(request.error) ?? 'Could not request a code. Please try again.')}
+          {request.isError && (throttleMessage(request.error) ?? t('PasswordResetPage.couldNotRequestACode'))}
         </p>
         <Button className="login__submit" variant="primary" type="submit" disabled={request.isPending || username.trim() === ''} loading={request.isPending}>
-          {request.isPending ? 'Requesting…' : 'Request code'}
+          {request.isPending ? t('PasswordResetPage.requesting') : t('PasswordResetPage.requestCode')}
         </Button>
         <Button className="login__link" variant="ghost" size="sm" onClick={onBack}>
-          Back to sign in
+          {t('PasswordResetPage.backToSignIn')}
         </Button>
       </form>
         </Card>
@@ -115,6 +118,7 @@ function ConfirmStep({
   onDone: () => void
   onNewCode: () => void
 }) {
+  const { t } = useTranslation('auth')
   const confirm = useConfirmPasswordReset()
   const [code, setCode] = useState('')
   const [next, setNext] = useState('')
@@ -138,12 +142,12 @@ function ConfirmStep({
         <AuthBrand />
         <Card className="auth-card">
         <form className="login__card" onSubmit={onSubmit}>
-        <h1 className="login__title">Enter your code</h1>
+        <h1 className="login__title">{t('PasswordResetPage.enterYourCode')}</h1>
         <p className="reset__intro" role="status">
-          {NEUTRAL_MESSAGE}
+          {NEUTRAL_MESSAGE()}
         </p>
         <label className="login__field">
-          <span>6-digit code</span>
+          <span>{t('PasswordResetPage.6DigitCode')}</span>
           <input
             ref={ref}
             className="reset__code"
@@ -156,7 +160,7 @@ function ConfirmStep({
           />
         </label>
         <label className="login__field">
-          <span>New password</span>
+          <span>{t('PasswordResetPage.newPassword')}</span>
           <input
             type="password"
             value={next}
@@ -166,7 +170,7 @@ function ConfirmStep({
           />
         </label>
         <label className="login__field">
-          <span>Confirm new password</span>
+          <span>{t('PasswordResetPage.confirmNewPassword')}</span>
           <input
             type="password"
             value={confirmation}
@@ -190,14 +194,14 @@ function ConfirmStep({
         </div>
         {errors?.invalidCode && (
           <Button className="login__link" variant="ghost" size="sm" onClick={onNewCode}>
-            Request a new code
+            {t('PasswordResetPage.requestANewCode')}
           </Button>
         )}
         <Button className="login__submit" variant="primary" type="submit" disabled={!canSubmit} loading={confirm.isPending}>
-          {confirm.isPending ? 'Resetting…' : 'Reset password'}
+          {confirm.isPending ? t('PasswordResetPage.resetting') : t('PasswordResetPage.resetPassword')}
         </Button>
         <Button className="login__link" variant="ghost" size="sm" onClick={onBack}>
-          Back to sign in
+          {t('PasswordResetPage.backToSignIn')}
         </Button>
       </form>
         </Card>

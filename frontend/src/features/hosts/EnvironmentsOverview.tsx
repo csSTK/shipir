@@ -5,9 +5,10 @@ import { Badge, Button, Card, Dialog, EmptyState, PageHeader, SearchField, Skele
 import { EnvironmentActions } from './EnvironmentActions.tsx'
 import { EnvironmentForm } from './EnvironmentForm.tsx'
 import { TagChips, TagFilter } from './TagChips.tsx'
-import { describeError, formatMemory, plural } from './format.ts'
+import { describeError, countOf, formatMemory } from './format.ts'
 import { useHostsOverview, type HostOverview } from './api.ts'
 import { envTags } from './tags.ts'
+import { useTranslation } from 'react-i18next'
 import './EnvironmentsOverview.css'
 
 type Role = 'ADMIN' | 'OPERATOR' | 'VIEWER'
@@ -22,6 +23,7 @@ function Stat({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function EnvironmentCard({ env, isAdmin }: { env: HostOverview; isAdmin: boolean }) {
+  const { t: tr } = useTranslation('hosts')
   const up = env.status === 'UP'
   const message = up ? null : describeError(env.error)
   return (
@@ -34,28 +36,28 @@ function EnvironmentCard({ env, isAdmin }: { env: HostOverview; isAdmin: boolean
             </span>
             <div className="env-card__title">
               <span className="env-card__name">{env.name}</span>
-              <span className="env-card__type">{env.connectionType === 'LOCAL' ? 'Local socket' : 'TCP + TLS'}</span>
+              <span className="env-card__type">{env.connectionType === 'LOCAL' ? tr('EnvironmentsOverview.localSocket') : tr('EnvironmentsOverview.tcpTls')}</span>
             </div>
-            <Badge tone={up ? 'ok' : 'bad'}>{up ? 'Up' : 'Down'}</Badge>
+            <Badge tone={up ? 'ok' : 'bad'}>{up ? tr('EnvironmentsOverview.up') : tr('EnvironmentsOverview.down')}</Badge>
           </div>
           <div className="env-card__endpoint">{env.endpoint}</div>
           <TagChips tags={envTags(env)} />
           {message && <p className="env-card__error">{message}</p>}
           {up && env.containers && (
             <div className="env-card__chips">
-              <Badge tone="ok">{`${env.containers.running} running`}</Badge>
-              <Badge tone="muted">{`${env.containers.stopped} stopped`}</Badge>
-              <Badge tone="ok" dot={false}>{`${env.containers.healthy} healthy`}</Badge>
-              <Badge tone={env.containers.unhealthy > 0 ? 'bad' : 'muted'}>{`${env.containers.unhealthy} unhealthy`}</Badge>
+              <Badge tone="ok">{tr('EnvironmentsOverview.runningRunning', { running: env.containers.running })}</Badge>
+              <Badge tone="muted">{tr('EnvironmentsOverview.stoppedStopped', { stopped: env.containers.stopped })}</Badge>
+              <Badge tone="ok" dot={false}>{tr('EnvironmentsOverview.healthyHealthy', { healthy: env.containers.healthy })}</Badge>
+              <Badge tone={env.containers.unhealthy > 0 ? 'bad' : 'muted'}>{tr('EnvironmentsOverview.unhealthyUnhealthy', { unhealthy: env.containers.unhealthy })}</Badge>
             </div>
           )}
           {up && (
             <dl className="env-card__stats">
-              {env.dockerVersion && <Stat label="Docker">{env.dockerVersion}</Stat>}
-              {env.cpus !== null && <Stat label="CPU">{plural(env.cpus, 'CPU')}</Stat>}
-              {env.memoryBytes !== null && <Stat label="Memory">{formatMemory(env.memoryBytes)}</Stat>}
-              {env.images !== null && <Stat label="Images">{plural(env.images, 'image')}</Stat>}
-              {env.volumes !== null && <Stat label="Volumes">{plural(env.volumes, 'volume')}</Stat>}
+              {env.dockerVersion && <Stat label={tr('EnvironmentsOverview.docker')}>{env.dockerVersion}</Stat>}
+              {env.cpus !== null && <Stat label={tr('EnvironmentsOverview.cpu')}>{countOf(env.cpus, 'cpu')}</Stat>}
+              {env.memoryBytes !== null && <Stat label={tr('EnvironmentsOverview.memory')}>{formatMemory(env.memoryBytes)}</Stat>}
+              {env.images !== null && <Stat label={tr('EnvironmentsOverview.images')}>{countOf(env.images, 'image')}</Stat>}
+              {env.volumes !== null && <Stat label={tr('EnvironmentsOverview.volumes')}>{countOf(env.volumes, 'volume')}</Stat>}
             </dl>
           )}
         </Link>
@@ -70,6 +72,7 @@ function EnvironmentCard({ env, isAdmin }: { env: HostOverview; isAdmin: boolean
 }
 
 export function EnvironmentsOverview({ role }: { role: Role }) {
+  const { t: tr } = useTranslation('hosts')
   const { data, isPending, isError, refetch, isFetching } = useHostsOverview()
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
@@ -97,31 +100,31 @@ export function EnvironmentsOverview({ role }: { role: Role }) {
   }
   const addButton = (
     <Button variant="primary" onClick={() => setAdding(true)}>
-      <Plus size={16} strokeWidth={1.75} aria-hidden="true" /> Add environment
+      <Plus size={16} strokeWidth={1.75} aria-hidden="true" /> {tr('EnvironmentsOverview.addEnvironment')}
     </Button>
   )
 
   return (
     <section className="envs">
       <PageHeader
-        title="Environments"
-        subtitle="Docker hosts managed with Shipir."
+        title={tr('EnvironmentsOverview.environments')}
+        subtitle={tr('EnvironmentsOverview.dockerHostsManagedWithShipir')}
         actions={
           <>
             <Button onClick={() => void refetch()} disabled={isFetching} aria-busy={isFetching}>
-              <RefreshCw size={16} strokeWidth={1.75} aria-hidden="true" /> Refresh
+              <RefreshCw size={16} strokeWidth={1.75} aria-hidden="true" /> {tr('EnvironmentsOverview.refresh')}
             </Button>
             {isAdmin && addButton}
           </>
         }
       />
-      <Toolbar label="Filter environments">
-        <SearchField placeholder="Search" aria-label="Search environments" value={query} onChange={(e) => setQuery(e.target.value)} />
+      <Toolbar label={tr('EnvironmentsOverview.filterEnvironments')}>
+        <SearchField placeholder={tr('EnvironmentsOverview.search')} aria-label={tr('EnvironmentsOverview.searchEnvironments')} value={query} onChange={(e) => setQuery(e.target.value)} />
         {filterTags.length > 0 && <TagFilter tags={filterTags} selected={selectedTags} onToggle={toggleTag} />}
       </Toolbar>
 
       {isPending && (
-        <ul className="envs__list" role="status" aria-label="Loading environments">
+        <ul className="envs__list" role="status" aria-label={tr('EnvironmentsOverview.loadingEnvironments')}>
           {[0, 1, 2].map((i) => (
             <li key={i} aria-hidden="true">
               <Skeleton height="9rem" />
@@ -131,24 +134,24 @@ export function EnvironmentsOverview({ role }: { role: Role }) {
       )}
       {isError && (
         <p role="alert" className="envs__message">
-          Could not load the environments. Try again with Refresh.
+          {tr('EnvironmentsOverview.couldNotLoadTheEnvironments')}
         </p>
       )}
       {data && data.length === 0 && (
         <EmptyState
           icon={Server}
-          title={isAdmin ? 'No environments yet. Add your first Docker environment.' : 'No environments yet, ask an admin.'}
+          title={isAdmin ? tr('EnvironmentsOverview.noEnvironmentsYetAddYour') : tr('EnvironmentsOverview.noEnvironmentsYetAskAn')}
           action={isAdmin ? addButton : undefined}
         />
       )}
       {data && data.length > 0 && rows.length === 0 && selectedTags.length === 0 && (
-        <EmptyState icon={Server} title={`No environment matches “${query.trim()}”.`} />
+        <EmptyState icon={Server} title={tr('EnvironmentsOverview.noEnvironmentMatchesTrim', { query: query.trim() })} />
       )}
       {data && data.length > 0 && rows.length === 0 && selectedTags.length > 0 && needle === '' && (
-        <EmptyState icon={Server} title="No environments with this tag" />
+        <EmptyState icon={Server} title={tr('EnvironmentsOverview.noEnvironmentsWithThisTag')} />
       )}
       {data && data.length > 0 && rows.length === 0 && selectedTags.length > 0 && needle !== '' && (
-        <EmptyState icon={Server} title="No environments match your filters" />
+        <EmptyState icon={Server} title={tr('EnvironmentsOverview.noEnvironmentsMatchYourFilters')} />
       )}
       {rows.length > 0 && (
         <ul className="envs__list">
@@ -158,7 +161,7 @@ export function EnvironmentsOverview({ role }: { role: Role }) {
         </ul>
       )}
 
-      <Dialog open={adding} onOpenChange={setAdding} title="Add environment">
+      <Dialog open={adding} onOpenChange={setAdding} title={tr('EnvironmentsOverview.addEnvironment')}>
         <EnvironmentForm onCreated={() => setAdding(false)} />
       </Dialog>
     </section>

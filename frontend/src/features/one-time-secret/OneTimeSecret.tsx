@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Button, TextField } from '../../shared/ui/index.ts'
+import { useTranslation } from 'react-i18next'
 import './OneTimeSecret.css'
 
 /**
@@ -7,6 +8,7 @@ import './OneTimeSecret.css'
  * when the clipboard is unavailable. The value lives only in the caller's state; nothing is persisted here.
  */
 export function OneTimeSecret({ label, value }: { label: string; value: string }) {
+  const { t } = useTranslation('one-time-secret')
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
 
   async function copy() {
@@ -31,11 +33,11 @@ export function OneTimeSecret({ label, value }: { label: string; value: string }
           onFocus={(e) => e.currentTarget.select()}
         />
         <Button className="otsecret__copy" onClick={() => void copy()}>
-          {state === 'copied' ? 'Copied' : 'Copy'}
+          {state === 'copied' ? t('OneTimeSecret.copied') : t('OneTimeSecret.copy')}
         </Button>
       </div>
       <p className="otsecret__hint" role="status">
-        {state === 'failed' && 'Could not copy automatically. Select the text and copy it manually.'}
+        {state === 'failed' && t('OneTimeSecret.couldNotCopyAutomaticallySelect')}
       </p>
     </div>
   )

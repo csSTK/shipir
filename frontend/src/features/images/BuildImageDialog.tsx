@@ -12,6 +12,8 @@ import {
   isValidBuildArgKey,
   isValidReference,
 } from './buildRules.ts'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
 import './ImagesPage.css'
 
 interface Props {
@@ -23,22 +25,23 @@ type Source = 'upload' | 'git'
 
 /** Only mounted for the Git source, so the (ADMIN) credential list is requested on demand. */
 function CredentialSelect({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const { t } = useTranslation('images')
   const credentials = useGitCredentials()
   return (
     <Select
-      label="Credential"
+      label={t('BuildImageDialog.credential')}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={credentials.isPending}
       help={
         credentials.isError
-          ? 'Could not load the credentials. Public repositories still work.'
+          ? t('BuildImageDialog.couldNotLoadTheCredentials')
           : credentials.data?.length === 0
-            ? 'No credentials yet. Add one under Settings, Git credentials.'
+            ? t('BuildImageDialog.noCredentialsYetAddOne')
             : undefined
       }
     >
-      <option value="">None (public repository)</option>
+      <option value="">{t('BuildImageDialog.nonePublicRepository')}</option>
       {credentials.data?.map((c) => (
         <option key={c.id} value={c.id}>
           {c.name}
@@ -50,13 +53,14 @@ function CredentialSelect({ value, onChange }: { value: string; onChange: (id: s
 
 function fileError(file: File | null): string | null {
   if (!file) return null
-  if (!hasContextExtension(file.name)) return 'Choose a .tar, .tar.gz or .tgz file.'
-  if (file.size > MAX_BUILD_CONTEXT_BYTES) return `The file is larger than ${MAX_BUILD_CONTEXT_LABEL}.`
+  if (!hasContextExtension(file.name)) return i18n.t('images:BuildImageDialog.chooseATarTarGz')
+  if (file.size > MAX_BUILD_CONTEXT_BYTES) return i18n.t('images:BuildImageDialog.theFileIsLargerThan', { MAX_BUILD_CONTEXT_LABEL })
   return null
 }
 
 /** Build dialog (ADMIN): upload a tar context or build from Git, then follow the live output. */
 export function BuildImageDialog({ hostId, onClose }: Props) {
+  const { t } = useTranslation('images')
   const [source, setSource] = useState<Source>('upload')
   const [file, setFile] = useState<File | null>(null)
   const [gitUrl, setGitUrl] = useState('')
@@ -73,13 +77,13 @@ export function BuildImageDialog({ hostId, onClose }: Props) {
 
   const tagError =
     tag.trim() && !isValidReference(tag.trim())
-      ? 'This is not a valid image reference. Example: myapp:1.0 or ghcr.io/org/app:latest.'
+      ? t('BuildImageDialog.thisIsNotAValid')
       : null
   const uploadError = fileError(file)
   const argErrors = buildArgs.map((a) => {
     if (!a) return null
     const eq = a.indexOf('=')
-    return eq < 1 || !isValidBuildArgKey(a.slice(0, eq)) ? 'Use KEY=VALUE; the key may contain letters, digits and underscores.' : null
+    return eq < 1 || !isValidBuildArgKey(a.slice(0, eq)) ? t('BuildImageDialog.useKeyValueTheKey') : null
   })
   const sourceReady = source === 'upload' ? !!file && !uploadError : !!gitUrl.trim() && !!gitRef.trim()
   const canSubmit = sourceReady && !!tag.trim() && !tagError && !!dockerfile.trim() && buildArgs.every((a, n) => a && !argErrors[n])
@@ -108,42 +112,42 @@ export function BuildImageDialog({ hostId, onClose }: Props) {
   const setArg = (n: number, value: string) => setBuildArgs((args) => args.map((a, i) => (i === n ? value : a)))
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()} title="Build image">
+    <Dialog open onOpenChange={(open) => !open && onClose()} title={t('BuildImageDialog.buildImage')}>
       {runId ? (
         <>
-          <DeployOutput title={`Building ${tag.trim()}`} runId={runId} onFinished={() => void refresh()} />
+          <DeployOutput title={t('BuildImageDialog.buildingTrim', { tag: tag.trim() })} runId={runId} onFinished={() => void refresh()} />
           <div className="ui-dialog-actions">
             <Button variant="primary" onClick={onClose}>
-              Close
+              {t('BuildImageDialog.close')}
             </Button>
           </div>
         </>
       ) : (
         <form className="ui-form" onSubmit={submit}>
           <fieldset className="build__source">
-            <legend>Source</legend>
+            <legend>{t('BuildImageDialog.source')}</legend>
             <label className="build__radio">
               <input type="radio" name="build-source" checked={source === 'upload'} onChange={() => setSource('upload')} />
-              Upload
+              {t('BuildImageDialog.upload')}
             </label>
             <label className="build__radio">
               <input type="radio" name="build-source" checked={source === 'git'} onChange={() => setSource('git')} />
-              Git repository
+              {t('BuildImageDialog.gitRepository')}
             </label>
           </fieldset>
           {source === 'upload' ? (
             <TextField
               type="file"
-              label="Build context"
+              label={t('BuildImageDialog.buildContext')}
               accept=".tar,.tar.gz,.tgz"
-              help={`A .tar or .tar.gz of the build directory, up to ${MAX_BUILD_CONTEXT_LABEL}.`}
+              help={t('BuildImageDialog.aTarOrTarGz', { MAX_BUILD_CONTEXT_LABEL })}
               error={uploadError}
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
           ) : (
             <>
               <TextField
-                label="Repository URL"
+                label={t('BuildImageDialog.repositoryUrl')}
                 value={gitUrl}
                 onChange={(e) => setGitUrl(e.target.value)}
                 placeholder="https://github.com/owner/repo.git"
@@ -152,7 +156,7 @@ export function BuildImageDialog({ hostId, onClose }: Props) {
                 spellCheck={false}
               />
               <TextField
-                label="Branch, tag or commit"
+                label={t('BuildImageDialog.branchTagOrCommit')}
                 value={gitRef}
                 onChange={(e) => setGitRef(e.target.value)}
                 autoComplete="off"
@@ -162,7 +166,7 @@ export function BuildImageDialog({ hostId, onClose }: Props) {
             </>
           )}
           <TextField
-            label="Image tag"
+            label={t('BuildImageDialog.imageTag')}
             value={tag}
             onChange={(e) => setTag(e.target.value)}
             placeholder="myapp:1.0"
@@ -172,36 +176,36 @@ export function BuildImageDialog({ hostId, onClose }: Props) {
             spellCheck={false}
           />
           <TextField
-            label="Dockerfile path"
+            label={t('BuildImageDialog.dockerfilePath')}
             value={dockerfile}
             onChange={(e) => setDockerfile(e.target.value)}
-            help="Relative to the context root."
+            help={t('BuildImageDialog.relativeToTheContextRoot')}
             autoComplete="off"
             spellCheck={false}
           />
           <div className="build__args">
-            <span className="build__args-title">Build arguments</span>
+            <span className="build__args-title">{t('BuildImageDialog.buildArguments')}</span>
             {buildArgs.map((arg, n) => (
               <div key={n} className="build__arg-row">
                 <TextField
-                  label={`Build argument ${n + 1}`}
+                  label={t('BuildImageDialog.buildArgumentValue', { value: n + 1 })}
                   value={arg}
                   onChange={(e) => setArg(n, e.target.value)}
-                  placeholder="KEY=VALUE"
+                  placeholder={t('BuildImageDialog.keyValue')}
                   error={argErrors[n]}
                   autoComplete="off"
                   spellCheck={false}
                 />
                 <IconButton
                   icon={X}
-                  aria-label={`Remove build argument ${n + 1}`}
+                  aria-label={t('BuildImageDialog.removeBuildArgumentValue', { value: n + 1 })}
                   onClick={() => setBuildArgs((args) => args.filter((_, i) => i !== n))}
                 />
               </div>
             ))}
             {buildArgs.length > 0 && (
               <p className="ui-hint" role="note">
-                Build arguments are visible in the image history. Do not pass secrets such as passwords or tokens.
+                {t('BuildImageDialog.buildArgumentsAreVisibleIn')}
               </p>
             )}
             <Button
@@ -210,10 +214,10 @@ export function BuildImageDialog({ hostId, onClose }: Props) {
               disabled={buildArgs.length >= MAX_BUILD_ARGS}
               onClick={() => setBuildArgs((args) => [...args, ''])}
             >
-              <Plus size={16} strokeWidth={1.75} aria-hidden="true" /> Add build argument
+              <Plus size={16} strokeWidth={1.75} aria-hidden="true" /> {t('BuildImageDialog.addBuildArgument')}
             </Button>
           </div>
-          <Switch label="Build without cache" checked={noCache} onChange={(e) => setNoCache(e.target.checked)} />
+          <Switch label={t('BuildImageDialog.buildWithoutCache')} checked={noCache} onChange={(e) => setNoCache(e.target.checked)} />
           {error && (
             <p role="alert" className="ui-error">
               {error}
@@ -221,10 +225,10 @@ export function BuildImageDialog({ hostId, onClose }: Props) {
           )}
           <div className="ui-dialog-actions">
             <Button variant="ghost" onClick={onClose}>
-              Cancel
+              {t('BuildImageDialog.cancel')}
             </Button>
             <Button variant="primary" type="submit" loading={build.isPending} disabled={!canSubmit}>
-              Build
+              {t('BuildImageDialog.build')}
             </Button>
           </div>
         </form>

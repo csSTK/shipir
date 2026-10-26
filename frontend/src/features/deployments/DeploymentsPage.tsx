@@ -19,12 +19,15 @@ import { AddDeploymentDialog } from './AddDeploymentDialog.tsx'
 import { ConfirmDialog } from './ConfirmDialog.tsx'
 import type { RowActions } from '../../shared/ui/ResourceTable.tsx'
 import { describeDeploymentError } from './deploymentErrors.ts'
+import { useTranslation } from 'react-i18next'
+import { Trans } from '../../shared/i18n/Trans.tsx'
+import i18n from 'i18next'
 import './DeploymentsPage.css'
 
 const STATUS: Record<DeploymentStatus, { label: string; tone: 'ok' | 'warn' | 'muted' }> = {
-  RUNNING: { label: 'Running', tone: 'ok' },
-  PARTIAL: { label: 'Partial', tone: 'warn' },
-  STOPPED: { label: 'Stopped', tone: 'muted' },
+  RUNNING: { get label() { return i18n.t('deployments:DeploymentsPage.running') }, tone: 'ok' },
+  PARTIAL: { get label() { return i18n.t('deployments:DeploymentsPage.partial') }, tone: 'warn' },
+  STOPPED: { get label() { return i18n.t('deployments:DeploymentsPage.stopped') }, tone: 'muted' },
 }
 
 /** A live Compose project, a Shipir-managed deployment, or both (joined by name or `managedDeploymentId`). */
@@ -50,6 +53,7 @@ function joinRows(live: DeploymentSummary[], managed: ManagedDeployment[]): Row[
 
 /** `/environments/:id/deployments`: Compose projects of one environment, plus managed deployments. */
 export function DeploymentsPage() {
+  const { t } = useTranslation('deployments')
   const { id = '' } = useParams()
   const navigate = useNavigate()
   const { data: user } = useCurrentUser()
@@ -73,17 +77,17 @@ export function DeploymentsPage() {
     [live.data, managed.data],
   )
 
-  function run(kind: 'Deploy' | 'Stop', deployment: ManagedDeployment) {
+  function run(kind: 'deploy' | 'stop', deployment: ManagedDeployment) {
     setNotice(null)
-    if (kind === 'Deploy') {
+    if (kind === 'deploy') {
       deploy.mutate(deployment.id, {
-        onSuccess: (d) => setNotice({ tone: 'ok', text: `Deployment of ${deployment.name} started (ID ${d.runId}).` }),
-        onError: (e) => setNotice({ tone: 'error', text: describeDeploymentError(e, `Could not deploy ${deployment.name}.`) }),
+        onSuccess: (d) => setNotice({ tone: 'ok', text: t('DeploymentsPage.deploymentOfNameStartedId', { name: deployment.name, runId: d.runId }) }),
+        onError: (e) => setNotice({ tone: 'error', text: describeDeploymentError(e, t('DeploymentsPage.couldNotDeployName', { name: deployment.name })) }),
       })
     } else {
       stop.mutate(deployment.id, {
-        onSuccess: () => setNotice({ tone: 'ok', text: `${deployment.name} stopped.` }),
-        onError: (e) => setNotice({ tone: 'error', text: describeDeploymentError(e, `Could not stop ${deployment.name}.`) }),
+        onSuccess: () => setNotice({ tone: 'ok', text: t('DeploymentsPage.nameStopped', { name: deployment.name }) }),
+        onError: (e) => setNotice({ tone: 'error', text: describeDeploymentError(e, t('DeploymentsPage.couldNotStopName', { name: deployment.name })) }),
       })
     }
   }
@@ -102,9 +106,9 @@ export function DeploymentsPage() {
       {
         onSuccess: () => {
           closeRemove()
-          setNotice({ tone: 'ok', text: `${name} removed.` })
+          setNotice({ tone: 'ok', text: t('DeploymentsPage.nameRemoved', { name }) })
         },
-        onError: (e) => setRemoveError(describeDeploymentError(e, `Could not remove ${name}.`)),
+        onError: (e) => setRemoveError(describeDeploymentError(e, t('DeploymentsPage.couldNotRemoveName', { name }))),
       },
     )
   }
@@ -112,7 +116,7 @@ export function DeploymentsPage() {
   const columns: ResourceColumn<Row>[] = [
     {
       id: 'name',
-      header: 'Name',
+      header: t('DeploymentsPage.name'),
       sortValue: (r) => r.name,
       render: (r) =>
         r.managed ? (
@@ -127,22 +131,22 @@ export function DeploymentsPage() {
     },
     {
       id: 'status',
-      header: 'Status',
+      header: t('DeploymentsPage.status'),
       sortValue: (r) => r.live?.status ?? r.managed?.status ?? '',
       render: (r) => {
         if (r.live) return <Badge tone={STATUS[r.live.status].tone}>{STATUS[r.live.status].label}</Badge>
-        return <Badge tone={r.managed?.status === 'ERROR' ? 'bad' : 'muted'}>{r.managed?.status === 'ERROR' ? 'Error' : 'Not deployed'}</Badge>
+        return <Badge tone={r.managed?.status === 'ERROR' ? 'bad' : 'muted'}>{r.managed?.status === 'ERROR' ? t('DeploymentsPage.error') : t('DeploymentsPage.notDeployed')}</Badge>
       },
     },
     {
       id: 'source',
-      header: 'Source',
+      header: t('DeploymentsPage.source'),
       sortValue: (r) => r.managed?.source ?? '',
       render: (r) =>
         r.managed ? (
           <span className="deployments__source">
             {r.managed.source === 'GIT' ? <GitBranch size={16} strokeWidth={1.75} aria-hidden="true" /> : <FileText size={16} strokeWidth={1.75} aria-hidden="true" />}
-            {r.managed.source === 'GIT' ? 'Git' : 'File'}
+            {r.managed.source === 'GIT' ? t('DeploymentsPage.git') : t('DeploymentsPage.file')}
           </span>
         ) : (
           '–'
@@ -150,14 +154,14 @@ export function DeploymentsPage() {
     },
     {
       id: 'update',
-      header: 'Update',
+      header: t('DeploymentsPage.update'),
       sortValue: (r) => (r.live?.updateAvailable ? 1 : 0),
       render: (r) => {
         if (!r.live?.updateAvailable) return '–'
-        const badge = <Badge tone="warn">Update available</Badge>
+        const badge = <Badge tone="warn">{t('DeploymentsPage.updateAvailable')}</Badge>
         // Pull & update lives on the detail page of managed deployments.
         return r.managed ? (
-          <Link className="deployments__link" to={`/environments/${id}/deployments/${r.managed.id}`} aria-label={`Pull & update ${r.name}`}>
+          <Link className="deployments__link" to={`/environments/${id}/deployments/${r.managed.id}`} aria-label={t('DeploymentsPage.pullUpdateName', { name: r.name })}>
             {badge}
           </Link>
         ) : (
@@ -167,29 +171,29 @@ export function DeploymentsPage() {
     },
     {
       id: 'running',
-      header: 'Running',
+      header: t('DeploymentsPage.running'),
       sortValue: (r) => r.live?.runningCount ?? 0,
       render: (r) => (r.live ? `${r.live.runningCount} / ${r.live.containerCount}` : '–'),
     },
-    { id: 'dir', header: 'Working directory', render: (r) => r.live?.workingDir ?? '–' },
+    { id: 'dir', header: t('DeploymentsPage.workingDirectory'), render: (r) => r.live?.workingDir ?? '–' },
     {
       id: 'managed',
-      header: 'Managed',
+      header: t('DeploymentsPage.managed'),
       sortValue: (r) => (r.managed ? 0 : 1),
-      render: (r) => (r.managed ? <Badge tone="ok">Managed</Badge> : '–'),
+      render: (r) => (r.managed ? <Badge tone="ok">{t('DeploymentsPage.managed')}</Badge> : '–'),
     },
   ]
   const busy = deploy.isPending || stop.isPending
   function rowActions(r: Row): RowActions {
     const details: MenuEntry = r.managed
-      ? { label: 'Open details', onSelect: () => navigate(`/environments/${id}/deployments/${r.managed!.id}`) }
-      : { label: 'Show containers', onSelect: () => navigate(`/environments/${id}/containers?deployment=${encodeURIComponent(r.name)}`) }
+      ? { label: t('DeploymentsPage.openDetails'), onSelect: () => navigate(`/environments/${id}/deployments/${r.managed!.id}`) }
+      : { label: t('DeploymentsPage.showContainers'), onSelect: () => navigate(`/environments/${id}/containers?deployment=${encodeURIComponent(r.name)}`) }
     if (!canWrite) return { menu: [details] }
     if (r.managed) {
       return {
         primary: [
-          { label: 'Deploy', icon: Play, onSelect: () => run('Deploy', r.managed!), disabled: busy },
-          { label: 'Stop', icon: Square, onSelect: () => run('Stop', r.managed!), disabled: busy },
+          { label: t('DeploymentsPage.deploy'), icon: Play, onSelect: () => run('deploy', r.managed!), disabled: busy },
+          { label: t('DeploymentsPage.stop'), icon: Square, onSelect: () => run('stop', r.managed!), disabled: busy },
         ],
         menu: [details],
       }
@@ -197,9 +201,9 @@ export function DeploymentsPage() {
     return {
       primary: r.live
         ? [
-            { label: 'Adopt', icon: PackagePlus, onSelect: () => setAdopting(r.name) },
+            { label: t('DeploymentsPage.adopt'), icon: PackagePlus, onSelect: () => setAdopting(r.name) },
             {
-              label: 'Remove',
+              label: t('DeploymentsPage.remove'),
               icon: Trash2,
               danger: true,
               disabled: remove.isPending,
@@ -218,11 +222,11 @@ export function DeploymentsPage() {
   return (
     <section className="deployments">
       <PageHeader
-        title="Deployments"
+        title={t('DeploymentsPage.deployments')}
         actions={
           canWrite ? (
             <Button variant="primary" onClick={() => setAdding(true)}>
-              Add deployment
+              {t('DeploymentsPage.addDeployment')}
             </Button>
           ) : undefined
         }
@@ -233,7 +237,7 @@ export function DeploymentsPage() {
         </p>
       )}
       <ResourceTable
-        label="deployments"
+        label={t('DeploymentsPage.deployments2')}
         columns={columns}
         rows={rows}
         rowKey={(r) => r.managed?.id ?? r.name}
@@ -241,7 +245,7 @@ export function DeploymentsPage() {
         defaultSort="name"
         rowActions={rowActions}
         rowLabel={(r) => r.name}
-        emptyMessage="No deployments in this environment."
+        emptyMessage={t('DeploymentsPage.noDeploymentsInThisEnvironment')}
         isPending={live.isPending}
         error={live.error ? describeResourceError(live.error) : null}
         onRetry={() => void live.refetch()}
@@ -250,20 +254,19 @@ export function DeploymentsPage() {
       {adopting && <AdoptDeploymentDialog hostId={id} project={adopting} onClose={() => setAdopting(null)} />}
       {removing && (
         <ConfirmDialog
-          title="Remove deployment"
-          confirmLabel="Remove"
+          title={t('DeploymentsPage.removeDeployment')}
+          confirmLabel={t('DeploymentsPage.remove')}
           danger
           pending={remove.isPending}
           error={removeError}
           onConfirm={confirmRemove}
           onClose={closeRemove}
         >
-          Stop and remove the containers of <strong>{removing}</strong> with <code>docker compose down</code>. Shipir does not manage this
-          deployment, so its Compose file stays where it is.
+          <Trans t={t} i18nKey="DeploymentsPage.stopAndRemoveTheContainers" values={{ removing }} components={{ strong: <strong />, code: <code /> }} />
           <label className="deployments__check">
-            <input type="checkbox" checked={removeVolumes} onChange={(e) => setRemoveVolumes(e.target.checked)} /> Also remove volumes
+            <input type="checkbox" checked={removeVolumes} onChange={(e) => setRemoveVolumes(e.target.checked)} /> {t('DeploymentsPage.alsoRemoveVolumes')}
           </label>
-          {removeVolumes ? ' Data in its volumes will be deleted.' : ' Its volumes are kept.'}
+          {removeVolumes ? t('DeploymentsPage.dataInItsVolumesWill') : t('DeploymentsPage.itsVolumesAreKept')}
         </ConfirmDialog>
       )}
     </section>

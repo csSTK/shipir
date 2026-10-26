@@ -3,6 +3,7 @@ import { ApiError, apiFetch } from '../../shared/api/client.ts'
 import { describeDeploymentError } from '../deployments/deploymentErrors.ts'
 import { HOSTS_OVERVIEW_KEY } from './api.ts'
 import { describeResourceError } from './format.ts'
+import i18n from 'i18next'
 
 /**
  * DELETE `/hosts/{hostId}/{collection}/{ref}`; refreshes every list of the host (resources and
@@ -42,15 +43,15 @@ export function describeDeleteError(error: unknown): string {
       case 'RESOURCE_IN_USE':
         return serverMessage(error)
       case 'RESOURCE_NOT_FOUND':
-        return 'This resource no longer exists. The list was refreshed.'
+        return i18n.t('hosts:deleteResource.thisResourceNoLongerExists')
       case 'INVALID_RESOURCE_ID':
-        return 'This resource cannot be deleted because its identifier is invalid.'
+        return i18n.t('hosts:deleteResource.thisResourceCannotBeDeleted')
       case 'MANAGED_DEPLOYMENT':
-        return describeDeploymentError(error, 'This resource belongs to a managed deployment.')
+        return describeDeploymentError(error, i18n.t('hosts:deleteResource.thisResourceBelongsToA'))
       default:
-        if (error.status === 403) return 'You are not allowed to do this.'
+        if (error.status === 403) return i18n.t('hosts:deleteResource.youAreNotAllowedTo')
         if (error.status === 502 || error.code === 'HOST_NOT_FOUND') return describeResourceError(error)
     }
   }
-  return 'The resource could not be deleted. Try again.'
+  return i18n.t('hosts:deleteResource.theResourceCouldNotBe')
 }

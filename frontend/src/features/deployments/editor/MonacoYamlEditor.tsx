@@ -5,6 +5,7 @@ import { configureMonacoYaml } from 'monaco-yaml'
 import YamlWorker from 'monaco-yaml/yaml.worker?worker'
 import { useSyncExternalStore } from 'react'
 import composeSchema from './compose-spec.json'
+import { useTranslation } from 'react-i18next'
 
 // Bundle Monaco from node_modules: no CDN loader, workers come from Vite.
 self.MonacoEnvironment = {
@@ -46,6 +47,7 @@ export interface MonacoYamlEditorProps {
 }
 
 export default function MonacoYamlEditor({ value, onChange, readOnly, label, height, language = 'yaml', path = 'compose.yaml' }: MonacoYamlEditorProps) {
+  const { t } = useTranslation('deployments')
   const dark = useSyncExternalStore(subscribeDark, () => darkQuery?.matches ?? false)
   const reducedMotion = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
   return (
@@ -57,7 +59,7 @@ export default function MonacoYamlEditor({ value, onChange, readOnly, label, hei
       value={value}
       beforeMount={configureOnce}
       onChange={(v) => onChange(v ?? '')}
-      loading={<div className="ed-yaml__loading">Loading editor…</div>}
+      loading={<div className="ed-yaml__loading">{t('MonacoYamlEditor.loadingEditor')}</div>}
       options={{
         readOnly,
         ariaLabel: label,

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '../../shared/api/client.ts'
 import { useDeleteResourceMutation } from '../hosts/deleteResource.ts'
 import { useCreateResourceMutation } from '../hosts/createResource.ts'
+import i18n from 'i18next'
 
 /** One network of `GET /api/hosts/{id}/networks`; `subnet` is the first IPAM subnet or null. */
 export interface Network {
@@ -46,9 +47,9 @@ export function validateSubnet(subnet: string): string | null {
   const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})$/.exec(s)
   if (v4) {
     const ok = v4.slice(1, 5).every((p) => Number(p) <= 255) && Number(v4[5]) <= 32
-    return ok ? null : 'Enter a valid subnet such as 172.30.0.0/16.'
+    return ok ? null : i18n.t('networks:api.enterAValidSubnetSuch')
   }
   const v6 = /^[0-9a-fA-F:]+\/(\d{1,3})$/.exec(s)
   if (v6 && s.includes(':') && Number(v6[1]) <= 128) return null
-  return 'Enter a valid subnet such as 172.30.0.0/16.'
+  return i18n.t('networks:api.enterAValidSubnetSuch')
 }

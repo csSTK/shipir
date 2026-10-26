@@ -12,9 +12,12 @@ import type { RowActions } from '../../shared/ui/ResourceTable.tsx'
 import { ConfirmDialog } from '../deployments/ConfirmDialog.tsx'
 import { actionsFor, describeActionError, useContainerAction, useContainers, useDeleteContainer, type Container, type ContainerAction } from './api.ts'
 import { CreateContainerDialog } from './CreateContainerDialog.tsx'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
+import { dateTimeFormat, formatNumber, ONE_DECIMAL } from '../../shared/i18n/format.ts'
 import './ContainersPage.css'
 
-const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+const dateFormat = dateTimeFormat({ dateStyle: 'medium', timeStyle: 'short' })
 
 function stateTone(state: string): 'ok' | 'warn' | 'bad' | 'muted' {
   if (state === 'running') return 'ok'
@@ -44,19 +47,19 @@ function baseColumnsFor(updates: Map<string, string>, pending: { id: string; act
   return [
     {
       id: 'name',
-      header: 'Name',
+      header: i18n.t('containers:ContainersPage.name'),
       defaultWidth: 210,
       sortValue: (c) => c.name,
       render: (c) => (
         <span className="containers__namecell">
-          <Link className="containers__name" to={c.id} aria-label={`Details of ${c.name}`}>
+          <Link className="containers__name" to={c.id} aria-label={i18n.t('containers:ContainersPage.detailsOfName', { name: c.name })}>
             {c.name}
           </Link>
           <span className="containers__image">
             <span className="containers__image-text">{c.image}</span>
             {updates.has(c.id) && (
-              <Link className="containers__update" to={updates.get(c.id)!} aria-label={`Update available for ${c.name}`}>
-                <Badge tone="warn">Update available</Badge>
+              <Link className="containers__update" to={updates.get(c.id)!} aria-label={i18n.t('containers:ContainersPage.updateAvailableForName', { name: c.name })}>
+                <Badge tone="warn">{i18n.t('containers:ContainersPage.updateAvailable')}</Badge>
               </Link>
             )}
           </span>
@@ -65,7 +68,7 @@ function baseColumnsFor(updates: Map<string, string>, pending: { id: string; act
     },
     {
       id: 'state',
-      header: 'State',
+      header: i18n.t('containers:ContainersPage.state'),
       defaultWidth: 130,
       sortValue: (c) => c.state,
       render: (c) => (
@@ -86,10 +89,10 @@ function baseColumnsFor(updates: Map<string, string>, pending: { id: string; act
         </span>
       ),
     },
-    { id: 'deployment', header: 'Deployment', defaultWidth: 120, sortValue: (c) => c.composeProject, render: (c) => c.composeProject ?? '–' },
+    { id: 'deployment', header: i18n.t('containers:ContainersPage.deployment'), defaultWidth: 120, sortValue: (c) => c.composeProject, render: (c) => c.composeProject ?? '–' },
     {
       id: 'ports',
-      header: 'Ports',
+      header: i18n.t('containers:ContainersPage.ports'),
       defaultWidth: 130,
       render: (c) =>
         c.ports.length ? (
@@ -105,7 +108,7 @@ function baseColumnsFor(updates: Map<string, string>, pending: { id: string; act
     },
     {
       id: 'created',
-      header: 'Created',
+      header: i18n.t('containers:ContainersPage.created'),
       defaultHidden: true,
       sortValue: (c) => Date.parse(c.created),
       render: (c) => dateFormat.format(new Date(c.created)),
@@ -128,15 +131,15 @@ function statsColumns(series: Record<string, StatSample[]>): ResourceColumn<Cont
         if (!samples) return '–'
         return (
           <span className="containers__stat">
-            <span className="containers__stat-value">{last(samples)!.cpu.toFixed(1)}%</span>
-            <Sparkline values={samples.map((s) => s.cpu)} max={100} width={48} label={`CPU history of ${c.name}`} />
+            <span className="containers__stat-value">{formatNumber(last(samples)!.cpu, ONE_DECIMAL)}%</span>
+            <Sparkline values={samples.map((s) => s.cpu)} max={100} width={48} label={i18n.t('containers:ContainersPage.cpuHistoryOfName', { name: c.name })} />
           </span>
         )
       },
     },
     {
       id: 'memory',
-      header: 'Memory',
+      header: i18n.t('containers:ContainersPage.memory'),
       defaultWidth: 150,
       sortValue: (c) => last(series[c.id])?.memUsed ?? -1,
       render: (c) => {
@@ -144,9 +147,9 @@ function statsColumns(series: Record<string, StatSample[]>): ResourceColumn<Cont
         if (!samples) return '–'
         const now = last(samples)!
         return (
-          <span className="containers__stat" title={now.memLimit > 0 ? `of ${formatSize(now.memLimit)}` : undefined}>
+          <span className="containers__stat" title={now.memLimit > 0 ? i18n.t('containers:ContainersPage.ofSize', { size: formatSize(now.memLimit) }) : undefined}>
             <span className="containers__stat-value">{formatSize(now.memUsed)}</span>
-            <Sparkline values={samples.map((s) => s.memUsed)} max={now.memLimit} width={48} label={`Memory history of ${c.name}`} />
+            <Sparkline values={samples.map((s) => s.memUsed)} max={now.memLimit} width={48} label={i18n.t('containers:ContainersPage.memoryHistoryOfName', { name: c.name })} />
           </span>
         )
       },
@@ -155,12 +158,12 @@ function statsColumns(series: Record<string, StatSample[]>): ResourceColumn<Cont
 }
 
 const LABELS: Record<ContainerAction, [label: string, pending: string]> = {
-  start: ['Start', 'Starting…'],
-  stop: ['Stop', 'Stopping…'],
-  restart: ['Restart', 'Restarting…'],
-  pause: ['Pause', 'Pausing…'],
-  unpause: ['Unpause', 'Unpausing…'],
-  kill: ['Kill', 'Killing…'],
+  get start(): [string, string] { return [i18n.t('containers:ContainersPage.start'), i18n.t('containers:ContainersPage.starting')] },
+  get stop(): [string, string] { return [i18n.t('containers:ContainersPage.stop'), i18n.t('containers:ContainersPage.stopping')] },
+  get restart(): [string, string] { return [i18n.t('containers:ContainersPage.restart'), i18n.t('containers:ContainersPage.restarting')] },
+  get pause(): [string, string] { return [i18n.t('containers:ContainersPage.pause'), i18n.t('containers:ContainersPage.pausing')] },
+  get unpause(): [string, string] { return [i18n.t('containers:ContainersPage.unpause'), i18n.t('containers:ContainersPage.unpausing')] },
+  get kill(): [string, string] { return [i18n.t('containers:ContainersPage.kill'), i18n.t('containers:ContainersPage.killing')] },
 }
 
 const ICON_PROPS = { size: 16, strokeWidth: 1.75 } as const
@@ -177,6 +180,7 @@ const isToggle = (a: ContainerAction): a is keyof typeof TOGGLE_ICONS => a in TO
 
 /** Looks up the managed deployment only once a delete is requested, so plain browsing costs no extra request. */
 function DeleteContainerDialog({ hostId, container, onClose }: { hostId: string; container: Container; onClose: () => void }) {
+  const { t } = useTranslation('containers')
   const deployments = useDeployments(hostId)
   const del = useDeleteContainer(hostId)
   const managed = deployments.data?.some((d) => d.name === container.composeProject && d.managedDeploymentId)
@@ -185,7 +189,7 @@ function DeleteContainerDialog({ hostId, container, onClose }: { hostId: string;
       kind="container"
       name={container.name}
       forceOption={container.state === 'running'}
-      warning={managed ? `Belongs to deployment ${container.composeProject} and may come back on the next deploy.` : null}
+      warning={managed ? t('ContainersPage.belongsToDeploymentComposeprojectAnd', { composeProject: container.composeProject }) : null}
       onDelete={(force) => del.mutateAsync({ id: container.id, force })}
       onClose={onClose}
     />
@@ -194,6 +198,7 @@ function DeleteContainerDialog({ hostId, container, onClose }: { hostId: string;
 
 /** `/environments/:id/containers`: all containers of one environment, optionally `?deployment=<project>`. */
 export function ContainersPage() {
+  const { t } = useTranslation('containers')
   const { id = '' } = useParams()
   const [params, setParams] = useSearchParams()
   const deployment = params.get('deployment')
@@ -212,7 +217,7 @@ export function ContainersPage() {
     act.mutate(
       { id: c.id, action },
       {
-        onError: (e) => setActionError(`${LABELS[action][0]} ${c.name}: ${describeActionError(e)}`),
+        onError: (e) => setActionError(t('ContainersPage.actionFailed', { action: LABELS[action][0], name: c.name, error: describeActionError(e) })),
         onSettled: () => setKillTarget(null),
       },
     )
@@ -246,9 +251,9 @@ export function ContainersPage() {
     if (canWrite && toggle) {
       primary.push({ label: LABELS[toggle][0], icon: TOGGLE_ICONS[toggle], onSelect: () => run(c, toggle), disabled: busy })
     }
-    primary.push({ label: 'Logs', icon: ScrollText, onSelect: () => navigate(`${c.id}/logs`) })
+    primary.push({ label: t('ContainersPage.logs'), icon: ScrollText, onSelect: () => navigate(`${c.id}/logs`) })
     if (isAdmin && c.state === 'running') {
-      primary.push({ label: 'Console', icon: SquareTerminal, onSelect: () => navigate(`${c.id}/console`) })
+      primary.push({ label: t('ContainersPage.console'), icon: SquareTerminal, onSelect: () => navigate(`${c.id}/console`) })
     }
     const menu: MenuEntry[] = []
     if (canWrite) {
@@ -257,13 +262,13 @@ export function ContainersPage() {
         menu.push({ label: LABELS[a][0], icon: MENU_ICONS[a], onSelect: () => run(c, a), disabled: busy })
       }
     }
-    menu.push({ label: 'Details', icon: <Info {...ICON_PROPS} />, onSelect: () => navigate(c.id) })
+    menu.push({ label: t('ContainersPage.details'), icon: <Info {...ICON_PROPS} />, onSelect: () => navigate(c.id) })
     if (canWrite) {
       menu.push({ type: 'separator' })
       if (available.includes('kill')) {
-        menu.push({ label: 'Kill', icon: MENU_ICONS.kill, danger: true, disabled: busy, onSelect: () => setKillTarget(c) })
+        menu.push({ label: t('ContainersPage.kill'), icon: MENU_ICONS.kill, danger: true, disabled: busy, onSelect: () => setKillTarget(c) })
       }
-      menu.push({ label: 'Delete', icon: <Trash2 {...ICON_PROPS} />, danger: true, onSelect: () => setTarget(c) })
+      menu.push({ label: t('ContainersPage.delete'), icon: <Trash2 {...ICON_PROPS} />, danger: true, onSelect: () => setTarget(c) })
     }
     return { primary, menu }
   }
@@ -273,11 +278,11 @@ export function ContainersPage() {
   return (
     <section className="containers">
       <PageHeader
-        title="Containers"
+        title={t('ContainersPage.containers')}
         actions={
           canWrite ? (
             <Button variant="primary" onClick={() => setCreating(true)}>
-              Create container
+              {t('ContainersPage.createContainer')}
             </Button>
           ) : undefined
         }
@@ -288,7 +293,7 @@ export function ContainersPage() {
         </p>
       )}
       <ResourceTable
-        label="containers"
+        label={t('ContainersPage.containers2')}
         columns={columns}
         rows={rows}
         rowKey={(c) => c.id}
@@ -296,28 +301,28 @@ export function ContainersPage() {
         defaultSort="name"
         rowActions={rowActions}
         rowLabel={(c) => c.name}
-        emptyMessage={deployment ? `No containers in deployment ${deployment}.` : 'No containers in this environment.'}
+        emptyMessage={deployment ? t('ContainersPage.noContainersInDeploymentDeployment', { deployment }) : t('ContainersPage.noContainersInThisEnvironment')}
         isPending={isPending}
         error={error ? describeResourceError(error) : null}
         onRetry={() => void refetch()}
         toolbar={
           deployment && (
             <button type="button" className="containers__chip" onClick={() => setParams({})}>
-              Deployment: {deployment} <X size={14} strokeWidth={2} aria-hidden="true" />
+              {t('ContainersPage.deploymentDeployment', { deployment })} <X size={14} strokeWidth={2} aria-hidden="true" />
             </button>
           )
         }
       />
       {killTarget && (
         <ConfirmDialog
-          title="Kill container"
-          confirmLabel={act.isPending ? 'Killing…' : 'Kill'}
+          title={t('ContainersPage.killContainer')}
+          confirmLabel={act.isPending ? t('ContainersPage.killing') : t('ContainersPage.kill')}
           danger
           pending={act.isPending}
           onConfirm={() => run(killTarget, 'kill')}
           onClose={() => setKillTarget(null)}
         >
-          Kill {killTarget.name} immediately? The container is stopped without a graceful shutdown and unsaved data may be lost.
+          {t('ContainersPage.killNameImmediatelyTheContainer', { name: killTarget.name })}
         </ConfirmDialog>
       )}
       {creating && <CreateContainerDialog hostId={id} isAdmin={isAdmin} onClose={() => setCreating(false)} />}

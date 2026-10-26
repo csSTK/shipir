@@ -1,9 +1,18 @@
 /** Pure data helpers of the usage charts: rates from counters, aggregation, gaps, axis ticks. No React, no DOM. */
 
+import i18n from 'i18next'
+import { dateTimeFormat } from '../i18n/format.ts'
+
 export type Range = '1h' | '6h' | '24h' | '7d' | '30d'
 
-/** Spoken form of a range, for chart descriptions. */
-export const RANGE_WORDS: Record<Range, string> = { '1h': 'last hour', '6h': 'last 6 hours', '24h': 'last 24 hours', '7d': 'last 7 days', '30d': 'last 30 days' }
+/** Spoken form of a range, for chart descriptions (resolved when read, so it follows the UI language). */
+export const RANGE_WORDS: Record<Range, string> = {
+  get '1h'() { return i18n.t('common:series.lastHour') },
+  get '6h'() { return i18n.t('common:series.last6Hours') },
+  get '24h'() { return i18n.t('common:series.last24Hours') },
+  get '7d'() { return i18n.t('common:series.last7Days') },
+  get '30d'() { return i18n.t('common:series.last30Days') },
+}
 
 export interface TimePoint {
   /** Epoch milliseconds. */
@@ -107,9 +116,9 @@ export function timeTicks(from: number, to: number, range: Range): number[] {
   return ticks
 }
 
-const timeFormat = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' })
-const weekdayFormat = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric' })
-const dateFormat = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
+const timeFormat = dateTimeFormat({ hour: 'numeric', minute: '2-digit' })
+const weekdayFormat = dateTimeFormat({ weekday: 'short', day: 'numeric' })
+const dateFormat = dateTimeFormat({ month: 'short', day: 'numeric' })
 
 /** Axis label: clock time for up to a day, weekday and day for a week, date for a month. */
 export function formatTick(ms: number, range: Range): string {

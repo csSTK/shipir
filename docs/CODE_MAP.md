@@ -343,10 +343,16 @@ Frontend (`frontend/`):
 - `src/features/hosts/{DiskUsageCard.tsx,DiskUsageCard.css,DiskUsageCard.test.tsx,diskUsage.ts}`: 'Disk usage' card on `EnvironmentDashboard` (running environments only): `useDiskUsage` = GET `/hosts/{id}/disk-usage` once per visit (staleTime 10 min, no polling/focus refetch, key under `['hosts', id]`); stacked bar (`role=img` summary) + legend per category (count, size, reclaimable, 'unknown' for null); ranked 'Largest items' list (name, category label, size; empty state 'No items to show.'); refresh IconButton, 403 = 'Only available with access to the whole environment.', other errors = Retry; 'Review cleanup' (ADMIN/OPERATOR) opens the prune dialog; category colours from palette tokens
 - `src/features/hosts/format.test.ts`: `formatSize` tiers (B, KiB, MiB, GiB, TiB, PiB; larger stays PiB)
 - `src/features/hosts/resources.ts`: `ENV_RESOURCES` (deployments/containers/images/networks/volumes) for sidebar, tiles
-- `src/features/hosts/format.ts`: memory/plural formatting, overview error code to message, `describeResourceError(err)` for `/hosts/{id}/...` failures
+- `src/features/hosts/format.ts`: memory/size formatting (`Intl` numbers), `countOf(count, noun)` plurals (`hosts:count.<noun>_one/_other`), overview error code to message, `describeResourceError(err)` for `/hosts/{id}/...` failures
 - `src/features/hosts/index.ts`: exports form, overview, dashboard, `ENV_RESOURCES`, hooks, types
-- `src/test/setup.ts`: jest-dom matchers for Vitest
-- `playwright.config.ts`: Playwright config (Chromium, `e2e/` dir, starts Vite dev server)
+- `src/test/setup.ts`: jest-dom matchers for Vitest; imports `shared/i18n` so every test runs with lng=en
+- `src/shared/i18n/index.ts`: i18next + react-i18next init (lng `en`, namespaces = one JSON per feature, bundled eagerly via `import.meta.glob`, `escapeValue: false`); also re-exports the format helpers
+- `src/shared/i18n/format.ts`: `formatDate`/`formatDateTime`/`dateTimeFormat`/`formatNumber`/`formatRelativeTime`/`ONE_DECIMAL`: all dates and numbers via `Intl` with the active language
+- `src/shared/i18n/locales/en/<namespace>.json`: English texts, namespace = feature (`containers`, `deployments`, `hosts`, ...), `app` = layout/shell, `common` = shared UI; keys `Component.slug`, `_one`/`_other` for plurals, `{{name}}` interpolation, `<strong>`-style tags for `Trans`
+- `src/shared/i18n/literalStrings.{ts,test.ts}`: guard: AST scan (TypeScript compiler API) failing on literal user-facing text in JSX (text, `aria-label`/`title`/`placeholder`/... attributes, strings in JSX expressions) and on capitalised message literals outside `t()`/`i18n.t()` in any TS/TSX file
+- `src/shared/i18n/Trans.tsx`: `Trans` wrapper that HTML-escapes interpolated values (`escapeValue: true` + `shouldUnescape`) so names cannot break out of mapped tags; use it instead of react-i18next's `Trans` (guarded by a test)
+- `src/shared/i18n/i18n.test.tsx`: i18n runs in `en`; a value like `</strong><strong>EVIL</strong>` cannot add markup through `Trans`; `&` stays `&`
+- `playwright.config.ts`: Playwright config (Chromium, locale `en-US`, `e2e/` dir, starts Vite dev server)
 - `tsconfig.e2e.json`: type-checks `e2e/` and `playwright.config.ts` (referenced from `tsconfig.json`)
 - `e2e/fixtures/api.ts`: Playwright `test` with auto `api` fixture: mocks `/api/**` per method+path, fails on unmocked calls (own spec: `api.spec.ts`); also defaults `GET /api/hosts/*/stats/history` to an empty history (specs override)
 - `e2e/fixtures/stomp.ts`: `mockBroker(page, onSubscribe, {refuse})` minimal STOMP broker over `routeWebSocket` (records SUBSCRIBE headers, pushes frames, optional ERROR on subscribe)

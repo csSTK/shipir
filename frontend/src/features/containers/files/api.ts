@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { ApiError, apiFetch, readCookie } from '../../../shared/api/client.ts'
+import i18n from 'i18next'
 
 export interface ContainerFileEntry {
   name: string
@@ -57,8 +58,8 @@ export function uploadFile(
       }
       reject(new ApiError(xhr.status, xhr.responseText || xhr.statusText, code))
     }
-    xhr.onerror = () => reject(new ApiError(0, 'Network error'))
-    xhr.onabort = () => reject(new ApiError(0, 'Upload cancelled', 'ABORTED'))
+    xhr.onerror = () => reject(new ApiError(0, i18n.t('containers:api.networkError')))
+    xhr.onabort = () => reject(new ApiError(0, i18n.t('containers:api.uploadCancelled'), 'ABORTED'))
     const form = new FormData()
     form.append('file', file)
     xhr.send(form)
@@ -67,29 +68,29 @@ export function uploadFile(
 }
 
 const LIST_ERRORS: Record<string, string> = {
-  DIRECTORY_TOO_LARGE: 'This directory is too large to list. Open a subdirectory instead.',
-  INVALID_PATH: 'This path is not valid.',
-  RESOURCE_NOT_FOUND: 'This path does not exist in the container.',
-  UNREACHABLE: 'Could not reach the Docker host.',
-  TIMEOUT: 'The connection to the Docker host timed out.',
+  get DIRECTORY_TOO_LARGE() { return i18n.t('containers:api.thisDirectoryIsTooLarge') },
+  get INVALID_PATH() { return i18n.t('containers:api.thisPathIsNotValid') },
+  get RESOURCE_NOT_FOUND() { return i18n.t('containers:api.thisPathDoesNotExist') },
+  get UNREACHABLE() { return i18n.t('containers:api.couldNotReachTheDocker') },
+  get TIMEOUT() { return i18n.t('containers:api.theConnectionToTheDocker') },
 }
 
 const UPLOAD_ERRORS: Record<string, string> = {
-  SIZE_LIMIT_EXCEEDED: 'The file is too large to upload.',
-  INVALID_FILE_NAME: 'The file name is not allowed.',
-  INVALID_UPLOAD: 'The upload was rejected.',
-  INVALID_PATH: 'This path is not valid.',
-  RESOURCE_NOT_FOUND: 'The target directory no longer exists.',
-  ABORTED: 'Upload cancelled.',
+  get SIZE_LIMIT_EXCEEDED() { return i18n.t('containers:api.theFileIsTooLarge') },
+  get INVALID_FILE_NAME() { return i18n.t('containers:api.theFileNameIsNot') },
+  get INVALID_UPLOAD() { return i18n.t('containers:api.theUploadWasRejected') },
+  get INVALID_PATH() { return i18n.t('containers:api.thisPathIsNotValid') },
+  get RESOURCE_NOT_FOUND() { return i18n.t('containers:api.theTargetDirectoryNoLonger') },
+  get ABORTED() { return i18n.t('containers:api.uploadCancelled2') },
 }
 
 function describe(error: unknown, table: Record<string, string>, fallback: string): string {
   if (error instanceof ApiError) {
     if (error.code && table[error.code]) return table[error.code]
-    if (error.status === 403) return 'You are not allowed to access container files.'
+    if (error.status === 403) return i18n.t('containers:api.youAreNotAllowedTo')
   }
   return fallback
 }
 
-export const describeListError = (e: unknown) => describe(e, LIST_ERRORS, 'Could not load the files.')
-export const describeUploadError = (e: unknown) => describe(e, UPLOAD_ERRORS, 'Upload failed.')
+export const describeListError = (e: unknown) => describe(e, LIST_ERRORS, i18n.t('containers:api.couldNotLoadTheFiles'))
+export const describeUploadError = (e: unknown) => describe(e, UPLOAD_ERRORS, i18n.t('containers:api.uploadFailed'))

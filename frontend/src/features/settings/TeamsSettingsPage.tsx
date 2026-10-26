@@ -15,24 +15,28 @@ import {
 } from './api.ts'
 import { SettingsPage } from './SettingsPage.tsx'
 import { UserAccessDialog } from './UserAccessDialog.tsx'
+import { useTranslation } from 'react-i18next'
+import { Trans } from '../../shared/i18n/Trans.tsx'
+import i18n from 'i18next'
 import './SettingsPage.css'
 
 function errorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case 'TEAM_NAME_TAKEN':
-        return 'This team name is already taken.'
+        return i18n.t('settings:TeamsSettingsPage.thisTeamNameIsAlready')
       case 'TEAM_NOT_FOUND':
-        return 'This team no longer exists.'
+        return i18n.t('settings:TeamsSettingsPage.thisTeamNoLongerExists')
       case 'UNKNOWN_USER':
-        return 'A selected user no longer exists. Close and reopen the dialog.'
+        return i18n.t('settings:TeamsSettingsPage.aSelectedUserNoLonger')
     }
-    if (error.status === 400) return 'Enter a team name of up to 100 characters.'
+    if (error.status === 400) return i18n.t('settings:TeamsSettingsPage.enterATeamNameOf')
   }
   return fallback
 }
 
 function NameDialog({ team, onClose }: { team?: Team; onClose: () => void }) {
+  const { t: tr } = useTranslation('settings')
   const [name, setName] = useState(team?.name ?? '')
   const [problem, setProblem] = useState<string | null>(null)
   const create = useCreateTeam()
@@ -42,9 +46,9 @@ function NameDialog({ team, onClose }: { team?: Team; onClose: () => void }) {
   function submit(e: FormEvent) {
     e.preventDefault()
     const value = name.trim()
-    if (!value || value.length > 100) return setProblem('Enter a team name of up to 100 characters.')
+    if (!value || value.length > 100) return setProblem(tr('TeamsSettingsPage.enterATeamNameOf'))
     setProblem(null)
-    const handlers = { onSuccess: onClose, onError: (err: unknown) => setProblem(errorMessage(err, 'Could not save the team. Try again.')) }
+    const handlers = { onSuccess: onClose, onError: (err: unknown) => setProblem(errorMessage(err, tr('TeamsSettingsPage.couldNotSaveTheTeam'))) }
     if (team) rename.mutate({ id: team.id, name: value }, handlers)
     else create.mutate(value, handlers)
   }
@@ -53,20 +57,20 @@ function NameDialog({ team, onClose }: { team?: Team; onClose: () => void }) {
     <Dialog
       open
       onOpenChange={(open) => !open && onClose()}
-      title={team ? 'Rename team' : 'Add team'}
+      title={team ? tr('TeamsSettingsPage.renameTeam') : tr('TeamsSettingsPage.addTeam')}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {tr('TeamsSettingsPage.cancel')}
           </Button>
           <Button variant="primary" type="submit" form="team-name-form" loading={pending}>
-            {team ? 'Save' : 'Create team'}
+            {team ? tr('TeamsSettingsPage.save') : tr('TeamsSettingsPage.createTeam')}
           </Button>
         </>
       }
     >
       <form id="team-name-form" onSubmit={submit} className="settings__form">
-        <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
+        <TextField label={tr('TeamsSettingsPage.name')} value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
         {problem && (
           <p role="alert" className="settings__error">
             {problem}
@@ -79,6 +83,7 @@ function NameDialog({ team, onClose }: { team?: Team; onClose: () => void }) {
 
 /** Replaces the member list of one team; the checked users are sent as a whole. */
 function MembersDialog({ team, onClose }: { team: Team; onClose: () => void }) {
+  const { t: tr } = useTranslation('settings')
   const detail = useTeam(team.id)
   const users = useUsers()
   const save = useSaveTeamMembers()
@@ -97,7 +102,7 @@ function MembersDialog({ team, onClose }: { team: Team; onClose: () => void }) {
     setProblem(null)
     save.mutate(
       { id: team.id, userIds: selected },
-      { onSuccess: onClose, onError: (err) => setProblem(errorMessage(err, 'Could not save the members. Try again.')) },
+      { onSuccess: onClose, onError: (err) => setProblem(errorMessage(err, tr('TeamsSettingsPage.couldNotSaveTheMembers'))) },
     )
   }
 
@@ -105,27 +110,27 @@ function MembersDialog({ team, onClose }: { team: Team; onClose: () => void }) {
     <Dialog
       open
       onOpenChange={(open) => !open && onClose()}
-      title={`Members of ${team.name}`}
+      title={tr('TeamsSettingsPage.membersOfName', { name: team.name })}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {tr('TeamsSettingsPage.cancel')}
           </Button>
           <Button variant="primary" disabled={!ready} loading={save.isPending} onClick={submit}>
-            Save members
+            {tr('TeamsSettingsPage.saveMembers')}
           </Button>
         </>
       }
     >
-      {!ready && !failed && <p className="settings__muted">Loading…</p>}
+      {!ready && !failed && <p className="settings__muted">{tr('TeamsSettingsPage.loading')}</p>}
       {failed && (
         <p role="alert" className="settings__error">
-          Could not load the members.
+          {tr('TeamsSettingsPage.couldNotLoadTheMembers')}
         </p>
       )}
       {ready && (
         <fieldset className="settings__group">
-          <legend className="settings__legend">Users in this team</legend>
+          <legend className="settings__legend">{tr('TeamsSettingsPage.usersInThisTeam')}</legend>
           {users.data.map((u) => (
             <label key={u.id} className="settings__check">
               <input type="checkbox" checked={selected.includes(u.id)} onChange={() => toggle(u.id)} />
@@ -147,6 +152,7 @@ type DialogState = { kind: 'create' } | { kind: 'rename' | 'members' | 'access' 
 
 /** Settings > Teams: ADMIN teams with members and team-level access. The caller restricts access to ADMIN. */
 export function TeamsSettingsPage() {
+  const { t: tr } = useTranslation('settings')
   const { data, isPending, isError, refetch } = useTeams()
   const [dialog, setDialog] = useState<DialogState>(null)
   const [problem, setProblem] = useState<string | null>(null)
@@ -159,10 +165,10 @@ export function TeamsSettingsPage() {
   const close = () => open(null)
 
   const columns: ResourceColumn<Team>[] = [
-    { id: 'name', header: 'Name', sortValue: (t) => t.name, defaultWidth: 260, hideable: false, render: (t) => <strong>{t.name}</strong> },
+    { id: 'name', header: tr('TeamsSettingsPage.name'), sortValue: (t) => t.name, defaultWidth: 260, hideable: false, render: (t) => <strong>{t.name}</strong> },
     {
       id: 'members',
-      header: 'Members',
+      header: tr('TeamsSettingsPage.members'),
       sortValue: (t) => t.memberCount,
       defaultWidth: 120,
       render: (t) => <span className="settings__muted">{t.memberCount}</span>,
@@ -171,34 +177,34 @@ export function TeamsSettingsPage() {
 
   const rowActions = (t: Team): RowActions => ({
     primary: [
-      { label: 'Members of', icon: Users, onSelect: () => open({ kind: 'members', team: t }) },
-      { label: 'Access for', icon: KeyRound, onSelect: () => open({ kind: 'access', team: t }) },
-      { label: 'Rename', icon: Pencil, onSelect: () => open({ kind: 'rename', team: t }) },
-      { label: 'Delete', icon: Trash2, danger: true, onSelect: () => open({ kind: 'delete', team: t }) },
+      { label: tr('TeamsSettingsPage.membersOf'), icon: Users, onSelect: () => open({ kind: 'members', team: t }) },
+      { label: tr('TeamsSettingsPage.accessFor'), icon: KeyRound, onSelect: () => open({ kind: 'access', team: t }) },
+      { label: tr('TeamsSettingsPage.rename'), icon: Pencil, onSelect: () => open({ kind: 'rename', team: t }) },
+      { label: tr('TeamsSettingsPage.delete'), icon: Trash2, danger: true, onSelect: () => open({ kind: 'delete', team: t }) },
     ],
   })
 
   return (
     <SettingsPage
       wide
-      title="Teams"
-      subtitle="Group users and give a team access to environments and deployments. Members get the team's access in addition to their own."
+      title={tr('TeamsSettingsPage.teams')}
+      subtitle={tr('TeamsSettingsPage.groupUsersAndGiveA')}
       actions={
         <Button variant="primary" onClick={() => open({ kind: 'create' })}>
-          Add team
+          {tr('TeamsSettingsPage.addTeam')}
         </Button>
       }
     >
       <ResourceTable
-        label="teams"
+        label={tr('TeamsSettingsPage.teams2')}
         columns={columns}
         rows={data}
         rowKey={(t) => t.id}
         searchText={(t) => t.name}
         defaultSort="name"
-        emptyMessage="No teams yet."
+        emptyMessage={tr('TeamsSettingsPage.noTeamsYet')}
         isPending={isPending}
-        error={isError ? 'Could not load teams.' : null}
+        error={isError ? tr('TeamsSettingsPage.couldNotLoadTeams') : null}
         onRetry={() => void refetch()}
         rowActions={rowActions}
         rowLabel={(t) => t.name}
@@ -211,19 +217,19 @@ export function TeamsSettingsPage() {
         <ConfirmDialog
           open
           onOpenChange={(o) => !o && close()}
-          title="Delete team"
-          confirmLabel="Delete"
+          title={tr('TeamsSettingsPage.deleteTeam')}
+          confirmLabel={tr('TeamsSettingsPage.delete')}
           danger
           loading={remove.isPending}
           onConfirm={() =>
             remove.mutate(dialog.team.id, {
               onSuccess: close,
-              onError: (err) => setProblem(errorMessage(err, 'Could not delete the team. Try again.')),
+              onError: (err) => setProblem(errorMessage(err, tr('TeamsSettingsPage.couldNotDeleteTheTeam'))),
             })
           }
         >
           <p className="settings__text">
-            Delete <strong>{dialog.team.name}</strong>? Its members lose the access they only had through this team.
+            <Trans t={tr} i18nKey="TeamsSettingsPage.deleteNameItsMembersLose" values={{ name: dialog.team.name }} components={{ strong: <strong /> }} />
           </p>
           {problem && (
             <p role="alert" className="settings__error">

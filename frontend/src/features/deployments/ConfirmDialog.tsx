@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Button, Dialog } from '../../shared/ui/index.ts'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   title: string
@@ -17,6 +18,7 @@ interface Props {
 
 /** Confirmation for rollback, delete and stop; content-rich variant of the shared `ConfirmDialog` (details, inline error). */
 export function ConfirmDialog({ title, confirmLabel, danger = false, pending = false, error = null, onConfirm, onClose, children, details }: Props) {
+  const { t } = useTranslation('deployments')
   return (
     <Dialog
       open
@@ -25,7 +27,7 @@ export function ConfirmDialog({ title, confirmLabel, danger = false, pending = f
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('ConfirmDialog.cancel')}
           </Button>
           <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm} disabled={pending} loading={pending}>
             {confirmLabel}

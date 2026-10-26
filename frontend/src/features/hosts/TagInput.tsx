@@ -1,6 +1,7 @@
 import { useId, useImperativeHandle, useRef, useState, type KeyboardEvent, type Ref } from 'react'
 import { X } from 'lucide-react'
 import { addTag, normalizeTag } from './tags.ts'
+import { useTranslation } from 'react-i18next'
 import './TagInput.css'
 
 export interface TagInputHandle {
@@ -21,6 +22,7 @@ interface TagInputProps {
  * has a remove button. Rules come from `addTag`; a rejected draft stays in the field with an inline alert.
  */
 export function TagInput({ tags, onChange, label, ref }: TagInputProps) {
+  const { t: tr } = useTranslation('hosts')
   const [draft, setDraft] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -91,7 +93,7 @@ export function TagInput({ tags, onChange, label, ref }: TagInputProps) {
             <button
               type="button"
               className="tag-input__remove"
-              aria-label={`Remove tag ${tag}`}
+              aria-label={tr('TagInput.removeTagTag', { tag })}
               onClick={() => {
                 onChange(tags.filter((t) => t !== tag))
                 // Keep keyboard users in the field instead of dropping focus to the body.
@@ -111,7 +113,7 @@ export function TagInput({ tags, onChange, label, ref }: TagInputProps) {
           aria-invalid={problem ? true : undefined}
           autoComplete="off"
           spellCheck={false}
-          placeholder={tags.length === 0 ? 'Add a tag' : undefined}
+          placeholder={tags.length === 0 ? tr('TagInput.addATag') : undefined}
           value={draft}
           onChange={(event) => handleChange(event.target.value)}
           onKeyDown={handleKeyDown}
@@ -122,7 +124,7 @@ export function TagInput({ tags, onChange, label, ref }: TagInputProps) {
         />
       </div>
       <p id={hintId} className="ui-hint">
-        Up to 10 tags. Lowercase letters, digits and hyphens. Press Enter or comma to add.
+        {tr('TagInput.upTo10TagsLowercase')}
       </p>
       {problem && (
         <p id={problemId} role="alert" className="ui-error">

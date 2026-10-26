@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError, apiFetch, readCookie } from '../../shared/api/client.ts'
 import { saveBlob } from '../settings/api.ts'
+import i18n from 'i18next'
 
 export const MAX_RESTORE_BYTES = 100 * 1024 * 1024
 export const MAX_RESTORE_LABEL = '100 MB'
@@ -69,22 +70,22 @@ export async function restoreVolume(hostId: string, volume: string, file: File, 
 }
 
 const ERRORS: Record<string, string> = {
-  RESOURCE_NOT_FOUND: 'This volume no longer exists.',
-  HOST_NOT_FOUND: 'This environment does not exist or was deleted.',
-  VOLUME_IN_USE: 'This volume is in use. Confirm below to restore into it anyway.',
-  INVALID_ARCHIVE: 'The file is not a valid backup archive (a tar without unsafe paths or links).',
-  SIZE_LIMIT_EXCEEDED: `The archive is larger than ${MAX_RESTORE_LABEL}.`,
-  SCHEDULE_EXISTS: 'This volume already has a backup schedule.',
-  INVALID_SCHEDULE: 'The schedule is not valid.',
-  SCHEDULE_NOT_FOUND: 'This schedule no longer exists.',
-  FORBIDDEN: 'You are not allowed to do this.',
-  UNREACHABLE: 'Could not reach the Docker host.',
-  TIMEOUT: 'The connection to the Docker host timed out.',
+  get RESOURCE_NOT_FOUND() { return i18n.t('volumes:backup.thisVolumeNoLongerExists') },
+  get HOST_NOT_FOUND() { return i18n.t('volumes:backup.thisEnvironmentDoesNotExist') },
+  get VOLUME_IN_USE() { return i18n.t('volumes:backup.thisVolumeIsInUse') },
+  get INVALID_ARCHIVE() { return i18n.t('volumes:backup.theFileIsNotA') },
+  get SIZE_LIMIT_EXCEEDED() { return i18n.t('volumes:backup.theArchiveIsLargerThan', { MAX_RESTORE_LABEL }) },
+  get SCHEDULE_EXISTS() { return i18n.t('volumes:backup.thisVolumeAlreadyHasA') },
+  get INVALID_SCHEDULE() { return i18n.t('volumes:backup.theScheduleIsNotValid') },
+  get SCHEDULE_NOT_FOUND() { return i18n.t('volumes:backup.thisScheduleNoLongerExists') },
+  get FORBIDDEN() { return i18n.t('volumes:backup.youAreNotAllowedTo') },
+  get UNREACHABLE() { return i18n.t('volumes:backup.couldNotReachTheDocker') },
+  get TIMEOUT() { return i18n.t('volumes:backup.theConnectionToTheDocker') },
 }
 
 export function describeBackupError(error: unknown): string {
   if (error instanceof ApiError && error.code && ERRORS[error.code]) return ERRORS[error.code]
-  return 'The request failed. Try again.'
+  return i18n.t('volumes:backup.theRequestFailedTryAgain')
 }
 
 export function useBackupSchedules(hostId: string, enabled = true) {

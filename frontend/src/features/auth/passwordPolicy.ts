@@ -1,3 +1,4 @@
+import i18n from 'i18next'
 /**
  * Client-side mirror of the backend password policy, used only for live feedback.
  * The server stays authoritative (400 PASSWORD_POLICY).
@@ -29,19 +30,19 @@ export function checkPassword(password: string, username: string, confirmation: 
   return [
     {
       id: 'length',
-      label: `${MIN_LENGTH} to ${MAX_LENGTH} characters`,
+      label: i18n.t('auth:passwordPolicy.minToMaxCharacters', { min: MIN_LENGTH, max: MAX_LENGTH }),
       met: password.length >= MIN_LENGTH && password.length <= MAX_LENGTH,
     },
-    { id: 'uppercase', label: 'An uppercase letter', met: /\p{Lu}/u.test(password) },
-    { id: 'lowercase', label: 'A lowercase letter', met: /\p{Ll}/u.test(password) },
-    { id: 'digit', label: 'A digit', met: /\p{Nd}/u.test(password) },
-    { id: 'symbol', label: 'A symbol (not a letter or digit)', met: /[^\p{L}\p{Nd}]/u.test(password) },
+    { id: 'uppercase', label: i18n.t('auth:passwordPolicy.anUppercaseLetter'), met: /\p{Lu}/u.test(password) },
+    { id: 'lowercase', label: i18n.t('auth:passwordPolicy.aLowercaseLetter'), met: /\p{Ll}/u.test(password) },
+    { id: 'digit', label: i18n.t('auth:passwordPolicy.aDigit'), met: /\p{Nd}/u.test(password) },
+    { id: 'symbol', label: i18n.t('auth:passwordPolicy.aSymbolNotALetter'), met: /[^\p{L}\p{Nd}]/u.test(password) },
     {
       id: 'notUsername',
-      label: 'Different from your username',
+      label: i18n.t('auth:passwordPolicy.differentFromYourUsername'),
       met: password.length > 0 && password.toLowerCase() !== username.toLowerCase(),
     },
-    { id: 'match', label: 'Matches the confirmation', met: password.length > 0 && password === confirmation },
+    { id: 'match', label: i18n.t('auth:passwordPolicy.matchesTheConfirmation'), met: password.length > 0 && password === confirmation },
   ]
 }
 
@@ -50,17 +51,17 @@ export function isPasswordValid(password: string, username: string, confirmation
 }
 
 const VIOLATION_MESSAGES: Record<string, string> = {
-  TOO_SHORT: `The password must be at least ${MIN_LENGTH} characters long.`,
-  TOO_LONG: `The password must be at most ${MAX_LENGTH} characters long.`,
-  MISSING_UPPERCASE: 'The password needs an uppercase letter.',
-  MISSING_LOWERCASE: 'The password needs a lowercase letter.',
-  MISSING_DIGIT: 'The password needs a digit.',
-  MISSING_SYMBOL: 'The password needs a symbol.',
-  EQUALS_USERNAME: 'The password must differ from your username.',
-  SAME_AS_CURRENT: 'The new password must be different from the current one.',
+  get TOO_SHORT() { return i18n.t('auth:passwordPolicy.thePasswordMustBeAt', { MIN_LENGTH }) },
+  get TOO_LONG() { return i18n.t('auth:passwordPolicy.thePasswordMustBeAt2', { MAX_LENGTH }) },
+  get MISSING_UPPERCASE() { return i18n.t('auth:passwordPolicy.thePasswordNeedsAnUppercase') },
+  get MISSING_LOWERCASE() { return i18n.t('auth:passwordPolicy.thePasswordNeedsALowercase') },
+  get MISSING_DIGIT() { return i18n.t('auth:passwordPolicy.thePasswordNeedsADigit') },
+  get MISSING_SYMBOL() { return i18n.t('auth:passwordPolicy.thePasswordNeedsASymbol') },
+  get EQUALS_USERNAME() { return i18n.t('auth:passwordPolicy.thePasswordMustDifferFrom') },
+  get SAME_AS_CURRENT() { return i18n.t('auth:passwordPolicy.theNewPasswordMustBe') },
 }
 
 /** Readable text for a backend `PASSWORD_POLICY` violation code. */
 export function violationMessage(code: string): string {
-  return VIOLATION_MESSAGES[code] ?? 'The password does not meet the requirements.'
+  return VIOLATION_MESSAGES[code] ?? i18n.t('auth:passwordPolicy.thePasswordDoesNotMeet')
 }

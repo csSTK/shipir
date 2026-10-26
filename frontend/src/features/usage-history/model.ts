@@ -1,6 +1,7 @@
 import type { ChartSeries } from '../../shared/charts/TimeSeriesChart.tsx'
 import { aggregateSeries, counterRates } from '../../shared/charts/series.ts'
 import type { HistoryPoint, StatsHistory } from './api.ts'
+import i18n from 'i18next'
 
 
 export interface ContainerCharts {
@@ -24,14 +25,14 @@ export function containerCharts(history: StatsHistory): ContainerCharts | null {
   const b = history.bucketSeconds
   return {
     cpu: [{ key: 'cpu', label: 'CPU', points: points.map((p) => ({ t: time(p), v: p.cpuPercent })) }],
-    memory: [{ key: 'memory', label: 'Memory', points: points.map((p) => ({ t: time(p), v: p.memoryBytes })) }],
+    memory: [{ key: 'memory', label: i18n.t('usage-history:model.memory'), points: points.map((p) => ({ t: time(p), v: p.memoryBytes })) }],
     network: [
-      rateSeries(points, 'rx', 'Received', (p) => p.networkRxBytes, b),
-      rateSeries(points, 'tx', 'Sent', (p) => p.networkTxBytes, b),
+      rateSeries(points, 'rx', i18n.t('usage-history:model.received'), (p) => p.networkRxBytes, b),
+      rateSeries(points, 'tx', i18n.t('usage-history:model.sent'), (p) => p.networkTxBytes, b),
     ],
     disk: [
-      rateSeries(points, 'read', 'Read', (p) => p.blockReadBytes, b),
-      rateSeries(points, 'write', 'Written', (p) => p.blockWriteBytes, b),
+      rateSeries(points, 'read', i18n.t('usage-history:model.read'), (p) => p.blockReadBytes, b),
+      rateSeries(points, 'write', i18n.t('usage-history:model.written'), (p) => p.blockWriteBytes, b),
     ],
   }
 }
@@ -46,6 +47,6 @@ export function hostCharts(history: StatsHistory): { cpu: ChartSeries[]; memory:
     )
   return {
     cpu: [{ key: 'cpu', label: 'CPU', points: sum((p) => p.cpuPercent) }],
-    memory: [{ key: 'memory', label: 'Memory', points: sum((p) => p.memoryBytes) }],
+    memory: [{ key: 'memory', label: i18n.t('usage-history:model.memory'), points: sum((p) => p.memoryBytes) }],
   }
 }

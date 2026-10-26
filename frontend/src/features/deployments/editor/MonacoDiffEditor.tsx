@@ -2,6 +2,7 @@ import { DiffEditor, loader } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import { useSyncExternalStore } from 'react'
+import { useTranslation } from 'react-i18next'
 
 self.MonacoEnvironment = { getWorker: () => new EditorWorker() }
 loader.config({ monaco })
@@ -23,6 +24,7 @@ export interface MonacoDiffEditorProps {
 
 /** Read-only Monaco diff view. */
 export default function MonacoDiffEditor({ original, modified, label, height, sideBySide }: MonacoDiffEditorProps) {
+  const { t } = useTranslation('deployments')
   const dark = useSyncExternalStore(subscribeDark, () => darkQuery?.matches ?? false)
   const reducedMotion = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
   return (
@@ -32,7 +34,7 @@ export default function MonacoDiffEditor({ original, modified, label, height, si
       theme={dark ? 'vs-dark' : 'light'}
       original={original}
       modified={modified}
-      loading={<div className="ed-yaml__loading">Loading diff…</div>}
+      loading={<div className="ed-yaml__loading">{t('MonacoDiffEditor.loadingDiff')}</div>}
       options={{
         readOnly: true,
         originalEditable: false,

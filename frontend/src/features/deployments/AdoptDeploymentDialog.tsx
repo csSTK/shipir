@@ -6,12 +6,15 @@ import { useAdoptDeployment } from './api.ts'
 import { describeDeploymentError } from './deploymentErrors.ts'
 import { EnvEditor, toPayload, validateEnv, YamlEditor } from './editor/index.ts'
 import type { EnvEntry } from './api.ts'
+import { useTranslation } from 'react-i18next'
+import { Trans } from '../../shared/i18n/Trans.tsx'
 
 /**
  * Adopts an unmanaged Compose project. First tries the files the project was started with; when the server
  * cannot read them (YAML_REQUIRED) the user pastes the YAML and variables instead.
  */
 export function AdoptDeploymentDialog({ hostId, project, onClose }: { hostId: string; project: string; onClose: () => void }) {
+  const { t } = useTranslation('deployments')
   const navigate = useNavigate()
   const adopt = useAdoptDeployment(hostId)
   const [manual, setManual] = useState(false)
@@ -26,8 +29,8 @@ export function AdoptDeploymentDialog({ hostId, project, onClose }: { hostId: st
     setYamlError(null)
     let body: { yaml?: string; env?: EnvEntry[] } = {}
     if (manual) {
-      if (yaml.trim() === '') return setProblem('Enter the Compose file.')
-      if (validateEnv(env).size > 0) return setProblem('Fix the highlighted variables first.')
+      if (yaml.trim() === '') return setProblem(t('AdoptDeploymentDialog.enterTheComposeFile'))
+      if (validateEnv(env).size > 0) return setProblem(t('AdoptDeploymentDialog.fixTheHighlightedVariablesFirst'))
       body = { yaml, env: toPayload(env) }
     }
     adopt.mutate(
@@ -38,20 +41,20 @@ export function AdoptDeploymentDialog({ hostId, project, onClose }: { hostId: st
           const code = err instanceof ApiError ? err.code : undefined
           if (code === 'YAML_REQUIRED') {
             setManual(true)
-            setProblem('Shipir cannot read the Compose file of this project. Paste it below.')
+            setProblem(t('AdoptDeploymentDialog.shipirCannotReadTheCompose'))
           } else if (code === 'PATH_NOT_ALLOWED') {
             setManual(true)
-            setProblem(describeDeploymentError(err, 'Shipir may not read the Compose file of this project. Paste it below.'))
+            setProblem(describeDeploymentError(err, t('AdoptDeploymentDialog.shipirMayNotReadThe')))
           } else if (code === 'RELATIVE_PATHS_NOT_SUPPORTED') {
             setManual(true)
-            setProblem(describeDeploymentError(err, 'The Compose file uses relative paths. Use absolute paths.'))
+            setProblem(describeDeploymentError(err, t('AdoptDeploymentDialog.theComposeFileUsesRelative')))
           } else if (code === 'INVALID_COMPOSE') {
             const details = (err as ApiError).details
             setManual(true)
-            setYamlError({ message: 'The Compose file is not valid.', details })
-            setProblem(manual ? null : describeDeploymentError(err, 'The Compose file is not valid.') + ' Paste a corrected file below.')
+            setYamlError({ message: t('AdoptDeploymentDialog.theComposeFileIsNot'), details })
+            setProblem(manual ? null : describeDeploymentError(err, t('AdoptDeploymentDialog.theComposeFileIsNot')) + t('AdoptDeploymentDialog.pasteACorrectedFileBelow'))
           } else {
-            setProblem(describeDeploymentError(err, 'Could not adopt the project. Try again.'))
+            setProblem(describeDeploymentError(err, t('AdoptDeploymentDialog.couldNotAdoptTheProject')))
           }
         },
       },
@@ -59,21 +62,20 @@ export function AdoptDeploymentDialog({ hostId, project, onClose }: { hostId: st
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()} title="Adopt deployment">
+    <Dialog open onOpenChange={(open) => !open && onClose()} title={t('AdoptDeploymentDialog.adoptDeployment')}>
       <form onSubmit={submit} className="ui-form">
         <p className="ui-dialog-text">
-          Shipir takes <strong>{project}</strong> under its management using its Compose file
-          {manual ? ' as pasted below' : ' as found on the environment'}. Running containers are not restarted.
+          <Trans t={t} i18nKey="AdoptDeploymentDialog.shipirTakesProjectUnderIts" values={{ project }} components={{ strong: <strong /> }} />
+          {manual ? t('AdoptDeploymentDialog.asPastedBelow') : t('AdoptDeploymentDialog.asFoundOnTheEnvironment')}{t('AdoptDeploymentDialog.runningContainersAreNotRestarted')}
         </p>
         <p className="ui-hint">
-          Projects whose Compose file uses relative bind mounts, <code>env_file</code> entries or build contexts cannot be adopted,
-          because they would resolve against Shipir&apos;s own stack directory instead of the original one. Use absolute paths.
+          <Trans t={t} i18nKey="AdoptDeploymentDialog.projectsWhoseComposeFileUses" components={{ code: <code /> }} />
         </p>
         {manual && (
           <div className="ui-form">
             <div className="ui-form-field">
-              <span>Compose file</span>
-              <YamlEditor label="Compose file" value={yaml} onChange={setYaml} height="260px" error={yamlError} />
+              <span>{t('AdoptDeploymentDialog.composeFile')}</span>
+              <YamlEditor label={t('AdoptDeploymentDialog.composeFile2')} value={yaml} onChange={setYaml} height="260px" error={yamlError} />
             </div>
             <EnvEditor value={env} onChange={setEnv} />
           </div>
@@ -85,10 +87,10 @@ export function AdoptDeploymentDialog({ hostId, project, onClose }: { hostId: st
         )}
         <div className="ui-dialog-actions">
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('AdoptDeploymentDialog.cancel')}
           </Button>
           <Button variant="primary" type="submit" loading={adopt.isPending}>
-            Adopt
+            {t('AdoptDeploymentDialog.adopt')}
           </Button>
         </div>
       </form>

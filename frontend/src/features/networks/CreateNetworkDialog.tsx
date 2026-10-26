@@ -3,9 +3,11 @@ import { describeCreateError } from '../hosts/createResource.ts'
 import { validateVolumeName as validateName } from '../volumes/api.ts'
 import { useCreateNetwork, validateSubnet, type NetworkDriver } from './api.ts'
 import { Button, Dialog } from '../../shared/ui/index.ts'
+import { useTranslation } from 'react-i18next'
 
 /** Creates a network. Drivers other than bridge are offered to ADMIN only (the server enforces it too). */
 export function CreateNetworkDialog({ hostId, isAdmin, onClose }: { hostId: string; isAdmin: boolean; onClose: () => void }) {
+  const { t } = useTranslation('networks')
   const [name, setName] = useState('')
   const [driver, setDriver] = useState<NetworkDriver>('bridge')
   const [internal, setInternal] = useState(false)
@@ -28,10 +30,10 @@ export function CreateNetworkDialog({ hostId, isAdmin, onClose }: { hostId: stri
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()} title="Create network">
+    <Dialog open onOpenChange={(open) => !open && onClose()} title={t('CreateNetworkDialog.createNetwork')}>
       <form className="ui-form" onSubmit={submit} noValidate>
         <label className="ui-form-field">
-          Name
+          {t('CreateNetworkDialog.name')}
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -50,19 +52,19 @@ export function CreateNetworkDialog({ hostId, isAdmin, onClose }: { hostId: stri
 
         {isAdmin ? (
           <label className="ui-form-field">
-            Driver
+            {t('CreateNetworkDialog.driver')}
             <select value={driver} onChange={(e) => setDriver(e.target.value as NetworkDriver)}>
-              <option value="bridge">bridge</option>
-              <option value="overlay">overlay</option>
-              <option value="macvlan">macvlan</option>
-              <option value="ipvlan">ipvlan</option>
+              <option value="bridge">{t('CreateNetworkDialog.bridge')}</option>
+              <option value="overlay">{t('CreateNetworkDialog.overlay')}</option>
+              <option value="macvlan">{t('CreateNetworkDialog.macvlan')}</option>
+              <option value="ipvlan">{t('CreateNetworkDialog.ipvlan')}</option>
             </select>
           </label>
         ) : (
-          <p className="ui-hint">Driver: bridge</p>
+          <p className="ui-hint">{t('CreateNetworkDialog.driverBridge')}</p>
         )}
         <label className="ui-form-field">
-          Subnet (optional)
+          {t('CreateNetworkDialog.subnetOptional')}
           <input
             value={subnet}
             onChange={(e) => setSubnet(e.target.value)}
@@ -79,7 +81,7 @@ export function CreateNetworkDialog({ hostId, isAdmin, onClose }: { hostId: stri
         )}
 
         <label>
-          <input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} /> Internal (no outside access)
+          <input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} /> {t('CreateNetworkDialog.internalNoOutsideAccess')}
         </label>
         {error && (
           <p role="alert" className="ui-error">
@@ -88,10 +90,10 @@ export function CreateNetworkDialog({ hostId, isAdmin, onClose }: { hostId: stri
         )}
         <div className="ui-dialog-actions">
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('CreateNetworkDialog.cancel')}
           </Button>
           <Button variant="primary" type="submit" disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create'}
+            {create.isPending ? t('CreateNetworkDialog.creating') : t('CreateNetworkDialog.create')}
           </Button>
         </div>
       </form>

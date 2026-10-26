@@ -3,6 +3,7 @@ import { ArrowDown, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button, IconButton, SearchField, Toolbar } from '../../../shared/ui/index.ts'
 import type { LogLine } from './logStream.ts'
 import { findMatches, type MatchRange } from './logSearch.ts'
+import { useTranslation } from 'react-i18next'
 import './LogView.css'
 
 const BOTTOM_TOLERANCE_PX = 24
@@ -23,6 +24,7 @@ interface LogViewProps {
 
 /** Search box with match navigation, filters and the log itself. Searching and filtering happen on the buffered lines only. */
 export function LogView({ lines, label, emptyText, truncated = false, services, serviceEnds = {} }: LogViewProps) {
+  const { t: tr } = useTranslation('containers')
   const [input, setInput] = useState('')
   const [query, setQuery] = useState('')
   const [stderrOnly, setStderrOnly] = useState(false)
@@ -121,10 +123,10 @@ export function LogView({ lines, label, emptyText, truncated = false, services, 
 
   return (
     <div className="logv">
-      <Toolbar label="Search and filter">
+      <Toolbar label={tr('LogView.searchAndFilter')}>
         <SearchField
-          aria-label="Search logs"
-          placeholder="Search logs"
+          aria-label={tr('LogView.searchLogs')}
+          placeholder={tr('LogView.searchLogs')}
           value={input}
           onChange={(e) => {
             setInput(e.target.value)
@@ -136,47 +138,47 @@ export function LogView({ lines, label, emptyText, truncated = false, services, 
         {query && (
           <>
             <span className="logv__count" aria-live="polite">
-              {total === 0 ? 'No matches' : `${current + 1} of ${total}`}
+              {total === 0 ? tr('LogView.noMatches') : tr('LogView.valueOfTotal', { current: current + 1, total })}
             </span>
-            <IconButton icon={ChevronUp} aria-label="Previous match" onClick={() => step(-1)} disabled={total === 0} />
-            <IconButton icon={ChevronDown} aria-label="Next match" onClick={() => step(1)} disabled={total === 0} />
+            <IconButton icon={ChevronUp} aria-label={tr('LogView.previousMatch')} onClick={() => step(-1)} disabled={total === 0} />
+            <IconButton icon={ChevronDown} aria-label={tr('LogView.nextMatch')} onClick={() => step(1)} disabled={total === 0} />
           </>
         )}
         <label className="logv__check">
           <input type="checkbox" checked={stderrOnly} onChange={(e) => setStderrOnly(e.target.checked)} />
-          <span>stderr only</span>
+          <span>{tr('LogView.stderrOnly')}</span>
         </label>
         {filtered && (
           <>
-            <span className="logv__note">{`Showing ${visible.length} of ${lines.length} lines`}</span>
+            <span className="logv__note">{tr('LogView.showingLengthOfLength2Lines', { shown: visible.length, total: lines.length })}</span>
             <Button variant="ghost" size="sm" onClick={clearFilters}>
-              Clear filters
+              {tr('LogView.clearFilters')}
             </Button>
           </>
         )}
       </Toolbar>
 
       {services && services.length > 0 && (
-        <ul className="logv__legend" aria-label="Services">
+        <ul className="logv__legend" aria-label={tr('LogView.services')}>
           {services.map((s) => (
             <li key={s}>
               <button type="button" className={`logv__chip logv__chip--${colour(s)}`} aria-pressed={!hidden.has(s)} onClick={() => toggleService(s)}>
                 <span className="logv__dot" aria-hidden="true" />
                 {s}
-                {serviceEnds[s] && <span className="logv__ended">{serviceEnds[s] === 'ENDED' ? 'ended' : 'failed'}</span>}
+                {serviceEnds[s] && <span className="logv__ended">{serviceEnds[s] === 'ENDED' ? tr('LogView.ended') : tr('LogView.failed')}</span>}
               </button>
             </li>
           ))}
         </ul>
       )}
 
-      {truncated && <p className="logv__note">The oldest lines were dropped to keep the browser responsive; only the latest are shown.</p>}
+      {truncated && <p className="logv__note">{tr('LogView.theOldestLinesWereDropped')}</p>}
 
       <div className="logv__body">
         {/* aria-live off: a busy stream must not be announced line by line. */}
         <div ref={logRef} className="logv__log" role="log" aria-label={label} aria-live="off" tabIndex={0}>
           {visible.length === 0 ? (
-            <span className="logv__empty">{lines.length > 0 ? 'No lines match the filters.' : emptyText}</span>
+            <span className="logv__empty">{lines.length > 0 ? tr('LogView.noLinesMatchTheFilters') : emptyText}</span>
           ) : (
             visible.map((l) => (
               <div key={l.seq} className={`logv__line${l.stream === 'STDERR' ? ' logv__line--err' : ''}`}>
@@ -189,7 +191,7 @@ export function LogView({ lines, label, emptyText, truncated = false, services, 
         </div>
         {!following && (
           <Button variant="primary" size="sm" className="logv__jump" onClick={jumpToLatest}>
-            <ArrowDown size={16} strokeWidth={1.75} aria-hidden="true" /> Jump to latest
+            <ArrowDown size={16} strokeWidth={1.75} aria-hidden="true" /> {tr('LogView.jumpToLatest')}
           </Button>
         )}
       </div>

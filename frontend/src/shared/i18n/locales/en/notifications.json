@@ -1,0 +1,21 @@
+{
+  "NotificationsPage.markAsRead": "Mark as read",
+  "NotificationsPage.notifications": "Notifications",
+  "NotificationsPage.unreadOnly": "Unread only",
+  "NotificationsPage.markAllAsRead": "Mark all as read",
+  "NotificationsPage.couldNotLoadNotifications": "Could not load notifications.",
+  "NotificationsPage.noUnreadNotifications": "No unread notifications.",
+  "NotificationsPage.noNotificationsYet": "No notifications yet.",
+  "NotificationsPage.hostAndDeploymentProblemsShow": "Host and deployment problems show up here.",
+  "api.hostDown": "Host down",
+  "api.hostUp": "Host up",
+  "api.deploymentFailed": "Deployment failed",
+  "api.containerCrashed": "Container crashed",
+  "api.containerUnhealthy": "Container unhealthy",
+  "api.gitAutoUpdateFailed": "Git auto-update failed",
+  "api.imageUpdateApplied": "Image update applied",
+  "api.imageUpdateFailed": "Image update failed",
+  "api.uptimeCheckDown": "Uptime check down",
+  "api.uptimeCheckUp": "Uptime check up",
+  "NotificationsPage.justNow": "just now"
+}

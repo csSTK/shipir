@@ -10,9 +10,10 @@ import {
   type AppNotification,
   type NotificationType,
 } from './api.ts'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
+import { formatRelativeTime } from '../../shared/i18n/format.ts'
 import './NotificationsPage.css'
-
-const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
 
 function relativeTime(iso: string): string {
   const seconds = Math.round((new Date(iso).getTime() - Date.now()) / 1000)
@@ -22,9 +23,9 @@ function relativeTime(iso: string): string {
     ['minute', 60],
   ]
   for (const [unit, size] of units) {
-    if (Math.abs(seconds) >= size) return rtf.format(Math.round(seconds / size), unit)
+    if (Math.abs(seconds) >= size) return formatRelativeTime(Math.round(seconds / size), unit)
   }
-  return 'just now'
+  return i18n.t('notifications:NotificationsPage.justNow')
 }
 
 type Tone = 'ok' | 'bad' | 'warn'
@@ -62,6 +63,7 @@ function targetOf(item: AppNotification): { label: string; to: string | null } |
 }
 
 function Row({ item, onRead }: { item: AppNotification; onRead: (id: string) => void }) {
+  const { t } = useTranslation('notifications')
   const style = TYPE_STYLE[item.type]
   const target = targetOf(item)
   return (
@@ -89,7 +91,7 @@ function Row({ item, onRead }: { item: AppNotification; onRead: (id: string) => 
       </div>
       {!item.read && (
         <Button size="sm" onClick={() => onRead(item.id)}>
-          Mark as read
+          {t('NotificationsPage.markAsRead')}
         </Button>
       )}
     </li>
@@ -97,23 +99,24 @@ function Row({ item, onRead }: { item: AppNotification; onRead: (id: string) => 
 }
 
 export function NotificationsPage() {
+  const { t } = useTranslation('notifications')
   const [unreadOnly, setUnreadOnly] = useState(false)
   const { data, isPending, isError } = useNotifications(unreadOnly)
   const markRead = useMarkRead()
   const markAll = useMarkAllRead()
 
   return (
-    <section className="notifs" aria-label="Notifications">
+    <section className="notifs" aria-label={t('NotificationsPage.notifications')}>
       <PageHeader
-        title="Notifications"
+        title={t('NotificationsPage.notifications')}
         actions={
           <>
             <label className="notifs__filter">
               <input type="checkbox" checked={unreadOnly} onChange={(event) => setUnreadOnly(event.target.checked)} />
-              Unread only
+              {t('NotificationsPage.unreadOnly')}
             </label>
             <Button disabled={markAll.isPending} onClick={() => markAll.mutate()}>
-              Mark all as read
+              {t('NotificationsPage.markAllAsRead')}
             </Button>
           </>
         }
@@ -127,11 +130,11 @@ export function NotificationsPage() {
       )}
       {isError && (
         <p role="alert" className="notifs__error">
-          Could not load notifications.
+          {t('NotificationsPage.couldNotLoadNotifications')}
         </p>
       )}
       {data && data.content.length === 0 && (
-        <EmptyState icon={Bell} title={unreadOnly ? 'No unread notifications.' : 'No notifications yet.'} description="Host and deployment problems show up here." />
+        <EmptyState icon={Bell} title={unreadOnly ? t('NotificationsPage.noUnreadNotifications') : t('NotificationsPage.noNotificationsYet')} description={t('NotificationsPage.hostAndDeploymentProblemsShow')} />
       )}
       {data && data.content.length > 0 && (
         <ul className="notifs__list">

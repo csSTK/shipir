@@ -12,30 +12,34 @@ import { BackupSchedulesDialog } from './BackupSchedulesDialog.tsx'
 import { RestoreVolumeDialog } from './RestoreVolumeDialog.tsx'
 import { LastBackupBadge } from './LastBackupBadge.tsx'
 import { describeBackupError, downloadVolumeBackup, useBackupSchedules } from './backup.ts'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
+import { dateTimeFormat } from '../../shared/i18n/format.ts'
 import './VolumesPage.css'
 import './VolumeBackup.css'
 
-const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+const dateFormat = dateTimeFormat({ dateStyle: 'medium', timeStyle: 'short' })
 
 const baseColumns: ResourceColumn<Volume>[] = [
-  { id: 'name', header: 'Name', sortValue: (v) => v.name, render: (v) => <strong>{v.name}</strong> },
-  { id: 'driver', header: 'Driver', sortValue: (v) => v.driver, render: (v) => v.driver },
+  { id: 'name', get header() { return i18n.t('volumes:VolumesPage.name') }, sortValue: (v) => v.name, render: (v) => <strong>{v.name}</strong> },
+  { id: 'driver', get header() { return i18n.t('volumes:VolumesPage.driver') }, sortValue: (v) => v.driver, render: (v) => v.driver },
   {
     id: 'created',
-    header: 'Created',
+    get header() { return i18n.t('volumes:VolumesPage.created') },
     sortValue: (v) => (v.created ? Date.parse(v.created) : null),
     render: (v) => (v.created ? dateFormat.format(new Date(v.created)) : '–'),
   },
   {
     id: 'usage',
-    header: 'Usage',
+    get header() { return i18n.t('volumes:VolumesPage.usage') },
     sortValue: (v) => (v.inUse ? 1 : 0),
-    render: (v) => <Badge tone={v.inUse ? 'ok' : 'muted'}>{v.inUse ? 'In use' : 'Unused'}</Badge>,
+    render: (v) => <Badge tone={v.inUse ? 'ok' : 'muted'}>{v.inUse ? i18n.t('volumes:VolumesPage.inUse') : i18n.t('volumes:VolumesPage.unused')}</Badge>,
   },
 ]
 
 /** `/environments/:id/volumes`: all volumes of one environment. */
 export function VolumesPage() {
+  const { t } = useTranslation('volumes')
   const { id = '' } = useParams()
   const { data: user } = useCurrentUser()
   const canWrite = user?.role === 'ADMIN' || user?.role === 'OPERATOR'
@@ -56,7 +60,7 @@ export function VolumesPage() {
       ...baseColumns,
       {
         id: 'backup',
-        header: 'Last backup',
+        header: t('VolumesPage.lastBackup'),
         sortValue: (v) => {
           const at = lastRun.get(v.name)?.lastRunAt
           return at ? Date.parse(at) : null
@@ -64,7 +68,7 @@ export function VolumesPage() {
         render: (v) => <LastBackupBadge status={lastRun.get(v.name)?.lastStatus ?? null} at={lastRun.get(v.name)?.lastRunAt ?? null} />,
       },
     ]
-  }, [canWrite, schedules.data])
+  }, [canWrite, schedules.data, t])
 
   async function backup(v: Volume) {
     setNotice(null)
@@ -73,8 +77,8 @@ export function VolumesPage() {
       await downloadVolumeBackup(id, v.name)
       setNotice(
         v.inUse
-          ? `Backup of ${v.name} downloaded. ${v.name} is in use, so the archive may be inconsistent.`
-          : `Backup of ${v.name} downloaded.`,
+          ? t('VolumesPage.backupOfNameDownloadedName2', { name: v.name, volume: v.name })
+          : t('VolumesPage.backupOfNameDownloaded', { name: v.name }),
       )
     } catch (e) {
       setBackupError(describeBackupError(e))
@@ -84,15 +88,15 @@ export function VolumesPage() {
   return (
     <section className="volumes">
       <PageHeader
-        title="Volumes"
+        title={t('VolumesPage.volumes')}
         actions={
           canWrite && (
             <>
               <Button variant="secondary" onClick={() => setScheduling({})}>
-                Backup schedules
+                {t('VolumesPage.backupSchedules')}
               </Button>
               <Button variant="primary" onClick={() => setCreating(true)}>
-                Create volume
+                {t('VolumesPage.createVolume')}
               </Button>
             </>
           )
@@ -109,13 +113,13 @@ export function VolumesPage() {
         </p>
       )}
       <ResourceTable
-        label="volumes"
+        label={t('VolumesPage.volumes2')}
         columns={columns}
         rows={data}
         rowKey={(v) => v.name}
         searchText={(v) => `${v.name} ${v.driver}`}
         defaultSort="name"
-        emptyMessage="No volumes in this environment."
+        emptyMessage={t('VolumesPage.noVolumesInThisEnvironment')}
         isPending={isPending}
         error={error ? describeResourceError(error) : null}
         onRetry={() => void refetch()}
@@ -124,9 +128,9 @@ export function VolumesPage() {
           canWrite
             ? (v) => ({
                 menu: [
-                  { label: 'Backup', icon: <Download size={16} strokeWidth={1.75} />, onSelect: () => void backup(v) },
-                  { label: 'Restore…', icon: <Upload size={16} strokeWidth={1.75} />, onSelect: () => setRestoring(v) },
-                  { label: 'Schedule backups…', icon: <CalendarClock size={16} strokeWidth={1.75} />, onSelect: () => setScheduling({ volume: v.name }) },
+                  { label: t('VolumesPage.backup'), icon: <Download size={16} strokeWidth={1.75} />, onSelect: () => void backup(v) },
+                  { label: t('VolumesPage.restore'), icon: <Upload size={16} strokeWidth={1.75} />, onSelect: () => setRestoring(v) },
+                  { label: t('VolumesPage.scheduleBackups'), icon: <CalendarClock size={16} strokeWidth={1.75} />, onSelect: () => setScheduling({ volume: v.name }) },
                   { type: 'separator' },
                   ...deleteMenu(() => setTarget(v)),
                 ],

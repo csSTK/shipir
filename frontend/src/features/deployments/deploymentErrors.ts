@@ -1,80 +1,81 @@
 import { ApiError } from '../../shared/api/client.ts'
+import i18n from 'i18next'
 
 /** Maps deployment API failures to short user-facing messages. */
 export function describeDeploymentError(error: unknown, fallback: string): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case 'DEPLOYMENT_IN_PROGRESS':
-        return 'A run is already in progress for this deployment. Wait until it finishes.'
+        return i18n.t('deployments:deploymentErrors.aRunIsAlreadyIn')
       case 'DEPLOYMENT_NAME_TAKEN':
-        return 'A deployment with this name already exists in this environment.'
+        return i18n.t('deployments:deploymentErrors.aDeploymentWithThisName')
       case 'ENCRYPTION_KEY_MISSING':
-        return 'The server has no encryption key configured, so environment variables cannot be stored.'
+        return i18n.t('deployments:deploymentErrors.theServerHasNoEncryption')
       case 'INVALID_DEPLOYMENT_NAME':
-        return 'Use lowercase letters, digits, hyphens and underscores, starting with a letter or digit.'
+        return i18n.t('deployments:deploymentErrors.useLowercaseLettersDigitsHyphens')
       case 'INVALID_COMPOSE':
-        return ['The Compose file is not valid.', ...(error.details ?? [])].join(' ')
+        return [i18n.t('deployments:deploymentErrors.theComposeFileIsNot'), ...(error.details ?? [])].join(' ')
       case 'INVALID_ENV':
-        return 'An environment variable is invalid. Check names and values.'
+        return i18n.t('deployments:deploymentErrors.anEnvironmentVariableIsInvalid')
       case 'GIT_MANAGED':
-        return 'The Compose file of a Git deployment comes from the repository and cannot be edited here.'
+        return i18n.t('deployments:deploymentErrors.theComposeFileOfA')
       case 'GIT_AUTH_FAILED':
-        return 'The repository rejected the credentials. Check the credential or choose another one.'
+        return i18n.t('deployments:deploymentErrors.theRepositoryRejectedTheCredentials')
       case 'GIT_REF_NOT_FOUND':
-        return 'The branch or tag was not found in the repository.'
+        return i18n.t('deployments:deploymentErrors.theBranchOrTagWas')
       case 'GIT_REPO_NOT_FOUND':
-        return 'The repository was not found. Check the URL, or select a credential for a private repository.'
+        return i18n.t('deployments:deploymentErrors.theRepositoryWasNotFound')
       case 'GIT_UNREACHABLE':
-        return 'The Git server could not be reached. Try again later.'
+        return i18n.t('deployments:deploymentErrors.theGitServerCouldNot')
       case 'COMPOSE_FILE_NOT_FOUND':
-        return 'The repository has no Compose file at this path.'
+        return i18n.t('deployments:deploymentErrors.theRepositoryHasNoCompose')
       case 'INVALID_COMPOSE_PATH':
-        return 'The Compose file path must be relative to the repository root and stay inside it.'
+        return i18n.t('deployments:deploymentErrors.theComposeFilePathMust')
       case 'INVALID_REPO_URL':
-        return 'Enter a valid https:// repository URL.'
+        return i18n.t('deployments:deploymentErrors.enterAValidHttpsRepository')
       case 'CREDENTIAL_NOT_FOUND':
-        return 'This credential no longer exists. Choose another one.'
+        return i18n.t('deployments:deploymentErrors.thisCredentialNoLongerExists')
       case 'NOT_A_GIT_DEPLOYMENT':
-        return 'This deployment is not sourced from a Git repository.'
+        return i18n.t('deployments:deploymentErrors.thisDeploymentIsNotSourced')
       case 'NOT_A_FILE_DEPLOYMENT':
-        return 'Automatic image updates are only available for deployments with their own Compose file, not for Git deployments.'
+        return i18n.t('deployments:deploymentErrors.automaticImageUpdatesAreOnly')
       case 'NOT_DEPLOYED':
-        return 'Deploy this deployment once before pulling updates.'
+        return i18n.t('deployments:deploymentErrors.deployThisDeploymentOnceBefore')
       case 'DEPLOYMENT_NOT_FOUND':
-        return 'This deployment no longer exists.'
+        return i18n.t('deployments:deploymentErrors.thisDeploymentNoLongerExists')
       case 'VERSION_NOT_FOUND':
-        return 'This version no longer exists.'
+        return i18n.t('deployments:deploymentErrors.thisVersionNoLongerExists')
       case 'COMPOSE_DOWN_FAILED':
-        return 'Docker could not stop the deployment, so it was not deleted. Try again.'
+        return i18n.t('deployments:deploymentErrors.dockerCouldNotStopThe')
       case 'MANAGED_DEPLOYMENT':
-        return 'This deployment is managed by Shipir; delete it from its detail page.'
+        return i18n.t('deployments:deploymentErrors.thisDeploymentIsManagedBy')
       case 'PROJECT_NOT_FOUND':
-        return 'This project no longer exists on the environment.'
+        return i18n.t('deployments:deploymentErrors.thisProjectNoLongerExists')
       case 'PATH_NOT_ALLOWED':
-        return 'The compose file of this project is in a directory Shipir may not read. Paste the YAML instead.'
+        return i18n.t('deployments:deploymentErrors.theComposeFileOfThis')
       case 'RELATIVE_PATHS_NOT_SUPPORTED':
         return [
-          'This project uses paths relative to its original directory, which Shipir cannot keep. Make them absolute and adopt again:',
+          i18n.t('deployments:deploymentErrors.thisProjectUsesPathsRelative'),
           ...(error.details ?? []),
         ].join(' ')
       case 'HOST_NOT_FOUND':
-        return 'This environment no longer exists.'
+        return i18n.t('deployments:deploymentErrors.thisEnvironmentNoLongerExists')
       default:
-        if (error.status === 403) return 'You are not allowed to do this.'
+        if (error.status === 403) return i18n.t('deployments:deploymentErrors.youAreNotAllowedTo')
     }
   }
   return fallback
 }
 
 const POLL_ERRORS: Record<string, string> = {
-  GIT_AUTH_FAILED: 'Authentication failed',
-  GIT_REF_NOT_FOUND: 'Branch or tag not found',
-  GIT_REPO_NOT_FOUND: 'Repository not found',
-  GIT_UNREACHABLE: 'Git server unreachable',
-  COMPOSE_FILE_NOT_FOUND: 'Compose file not found',
+  get GIT_AUTH_FAILED() { return i18n.t('deployments:deploymentErrors.authenticationFailed') },
+  get GIT_REF_NOT_FOUND() { return i18n.t('deployments:deploymentErrors.branchOrTagNotFound') },
+  get GIT_REPO_NOT_FOUND() { return i18n.t('deployments:deploymentErrors.repositoryNotFound') },
+  get GIT_UNREACHABLE() { return i18n.t('deployments:deploymentErrors.gitServerUnreachable') },
+  get COMPOSE_FILE_NOT_FOUND() { return i18n.t('deployments:deploymentErrors.composeFileNotFound') },
 }
 
 /** Short text for the `lastPollError` code of a Git deployment's auto-update check. */
 export function describePollError(code: string): string {
-  return POLL_ERRORS[code] ?? 'The last check failed'
+  return POLL_ERRORS[code] ?? i18n.t('deployments:deploymentErrors.theLastCheckFailed')
 }

@@ -3,6 +3,7 @@ import { Button, Dialog, Switch } from '../../shared/ui/index.ts'
 import type { Volume } from './api.ts'
 import { MAX_RESTORE_BYTES, MAX_RESTORE_LABEL, describeBackupError, restoreVolume } from './backup.ts'
 import { ApiError } from '../../shared/api/client.ts'
+import { useTranslation } from 'react-i18next'
 import './VolumeBackup.css'
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
 
 /** Pick a tar, restore it onto the volume; a volume in use needs an explicit confirmation. */
 export function RestoreVolumeDialog({ hostId, volume, onClose, onDone }: Props) {
+  const { t } = useTranslation('volumes')
   const [file, setFile] = useState<File | null>(null)
   const [inUse, setInUse] = useState(volume.inUse)
   const [confirmed, setConfirmed] = useState(false)
@@ -22,7 +24,7 @@ export function RestoreVolumeDialog({ hostId, volume, onClose, onDone }: Props) 
 
   function pick(f: File | null) {
     setFile(f)
-    setError(f && f.size > MAX_RESTORE_BYTES ? `This file is larger than ${MAX_RESTORE_LABEL}.` : null)
+    setError(f && f.size > MAX_RESTORE_BYTES ? t('RestoreVolumeDialog.thisFileIsLargerThan', { MAX_RESTORE_LABEL }) : null)
   }
 
   const tooBig = !!file && file.size > MAX_RESTORE_BYTES
@@ -34,7 +36,7 @@ export function RestoreVolumeDialog({ hostId, volume, onClose, onDone }: Props) 
     setError(null)
     try {
       await restoreVolume(hostId, volume.name, file, inUse && confirmed)
-      onDone(`Restored ${file.name} into ${volume.name}.`)
+      onDone(t('RestoreVolumeDialog.restoredNameIntoName2', { name: file.name, volume: volume.name }))
       onClose()
     } catch (e) {
       if (e instanceof ApiError && e.code === 'VOLUME_IN_USE') setInUse(true)
@@ -47,31 +49,30 @@ export function RestoreVolumeDialog({ hostId, volume, onClose, onDone }: Props) 
     <Dialog
       open
       onOpenChange={(open) => !open && onClose()}
-      title={`Restore ${volume.name}`}
+      title={t('RestoreVolumeDialog.restoreName', { name: volume.name })}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('RestoreVolumeDialog.cancel')}
           </Button>
           <Button variant="primary" disabled={!ready} loading={pending} onClick={() => void submit()}>
-            Restore
+            {t('RestoreVolumeDialog.restore')}
           </Button>
         </>
       }
     >
       <div className="vbackup__stack">
         <p className="ui-dialog-text">
-          The archive is overlaid onto the existing volume: files with the same path are overwritten, files that are not in the archive stay.
-          The maximum size is {MAX_RESTORE_LABEL}.
+          {t('RestoreVolumeDialog.theArchiveIsOverlaidOnto', { MAX_RESTORE_LABEL })}
         </p>
         <label className="ui-form-field">
-          Backup archive (.tar)
+          {t('RestoreVolumeDialog.backupArchiveTar')}
           <input type="file" accept=".tar,application/x-tar" onChange={(e) => pick(e.target.files?.[0] ?? null)} />
         </label>
         {inUse && (
           <Switch
-            label="Volume is in use, restore anyway"
-            help="Running containers may see files change while they are written."
+            label={t('RestoreVolumeDialog.volumeIsInUseRestore')}
+            help={t('RestoreVolumeDialog.runningContainersMaySeeFiles')}
             checked={confirmed}
             onChange={(e) => setConfirmed(e.target.checked)}
           />

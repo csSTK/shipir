@@ -3,6 +3,7 @@ import { ApiError, apiFetch, readCookie } from '../../shared/api/client.ts'
 import { HOSTS_OVERVIEW_KEY } from '../hosts/api.ts'
 import { useDeleteResourceMutation } from '../hosts/deleteResource.ts'
 import { MAX_BUILD_CONTEXT_LABEL } from './buildRules.ts'
+import i18n from 'i18next'
 
 /** One image of `GET /api/hosts/{id}/images`; `repoTags` is empty for dangling images. */
 export interface Image {
@@ -54,11 +55,11 @@ export function useRefreshAfterPull(hostId: string) {
 export function describePullError(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === 'INVALID_IMAGE_REFERENCE')
-      return 'This is not a valid image reference. Example: nginx:1.27 or ghcr.io/org/app:latest.'
-    if (error.code === 'HOST_NOT_FOUND') return 'This environment no longer exists.'
-    if (error.status === 403) return 'You are not allowed to pull images here.'
+      return i18n.t('images:api.thisIsNotAValid')
+    if (error.code === 'HOST_NOT_FOUND') return i18n.t('images:api.thisEnvironmentNoLongerExists')
+    if (error.status === 403) return i18n.t('images:api.youAreNotAllowedTo')
   }
-  return 'Could not start the pull. Try again.'
+  return i18n.t('images:api.couldNotStartThePull')
 }
 
 /** Normalises a container's image string to a tag reference (`nginx` -> `nginx:latest`). */
@@ -81,16 +82,16 @@ export interface BuildInput {
 }
 
 const BUILD_ERRORS: Record<string, string> = {
-  BUILD_IN_PROGRESS: 'A build is already running on this environment. Wait for it to finish, then try again.',
-  SIZE_LIMIT_EXCEEDED: `The build context is larger than ${MAX_BUILD_CONTEXT_LABEL}. Remove files with a .dockerignore or use a Git repository.`,
-  INVALID_ARCHIVE: 'The file is not a valid tar archive (.tar or .tar.gz without unsafe paths or links).',
-  INVALID_BUILD_SOURCE: 'Provide either an uploaded context or a Git repository with a branch, tag or commit.',
-  INVALID_IMAGE_REFERENCE: 'This is not a valid image reference. Example: myapp:1.0 or ghcr.io/org/app:latest.',
-  INVALID_GIT_REF: 'This is not a valid Git branch, tag or commit.',
-  INVALID_GIT_CREDENTIAL: 'The selected Git credential is not valid.',
-  INVALID_DOCKERFILE_PATH: 'The Dockerfile path must be a relative path inside the context.',
-  INVALID_BUILD_ARG: 'A build argument is not valid. Use KEY=VALUE with letters, digits and underscores in the key.',
-  HOST_NOT_FOUND: 'This environment no longer exists.',
+  get BUILD_IN_PROGRESS() { return i18n.t('images:api.aBuildIsAlreadyRunning') },
+  get SIZE_LIMIT_EXCEEDED() { return i18n.t('images:api.theBuildContextIsLarger', { MAX_BUILD_CONTEXT_LABEL }) },
+  get INVALID_ARCHIVE() { return i18n.t('images:api.theFileIsNotA') },
+  get INVALID_BUILD_SOURCE() { return i18n.t('images:api.provideEitherAnUploadedContext') },
+  get INVALID_IMAGE_REFERENCE() { return i18n.t('images:api.thisIsNotAValid2') },
+  get INVALID_GIT_REF() { return i18n.t('images:api.thisIsNotAValid3') },
+  get INVALID_GIT_CREDENTIAL() { return i18n.t('images:api.theSelectedGitCredentialIs') },
+  get INVALID_DOCKERFILE_PATH() { return i18n.t('images:api.theDockerfilePathMustBe') },
+  get INVALID_BUILD_ARG() { return i18n.t('images:api.aBuildArgumentIsNot') },
+  get HOST_NOT_FOUND() { return i18n.t('images:api.thisEnvironmentNoLongerExists') },
 }
 
 async function toApiError(response: Response): Promise<ApiError> {
@@ -136,9 +137,9 @@ export function describeBuildError(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code && BUILD_ERRORS[error.code]) return BUILD_ERRORS[error.code]
     if (error.status === 413) return BUILD_ERRORS.SIZE_LIMIT_EXCEEDED
-    if (error.status === 403) return 'Only administrators can build images.'
+    if (error.status === 403) return i18n.t('images:api.onlyAdministratorsCanBuildImages')
   }
-  return 'Could not start the build. Try again.'
+  return i18n.t('images:api.couldNotStartTheBuild')
 }
 
 export function useBuildImage(hostId: string) {
@@ -173,17 +174,17 @@ export function usePushImage(hostId: string) {
 
 export function describeTagError(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.code === 'INVALID_IMAGE_REFERENCE') return 'This is not a valid repository or tag.'
-    if (error.code === 'RESOURCE_NOT_FOUND') return 'This image no longer exists.'
-    if (error.status === 403) return 'You are not allowed to tag images here.'
+    if (error.code === 'INVALID_IMAGE_REFERENCE') return i18n.t('images:api.thisIsNotAValid4')
+    if (error.code === 'RESOURCE_NOT_FOUND') return i18n.t('images:api.thisImageNoLongerExists')
+    if (error.status === 403) return i18n.t('images:api.youAreNotAllowedTo2')
   }
-  return 'Could not tag the image. Try again.'
+  return i18n.t('images:api.couldNotTagTheImage')
 }
 
 export function describePushError(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.code === 'INVALID_IMAGE_REFERENCE') return 'This is not a valid image reference to push.'
-    if (error.status === 403) return 'You are not allowed to push images here.'
+    if (error.code === 'INVALID_IMAGE_REFERENCE') return i18n.t('images:api.thisIsNotAValid5')
+    if (error.status === 403) return i18n.t('images:api.youAreNotAllowedTo3')
   }
-  return 'Could not start the push. Try again.'
+  return i18n.t('images:api.couldNotStartThePush')
 }

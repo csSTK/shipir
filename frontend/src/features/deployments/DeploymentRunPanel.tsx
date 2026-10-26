@@ -1,8 +1,9 @@
 import { DeployOutput } from './deploy-output/DeployOutput.tsx'
 import type { RunResult } from './deploy-output/useRunStream.ts'
+import { useTranslation } from 'react-i18next'
 
 export interface StartedRun {
-  /** Label of the action, e.g. 'Deploy' or 'Restart web'. */
+  /** Machine key of the action ('deploy', 'rollback', ...) or a free label such as 'Restart web' from the services card. */
   kind: string
   runId: string
 }
@@ -15,6 +16,7 @@ export function DeploymentRunPanel({
   run: StartedRun
   onFinished?: (result: RunResult) => void
 }) {
-  const title = run.kind === 'Rollback' ? 'Rollback' : 'Deployment'
+  const { t } = useTranslation('deployments')
+  const title = run.kind === 'rollback' ? t('DeploymentRunPanel.rollback') : t('DeploymentRunPanel.deployment')
   return <DeployOutput title={title} runId={run.runId} onFinished={onFinished} />
 }

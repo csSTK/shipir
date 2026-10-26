@@ -3,6 +3,7 @@ import { DeployOutput } from '../deployments/deploy-output/DeployOutput.tsx'
 import { describePullError, usePullImage, useRefreshAfterPull } from './api.ts'
 import './ImagesPage.css'
 import { Button, Dialog } from '../../shared/ui/index.ts'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   hostId: string
@@ -13,6 +14,7 @@ interface Props {
 
 /** Pulls an image by reference and shows the streamed progress in place of the form. */
 export function PullImageDialog({ hostId, initialReference = '', onClose }: Props) {
+  const { t } = useTranslation('images')
   const [reference, setReference] = useState(initialReference)
   const [runId, setRunId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -31,20 +33,20 @@ export function PullImageDialog({ hostId, initialReference = '', onClose }: Prop
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()} title="Pull image">
+    <Dialog open onOpenChange={(open) => !open && onClose()} title={t('PullImageDialog.pullImage')}>
       {runId ? (
         <>
-          <DeployOutput title={`Pulling ${reference.trim()}`} runId={runId} onFinished={() => void refresh()} />
+          <DeployOutput title={t('PullImageDialog.pullingTrim', { reference: reference.trim() })} runId={runId} onFinished={() => void refresh()} />
           <div className="ui-dialog-actions">
             <Button variant="primary" onClick={onClose}>
-              Close
+              {t('PullImageDialog.close')}
             </Button>
           </div>
         </>
       ) : (
         <form className="ui-form" onSubmit={submit}>
           <label className="ui-form-field">
-            Image reference
+            {t('PullImageDialog.imageReference')}
             <input
               value={reference}
               onChange={(e) => setReference(e.target.value)}
@@ -62,10 +64,10 @@ export function PullImageDialog({ hostId, initialReference = '', onClose }: Prop
           )}
           <div className="ui-dialog-actions">
             <Button variant="ghost" onClick={onClose}>
-              Cancel
+              {t('PullImageDialog.cancel')}
             </Button>
             <Button variant="primary" type="submit" disabled={pull.isPending || !reference.trim()}>
-              {pull.isPending ? 'Starting…' : 'Pull'}
+              {pull.isPending ? t('PullImageDialog.starting') : t('PullImageDialog.pull')}
             </Button>
           </div>
         </form>

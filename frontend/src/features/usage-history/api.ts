@@ -1,13 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '../../shared/api/client.ts'
 import type { Range } from '../../shared/charts/series.ts'
+import i18n from 'i18next'
 
 export const RANGES: { value: Range; label: string }[] = [
-  { value: '1h', label: 'Last hour' },
-  { value: '6h', label: 'Last 6 hours' },
-  { value: '24h', label: 'Last 24 hours' },
-  { value: '7d', label: 'Last 7 days' },
-  { value: '30d', label: 'Last 30 days' },
+  { value: '1h', get label() { return i18n.t('usage-history:api.lastHour') } },
+  { value: '6h', get label() { return i18n.t('usage-history:api.last6Hours') } },
+  { value: '24h', get label() { return i18n.t('usage-history:api.last24Hours') } },
+  { value: '7d', get label() { return i18n.t('usage-history:api.last7Days') } },
+  { value: '30d', get label() { return i18n.t('usage-history:api.last30Days') } },
 ]
 export const DEFAULT_RANGE: Range = '24h'
 

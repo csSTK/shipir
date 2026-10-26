@@ -16,6 +16,8 @@ import {
   type TeamDetail,
   type Team,
 } from './api.ts'
+import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
 import './SettingsPage.css'
 import './UserAccessDialog.css'
 
@@ -23,7 +25,7 @@ type Level = 'NONE' | 'VIEW' | 'OPERATE'
 /** Selected level keyed by `h:<hostId>` or `d:<deploymentId>`. */
 type Levels = Record<string, Level>
 
-const LABELS: Record<Level, string> = { NONE: 'None', VIEW: 'View', OPERATE: 'Operate' }
+const LABELS: Record<Level, string> = { get NONE() { return i18n.t('settings:UserAccessDialog.none') }, get VIEW() { return i18n.t('settings:UserAccessDialog.view') }, get OPERATE() { return i18n.t('settings:UserAccessDialog.operate') } }
 
 function toLevels(grants: PermissionGrant[]): Levels {
   const out: Levels = {}
@@ -50,21 +52,21 @@ function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case 'USER_NOT_FOUND':
-        return 'This user no longer exists.'
+        return i18n.t('settings:UserAccessDialog.thisUserNoLongerExists')
       case 'TEAM_NOT_FOUND':
-        return 'This team no longer exists.'
+        return i18n.t('settings:UserAccessDialog.thisTeamNoLongerExists')
       case 'UNKNOWN_HOST':
-        return 'An environment in this list no longer exists. Close and reopen the dialog.'
+        return i18n.t('settings:UserAccessDialog.anEnvironmentInThisList')
       case 'UNKNOWN_DEPLOYMENT':
-        return 'A deployment in this list no longer exists. Close and reopen the dialog.'
+        return i18n.t('settings:UserAccessDialog.aDeploymentInThisList')
       case 'ADMIN_NEEDS_NO_GRANTS':
-        return 'Admins have access to everything and need no grants.'
+        return i18n.t('settings:UserAccessDialog.adminsHaveAccessToEverything')
       case 'INVALID_GRANT':
       case 'DUPLICATE_GRANT':
-        return 'These grants are not valid. Check the selection.'
+        return i18n.t('settings:UserAccessDialog.theseGrantsAreNotValid')
     }
   }
-  return 'Could not save the access. Try again.'
+  return i18n.t('settings:UserAccessDialog.couldNotSaveTheAccess')
 }
 
 function LevelSelect({ label, value, disabled, onChange }: { label: string; value: Level; disabled?: boolean; onChange: (l: Level) => void }) {
@@ -92,6 +94,7 @@ function HostAccess({
   setLevel: (key: string, level: Level) => void
   onDeployments: (ids: string[], hostId: string) => void
 }) {
+  const { t: tr } = useTranslation('settings')
   const { data, isPending, isError } = useManagedDeployments(host.id)
   const hostLevel = levels[`h:${host.id}`] ?? 'NONE'
   const covered = hostLevel !== 'NONE'
@@ -102,20 +105,20 @@ function HostAccess({
     <li className="ua-host">
       <div className="ua-line">
         <strong>{host.name}</strong>
-        <LevelSelect label={`Access to ${host.name}`} value={hostLevel} onChange={(l) => setLevel(`h:${host.id}`, l)} />
+        <LevelSelect label={tr('UserAccessDialog.accessToName', { name: host.name })} value={hostLevel} onChange={(l) => setLevel(`h:${host.id}`, l)} />
       </div>
-      {isPending && <span className="settings__muted">Loading deployments…</span>}
-      {isError && <span className="settings__muted">Could not load deployments.</span>}
+      {isPending && <span className="settings__muted">{tr('UserAccessDialog.loadingDeployments')}</span>}
+      {isError && <span className="settings__muted">{tr('UserAccessDialog.couldNotLoadDeployments')}</span>}
       {data && data.length > 0 && (
         <ul className="ua-deployments">
           {data.map((d) => (
             <li key={d.id} className="ua-line">
               <span>
                 {d.name}
-                {covered && <span className="settings__muted"> · covered by environment access</span>}
+                {covered && <span className="settings__muted"> {tr('UserAccessDialog.coveredByEnvironmentAccess')}</span>}
               </span>
               <LevelSelect
-                label={`Access to ${d.name}`}
+                label={tr('UserAccessDialog.accessToName', { name: d.name })}
                 value={covered ? hostLevel : (levels[`d:${d.id}`] ?? 'NONE')}
                 disabled={covered}
                 onChange={(l) => setLevel(`d:${d.id}`, l)}
@@ -131,7 +134,7 @@ function HostAccess({
 /** Who the access is edited for: one user or one team. */
 export type AccessSubject = { kind: 'user'; user: ManagedUser } | { kind: 'team'; team: Team }
 
-const LEVEL_TEXT: Record<PermissionLevel, string> = { VIEW: 'View', OPERATE: 'Operate' }
+const LEVEL_TEXT: Record<PermissionLevel, string> = { get VIEW() { return i18n.t('settings:UserAccessDialog.view') }, get OPERATE() { return i18n.t('settings:UserAccessDialog.operate') } }
 
 function GrantLine({ grant }: { grant: PermissionGrant }) {
   return grant.deploymentId && grant.deploymentHostId ? (
@@ -142,23 +145,26 @@ function GrantLine({ grant }: { grant: PermissionGrant }) {
 }
 
 function HostGrantLine({ hostId, level }: { hostId: string; level: PermissionLevel }) {
+  const { t: tr } = useTranslation('settings')
   const hosts = useHosts()
-  return <li>{`${hosts.data?.find((h) => h.id === hostId)?.name ?? 'Environment'}: ${LEVEL_TEXT[level]}`}</li>
+  return <li>{`${hosts.data?.find((h) => h.id === hostId)?.name ?? tr('UserAccessDialog.environment')}: ${LEVEL_TEXT[level]}`}</li>
 }
 
 function DeploymentGrantLine({ deploymentId, hostId, level }: { deploymentId: string; hostId: string; level: PermissionLevel }) {
+  const { t: tr } = useTranslation('settings')
   const deployments = useManagedDeployments(hostId)
-  const name = deployments.data?.find((d) => d.id === deploymentId)?.name ?? 'Deployment'
-  return <li>{`${name} (deployment): ${LEVEL_TEXT[level]}`}</li>
+  const name = deployments.data?.find((d) => d.id === deploymentId)?.name ?? tr('UserAccessDialog.deployment')
+  return <li>{tr('UserAccessDialog.nameDeploymentLevelText', { name, LEVEL_TEXT: LEVEL_TEXT[level] })}</li>
 }
 
 function TeamGrants({ team }: { team: Team }) {
+  const { t: tr } = useTranslation('settings')
   const perms = useSubjectPermissions('team', team.id)
   return (
     <li>
       <strong>{team.name}</strong>
-      {perms.isError && <span className="settings__muted"> Could not load the team's access.</span>}
-      {perms.data && perms.data.grants.length === 0 && <span className="settings__muted"> No access granted yet.</span>}
+      {perms.isError && <span className="settings__muted"> {tr('UserAccessDialog.couldNotLoadTheTeam')}</span>}
+      {perms.data && perms.data.grants.length === 0 && <span className="settings__muted"> {tr('UserAccessDialog.noAccessGrantedYet')}</span>}
       {perms.data && perms.data.grants.length > 0 && (
         <ul>
           {perms.data.grants.map((g) => (
@@ -172,6 +178,7 @@ function TeamGrants({ team }: { team: Team }) {
 
 /** Teams the user belongs to with their grants. These add to the direct ones; the effective result is the highest level. */
 function InheritedTeams({ user }: { user: ManagedUser }) {
+  const { t: tr } = useTranslation('settings')
   const teams = useTeams()
   const details = useQueries({
     queries: (teams.data ?? []).map((t) => ({
@@ -183,10 +190,10 @@ function InheritedTeams({ user }: { user: ManagedUser }) {
   const memberOf = (teams.data ?? []).filter((_, i) => details[i]?.data?.members.some((m) => m.userId === user.id))
   if (memberOf.length === 0) return null
   return (
-    <div className="ua-inherited" role="group" aria-label="Inherited team access">
+    <div className="ua-inherited" role="group" aria-label={tr('UserAccessDialog.inheritedTeamAccess')}>
       <p className="settings__muted">
-        Also inherits access from these teams (managed under Teams).
-        {user.role === 'VIEWER' && ' Team grants never allow Operate for a viewer; it is capped to View.'}
+        {tr('UserAccessDialog.alsoInheritsAccessFromThese')}
+        {user.role === 'VIEWER' && tr('UserAccessDialog.teamGrantsNeverAllowOperate')}
       </p>
       <ul>
         {memberOf.map((t) => (
@@ -199,6 +206,7 @@ function InheritedTeams({ user }: { user: ManagedUser }) {
 
 /** ADMIN dialog: per-host and per-managed-deployment access for one user or team, saved as a full replacement. */
 export function UserAccessDialog({ subject, onClose }: { subject: AccessSubject; onClose: () => void }) {
+  const { t: tr } = useTranslation('settings')
   const kind = subject.kind
   const target = subject.kind === 'user' ? subject.user : subject.team
   const name = subject.kind === 'user' ? subject.user.username : subject.team.name
@@ -235,27 +243,27 @@ export function UserAccessDialog({ subject, onClose }: { subject: AccessSubject;
     <Dialog
       open
       onOpenChange={(open) => !open && onClose()}
-      title={`Access for ${name}`}
+      title={tr('UserAccessDialog.accessForName', { name })}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {tr('UserAccessDialog.cancel')}
           </Button>
           <Button variant="primary" disabled={!ready} loading={save.isPending} onClick={submit}>
-            Save access
+            {tr('UserAccessDialog.saveAccess')}
           </Button>
         </>
       }
     >
       <p className="settings__muted">
-        Choose what {name} can see and do per environment. Access to an environment covers all its deployments.
-        {subject.kind === 'user' && subject.user.role === 'VIEWER' && ' Viewers are limited to view, even if Operate is selected.'}
-        {subject.kind === 'team' && ' Members get this access in addition to their own.'}
+        {tr('UserAccessDialog.chooseWhatNameCanSee', { name })}
+        {subject.kind === 'user' && subject.user.role === 'VIEWER' && tr('UserAccessDialog.viewersAreLimitedToView')}
+        {subject.kind === 'team' && tr('UserAccessDialog.membersGetThisAccessIn')}
       </p>
       {subject.kind === 'user' && <InheritedTeams user={subject.user} />}
-      {!ready && !failed && <p className="settings__muted">Loading…</p>}
-      {failed && <p role="alert" className="settings__error">Could not load the access settings.</p>}
-      {ready && hosts.data.length === 0 && <p className="settings__muted">There are no environments yet.</p>}
+      {!ready && !failed && <p className="settings__muted">{tr('UserAccessDialog.loading')}</p>}
+      {failed && <p role="alert" className="settings__error">{tr('UserAccessDialog.couldNotLoadTheAccess')}</p>}
+      {ready && hosts.data.length === 0 && <p className="settings__muted">{tr('UserAccessDialog.thereAreNoEnvironmentsYet')}</p>}
       {ready && (
         <ul className="ua-hosts">
           {hosts.data.map((h) => (
