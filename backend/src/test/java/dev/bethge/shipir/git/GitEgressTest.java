@@ -8,6 +8,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import org.springframework.util.unit.DataSize;
+
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
@@ -61,8 +63,12 @@ class GitEgressTest {
         });
     }
 
+    static GitProperties props() {
+        return new GitProperties(true, Duration.ofSeconds(2), Duration.ofMinutes(1), DataSize.ofMegabytes(50));
+    }
+
     private GitRemoteChecker checker(boolean allowPrivate) {
-        return new GitRemoteChecker(new GitProperties(true, Duration.ofSeconds(2)), policy(allowPrivate));
+        return new GitRemoteChecker(props(), policy(allowPrivate));
     }
 
     @Test
@@ -97,7 +103,7 @@ class GitEgressTest {
     @Test
     void remoteCommitAndSyncUseTheSamePolicy() throws Exception {
         GitRepositoryService service = new GitRepositoryService(mock(GitCredentialRepository.class),
-                mock(SecretCipher.class), checker(false), new GitProperties(true, Duration.ofSeconds(2)));
+                mock(SecretCipher.class), checker(false), props());
         assertThatThrownBy(() -> service.remoteCommit(base + "/x.git", "main", null))
                 .isInstanceOfSatisfying(GitOperationException.class, e -> assertThat(e.code()).isEqualTo("GIT_UNREACHABLE"));
         Path dir = Files.createTempDirectory("shipir-egress-");

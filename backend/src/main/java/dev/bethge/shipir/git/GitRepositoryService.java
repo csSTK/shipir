@@ -32,6 +32,10 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Collection;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 
 /**
@@ -44,6 +48,7 @@ public class GitRepositoryService {
 
     private static final Logger log = LoggerFactory.getLogger(GitRepositoryService.class);
     private static final Pattern SHA = Pattern.compile("[0-9a-fA-F]{40}");
+    private static final Pattern REF = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._/-]{0,199}");
     private static final String TARGET_REF = "refs/shipir/target";
     private static final long MAX_COMPOSE_BYTES = 500_000;
     static final String MISMATCH_MESSAGE = "The credential is bound to a different host than the repository URL";
@@ -59,6 +64,20 @@ public class GitRepositoryService {
         this.cipher = cipher;
         this.checker = checker;
         this.properties = properties;
+    }
+
+    /**
+     * Branch, tag or commit name as {@link #sync} looks it up: starts with a letter or digit (no option injection),
+     * only {@code A-Za-z0-9._/-}, at most 200 characters, no {@code ..}, {@code //}, {@code /.}, trailing slash or
+     * {@code .lock}. Fails with 400 INVALID_GIT_REF. Callers may reject early; {@link #sync} and {@link #remoteCommit}
+     * check again so no path can bypass it.
+     */
+    public static void validateRef(String ref) {
+        String r = ref == null ? "" : ref.trim();
+        if (!REF.matcher(r).matches() || r.contains("..") || r.contains("//") || r.endsWith("/") || r.endsWith(".lock")
+                || r.contains("/.")) {
+            throw new GitOperationException(HttpStatus.BAD_REQUEST, "INVALID_GIT_REF", "Invalid Git branch, tag or commit");
+        }
     }
 
     /** Same rules as the connection test: absolute https URL (http only with the test flag), no userinfo. */
@@ -94,18 +113,41 @@ public class GitRepositoryService {
      */
     public GitCheckout sync(Path repoDir, String repoUrl, String ref, String composePath, UUID credentialId) {
         validateUrl(repoUrl);
+        validateRef(ref);
         CredentialsProvider provider = provider(credentialId, repoUrl);
+        boolean fresh = !Files.exists(repoDir.resolve(".git"));
         prepare(repoDir);
         // reject a traversing/absolute path before any network traffic (the final check follows the checkout)
         composeFile(repoDir, composePath, false);
 
-        String commit;
+        CloneGuard guard = new CloneGuard(repoDir, properties.maxCheckoutSize().toBytes(),
+                properties.cloneTimeout().toNanos());
+        String commit = null;
         try (Git git = Git.open(repoDir.toFile())) {
-            commit = fetch(git, repoUrl.trim(), ref.trim(), provider);
+            commit = fetch(git, repoUrl.trim(), ref.trim(), provider, guard);
             git.reset().setMode(ResetCommand.ResetType.HARD).setRef(commit).call();
-        } catch (GitAPIException | IOException e) {
-            log.warn("Git checkout failed: {}", e.getClass().getSimpleName());
-            throw new GitOperationException(HttpStatus.BAD_GATEWAY, "GIT_UNREACHABLE", "The repository could not be read");
+            guard.check();
+        } catch (GitAPIException | IOException | RuntimeException e) {
+            if (guard.check() == null) {
+                if (e instanceof RuntimeException r) {
+                    throw r;
+                }
+                log.warn("Git checkout failed: {}", e.getClass().getSimpleName());
+                throw new GitOperationException(HttpStatus.BAD_GATEWAY, "GIT_UNREACHABLE",
+                        "The repository could not be read");
+            }
+        }
+        if (guard.violation() != null) {
+            if (fresh) {
+                // only a checkout this call created is removed; an existing one may back a running stack
+                CloneGuard.deleteQuietly(repoDir);
+            }
+            log.warn("Git checkout aborted: {}", guard.violation());
+            throw guard.violation() == CloneGuard.Violation.TIMEOUT
+                    ? new GitOperationException(HttpStatus.GATEWAY_TIMEOUT, "GIT_CLONE_TIMEOUT",
+                            "Reading the repository took too long")
+                    : new GitOperationException(HttpStatus.PAYLOAD_TOO_LARGE, "GIT_REPO_TOO_LARGE",
+                            "The repository is larger than the allowed checkout size");
         }
         Path file = composeFile(repoDir, composePath, true);
         return new GitCheckout(commit, read(file));
@@ -140,18 +182,20 @@ public class GitRepositoryService {
      */
     public String remoteCommit(String repoUrl, String ref, UUID credentialId) {
         validateUrl(repoUrl);
+        validateRef(ref);
         CredentialsProvider provider = provider(credentialId, repoUrl);
         if (SHA.matcher(ref.trim()).matches()) {
             return ref.trim().toLowerCase();
         }
-        Ref found = lookupRemoteRef(repoUrl.trim(), ref.trim(), provider);
+        Ref found = lookupRemoteRef(repoUrl.trim(), ref.trim(), provider,
+                new CloneGuard(null, Long.MAX_VALUE, properties.cloneTimeout().toNanos()));
         ObjectId peeled = found.getPeeledObjectId();
         return (peeled != null ? peeled : found.getObjectId()).name();
     }
 
-    private String fetch(Git git, String url, String ref, CredentialsProvider provider)
+    private String fetch(Git git, String url, String ref, CredentialsProvider provider, CloneGuard guard)
             throws GitAPIException, IOException {
-        String source = resolveRemoteRef(url, ref, provider);
+        String source = resolveRemoteRef(url, ref, provider, guard);
         // a stale target from the previous sync must never be mistaken for the result of this fetch
         RefUpdate stale = git.getRepository().updateRef(TARGET_REF);
         stale.setForceUpdate(true);
@@ -163,10 +207,11 @@ public class GitRepositoryService {
                     .setRefSpecs(new RefSpec("+" + source + ":" + TARGET_REF))
                     .setDepth(1)
                     .setTagOpt(TagOpt.NO_TAGS)
-                    .setTimeout(timeoutSeconds())
+                    .setTimeout((int) Math.max(1, Math.min(timeoutSeconds(), guard.remainingNanos() / 1_000_000_000L)))
+                    .setProgressMonitor(guard)
                     .setCredentialsProvider(provider);
             checker.guard(fetch);
-            fetch.call();
+            bounded(fetch::call, guard);
         } catch (TransportException e) {
             throw map(e, SHA.matcher(ref).matches());
         }
@@ -181,25 +226,59 @@ public class GitRepositoryService {
     }
 
     /** Finds the full remote ref name for a branch or tag name; a commit SHA is fetched as is. */
-    private String resolveRemoteRef(String url, String ref, CredentialsProvider provider) {
+    private String resolveRemoteRef(String url, String ref, CredentialsProvider provider, CloneGuard guard) {
         if (SHA.matcher(ref).matches()) {
             return ref.toLowerCase();
         }
-        return lookupRemoteRef(url, ref, provider).getName();
+        return lookupRemoteRef(url, ref, provider, guard).getName();
     }
 
-    private Ref lookupRemoteRef(String url, String ref, CredentialsProvider provider) {
-        Collection<Ref> remote;
+    /**
+     * ls-remote bounded by the guard's overall deadline (JGit's own timeout only fires on silence, so a server dripping
+     * the ref advertisement could otherwise hold the caller). The call runs on its own thread; on timeout it is
+     * abandoned and ends by itself at the latest on the transport's inactivity timeout.
+     */
+    private static <T> T bounded(java.util.concurrent.Callable<T> call, CloneGuard guard) throws GitAPIException {
+        FutureTask<T> task = new FutureTask<>(call);
+        Thread.ofVirtual().start(task);
         try {
-            LsRemoteCommand lsRemote = Git.lsRemoteRepository().setRemote(url).setHeads(true).setTags(true)
-                    .setTimeout(timeoutSeconds()).setCredentialsProvider(provider);
-            checker.guard(lsRemote);
-            remote = lsRemote.call();
+            return task.get(Math.max(1, guard.remainingNanos()), TimeUnit.NANOSECONDS);
+        } catch (TimeoutException e) {
+            task.cancel(true);
+            guard.check();
+            throw new GitOperationException(HttpStatus.GATEWAY_TIMEOUT, "GIT_CLONE_TIMEOUT",
+                    "Reading the repository took too long");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            task.cancel(true);
+            throw new GitOperationException(HttpStatus.BAD_GATEWAY, "GIT_UNREACHABLE", "The repository could not be read");
+        } catch (ExecutionException e) {
+            switch (e.getCause()) {
+                case GitAPIException g -> throw g;
+                case RuntimeException r -> throw r;
+                default -> throw new GitOperationException(HttpStatus.BAD_GATEWAY, "GIT_UNREACHABLE",
+                        "The repository could not be read");
+            }
+        }
+    }
+
+    private Ref lookupRemoteRef(String url, String ref, CredentialsProvider provider, CloneGuard guard) {
+        Collection<Ref> remote;
+        LsRemoteCommand lsRemote = Git.lsRemoteRepository().setRemote(url).setHeads(true).setTags(true)
+                .setTimeout((int) Math.max(1, Math.min(timeoutSeconds(), guard.remainingNanos() / 1_000_000_000L)))
+                .setCredentialsProvider(provider);
+        checker.guard(lsRemote);
+        try {
+            remote = bounded(lsRemote::call, guard);
         } catch (TransportException e) {
             throw map(e, false);
         } catch (GitAPIException e) {
             log.warn("Git ls-remote failed: {}", e.getClass().getSimpleName());
             throw new GitOperationException(HttpStatus.BAD_GATEWAY, "GIT_UNREACHABLE", "The repository could not be read");
+        }
+        if (guard.check() == CloneGuard.Violation.TIMEOUT) {
+            throw new GitOperationException(HttpStatus.GATEWAY_TIMEOUT, "GIT_CLONE_TIMEOUT",
+                    "Reading the repository took too long");
         }
         for (String candidate : new String[]{ref, Constants.R_HEADS + ref, Constants.R_TAGS + ref}) {
             if (candidate.startsWith("refs/")) {

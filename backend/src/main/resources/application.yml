@@ -66,6 +66,10 @@ shipir:
     # Link-local and cloud metadata addresses stay blocked either way.
     allow-private-ranges: ${SHIPIR_EGRESS_ALLOW_PRIVATE_RANGES:false}
   git:
+    # overall deadline of one fetch (connect-timeout is only an inactivity timeout) and cap for the checkout dir on disk;
+    # exceeding either aborts the fetch and deletes the directory (GIT_CLONE_TIMEOUT / GIT_REPO_TOO_LARGE)
+    clone-timeout: 10m
+    max-checkout-size: 500MB
     poll-enabled: true
     poll-tick: 60s
   volume-backup:

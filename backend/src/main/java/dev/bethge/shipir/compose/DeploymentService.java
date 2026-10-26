@@ -196,6 +196,7 @@ public class DeploymentService {
         requireText(r.ref(), "ref");
         requireText(r.composePath(), "composePath");
         git.validateUrl(r.repoUrl());
+        GitRepositoryService.validateRef(r.ref());
         // before the row exists: a credential for another host is a 400, the token is never read for it
         git.requireCredentialForUrl(r.credentialId(), r.repoUrl());
         String envText = renderEnv(r.env());
