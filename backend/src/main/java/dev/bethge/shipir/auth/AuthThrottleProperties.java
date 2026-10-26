@@ -7,7 +7,7 @@ import java.time.Duration;
 import java.util.List;
 
 /**
- * Bound from {@code shipir.security.*}. {@code trustedProxies} are the exact peer addresses whose
+ * Bound from {@code shipir.security.*}. {@code trustedProxies} are the peer addresses (exact IP or CIDR range, e.g. {@code 172.28.77.0/24}) whose
  * {@code X-Forwarded-For} header is believed; empty means the header is ignored.
  */
 @ConfigurationProperties("shipir.security")

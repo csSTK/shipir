@@ -20,8 +20,11 @@ services:
       SHIPIR_ENCRYPTION_KEY: ${SHIPIR_ENCRYPTION_KEY:-}
       # true behind an HTTPS reverse proxy: Secure cookies + HSTS (see README, "HTTPS and reverse proxy").
       SHIPIR_SECURITY_HTTPS: ${SHIPIR_HTTPS:-false}
-      # Peer addresses (comma-separated) of the frontend/nginx container; needed for per-client login throttling.
-      SHIPIR_SECURITY_TRUSTED_PROXIES: ${SHIPIR_SECURITY_TRUSTED_PROXIES:-}
+      # Proxies (comma-separated IPs or CIDRs) whose X-Forwarded-For is believed, for per-client login throttling.
+      # Default: the dedicated stack network below, which only holds the nginx and backend containers.
+      SHIPIR_SECURITY_TRUSTED_PROXIES: ${SHIPIR_SECURITY_TRUSTED_PROXIES:-${SHIPIR_SUBNET:-172.28.77.0/24}}
+    networks:
+      - shipir
     # Access to the local Docker daemon. Grants root-equivalent control of the host; keep the stack private.
     group_add:
       - "${DOCKER_GID:?Set DOCKER_GID in .env to the owner group of /var/run/docker.sock (see .env.example)}"
@@ -42,7 +45,16 @@ services:
       - "${SHIPIR_PORT:-8080}:8080"
     depends_on:
       - backend
+    networks:
+      - shipir
     restart: unless-stopped
+
+networks:
+  # Fixed subnet so the trusted-proxy range above is known up front. Change SHIPIR_SUBNET in .env on a clash.
+  shipir:
+    ipam:
+      config:
+        - subnet: ${SHIPIR_SUBNET:-172.28.77.0/24}
 
 volumes:
   shipir-stacks:

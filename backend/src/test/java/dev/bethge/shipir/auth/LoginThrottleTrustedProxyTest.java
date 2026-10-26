@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(PostgresTestConfiguration.class)
-@TestPropertySource(properties = "shipir.security.trusted-proxies=127.0.0.1")
+@TestPropertySource(properties = "shipir.security.trusted-proxies=127.0.0.0/8")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class LoginThrottleTrustedProxyTest {
 
