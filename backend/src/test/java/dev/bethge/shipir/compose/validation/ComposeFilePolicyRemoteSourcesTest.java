@@ -59,7 +59,7 @@ class ComposeFilePolicyRemoteSourcesTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"github.com/docker/awesome-compose", "oci://docker.io/x/y:1", "git@github.com:x/y.git",
-            "https://github.com/x/y.git", "gitlab.com/x/y/compose.yaml", "ghcr.io/x/y"})
+            "https://github.com/x/y.git", "GitHub.com/x/y", "./github.com/x/y"})
     void rejectsRemoteIncludeForms(String source) throws IOException {
         assertThat(check("include:\n  - " + source + "\nservices: {}\n")).isNotEmpty();
         assertThat(check("include:\n  - path: " + source + "\nservices: {}\n")).isNotEmpty();
@@ -76,7 +76,7 @@ class ComposeFilePolicyRemoteSourcesTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"github.com/docker/awesome-compose", "oci://docker.io/x/y:1", "git@github.com:x/y.git",
-            "gitlab.com/x/y/compose.yaml", "ghcr.io/x/y"})
+            "GitHub.com/x/y", "./github.com/x/y"})
     void rejectsRemoteExtendsFileForms(String source) throws IOException {
         assertThat(check("services:\n  x:\n    extends:\n      file: " + source + "\n      service: s\n")).isNotEmpty();
         assertThat(check("services:\n  x:\n    extends:\n      file: [" + source + "]\n      service: s\n")).isNotEmpty();
@@ -86,5 +86,15 @@ class ComposeFilePolicyRemoteSourcesTest {
     void stillAllowsLocalExtendsFile() throws IOException {
         Files.writeString(dir.resolve("base.yaml"), "services:\n  s:\n    image: a\n");
         assertThat(check("services:\n  x:\n    extends:\n      file: ./base.yaml\n      service: s\n")).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"conf.d/a.yaml", "./conf.d/a.yaml", "my.app/base.yaml"})
+    void allowsLocalPathsWithADotInTheFirstDirectory(String path) throws IOException {
+        Files.createDirectories(dir.resolve(path).getParent());
+        Files.writeString(dir.resolve(path), "services:\n  s:\n    image: a\n");
+        assertThat(check("include:\n  - " + path + "\nservices: {}\n")).isEmpty();
+        assertThat(check("include:\n  - path: " + path + "\nservices: {}\n")).isEmpty();
+        assertThat(check("services:\n  x:\n    extends:\n      file: " + path + "\n      service: s\n")).isEmpty();
     }
 }

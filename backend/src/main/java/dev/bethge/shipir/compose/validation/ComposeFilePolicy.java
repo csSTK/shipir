@@ -227,15 +227,19 @@ final class ComposeFilePolicy {
     }
 
     /**
-     * For {@code include} and {@code extends.file} Compose treats {@code oci://}, {@code git@host:x/y}, {@code https://...} and the {@code github.com/x/y} shorthand as
-     * remote sources and fetches them from the network on the Shipir host. Only plain local paths are allowed: no
-     * {@code :} and no host-like first segment (a dot, e.g. {@code github.com/...}).
+     * For {@code include} and {@code extends.file} Compose treats {@code oci://}, {@code git@host:x/y}, {@code https://...}
+     * and the {@code github.com/x/y} shorthand as remote sources and fetches them from the network on the Shipir host.
+     * Only plain local paths are allowed: no {@code :} and no {@code github.com/} prefix. Verified with
+     * {@code docker compose config} (v5.1.3): {@code github.com/...} is the only host-like form Compose treats as remote;
+     * {@code conf.d/a.yaml}, {@code my.app/base.yaml}, {@code gitlab.com/x/y.yaml} and {@code ghcr.io/x/y} are plain local paths
+     * (deliberately no longer rejected). {@code GitHub.com/} and {@code ./github.com/} are rejected fail-closed although
+     * Compose treats them as local. A broader
+     * "dot in first segment" heuristic would wrongly reject those local paths.
      */
     private Path checkLocalSource(String raw, Path baseDir, String what) {
         String first = raw.startsWith("./") ? raw.substring(2) : raw;
-        int slash = first.indexOf('/');
-        boolean hostLike = slash > 0 && first.substring(0, slash).contains(".") && !first.startsWith(".");
-        if (raw.contains(":") || hostLike) {
+        boolean githubShorthand = first.regionMatches(true, 0, "github.com/", 0, "github.com/".length());
+        if (raw.contains(":") || githubShorthand) {
             violations.add(what + " " + raw + ": remote sources are not allowed");
             return null;
         }
