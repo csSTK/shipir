@@ -15,7 +15,7 @@ afterEach(() => {
   vi.resetAllMocks()
 })
 
-const current = { auditLogDays: 90, notificationDays: 30, chatSessionDays: 60 }
+const current = { auditLogDays: 90, notificationDays: 30, chatSessionDays: 60, statsDays: 7 }
 
 function renderPage(put?: () => Promise<unknown>) {
   apiFetchMock.mockImplementation((path: string, options?: { method?: string }) => {
@@ -40,6 +40,15 @@ describe('RetentionSettingsPage', () => {
     expect(await screen.findByLabelText('Audit log retention (days)')).toHaveValue(90)
     expect(screen.getByLabelText('Notification retention (days)')).toHaveValue(30)
     expect(screen.getByLabelText('Chat session retention (days)')).toHaveValue(60)
+    expect(screen.getByLabelText('Stats history (days)')).toHaveValue(7)
+  })
+
+  it('rejects an out-of-range stats history value client-side', async () => {
+    renderPage()
+    fireEvent.change(await screen.findByLabelText('Stats history (days)'), { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('Enter a value from 1 to 3650 days.')).toBeInTheDocument()
+    expect(calls('PUT')).toHaveLength(0)
   })
 
   it('rejects an out-of-range chat session value client-side', async () => {
@@ -74,15 +83,16 @@ describe('RetentionSettingsPage', () => {
   })
 
   it('saves the values and shows a success notice', async () => {
-    renderPage(() => Promise.resolve({ auditLogDays: 365, notificationDays: 30, chatSessionDays: 60 }))
+    renderPage(() => Promise.resolve({ auditLogDays: 365, notificationDays: 30, chatSessionDays: 60, statsDays: 14 }))
     const audit = await screen.findByLabelText('Audit log retention (days)')
     fireEvent.change(audit, { target: { value: '365' } })
+    fireEvent.change(screen.getByLabelText('Stats history (days)'), { target: { value: '14' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByText('Retention settings saved.')).toBeInTheDocument()
     await waitFor(() => expect(calls('PUT')).toHaveLength(1))
     expect(calls('PUT')[0]).toEqual([
       '/settings/retention',
-      { method: 'PUT', body: { auditLogDays: 365, notificationDays: 30, chatSessionDays: 60 } },
+      { method: 'PUT', body: { auditLogDays: 365, notificationDays: 30, chatSessionDays: 60, statsDays: 14 } },
     ])
   })
 

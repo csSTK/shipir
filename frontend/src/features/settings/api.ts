@@ -83,6 +83,8 @@ export interface RetentionSettings {
   auditLogDays: number
   notificationDays: number
   chatSessionDays: number
+  /** Resource usage (stats) history. */
+  statsDays: number
 }
 
 export const RETENTION_KEY = ['settings-retention'] as const

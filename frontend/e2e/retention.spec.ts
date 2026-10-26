@@ -4,23 +4,36 @@ const admin = { username: 'admin', role: 'ADMIN', setupRequired: false, setupSte
 
 test('admin changes the retention periods and saves', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: admin })
-  api.mock('GET', '/api/settings/retention', { body: { auditLogDays: 90, notificationDays: 30, chatSessionDays: 60 } })
-  api.mock('PUT', '/api/settings/retention', { body: { auditLogDays: 365, notificationDays: 14, chatSessionDays: 60 } })
+  api.mock('GET', '/api/settings/retention', { body: { auditLogDays: 90, notificationDays: 30, chatSessionDays: 60, statsDays: 7 } })
+  api.mock('PUT', '/api/settings/retention', { body: { auditLogDays: 365, notificationDays: 14, chatSessionDays: 60, statsDays: 30 } })
   await page.goto('/settings/retention')
 
   const audit = page.getByLabel('Audit log retention (days)')
   await expect(audit).toHaveValue('90')
   await audit.fill('365')
   await page.getByLabel('Notification retention (days)').fill('14')
+  await page.getByLabel('Stats history (days)').fill('30')
   await page.getByRole('button', { name: 'Save' }).click()
 
   await expect(page.getByText('Retention settings saved.')).toBeVisible()
   await expect(audit).toHaveValue('365')
+  await expect(page.getByLabel('Stats history (days)')).toHaveValue('30')
+})
+
+test('out-of-range stats history is rejected before saving', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', { body: admin })
+  api.mock('GET', '/api/settings/retention', { body: { auditLogDays: 90, notificationDays: 30, chatSessionDays: 60, statsDays: 7 } })
+  await page.goto('/settings/retention')
+
+  await page.getByLabel('Stats history (days)').fill('3651')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByRole('alert')).toContainText('Enter a value from 1 to 3650 days.')
+  await expect(page.getByText('Retention settings saved.')).toHaveCount(0)
 })
 
 test('server rejection is shown inline and nothing is reported as saved', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: admin })
-  api.mock('GET', '/api/settings/retention', { body: { auditLogDays: 90, notificationDays: 30, chatSessionDays: 60 } })
+  api.mock('GET', '/api/settings/retention', { body: { auditLogDays: 90, notificationDays: 30, chatSessionDays: 60, statsDays: 7 } })
   api.mock('PUT', '/api/settings/retention', {
     status: 400,
     body: { code: 'VALIDATION_FAILED', message: 'Invalid', details: ['notificationDays must be at least 1'] },
