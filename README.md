@@ -216,6 +216,24 @@ docker compose -f docker-compose.demo.yml down -v      # stops the stack and del
 
 `DOCKER_GID` is required as in the hosting stack (see the Docker socket note above); set it in `.env` or inline. The demo uses the same socket mount, so it has the same root-equivalent access to the host.
 
+### Locked out of 2FA
+
+Lost authenticator device: log in with a recovery code, or ask another ADMIN to reset your 2FA (Settings > Users).
+
+If the stored 2FA secret cannot be decrypted (typically `SHIPIR_ENCRYPTION_KEY` changed), login, confirm and disable answer `409 TWO_FACTOR_SECRET_UNREADABLE`, and the server logs a warning naming the user (never the secret). In order of preference:
+
+1. Restore the original `SHIPIR_ENCRYPTION_KEY`. Nothing is lost.
+2. Another ADMIN resets the affected user's 2FA (Settings > Users); the user enrols again.
+3. If the affected user is the only ADMIN, reset it directly in the database (this is a database write, so back up first and stop to think before running it):
+
+```sql
+UPDATE users SET totp_secret_ciphertext = NULL, totp_enabled_at = NULL, totp_last_used_step = NULL
+ WHERE username = '<admin>';
+DELETE FROM user_recovery_codes WHERE user_id = (SELECT id FROM users WHERE username = '<admin>');
+```
+
+The next login then needs only the password; if 2FA is required for admins, Shipir asks to enrol again.
+
 ### Backup & restore
 
 A backup has two parts: the PostgreSQL database (users, environments, permissions, audit log, notifications, deployment records and their encrypted secrets) and the `shipir-stacks` volume (stack files, `.env` files, Git checkouts, config-file backups). Both are needed for a complete restore.

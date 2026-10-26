@@ -5,6 +5,9 @@ import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
 import dev.bethge.shipir.auth.totp.dto.SetupResponse;
 import dev.bethge.shipir.common.security.SecretCipher;
+import dev.bethge.shipir.common.security.SecretDecryptionException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -42,6 +45,7 @@ public class TotpService {
 
     static final String PENDING_USER = "shipir.mfa.pending.user";
     static final String PENDING_UNTIL = "shipir.mfa.pending.until";
+    private static final Logger log = LoggerFactory.getLogger(TotpService.class);
     private static final String ISSUER = "Shipir";
     private static final int RECOVERY_CODE_COUNT = 10;
     private static final String RECOVERY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -220,7 +224,16 @@ public class TotpService {
         if (ciphertext == null) {
             return OptionalLong.empty();
         }
-        byte[] secret = Totp.fromBase32(cipher.decrypt(ciphertext));
+        String plain;
+        try {
+            plain = cipher.decrypt(ciphertext);
+        } catch (SecretDecryptionException e) {
+            // Names the user only: never the ciphertext or the exception cause. Recovery: README "Locked out of 2FA".
+            log.warn("Stored two-factor secret of user '{}' cannot be decrypted (encryption key changed?); "
+                    + "an administrator must reset two-factor authentication", user.getUsername());
+            throw e;
+        }
+        byte[] secret = Totp.fromBase32(plain);
         return Totp.match(secret, code.trim(), Totp.stepAt(clock.instant()), user.getTotpLastUsedStep());
     }
 

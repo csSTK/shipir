@@ -236,7 +236,7 @@ class TwoFactorApiTest {
     }
 
     @Test
-    void unreadableSecretAnswers409OnVerifyConfirmAndDisableInsteadOf500() throws Exception {
+    void unreadableSecretAnswers409OnVerifyConfirmAndDisableInsteadOf500(CapturedOutput output) throws Exception {
         Enrolment e = enrol(login("admin", ADMIN_PASSWORD));
         Session half = login("admin", ADMIN_PASSWORD);
         // simulates a changed encryption key: stored ciphertext can no longer be decrypted
@@ -247,6 +247,9 @@ class TwoFactorApiTest {
         assertThat(verify.getResponse().getStatus()).isEqualTo(409);
         assertThat(body(verify).get("code").asString()).isEqualTo("TWO_FACTOR_SECRET_UNREADABLE");
         assertThat(status(half, "GET", "/api/auth/me", null)).isEqualTo(401);
+        // operators see the failure in the log (user named, no secret or ciphertext)
+        assertThat(output.getAll()).contains("cannot be decrypted").contains("admin")
+                .doesNotContain(Totp.toBase32(e.secret));
 
         // confirm: an enrolment in progress whose secret is unreadable
         jdbc.update("UPDATE users SET totp_enabled_at = NULL WHERE username = 'admin'");
