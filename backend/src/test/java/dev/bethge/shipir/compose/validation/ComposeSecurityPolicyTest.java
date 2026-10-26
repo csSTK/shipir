@@ -101,6 +101,22 @@ class ComposeSecurityPolicyTest {
     }
 
     @Test
+    void deniesRelativeDockerfileThatEscapesThroughSymlinkBeforeDotDot() throws IOException {
+        Path outside = Files.createDirectories(Files.createTempDirectory("outside").resolve("deep"));
+        Files.createSymbolicLink(dir.resolve("link"), outside);
+        // link/../Dockerfile is outside/Dockerfile for Docker, not dir/Dockerfile as lexical normalization suggests
+        String json = "{\"services\":{\"x\":{\"build\":{\"context\":\"%s\",\"dockerfile\":\"link/../Dockerfile\"}}}}".formatted(dir);
+        assertThat(check(json)).containsExactly("x: build dockerfile link/../Dockerfile");
+    }
+
+    @Test
+    void allowsRelativeDockerfileWithDotDotInsideRealSubdirectory() throws IOException {
+        Files.createDirectories(dir.resolve("sub"));
+        String json = "{\"services\":{\"x\":{\"build\":{\"context\":\"%s\",\"dockerfile\":\"sub/../Dockerfile\"}}}}".formatted(dir);
+        assertThat(check(json)).isEmpty();
+    }
+
+    @Test
     void deniesAbsoluteHostBindMountAndDockerSocket() {
         String json = """
                 {"services":{"x":{"volumes":[

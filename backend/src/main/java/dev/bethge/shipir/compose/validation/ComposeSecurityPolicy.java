@@ -228,7 +228,8 @@ public class ComposeSecurityPolicy {
             if (Path.of(relativeOrAbsolute).isAbsolute() || context.isEmpty()) {
                 return relativeOrAbsolute;
             }
-            return Path.of(context).resolve(relativeOrAbsolute).normalize().toString();
+            // no lexical normalize: 'link/..' must be resolved through the symlink by real()
+            return Path.of(context).resolve(relativeOrAbsolute).toString();
         } catch (RuntimeException e) {
             return "";
         }
@@ -250,19 +251,35 @@ public class ComposeSecurityPolicy {
         return resolved != null && resolved.startsWith(allowed);
     }
 
-    /** Symlink-resolved absolute path, or null when it cannot be resolved. */
+    /**
+     * Symlink-resolved absolute path, or null when it cannot be resolved. Components are walked one by one so that
+     * {@code ..} after a symlink goes to the link target's parent (as the OS does), not to the link's lexical parent.
+     */
     static Path real(Path path) {
-        Path normalized = path.toAbsolutePath().normalize();
         try {
-            // resolve symlinks of the longest existing prefix so a link inside the checkout cannot point out of it
-            Path existing = normalized;
-            while (existing != null && !Files.exists(existing, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
-                existing = existing.getParent();
+            Path current = path.getRoot() != null ? path.getRoot() : Path.of("/");
+            if (path.getRoot() == null) {
+                path = path.toAbsolutePath();
+                current = path.getRoot();
             }
-            if (existing == null) {
-                return normalized;
+            for (Path part : path) {
+                String name = part.toString();
+                if (name.equals(".") || name.isEmpty()) {
+                    continue;
+                }
+                if (name.equals("..")) {
+                    Path parent = current.getParent();
+                    current = parent == null ? current : parent;
+                    continue;
+                }
+                Path next = current.resolve(name);
+                // a symlink (or a path below one) is resolved right away; missing components are appended as-is
+                if (Files.exists(next, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                    next = next.toRealPath();
+                }
+                current = next;
             }
-            return existing.toRealPath().resolve(existing.relativize(normalized)).normalize();
+            return current.normalize();
         } catch (IOException e) {
             return null; // unresolvable (e.g. symlink loop): fail closed
         }
