@@ -366,6 +366,7 @@ public class ContainerServiceImpl implements ContainerService {
             String oldName = name + "-shipir-old-" + suffix;
             HostConfig baseHost = old.getHostConfig() == null ? HostConfig.newHostConfig() : old.getHostConfig();
             String newId = createFrom(client, spec, name + "-shipir-new-" + suffix, baseHost, old.getConfig(), old.getId(), old.getMounts());
+            List<String> addedVolumes = volumesAddedByNewImage(client, newId, old.getMounts());
             boolean stopped = running; // set before stopping: a failed stop may still have stopped it
             boolean oldRenamed = false;
             try {
@@ -383,7 +384,7 @@ public class ContainerServiceImpl implements ContainerService {
                     client.startContainerCmd(newId).exec();
                 }
             } catch (RuntimeException e) {
-                boolean restored = rollback(client, id, newId, name, running, stopped, oldRenamed);
+                boolean restored = rollback(client, id, newId, name, running, stopped, oldRenamed, addedVolumes);
                 throw new DockerConnectionException(DockerErrorCode.RECREATE_FAILED, restored
                         ? "The container could not be recreated; the previous container was restored."
                         : "The container could not be recreated and restoring the previous one failed.", e);
@@ -397,15 +398,45 @@ public class ContainerServiceImpl implements ContainerService {
         });
     }
 
+    /**
+     * Anonymous volumes the freshly created container got on its own (a VOLUME path only the new image declares), i.e.
+     * the ones the old container never had. Only these may be removed on rollback; the old data must stay.
+     */
+    private static List<String> volumesAddedByNewImage(DockerClient client, String newId,
+                                                       List<InspectContainerResponse.Mount> oldMounts) {
+        try {
+            Set<String> oldNames = oldMounts == null ? Set.of() : oldMounts.stream()
+                    .map(InspectContainerResponse.Mount::getName).filter(java.util.Objects::nonNull)
+                    .collect(Collectors.toSet());
+            List<InspectContainerResponse.Mount> fresh = client.inspectContainerCmd(newId).exec().getMounts();
+            if (fresh == null) {
+                return List.of();
+            }
+            return fresh.stream().map(InspectContainerResponse.Mount::getName)
+                    .filter(n -> n != null && ANONYMOUS_VOLUME.matcher(n).matches() && !oldNames.contains(n))
+                    .toList();
+        } catch (RuntimeException e) {
+            log.warn("Could not determine the volumes created for the new container {}: {}", newId, e.toString());
+            return List.of();
+        }
+    }
+
     /** Best effort, every step on its own: the new container goes, the old one gets its name and state back. */
     private static boolean rollback(DockerClient client, String oldId, String newId, String name, boolean wasRunning,
-                                    boolean stopped, boolean oldRenamed) {
+                                    boolean stopped, boolean oldRenamed, List<String> addedVolumes) {
         boolean ok = true;
         try {
             client.removeContainerCmd(newId).withForce(true).withRemoveVolumes(false).exec();
         } catch (RuntimeException e) {
             ok = false;
             log.error("Rollback: could not remove the new container {}: {}", newId, e.toString());
+        }
+        for (String volume : addedVolumes) {
+            try {
+                client.removeVolumeCmd(volume).exec();
+            } catch (RuntimeException e) {
+                log.warn("Rollback: could not remove the volume {} created for the new container: {}", volume, e.toString());
+            }
         }
         if (oldRenamed) {
             try {
