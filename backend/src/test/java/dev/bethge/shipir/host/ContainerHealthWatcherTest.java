@@ -62,6 +62,60 @@ class ContainerHealthWatcherTest {
         return new DockerEventDto(DockerEventDto.Type.CONTAINER, action, id, "web-1", project, T0, exit);
     }
 
+    private static DockerEventDto kill(String id, String signal) {
+        return new DockerEventDto(DockerEventDto.Type.CONTAINER, "kill", id, "web-1", null, T0, null, signal);
+    }
+
+    @Test
+    void nonTerminatingSignalDoesNotSuppressLaterCrash() {
+        watcher.handle(hostId, kill("c1", "1")); // docker kill -s HUP: reload, the process lives on
+        watcher.handle(hostId, kill("c1", "10")); // USR1
+        watcher.handle(hostId, container("die", "c1", null, 137));
+        assertThat(published).hasSize(1);
+        assertThat(watcher.pendingKills()).isZero();
+    }
+
+    @Test
+    void killWithoutSignalIsIgnoredAndDoesNotSuppress() {
+        watcher.handle(hostId, kill("c1", null));
+        watcher.handle(hostId, container("die", "c1", null, 137));
+        assertThat(published).hasSize(1);
+        assertThat(watcher.pendingKills()).isZero();
+    }
+
+    @Test
+    void terminatingSignalsSuppress() {
+        for (String signal : List.of("2", "3", "9", "15")) {
+            watcher.handle(hostId, kill("c" + signal, signal));
+            watcher.handle(hostId, container("die", "c" + signal, null, 137));
+        }
+        assertThat(published).isEmpty();
+    }
+
+    @Test
+    void syncEvictsExpiredKillsAndKillsOfRemovedHosts() {
+        UUID gone = UUID.randomUUID();
+        watcher.handle(gone, kill("x", "9"));
+        watcher.handle(hostId, kill("old", "9"));
+        clock.advance(Duration.ofMinutes(4));
+        watcher.handle(hostId, kill("fresh", "9"));
+        clock.advance(Duration.ofMinutes(2)); // "old" and "x" are now 6 minutes old, "fresh" 2
+        assertThat(watcher.pendingKills()).isEqualTo(3);
+        watcher.sync();
+        watcher.shutdown();
+        assertThat(watcher.pendingKills()).isEqualTo(1); // only the fresh kill of a known host
+    }
+
+    @Test
+    void deletedHostDropsItsPendingKills() {
+        watcher.sync();
+        await().atMost(5, SECONDS).until(() -> fake.opened.size() == 1);
+        watcher.handle(hostId, kill("c1", "9"));
+        when(hosts.findAll()).thenReturn(List.of());
+        watcher.sync();
+        assertThat(watcher.pendingKills()).isZero();
+    }
+
     @Test
     void nonZeroExitIsReportedAsCrashWithContainerAndHost() {
         watcher.handle(hostId, container("die", "c1", null, 1));
@@ -90,18 +144,18 @@ class ContainerHealthWatcherTest {
 
     @Test
     void dieAfterKillEventOfSameContainerIsNotReported() {
-        watcher.handle(hostId, container("kill", "c1", null, null));
+        watcher.handle(hostId, kill("c1", "15"));
         watcher.handle(hostId, container("die", "c1", null, 137));
         assertThat(published).isEmpty();
     }
 
     @Test
     void killOfOtherContainerOrExpiredKillDoesNotSuppressCrash() {
-        watcher.handle(hostId, container("kill", "c2", null, null));
+        watcher.handle(hostId, kill("c2", "15"));
         watcher.handle(hostId, container("die", "c1", null, 137));
         assertThat(published).hasSize(1);
 
-        watcher.handle(hostId, container("kill", "c3", null, null));
+        watcher.handle(hostId, kill("c3", "9"));
         clock.advance(Duration.ofMinutes(6));
         watcher.handle(hostId, container("die", "c3", null, 137));
         assertThat(published).hasSize(2);
@@ -109,7 +163,7 @@ class ContainerHealthWatcherTest {
 
     @Test
     void killSuppressesOnlyTheNextDie() {
-        watcher.handle(hostId, container("kill", "c1", null, null));
+        watcher.handle(hostId, kill("c1", "15"));
         watcher.handle(hostId, container("die", "c1", null, 137));
         clock.advance(Duration.ofMinutes(11)); // past the dedupe window
         watcher.handle(hostId, container("die", "c1", null, 137)); // later crash without a kill

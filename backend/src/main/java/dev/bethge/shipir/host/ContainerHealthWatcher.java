@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Watches the Docker event stream of every host and publishes a {@link ContainerProblemEvent} when a container dies
- * with a non-zero exit code (exit 143, a plain SIGTERM stop, is ignored, as is any death preceded by a {@code kill} event, i.e. a deliberate stop or kill) or reports {@code health_status: unhealthy}.
+ * with a non-zero exit code (exit 143, a plain SIGTERM stop, is ignored, as is any death preceded by a {@code kill} event with a terminating signal, i.e. a deliberate stop or kill) or reports {@code health_status: unhealthy}.
  *
  * <p>One worker (virtual thread) per host, started by {@link #sync()} and stopped when the host is deleted; a dropped
  * stream is reopened with exponential backoff. The same problem of the same container is reported once per
@@ -41,6 +41,8 @@ class ContainerHealthWatcher {
     private static final Logger log = LoggerFactory.getLogger(ContainerHealthWatcher.class);
 
     static final int SIGTERM_EXIT = 143;
+    /** Signals that end the process (INT, QUIT, KILL, TERM); others (HUP, USR1, ...) leave a container running. */
+    static final Set<String> TERMINATING_SIGNALS = Set.of("2", "3", "9", "15");
     /** How long a kill event explains the following die event (covers a long {@code docker stop -t}). */
     static final Duration KILL_WINDOW = Duration.ofMinutes(5);
 
@@ -76,13 +78,22 @@ class ContainerHealthWatcher {
             workers.computeIfAbsent(host.getId(), id ->
                     Thread.ofVirtual().name("container-watch-" + id).start(() -> watch(id)));
         }
+        Instant now = clock.instant();
+        killedAt.entrySet().removeIf(e -> e.getValue().plus(KILL_WINDOW).isBefore(now)
+                || current.stream().noneMatch(id -> e.getKey().startsWith(id + "/")));
         workers.keySet().removeIf(id -> {
             if (current.contains(id)) {
                 return false;
             }
             workers.get(id).interrupt();
+            killedAt.keySet().removeIf(key -> key.startsWith(id + "/"));
             return true;
         });
+    }
+
+    /** Number of remembered terminating kills; for tests. */
+    int pendingKills() {
+        return killedAt.size();
     }
 
     @PreDestroy
@@ -131,7 +142,11 @@ class ContainerHealthWatcher {
         }
         ContainerProblemEvent.Kind kind;
         if ("kill".equals(event.action())) {
-            // docker stop/kill and Shipir's stop send this before the die event; the death is deliberate
+            // docker stop/kill and Shipir's stop send this before the die event; the death is deliberate,
+            // but only for signals that end the process (a HUP reload must not hide a later crash)
+            if (event.signal() == null || !TERMINATING_SIGNALS.contains(event.signal())) {
+                return;
+            }
             Instant now = clock.instant();
             killedAt.values().removeIf(t -> t.plus(KILL_WINDOW).isBefore(now));
             killedAt.put(hostId + "/" + event.id(), now);

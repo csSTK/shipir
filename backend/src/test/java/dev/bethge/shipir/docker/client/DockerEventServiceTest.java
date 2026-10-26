@@ -41,6 +41,13 @@ class DockerEventServiceTest {
     }
 
     @Test
+    void mapsSignalOfKillEvent() {
+        assertThat(DockerEventServiceImpl.map(event(EventType.CONTAINER, "kill", "abc",
+                Map.of("signal", "15"))).signal()).isEqualTo("15");
+        assertThat(DockerEventServiceImpl.map(event(EventType.CONTAINER, "start", "abc", Map.of())).signal()).isNull();
+    }
+
+    @Test
     void mapsContainerEventWithNameAndComposeProject() {
         DockerEventDto dto = DockerEventServiceImpl.map(event(EventType.CONTAINER, "start", "abc",
                 Map.of("name", "web-1", "com.docker.compose.project", "shop")));

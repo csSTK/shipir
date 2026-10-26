@@ -67,7 +67,8 @@ public class DockerEventServiceImpl implements DockerEventService {
                 : event.getTime() != null ? Instant.ofEpochSecond(event.getTime()) : Instant.now();
         return new DockerEventDto(type, action, id, attributes == null ? null : attributes.get("name"),
                 attributes == null ? null : attributes.get(COMPOSE_PROJECT_LABEL), time,
-                attributes == null ? null : parseInt(attributes.get("exitCode")));
+                attributes == null ? null : parseInt(attributes.get("exitCode")),
+                attributes == null ? null : attributes.get("signal"));
     }
 
     private static Integer parseInt(String value) {
