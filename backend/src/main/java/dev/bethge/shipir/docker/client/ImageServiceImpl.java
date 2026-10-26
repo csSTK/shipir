@@ -15,6 +15,7 @@ import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.dto.RegistryLogin;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
+import dev.bethge.shipir.common.util.OutputSanitizer;
 import dev.bethge.shipir.docker.dto.ImageDto;
 import org.springframework.stereotype.Service;
 
@@ -259,7 +260,7 @@ public class ImageServiceImpl implements ImageService {
      * one status line per (layer, status) change while base images are pulled. The daemon's error text is never forwarded;
      * a failing step has already printed its own output as stream lines.
      */
-    private static final class BuildOutput extends ResultCallback.Adapter<BuildResponseItem> {
+    static final class BuildOutput extends ResultCallback.Adapter<BuildResponseItem> {
         private final Consumer<String> onOutput;
         private final java.util.Map<String, String> lastStatus = new java.util.HashMap<>();
         volatile boolean failed;
@@ -277,7 +278,7 @@ public class ImageServiceImpl implements ImageService {
             String stream = item.getStream();
             if (stream != null) {
                 for (String line : stream.split("\\R")) {
-                    String clean = line.replaceAll("[\\p{Cntrl}&&[^\\t]]", " ").stripTrailing();
+                    String clean = OutputSanitizer.neutralize(line).stripTrailing();
                     if (!clean.isBlank()) {
                         onOutput.accept(clean);
                     }
@@ -288,14 +289,14 @@ public class ImageServiceImpl implements ImageService {
             if (status != null) {
                 String id = item.getId() == null ? "" : item.getId();
                 if (!status.equals(lastStatus.put(id, status))) {
-                    onOutput.accept(id.isEmpty() ? status : id + ": " + status);
+                    onOutput.accept(OutputSanitizer.neutralize(id.isEmpty() ? status : id + ": " + status));
                 }
             }
         }
     }
 
     /** Push items as one line per (layer, status) change; any error item fails the push, its text is not forwarded. */
-    private static final class PushProgress extends ResultCallback.Adapter<PushResponseItem> {
+    static final class PushProgress extends ResultCallback.Adapter<PushResponseItem> {
         private final Consumer<String> onProgress;
         private final java.util.Map<String, String> lastStatus = new java.util.HashMap<>();
         volatile boolean failed;
@@ -316,7 +317,7 @@ public class ImageServiceImpl implements ImageService {
             }
             String id = item.getId() == null ? "" : item.getId();
             if (!status.equals(lastStatus.put(id, status))) {
-                onProgress.accept(id.isEmpty() ? status : id + ": " + status);
+                onProgress.accept(OutputSanitizer.neutralize(id.isEmpty() ? status : id + ": " + status));
             }
         }
     }

@@ -3,6 +3,7 @@ package dev.bethge.shipir.host;
 import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
+import dev.bethge.shipir.common.util.OutputSanitizer;
 import dev.bethge.shipir.common.net.EgressPolicy;
 import dev.bethge.shipir.compose.execution.RegistryAuthSource;
 import dev.bethge.shipir.docker.DockerConnectionException;
@@ -446,7 +447,7 @@ class ImageBuildService {
     }
 
     /** Daemon output with bounded line length, no control characters and a cap on the number of lines. */
-    private static final class BoundedSink implements Consumer<String> {
+    static final class BoundedSink implements Consumer<String> {
         private final Consumer<String> delegate;
         private int lines;
 
@@ -465,7 +466,7 @@ class ImageBuildService {
                 return;
             }
             lines++;
-            String clean = line.replaceAll("[\\p{Cntrl}&&[^\\t]]", " ");
+            String clean = OutputSanitizer.neutralize(line);
             delegate.accept(clean.length() > MAX_LINE_LENGTH ? clean.substring(0, MAX_LINE_LENGTH) + "..." : clean);
         }
     }
