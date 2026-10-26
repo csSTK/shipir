@@ -47,7 +47,7 @@ test('admin browses directories and uploads a file', async ({ page, api }) => {
 test('too large directory shows an inline hint', async ({ page, api }) => {
   await setup(api, 'ADMIN')
   await page.route(filesUrl, (route) =>
-    route.fulfill({ status: 413, json: { code: 'SIZE_LIMIT_EXCEEDED', message: 'x' } }),
+    route.fulfill({ status: 413, json: { code: 'DIRECTORY_TOO_LARGE', message: 'The directory is too large to list', details: [] } }),
   )
   await page.goto('/environments/a/containers/c1')
   await page.getByRole('tab', { name: 'Files' }).click()
