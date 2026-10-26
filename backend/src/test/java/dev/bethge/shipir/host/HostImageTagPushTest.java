@@ -35,6 +35,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /** POST /images/{id}/tag and /images/push against a stubbed ImageService. */
 class HostImageTagPushTest extends HostApiTestBase {
 
+    /** Registry hosts resolve to a public address, so these tests do not depend on real DNS. */
+    @org.springframework.boot.test.context.TestConfiguration
+    static class PublicRegistryDns {
+        @org.springframework.context.annotation.Bean
+        @org.springframework.context.annotation.Primary
+        dev.bethge.shipir.common.net.EgressPolicy stubEgressPolicy() {
+            return new dev.bethge.shipir.common.net.EgressPolicy(new dev.bethge.shipir.common.net.EgressProperties(false),
+                    host -> new java.net.InetAddress[]{java.net.InetAddress.getByAddress(new byte[]{93, (byte) 184, (byte) 216, 34})});
+        }
+    }
+
     @MockitoBean
     ImageService images;
     @MockitoBean

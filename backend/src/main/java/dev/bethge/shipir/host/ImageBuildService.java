@@ -3,6 +3,7 @@ package dev.bethge.shipir.host;
 import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
+import dev.bethge.shipir.common.net.EgressPolicy;
 import dev.bethge.shipir.compose.execution.RegistryAuthSource;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
@@ -85,11 +86,13 @@ class ImageBuildService {
     private final RegistryAuthSource registryAuths;
     private final GitRepositoryService git;
     private final ImageBuildProperties properties;
+    private final EgressPolicy egress;
     private final Set<UUID> buildingHosts = ConcurrentHashMap.newKeySet();
 
     ImageBuildService(DockerHostRepository hosts, HostEndpointResolver endpoints, ImageService images, CurrentAccess access,
                       ComposeOutputStreamService streams, RegistryAuthSource registryAuths, GitRepositoryService git,
-                      ImageBuildProperties properties) {
+                      ImageBuildProperties properties, EgressPolicy egress) {
+        this.egress = egress;
         this.hosts = hosts;
         this.endpoints = endpoints;
         this.images = images;
@@ -247,6 +250,7 @@ class ImageBuildService {
         if (reference.lastIndexOf(':') <= reference.lastIndexOf('/')) {
             reference = reference + ":latest";
         }
+        ImageReferenceRules.requireAllowedRegistry(egress, reference);
         String pushed = reference;
         DockerEndpoint endpoint = call(hostId, (id, ep) -> ep);
         RegistryLogin login = ImageReferenceRules.loginFor(registryAuths, pushed);

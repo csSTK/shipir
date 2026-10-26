@@ -1,7 +1,11 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.common.net.EgressDeniedException;
+import dev.bethge.shipir.common.net.EgressPolicy;
 import dev.bethge.shipir.compose.execution.RegistryAuthSource;
 import dev.bethge.shipir.docker.dto.RegistryLogin;
+
+import org.springframework.http.HttpStatus;
 
 import java.util.List;
 import java.util.Locale;
@@ -51,6 +55,26 @@ final class ImageReferenceRules {
     /** All stored logins, for the base images a build pulls (the registry is only known to the daemon). */
     static List<RegistryLogin> allLogins(RegistryAuthSource auths) {
         return auths.auths().stream().map(a -> new RegistryLogin(a.registryHost(), a.username(), a.secret())).toList();
+    }
+
+    /**
+     * The daemon connects to the registry named in the reference, so that host must pass the shared egress policy
+     * (internal ranges refused unless {@code shipir.egress.allow-private-ranges}; metadata always). Docker Hub, which a
+     * reference without a registry means, is not resolved. Resolved here for a fail-fast answer; the daemon resolves again.
+     */
+    static void requireAllowedRegistry(EgressPolicy egress, String reference) {
+        String registry = registryOf(reference);
+        if ("docker.io".equals(registry)) {
+            return;
+        }
+        int colon = registry.lastIndexOf(':');
+        String host = colon > 0 ? registry.substring(0, colon) : registry;
+        try {
+            egress.check(host);
+        } catch (EgressDeniedException e) {
+            throw new HostException(HttpStatus.BAD_REQUEST, "REGISTRY_NOT_ALLOWED",
+                    "The registry of this image reference is not permitted");
+        }
     }
 
     static String registryOf(String reference) {

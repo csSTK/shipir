@@ -33,6 +33,7 @@ import dev.bethge.shipir.host.dto.PrunePreviewResponse;
 import dev.bethge.shipir.host.dto.PruneRequest;
 import dev.bethge.shipir.host.dto.PruneResponse;
 import dev.bethge.shipir.docker.dto.VolumeDto;
+import dev.bethge.shipir.common.net.EgressPolicy;
 import dev.bethge.shipir.compose.execution.RegistryAuthSource;
 import dev.bethge.shipir.docker.dto.RegistryLogin;
 import dev.bethge.shipir.host.dto.PullImageRequest;
@@ -80,12 +81,15 @@ public class HostResourcesService {
     private final ImageUpdateStore imageUpdates;
     private final DockerSystemService system;
 
+    private final EgressPolicy egress;
+
     HostResourcesService(DockerHostRepository hosts, HostEndpointResolver endpoints, ContainerService containers,
                          ImageService images, NetworkService networks, VolumeService volumes,
                          ManagedDeploymentLookup managedDeployments, CurrentAccess access,
                          ComposeOutputStreamService streams, RegistryAuthSource registryAuths,
-                         ImageUpdateStore imageUpdates, DockerSystemService system) {
+                         ImageUpdateStore imageUpdates, DockerSystemService system, EgressPolicy egress) {
         this.system = system;
+        this.egress = egress;
         this.hosts = hosts;
         this.endpoints = endpoints;
         this.containers = containers;
@@ -329,6 +333,7 @@ public class HostResourcesService {
         if (!ImageReferenceRules.isValidReference(reference)) {
             throw new HostException(HttpStatus.BAD_REQUEST, "INVALID_IMAGE_REFERENCE", "Invalid image reference");
         }
+        ImageReferenceRules.requireAllowedRegistry(egress, reference);
         DockerEndpoint endpoint = call(hostId, (id, ep) -> ep);
         RegistryLogin login = loginFor(reference);
         String runId = UUID.randomUUID().toString();
