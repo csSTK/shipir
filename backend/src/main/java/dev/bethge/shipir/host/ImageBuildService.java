@@ -74,6 +74,8 @@ class ImageBuildService {
     static final int MAX_OUTPUT_LINES = 5000;
     static final int MAX_LINE_LENGTH = 500;
     private static final String DEFAULT_DOCKERFILE = "Dockerfile";
+    /** Prefix of the per-build spool directory; {@link BuildTempSweeper} removes leftovers with this prefix. */
+    static final String SPOOL_PREFIX = "shipir-build-";
 
     private final DockerHostRepository hosts;
     private final HostEndpointResolver endpoints;
@@ -136,7 +138,7 @@ class ImageBuildService {
         Path work = null;
         boolean handedOver = false;
         try {
-            work = Files.createTempDirectory(tempRoot(), "build-");
+            work = Files.createTempDirectory(tempRoot(), SPOOL_PREFIX);
             if (upload) {
                 spool(request.context(), work.resolve("context.tar"), maxBytes);
                 validateArchive(work.resolve("context.tar"), maxBytes);
