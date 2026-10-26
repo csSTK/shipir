@@ -1,0 +1,106 @@
+.services {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.services__head,
+.services__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.services__title {
+  margin: 0;
+  font-size: var(--text-body-size);
+  font-weight: var(--weight-semibold);
+}
+.services__text {
+  margin: 0;
+  font-size: var(--text-small-size);
+  line-height: var(--text-small-leading);
+  color: var(--color-text-muted);
+}
+.services__list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.services__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+.services__name {
+  min-width: 0;
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+.services__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.services__profiles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+.services__fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.services__legend {
+  padding: 0;
+  font-size: var(--text-small-size);
+  font-weight: var(--weight-semibold);
+}
+.services__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.services__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    transform var(--duration-press) var(--ease-out),
+    border-color var(--duration-press) var(--ease-out);
+}
+.services__chip:active {
+  transform: scale(var(--press-scale));
+}
+.services__chip:has(input:checked) {
+  border-color: var(--color-accent);
+}
+.services__chip:has(:focus-visible) {
+  box-shadow: var(--shadow-focus);
+}
+@media (prefers-reduced-motion: reduce) {
+  .services__chip {
+    transition: border-color var(--duration-press) var(--ease-out);
+  }
+  .services__chip:active {
+    transform: none;
+  }
+}
+.services__chip input {
+  accent-color: var(--color-accent);
+}

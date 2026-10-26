@@ -49,6 +49,7 @@ function mockCommon(api: ApiMock, role: string) {
   api.mock('GET', `${BASE}/s1`, { body: deployment })
   api.mock('GET', `${BASE}/s1/webhook`, { body: { enabled: false, createdAt: null, rotatedAt: null } })
   api.mock('GET', `${BASE}/s1/uptime-checks`, { body: [] })
+  api.mock('GET', `${BASE}/s1/services`, { body: { services: ['web'], profiles: [] } })
   api.mock('GET', `${BASE}/s1/versions`, { body: versions })
   api.mock('GET', `${BASE}/s1/files`, { body: [] })
   api.mock('GET', '/api/git/credentials', {

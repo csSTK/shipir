@@ -2,7 +2,8 @@ import { DeployOutput } from './deploy-output/DeployOutput.tsx'
 import type { RunResult } from './deploy-output/useRunStream.ts'
 
 export interface StartedRun {
-  kind: 'Deploy' | 'Rollback' | 'Pull & redeploy' | 'Pull & update'
+  /** Label of the action, e.g. 'Deploy' or 'Restart web'. */
+  kind: string
   runId: string
 }
 

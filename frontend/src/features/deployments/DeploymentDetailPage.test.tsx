@@ -59,6 +59,7 @@ function serve(role: string, overrides: Record<string, Handler> = {}) {
     }
     if (path === '/auth/me') return Promise.resolve({ username: 'u', role, setupRequired: false })
     if (path === BASE) return Promise.resolve(deployment)
+    if (path === `${BASE}/services`) return Promise.resolve({ services: ['web'], profiles: [] })
     if (path === `${BASE}/uptime-checks`) return Promise.resolve([])
     if (path === `${BASE}/webhook`) return Promise.resolve({ enabled: false, createdAt: null, rotatedAt: null })
     if (path === `${BASE}/versions`) return Promise.resolve(versions)

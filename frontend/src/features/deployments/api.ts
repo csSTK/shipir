@@ -69,6 +69,8 @@ export interface ManagedDeploymentDetail extends ManagedDeployment {
   imageAutoUpdate?: ImageAutoUpdateInfo | null
   /** Variable names only; values are never part of this response. */
   envKeys: string[]
+  /** Active Compose profiles. */
+  profiles: string[]
 }
 
 export interface EnvEntry {

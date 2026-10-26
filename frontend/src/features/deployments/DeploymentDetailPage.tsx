@@ -23,6 +23,7 @@ import { GitSourcePanel } from './GitSourcePanel.tsx'
 import { ImageAutoUpdatePanel } from './ImageAutoUpdatePanel.tsx'
 import { DeploymentLogsPanel } from './logs/DeploymentLogsPanel.tsx'
 import { ConfigFilesPanel } from './config-files/index.ts'
+import { ServicesCard } from './services/index.ts'
 import { UptimeCard } from './uptime/index.ts'
 import { WebhookCard } from './webhook/index.ts'
 import { DeploymentContentPanel } from './DeploymentContentPanel.tsx'
@@ -248,6 +249,17 @@ export function DeploymentDetailPage() {
       )}
 
       <DeploymentContentPanel deployment={data} hostId={hostId} canWrite={canWrite} />
+
+      <ServicesCard
+        hostId={hostId}
+        deploymentId={deploymentId}
+        activeProfiles={data.profiles ?? []}
+        canOperate={canWrite}
+        onRunStarted={(kind, runId) => {
+          setActionError(null)
+          setStarted({ kind, runId })
+        }}
+      />
 
       <DeploymentLogsPanel hostId={hostId} project={data.name} />
 
