@@ -144,7 +144,7 @@ export function useSetHostTags() {
   const invalidate = useInvalidateHostData()
   return useMutation({
     mutationFn: ({ id, tags }: { id: string; tags: string[] }) =>
-      apiFetch<void>(`/hosts/${id}/tags`, { method: 'PUT', body: { tags } }),
+      apiFetch<Host>(`/hosts/${id}/tags`, { method: 'PUT', body: { tags } }),
     onSuccess: () => void invalidate(),
   })
 }

@@ -1,9 +1,18 @@
 import { renderHook, waitFor, cleanup } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { apiFetch } from '../../shared/api/client.ts'
-import { HOSTS_KEY, HOSTS_OVERVIEW_KEY, useCreateHost, useDeleteHost, useHostsOverview, useRenameHost } from './api.ts'
+import {
+  HOSTS_KEY,
+  HOSTS_OVERVIEW_KEY,
+  useCreateHost,
+  useDeleteHost,
+  useHostsOverview,
+  useRenameHost,
+  useSetHostTags,
+  type Host,
+} from './api.ts'
 
 vi.mock('../../shared/api/client.ts', async (importActual) => ({
   ...(await importActual<typeof import('../../shared/api/client.ts')>()),
@@ -68,6 +77,35 @@ describe('hosts mutations', () => {
 
     expect(apiFetchMock).toHaveBeenCalledWith('/hosts/abc', { method: 'PATCH', body: { name: 'New' } })
     expect(invalidatedKeys(invalidate)).toContain(JSON.stringify(HOSTS_OVERVIEW_KEY))
+  })
+})
+
+describe('useSetHostTags', () => {
+  it('puts the tag set and resolves with the updated environment the server returns', async () => {
+    const updated: Host = {
+      id: 'abc',
+      name: 'Local',
+      connectionType: 'LOCAL',
+      host: null,
+      port: null,
+      tls: false,
+      createdAt: '2026-10-01T10:00:00Z',
+      tags: ['eu', 'prod'],
+    }
+    apiFetchMock.mockResolvedValue(updated)
+    const { invalidate, wrapper } = setup()
+    const { result } = renderHook(() => useSetHostTags(), { wrapper })
+
+    result.current.mutate({ id: 'abc', tags: ['prod', 'eu'] })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(apiFetchMock).toHaveBeenCalledWith('/hosts/abc/tags', { method: 'PUT', body: { tags: ['prod', 'eu'] } })
+    expect(result.current.data).toEqual(updated)
+    expect(invalidatedKeys(invalidate)).toContain(JSON.stringify(HOSTS_OVERVIEW_KEY))
+  })
+
+  it('types the PUT response as the environment, not void', () => {
+    expectTypeOf<ReturnType<typeof useSetHostTags>['data']>().toEqualTypeOf<Host | undefined>()
   })
 })
 

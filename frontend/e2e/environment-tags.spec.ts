@@ -114,7 +114,7 @@ test('admin edits tags with the chip input and sees them on the card', async ({ 
   await dialog.getByRole('button', { name: 'Remove tag prod' }).click()
   await expect(dialog.getByRole('button', { name: 'Remove tag prod' })).toHaveCount(0)
 
-  api.mock('PUT', '/api/hosts/a/tags', { status: 204 })
+  api.mock('PUT', '/api/hosts/a/tags', { body: { ...local, tags: ['edge', 'eu'] } })
   api.mock('GET', '/api/hosts/overview', { body: [{ ...local, tags: ['edge', 'eu'] }] })
   await dialog.getByRole('button', { name: 'Save' }).click()
 
@@ -122,4 +122,20 @@ test('admin edits tags with the chip input and sees them on the card', async ({ 
   const card = page.getByRole('link', { name: /Local/ })
   await expect(card.getByRole('list', { name: 'Tags' })).toContainText('edge')
   await expect(card.getByRole('list', { name: 'Tags' })).not.toContainText('prod')
+})
+
+test('the top bar environment switcher groups environments by their first tag', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', { body: user('VIEWER') })
+  api.mock('GET', '/api/hosts/overview', { body: [staging, berlin, local] })
+  api.mock('GET', '/api/hosts/a/images', { body: [] })
+  await page.goto('/environments/a/images')
+
+  await page.getByRole('button', { name: /^Environment:/ }).click()
+  const menu = page.getByRole('menu')
+  await expect(menu.getByRole('menuitem')).toHaveCount(3)
+  const sequence = await menu.evaluate((el) =>
+    Array.from(el.children).map((child) => (child.getAttribute('role') === 'separator' ? 'sep' : child.textContent)),
+  )
+  // Local and Berlin share the first tag "eu"; untagged Staging goes last.
+  expect(sequence).toEqual(['Berlin', 'Local', 'sep', 'Staging'])
 })
