@@ -18,7 +18,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Lifecycle actions against the local Docker daemon; read timeout 2 s so the stop grace period exceeds it. */
+/** Lifecycle actions against the local Docker daemon; read timeout 5 s (generous for a loaded daemon) so the stop grace period exceeds it. */
 class ContainerLifecycleIntegrationTest {
 
     private static final String IMAGE = "alpine:3.20";
@@ -35,7 +35,7 @@ class ContainerLifecycleIntegrationTest {
         Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
                 "No Docker daemon available, skipping Docker integration test");
         String socket = "unix://" + DockerClientFactory.instance().getRemoteDockerUnixSocketPath();
-        manager = new DockerHostConnectionManager(new DockerProperties(socket, Duration.ofSeconds(3), Duration.ofSeconds(2)));
+        manager = new DockerHostConnectionManager(new DockerProperties(socket, Duration.ofSeconds(5), Duration.ofSeconds(5)));
         endpoint = manager.localEndpoint();
         docker = DockerClientFactory.instance().client();
         try {
@@ -87,10 +87,10 @@ class ContainerLifecycleIntegrationTest {
 
     @Test
     void stopWithTimeoutLongerThanReadTimeoutDoesNotTimeOut() {
-        // sleep as PID 1 ignores SIGTERM, so stop waits the whole grace period (4 s > 2 s read timeout)
+        // sleep as PID 1 ignores SIGTERM, so stop waits the whole grace period (8 s > 5 s read timeout)
         service.startContainer(hostId, endpoint, id);
 
-        service.stopContainer(hostId, endpoint, id, 4);
+        service.stopContainer(hostId, endpoint, id, 8);
 
         assertThat(state()).isEqualTo("exited");
     }

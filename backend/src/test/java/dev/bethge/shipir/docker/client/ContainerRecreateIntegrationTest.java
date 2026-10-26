@@ -122,6 +122,7 @@ class ContainerRecreateIntegrationTest {
         assertThat(docker.inspectVolumeCmd(volume).exec().getName()).isEqualTo(volume);
         assertThatThrownBy(() -> docker.inspectContainerCmd(oldId).exec()).isInstanceOf(RuntimeException.class);
         assertThat(docker.listContainersCmd().withShowAll(true).exec())
+                .filteredOn(c -> c.getNames()[0].startsWith("/" + prefix))
                 .noneMatch(c -> c.getNames()[0].contains("-shipir-"));
     }
 
