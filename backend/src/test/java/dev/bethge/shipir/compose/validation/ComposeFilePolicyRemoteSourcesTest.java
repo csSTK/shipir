@@ -73,4 +73,18 @@ class ComposeFilePolicyRemoteSourcesTest {
         Files.writeString(dir.resolve("sub/b.yaml"), "services: {}\n");
         assertThat(check("include:\n  - a.yaml\n  - ./sub/b.yaml\nservices: {}\n")).isEmpty();
     }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"github.com/docker/awesome-compose", "oci://docker.io/x/y:1", "git@github.com:x/y.git",
+            "gitlab.com/x/y/compose.yaml", "ghcr.io/x/y"})
+    void rejectsRemoteExtendsFileForms(String source) throws IOException {
+        assertThat(check("services:\n  x:\n    extends:\n      file: " + source + "\n      service: s\n")).isNotEmpty();
+        assertThat(check("services:\n  x:\n    extends:\n      file: [" + source + "]\n      service: s\n")).isNotEmpty();
+    }
+
+    @Test
+    void stillAllowsLocalExtendsFile() throws IOException {
+        Files.writeString(dir.resolve("base.yaml"), "services:\n  s:\n    image: a\n");
+        assertThat(check("services:\n  x:\n    extends:\n      file: ./base.yaml\n      service: s\n")).isEmpty();
+    }
 }

@@ -195,7 +195,7 @@ final class ComposeFilePolicy {
                 }
                 case "extends" -> {
                     if (value.isObject() && value.has("file")) {
-                        pathsOf(value.get("file")).forEach(p -> follow(check(p, baseDir, "extends file"), file, depth));
+                        pathsOf(value.get("file")).forEach(p -> follow(checkLocalSource(p, baseDir, "extends file"), file, depth));
                     }
                 }
                 case "include" -> {
@@ -217,9 +217,9 @@ final class ComposeFilePolicy {
     private void include(JsonNode include, Path baseDir, Path file, int depth) {
         for (JsonNode entry : include.isArray() ? include : List.of(include)) {
             if (entry.isTextual()) {
-                follow(checkInclude(entry.asString(), baseDir), file, depth);
+                follow(checkLocalSource(entry.asString(), baseDir, "include"), file, depth);
             } else if (entry.isObject()) {
-                pathsOf(entry.get("path")).forEach(p -> follow(checkInclude(p, baseDir), file, depth));
+                pathsOf(entry.get("path")).forEach(p -> follow(checkLocalSource(p, baseDir, "include"), file, depth));
                 // an include entry's env_file is covered by the generic env_file check in walk()
                 pathsOf(entry.get("project_directory")).forEach(p -> check(p, baseDir, "include project_directory"));
             }
@@ -227,19 +227,19 @@ final class ComposeFilePolicy {
     }
 
     /**
-     * Compose treats {@code oci://}, {@code git@host:x/y}, {@code https://...} and the {@code github.com/x/y} shorthand as
+     * For {@code include} and {@code extends.file} Compose treats {@code oci://}, {@code git@host:x/y}, {@code https://...} and the {@code github.com/x/y} shorthand as
      * remote sources and fetches them from the network on the Shipir host. Only plain local paths are allowed: no
      * {@code :} and no host-like first segment (a dot, e.g. {@code github.com/...}).
      */
-    private Path checkInclude(String raw, Path baseDir) {
+    private Path checkLocalSource(String raw, Path baseDir, String what) {
         String first = raw.startsWith("./") ? raw.substring(2) : raw;
         int slash = first.indexOf('/');
         boolean hostLike = slash > 0 && first.substring(0, slash).contains(".") && !first.startsWith(".");
         if (raw.contains(":") || hostLike) {
-            violations.add("include " + raw + ": remote include sources are not allowed");
+            violations.add(what + " " + raw + ": remote sources are not allowed");
             return null;
         }
-        return check(raw, baseDir, "include");
+        return check(raw, baseDir, what);
     }
 
     private void follow(Path included, Path from, int depth) {
