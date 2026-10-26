@@ -103,17 +103,19 @@ describe('UptimeCard', () => {
     expect(apiFetch.mock.calls.filter((c) => c[1]?.method === 'POST')).toHaveLength(0)
   })
 
-  it('explains EGRESS_DENIED with the config property', async () => {
-    renderCard([])
-    apiFetch.mockImplementation((_path: string, init?: { method?: string }) =>
-      init?.method === 'POST' ? Promise.reject(new ApiError(422, 'denied', 'EGRESS_DENIED')) : Promise.resolve([]),
-    )
-    fireEvent.click(await screen.findByRole('button', { name: 'Add check' }))
-    const dialog = await screen.findByRole('dialog')
-    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'LAN' } })
-    fireEvent.change(within(dialog).getByLabelText('URL'), { target: { value: 'http://10.0.0.5/' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
-    expect(await within(dialog).findByText(/shipir\.egress\.allow-private-ranges/)).toBeInTheDocument()
+  it('hints at the allow-private-ranges property next to an EGRESS_DENIED result', async () => {
+    const denied: UptimeCheck = {
+      ...check,
+      recentResults: [{ checkedAt: '2026-10-25T10:00:00Z', ok: false, statusCode: null, latencyMs: null, errorCode: 'EGRESS_DENIED' }],
+    }
+    renderCard([denied])
+    expect(await screen.findByText(/shipir\.egress\.allow-private-ranges/)).toBeInTheDocument()
+  })
+
+  it('shows no egress hint for other results', async () => {
+    renderCard([check])
+    await screen.findByText('Homepage')
+    expect(screen.queryByText(/allow-private-ranges/)).not.toBeInTheDocument()
   })
 
   it('toggles enabled inline and deletes after confirmation', async () => {

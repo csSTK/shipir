@@ -110,7 +110,15 @@ public class UptimeCheckService {
         Deployment deployment = deployments.requireDeployment(check.getDeploymentId());
         events.publishEvent(new UptimeStateChangedEvent(deployment.getHostId(), hostName(deployment.getHostId()),
                 deployment.getId(), deployment.getName(), check.getName(), changed == UptimeCheck.State.DOWN,
-                changed == UptimeCheck.State.DOWN ? result.errorCode() : null, at));
+                changed == UptimeCheck.State.DOWN ? publicErrorCode(result.errorCode()) : null, at));
+    }
+
+    /**
+     * Notifications and webhooks reach more people than the check's OPERATORs, so a policy refusal is reported as a plain
+     * connect failure: it must not tell a recipient that an internal target was blocked. The stored result keeps the code.
+     */
+    private static String publicErrorCode(String code) {
+        return "EGRESS_DENIED".equals(code) ? "CONNECTION_FAILED" : code;
     }
 
     @Transactional

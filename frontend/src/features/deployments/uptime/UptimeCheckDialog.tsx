@@ -49,12 +49,6 @@ export function validate(form: Form): Errors {
 
 function describe(error: unknown): { field?: keyof Form; message: string } {
   if (error instanceof ApiError) {
-    if (error.code === 'EGRESS_DENIED')
-      return {
-        field: 'url',
-        message:
-          'Shipir may not call this address. Private and internal addresses are blocked unless the server sets shipir.egress.allow-private-ranges.',
-      }
     if (error.code === 'UPTIME_CHECK_LIMIT') return { message: 'This deployment already has the maximum of 10 uptime checks.' }
     if (error.code === 'UPTIME_CHECK_NOT_FOUND') return { message: 'This check no longer exists.' }
     if (error.status === 403) return { message: 'You are not allowed to change uptime checks.' }

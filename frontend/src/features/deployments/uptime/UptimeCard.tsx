@@ -112,6 +112,12 @@ export function UptimeCard({ hostId, deploymentId, canOperate }: { hostId: strin
                     {c.lastCheckedAt ? ` · checked ${new Date(c.lastCheckedAt).toLocaleString()}` : ' · not checked yet'}
                     {last ? ` · ${last.statusCode ?? last.errorCode ?? 'no response'}` : ''}
                   </p>
+                  {last?.errorCode === 'EGRESS_DENIED' && (
+                    <p className="uptime__meta">
+                      Shipir may not call this address. Private and internal addresses are blocked unless the server sets
+                      shipir.egress.allow-private-ranges.
+                    </p>
+                  )}
                   {c.recentResults.length > 0 && (
                     <span className="uptime__strip" role="img" aria-label={`Last ${c.recentResults.length} results: ${c.recentResults.filter((r) => r.ok).length} ok`}>
                       {[...c.recentResults].reverse().map((r) => (

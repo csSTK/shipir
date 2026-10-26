@@ -204,6 +204,18 @@ class UptimeSchedulerTest extends DeploymentTestBase {
     }
 
     @Test
+    void egressDeniedIsReportedAsGenericConnectFailureInNotifications() {
+        addCheck("blocked", "http://169.254.169.254/latest", true);
+        tick();
+        tick(); // 2nd failure: DOWN
+        assertThat(adminNotifications("UPTIME_DOWN")).isEqualTo(1);
+        String message = jdbc.queryForObject("SELECT message FROM notifications WHERE type = 'UPTIME_DOWN' LIMIT 1", String.class);
+        assertThat(message).contains("CONNECTION_FAILED").doesNotContain("EGRESS_DENIED");
+        assertThat(jdbc.queryForObject("SELECT error_code FROM uptime_results WHERE ok = false LIMIT 1", String.class))
+                .isEqualTo("EGRESS_DENIED"); // the stored result keeps the detail for OPERATORs in the UI
+    }
+
+    @Test
     void resultsOlderThanTheRetentionArePurged() {
         UptimeCheck c = addCheck("home", base + "/", true);
         jdbc.update("INSERT INTO uptime_results (check_id, checked_at, ok, status_code) VALUES (?, ?::timestamptz, true, 200)",

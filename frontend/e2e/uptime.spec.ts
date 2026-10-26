@@ -69,10 +69,6 @@ test('lists checks without query string, adds one, shows a server error, deletes
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('Name', { exact: true }).fill('LAN')
   await dialog.getByLabel('URL').fill('http://10.0.0.5/')
-  api.mock('POST', UPTIME, { status: 422, body: { code: 'EGRESS_DENIED', message: 'denied' } })
-  await dialog.getByRole('button', { name: 'Save' }).click()
-  await expect(dialog.getByText(/shipir\.egress\.allow-private-ranges/)).toBeVisible()
-
   await dialog.getByLabel('Interval (seconds)').fill('5')
   await dialog.getByRole('button', { name: 'Save' }).click()
   await expect(dialog.getByText(/between 30 and 86400/)).toBeVisible()
@@ -83,6 +79,21 @@ test('lists checks without query string, adds one, shows a server error, deletes
   await card.getByRole('button', { name: 'Delete Homepage' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click()
   await expect(card.getByText('No uptime checks')).toBeVisible()
+})
+
+test('shows the allow-private-ranges hint next to an EGRESS_DENIED result', async ({ page, api }) => {
+  mockCommon(api, 'OPERATOR')
+  api.mock('GET', UPTIME, {
+    body: [
+      {
+        ...check,
+        lastStatus: 'DOWN',
+        recentResults: [{ checkedAt: '2026-10-25T10:00:00Z', ok: false, statusCode: null, latencyMs: null, errorCode: 'EGRESS_DENIED' }],
+      },
+    ],
+  })
+  await page.goto('/environments/a/deployments/s1')
+  await expect(page.getByRole('region', { name: 'Uptime checks' }).getByText(/shipir\.egress\.allow-private-ranges/)).toBeVisible()
 })
 
 test('viewers do not see the uptime card', async ({ page, api }) => {
