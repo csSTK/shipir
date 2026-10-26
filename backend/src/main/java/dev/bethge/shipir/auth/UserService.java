@@ -1,5 +1,6 @@
 package dev.bethge.shipir.auth;
 
+import dev.bethge.shipir.auth.token.ApiTokenService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,8 +15,10 @@ class UserService {
     private final UserRepository users;
     private final PasswordEncoder passwordEncoder;
     private final PasswordPolicy policy;
+    private final ApiTokenService apiTokens;
 
-    UserService(UserRepository users, PasswordEncoder passwordEncoder, PasswordPolicy policy) {
+    UserService(UserRepository users, PasswordEncoder passwordEncoder, PasswordPolicy policy, ApiTokenService apiTokens) {
+        this.apiTokens = apiTokens;
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.policy = policy;
@@ -42,6 +45,8 @@ class UserService {
             throw new PasswordPolicyException(violations);
         }
         user.changePasswordHash(passwordEncoder.encode(newPassword), Instant.now());
+        // Tokens survive neither a changed nor a stolen-and-changed password: the user mints new ones in the session.
+        apiTokens.revokeAllOf(user.getId());
     }
 
     static final class InvalidCurrentPasswordException extends RuntimeException {

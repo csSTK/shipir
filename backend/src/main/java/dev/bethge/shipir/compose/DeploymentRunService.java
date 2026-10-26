@@ -453,7 +453,11 @@ public class DeploymentRunService {
      */
     private boolean unrestricted(String username, UUID authorId) {
         if (!SYSTEM_USER.equals(username)) {
-            return users.findByUsername(username).filter(u -> !u.isDisabled()).map(u -> u.getRole() == Role.ADMIN).orElse(false);
+            var caller = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            // an API token never carries ADMIN power, whatever role its user has
+            return users.findByUsername(username).filter(u -> !u.isDisabled())
+                    .map(u -> dev.bethge.shipir.auth.token.ApiTokenAuthentication.effectiveRole(caller, u.getRole()) == Role.ADMIN)
+                    .orElse(false);
         }
         return authorId != null && users.findById(authorId).filter(u -> !u.isDisabled()).map(u -> u.getRole() == Role.ADMIN)
                 .orElse(false);

@@ -272,6 +272,32 @@ class UserAdminApiTest {
     }
 
     @Test
+    void resetPasswordRevokesTheUsersApiTokensButNotOthers() throws Exception {
+        Session admin = admin();
+        activeUser(admin, "tokenvictim", "OPERATOR");
+        activeUser(admin, "tokenbystander", "OPERATOR");
+        insertToken("tokenvictim");
+        insertToken("tokenbystander");
+
+        call(admin, "POST", "/api/users/" + idOf("tokenvictim") + "/reset-password", null).andExpect(status().isOk());
+
+        assertThat(tokenCount("tokenvictim")).isZero();
+        assertThat(tokenCount("tokenbystander")).isEqualTo(1);
+    }
+
+    private void insertToken(String username) {
+        String plain = dev.bethge.shipir.auth.token.TokenCodec.newToken("shp_");
+        jdbc.update("INSERT INTO api_tokens (user_id, name, token_hash, prefix, created_at, expires_at) "
+                        + "SELECT id, 'seeded', ?, ?, now(), now() + interval '30 days' FROM users WHERE username = ?",
+                dev.bethge.shipir.auth.token.TokenCodec.sha256Hex(plain), plain.substring(0, 8), username);
+    }
+
+    private int tokenCount(String username) {
+        return jdbc.queryForObject("SELECT count(*) FROM api_tokens t JOIN users u ON u.id = t.user_id "
+                + "WHERE u.username = ?", Integer.class, username);
+    }
+
+    @Test
     void deleteRemovesUserAndEndsSessions() throws Exception {
         Session admin = admin();
         Session victim = activeUser(admin, "gone", "VIEWER");

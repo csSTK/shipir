@@ -146,7 +146,7 @@ class AuthController {
     @GetMapping("/me")
     ResponseEntity<?> me(Authentication authentication) {
         return users.findByUsername(authentication.getName())
-                .<ResponseEntity<?>>map(u -> ResponseEntity.ok(CurrentUserResponse.from(u, setupStatus.stepFor(u))))
+                .<ResponseEntity<?>>map(u -> ResponseEntity.ok(CurrentUserResponse.from(u, setupStatus.stepFor(u), ApiTokenAuthentication.effectiveRole(authentication, u.getRole()))))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(new ErrorResponse("UNAUTHENTICATED", "Authentication required")));
     }

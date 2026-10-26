@@ -3,6 +3,7 @@ package dev.bethge.shipir.common.config;
 import dev.bethge.shipir.auth.token.ApiTokenAuthentication;
 import dev.bethge.shipir.auth.token.ApiTokenAuthenticationFilter;
 import dev.bethge.shipir.auth.token.ApiTokenAuthenticator;
+import dev.bethge.shipir.auth.token.BearerAttemptGuard;
 import dev.bethge.shipir.common.exception.ErrorResponse;
 import dev.bethge.shipir.common.security.SetupGateFilter;
 import dev.bethge.shipir.common.security.SetupStatus;
@@ -85,6 +86,7 @@ class SecurityConfig {
                                             SetupStatus setupStatus,
                                             SessionRegistry sessionRegistry,
                                             ApiTokenAuthenticator apiTokenAuthenticator,
+                                            BearerAttemptGuard bearerAttemptGuard,
                                             JsonMapper mapper,
                                             @Value("${shipir.security.https:false}") boolean https) throws Exception {
         http
@@ -115,7 +117,7 @@ class SecurityConfig {
                                 PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/webhooks/deploy/*"))
                         // plain (non-BREACH) handler: the SPA echoes the cookie value back as header
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
-                .addFilterBefore(new ApiTokenAuthenticationFilter(apiTokenAuthenticator, entryPoint), CsrfFilter.class)
+                .addFilterBefore(new ApiTokenAuthenticationFilter(apiTokenAuthenticator, entryPoint, bearerAttemptGuard, mapper), CsrfFilter.class)
                 .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
                 .addFilterBefore(new SetupGateFilter(setupStatus, mapper), AuthorizationFilter.class)
                 .sessionManagement(sm -> sm.maximumSessions(-1).sessionRegistry(sessionRegistry)
@@ -131,6 +133,9 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/webhooks/deploy/*").permitAll()
                         // personal API tokens are managed with the session only: a token cannot mint or list tokens
                         .requestMatchers("/api/account/tokens", "/api/account/tokens/**").access((supplier, context) ->
+                                new AuthorizationDecision(sessionAuthenticated(supplier.get())))
+                        // WebSocket channels carry exec and ADMIN streams whose checks read the stored role: session only (as does /api/ai below)
+                        .requestMatchers("/ws", "/ws/**").access((supplier, context) ->
                                 new AuthorizationDecision(sessionAuthenticated(supplier.get())))
                         .requestMatchers(HttpMethod.GET, "/api/auth/oidc/config", "/api/auth/oidc/authorize",
                                 "/api/auth/oidc/callback").permitAll()
@@ -183,6 +188,10 @@ class SecurityConfig {
                         .requestMatchers("/api/settings/ai", "/api/settings/ai/**").hasRole("ADMIN")
                         .requestMatchers("/api/settings/oidc", "/api/settings/oidc/**").hasRole("ADMIN")
                         .requestMatchers("/api/ai/shared-sessions", "/api/ai/shared-sessions/**").hasRole("ADMIN")
+                        // after the ADMIN-only shared-sessions rule above; session-only (as is /ws)
+                        // the AI chat runs its tools under a plain session-style authentication built from the stored role
+                        .requestMatchers("/api/ai", "/api/ai/**").access((supplier, context) ->
+                                new AuthorizationDecision(sessionAuthenticated(supplier.get())))
                         .anyRequest().authenticated());
         return http.build();
     }

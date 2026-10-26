@@ -25,8 +25,8 @@ import java.util.Optional;
 @Component
 public class LoginThrottle {
 
-    /** PASSWORD: password change of a signed-in user (guards the current-password check). WEBHOOK: public redeploy webhook, counted per client address on unknown tokens (see {@code DeploymentWebhookService}). */
-    public enum Scope { LOGIN, RESET, WEBHOOK, PASSWORD }
+    /** PASSWORD: password change of a signed-in user (guards the current-password check). WEBHOOK: public redeploy webhook, counted per client address on unknown tokens (see {@code DeploymentWebhookService}). BEARER: failed {@code Authorization: Bearer} credentials, counted per client address (see {@code BearerAttemptGuard}). */
+    public enum Scope { LOGIN, RESET, WEBHOOK, PASSWORD, BEARER }
 
     /**
      * Result of {@link #admit}: {@code lockedFor} is set if the attempt was refused; {@code lockoutStarted} if

@@ -329,6 +329,23 @@ class DeploymentWebhookApiTest extends DeploymentTestBase {
     }
 
     @Test
+    void webhookLockoutIsAuditedOnceWithScopeAndAddressButWithoutTheTokens() throws Exception {
+        String attacker = freshAddress();
+        String guess = "shw_" + UUID.randomUUID();
+
+        for (int i = 0; i < 8; i++) {
+            trigger(i == 0 ? guess : "shw_" + UUID.randomUUID(), attacker);
+        }
+
+        List<String> rows = jdbc.queryForList("SELECT details::text FROM audit_log WHERE action = 'LOGIN_THROTTLED' "
+                + "AND username = ?", String.class, attacker);
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0)).contains("WEBHOOK").contains(attacker).doesNotContain(guess);
+        assertThat(jdbc.queryForObject("SELECT outcome FROM audit_log WHERE action = 'LOGIN_THROTTLED' "
+                + "AND username = ?", String.class, attacker)).isEqualTo("FAILURE");
+    }
+
+    @Test
     void validRequestsAreNotCountedAsFailures() throws Exception {
         Login op = login("operator");
         String id = deployed(op);

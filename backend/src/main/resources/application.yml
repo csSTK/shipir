@@ -11,6 +11,8 @@ shipir:
     max-lifetime: 365d
     # last_used_at is written again only when older than this
     last-used-resolution: 5m
+    # most tokens one user may hold at a time (creating more -> 409 TOKEN_LIMIT_REACHED)
+    max-per-user: 20
   docker:
     local-socket: unix:///var/run/docker.sock
     connect-timeout: 3s

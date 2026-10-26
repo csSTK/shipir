@@ -42,7 +42,10 @@ public class ApiTokenService {
                 .toList();
     }
 
-    /** @throws ApiTokenException 400 INVALID_EXPIRY if {@code expiresAt} is not in the future or beyond the maximum lifetime */
+    /**
+     * @throws ApiTokenException 400 INVALID_EXPIRY if {@code expiresAt} is not in the future or beyond the maximum lifetime
+     * @throws ApiTokenException 409 TOKEN_LIMIT_REACHED if the user already holds the maximum number of tokens
+     */
     @Transactional
     @Auditable(action = "API_TOKEN_CREATE", targetType = "API_TOKEN", targetId = "#result?.id",
             details = "{'prefix': #result.prefix}")
@@ -54,6 +57,11 @@ public class ApiTokenService {
         if (!expiresAt.isAfter(now) || expiresAt.isAfter(latest)) {
             throw new ApiTokenException(HttpStatus.BAD_REQUEST, "INVALID_EXPIRY",
                     "The expiry must be in the future and within " + properties.maxLifetime().toDays() + " days");
+        }
+        tokens.lockUser(user.getId());
+        if (tokens.countByUserId(user.getId()) >= properties.maxPerUser()) {
+            throw new ApiTokenException(HttpStatus.CONFLICT, "TOKEN_LIMIT_REACHED",
+                    "At most " + properties.maxPerUser() + " API tokens are allowed per user; revoke one first");
         }
         String token = TokenCodec.newToken(ApiTokenAuthenticator.SCHEME_PREFIX);
         ApiToken saved = tokens.save(new ApiToken(user.getId(), request.name().strip(), TokenCodec.sha256Hex(token),
@@ -69,6 +77,18 @@ public class ApiTokenService {
         ApiToken token = tokens.findByIdAndUserId(id, userOf(username).getId()).orElseThrow(
                 () -> new ApiTokenException(HttpStatus.NOT_FOUND, "TOKEN_NOT_FOUND", "Token not found"));
         tokens.delete(token);
+    }
+
+    /**
+     * Deletes every token of the user. Called when the password changes or is reset: a credential change must end
+     * all access that does not need the password, including tokens a thief may have minted from a stolen session.
+     * Joins the caller's transaction, so the revocation is committed together with the new password.
+     */
+    @Transactional
+    public void revokeAllOf(UUID userId) {
+        // Same lock as create: a creation in flight finishes first, so its new token is deleted too.
+        tokens.lockUser(userId);
+        tokens.deleteAllByUserId(userId);
     }
 
     private User userOf(String username) {

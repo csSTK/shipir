@@ -117,6 +117,26 @@ class ContainerLogDownloadApiTest extends HostApiTestBase {
                 "2026-01-02T03:04:05Z one\n2026-01-02T03:04:06Z two\n");
     }
 
+    /** The streamed body is written after an async dispatch, which must be authenticated by the token again. */
+    @Test
+    void apiTokenAuthenticatesTheStreamedDownloadOnAsyncDispatchToo() throws Exception {
+        lines = List.of(out("one"));
+        login("viewer"); // grants the host to the seeded users
+        String plain = dev.bethge.shipir.auth.token.TokenCodec.newToken("shp_");
+        jdbc.update("INSERT INTO api_tokens (user_id, name, token_hash, prefix, created_at, expires_at) "
+                        + "SELECT id, 'seeded', ?, ?, now(), now() + interval '30 days' FROM users WHERE username = 'viewer'",
+                dev.bethge.shipir.auth.token.TokenCodec.sha256Hex(plain), plain.substring(0, 8));
+
+        MvcResult started = mvc.perform(get("/api/hosts/{h}/containers/web1/logs/download", host)
+                .header("Authorization", "Bearer " + plain)).andReturn();
+        MvcResult done = started.getRequest().isAsyncStarted()
+                ? mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch(started)).andReturn()
+                : started;
+
+        assertThat(done.getResponse().getStatus()).isEqualTo(200);
+        assertThat(done.getResponse().getContentAsString()).isEqualTo("2026-01-02T03:04:05Z one\n");
+    }
+
     @Test
     void timestampsCanBeLeftOut() throws Exception {
         lines = List.of(out("one"));

@@ -31,10 +31,13 @@ class PasswordResetService {
     private final PasswordPolicy policy;
     private final Clock clock;
     private final SessionInvalidator sessions;
+    private final dev.bethge.shipir.auth.token.ApiTokenService apiTokens;
 
     PasswordResetService(UserRepository users, PasswordResetCodeRepository codes, PasswordResetCodeSender sender,
                          PasswordResetProperties properties, PasswordEncoder passwordEncoder,
-                         PasswordPolicy policy, Clock clock, SessionInvalidator sessions) {
+                         PasswordPolicy policy, Clock clock, SessionInvalidator sessions,
+                         dev.bethge.shipir.auth.token.ApiTokenService apiTokens) {
+        this.apiTokens = apiTokens;
         this.users = users;
         this.codes = codes;
         this.sender = sender;
@@ -91,6 +94,7 @@ class PasswordResetService {
         open.markUsed(now);
         // The reset may be recovery from a compromise: every existing session of the user ends.
         sessions.expireSessionsOf(user.getUsername());
+        apiTokens.revokeAllOf(user.getId());
     }
 
     private static String sha256Hex(String value) {

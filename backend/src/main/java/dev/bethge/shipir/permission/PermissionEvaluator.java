@@ -44,7 +44,7 @@ public class PermissionEvaluator {
         if (auth == null || !auth.isAuthenticated() || auth.getName() == null) {
             return null;
         }
-        return users.findByUsername(auth.getName()).filter(u -> !u.isDisabled()).map(PermissionSubject::of)
+        return users.findByUsername(auth.getName()).filter(u -> !u.isDisabled()).map(u -> PermissionSubject.of(u, auth))
                 .orElse(null);
     }
 }

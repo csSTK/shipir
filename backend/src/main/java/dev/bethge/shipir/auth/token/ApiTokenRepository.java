@@ -19,6 +19,17 @@ public interface ApiTokenRepository extends JpaRepository<ApiToken, UUID> {
 
     Optional<ApiToken> findByIdAndUserId(UUID id, UUID userId);
 
+    long countByUserId(UUID userId);
+
+    @Transactional
+    @Modifying
+    @Query("delete from ApiToken t where t.userId = :userId")
+    int deleteAllByUserId(@Param("userId") UUID userId);
+
+    /** Row lock on the user (NO KEY UPDATE: the REQUIRES_NEW audit insert needs a key-share lock on the same row), so concurrent token creations of one user are counted one after the other. */
+    @Query(value = "SELECT id FROM users WHERE id = :userId FOR NO KEY UPDATE", nativeQuery = true)
+    List<UUID> lockUser(@Param("userId") UUID userId);
+
     /** Stamps the use unless it was stamped after {@code threshold} already; one guarded statement, no read-modify-write. */
     @Transactional
     @Modifying

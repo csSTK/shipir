@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
 
 /**
  * Resolves a presented bearer secret to an authentication. Empty for anything that is not a currently valid token of
- * an enabled user, without saying why. The role is read from the user on every request, so role changes, disabling and
+ * an enabled user, without saying why. The role is read from the user on every request (capped at OPERATOR, see {@link ApiTokenAuthentication}), so role changes, disabling and
  * deleting a user (cascade) take effect immediately.
  */
 @Service
@@ -60,6 +60,6 @@ public class ApiTokenAuthenticator {
             // Bookkeeping only: never fail an authenticated request over it.
             log.warn("Could not update last use of API token {}: {}", token.getPrefix(), e.toString());
         }
-        return new ApiTokenAuthentication(user.getUsername(), user.getRole().name(), token.getId());
+        return new ApiTokenAuthentication(user.getUsername(), user.getRole(), token.getId());
     }
 }

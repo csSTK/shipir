@@ -37,10 +37,13 @@ class UserAdminService {
     private final LastAdminGuard lastAdmin;
     private final Clock clock;
     private final TotpService totp;
+    private final dev.bethge.shipir.auth.token.ApiTokenService apiTokens;
     private final SecureRandom random = new SecureRandom();
 
     UserAdminService(UserRepository users, PasswordEncoder encoder, SessionInvalidator sessions, Clock clock,
-                     TotpService totp, LastAdminGuard lastAdmin) {
+                     TotpService totp, LastAdminGuard lastAdmin,
+                     dev.bethge.shipir.auth.token.ApiTokenService apiTokens) {
+        this.apiTokens = apiTokens;
         this.lastAdmin = lastAdmin;
         this.totp = totp;
         this.users = users;
@@ -125,6 +128,7 @@ class UserAdminService {
         String password = generatePassword();
         user.resetPasswordHash(encoder.encode(password));
         sessions.expireSessionsOf(user.getUsername());
+        apiTokens.revokeAllOf(user.getId());
         return new OneTimePasswordResponse(user.getId(), user.getUsername(), user.getRole(), password);
     }
 

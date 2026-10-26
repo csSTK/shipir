@@ -45,7 +45,7 @@ public class CurrentAccess {
             return Optional.of(NOBODY);
         }
         return Optional.of(users.findByUsername(auth.getName()).filter(u -> !u.isDisabled())
-                .map(PermissionSubject::of).orElse(NOBODY));
+                .map(u -> PermissionSubject.of(u, auth)).orElse(NOBODY));
     }
 
     /** True for ADMIN and for the system caller. */

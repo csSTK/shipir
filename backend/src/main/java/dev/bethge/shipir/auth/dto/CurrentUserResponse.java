@@ -13,7 +13,12 @@ public record CurrentUserResponse(String username, Role role, boolean setupRequi
                                   boolean twoFactorEnabled, String externalIssuer) {
 
     public static CurrentUserResponse from(User user, Optional<SetupStep> step) {
-        return new CurrentUserResponse(user.getUsername(), user.getRole(), step.isPresent(), step.orElse(null),
+        return from(user, step, user.getRole());
+    }
+
+    /** With the role the caller acts under (an API token's is capped, see {@code ApiTokenAuthentication}). */
+    public static CurrentUserResponse from(User user, Optional<SetupStep> step, Role effectiveRole) {
+        return new CurrentUserResponse(user.getUsername(), effectiveRole, step.isPresent(), step.orElse(null),
                 user.isTwoFactorEnabled(), user.getExternalIssuer());
     }
 }

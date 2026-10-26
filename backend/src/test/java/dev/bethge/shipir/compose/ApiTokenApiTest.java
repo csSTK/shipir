@@ -25,13 +25,23 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Personal API tokens: management through the session, authentication with {@code Authorization: Bearer shp_...}. */
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+@TestPropertySource(properties = {"shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+        "shipir.api-tokens.max-per-user=3"})
 class ApiTokenApiTest extends DeploymentTestBase {
 
     private static final String TOKENS = "/api/account/tokens";
 
+    @org.springframework.beans.factory.annotation.Autowired
+    dev.bethge.shipir.auth.LoginThrottle throttle;
+
+    private void resetThrottle() {
+        ((java.util.Map<?, ?>) org.springframework.test.util.ReflectionTestUtils.getField(throttle, "entries")).clear();
+    }
+
     @BeforeEach
     void resetTokens() {
+        // The throttle is in-memory state shared by all tests of this context: bad-token tests would lock 127.0.0.1.
+        resetThrottle();
         jdbc.update("DELETE FROM api_tokens");
         jdbc.update("UPDATE security_settings SET require_2fa_for_admins = FALSE");
         jdbc.update("UPDATE users SET disabled_at = NULL, role = upper(username) WHERE username IN ('admin', 'operator', 'viewer')");
@@ -282,6 +292,7 @@ class ApiTokenApiTest extends DeploymentTestBase {
                 "Bearer " + "shp_" + "a".repeat(10_000), "Bearer " + valid + "x", "Bearer " + valid.substring(1),
                 "Bearer " + valid + " " + valid, "Basic YWRtaW46YWRtaW4=", "Token " + valid, valid, "shp_ " + valid);
         for (String header : headers) {
+            resetThrottle(); // each bad header is a failure; see the throttle tests for the lockout itself
             mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, header))
                     .andExpect(status().isUnauthorized());
         }
@@ -386,17 +397,258 @@ class ApiTokenApiTest extends DeploymentTestBase {
     }
 
     @Test
-    void tokenRequestsAreAuthenticatedOnAsyncDispatchToo() throws Exception {
+    void anAdminTokenIsCappedAtOperatorAndNeverReachesAdminOnlyRoutes() throws Exception {
+        String token = tokenOf("admin");
+        String json = "{\"passphrase\":\"a-long-enough-passphrase\"}";
+
+        mvc.perform(bearer(get("/api/users"), token)).andExpect(status().isForbidden());
+        mvc.perform(bearer(get("/api/teams"), token)).andExpect(status().isForbidden());
+        mvc.perform(bearer(get("/api/audit-log"), token)).andExpect(status().isForbidden());
+        mvc.perform(bearer(get("/api/settings/ai"), token)).andExpect(status().isForbidden());
+        mvc.perform(bearer(get("/api/settings/security"), token)).andExpect(status().isForbidden());
+        mvc.perform(bearer(post("/api/backup"), token).contentType(APPLICATION_JSON).content(json))
+                .andExpect(status().isForbidden());
+        mvc.perform(bearer(post("/api/hosts/" + hostId + "/containers/abc/exec"), token).contentType(APPLICATION_JSON)
+                .content("{}")).andExpect(status().isForbidden());
+        mvc.perform(bearer(get("/api/hosts/" + hostId + "/containers/abc/files"), token)).andExpect(status().isForbidden());
+        mvc.perform(bearer(post("/api/hosts/" + hostId + "/images/build"), token)).andExpect(status().isForbidden());
+        mvc.perform(bearer(post("/api/hosts"), token).contentType(APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void anAdminTokenKeepsOperatorLevelAccessWhereTheUserIsGranted() throws Exception {
+        grantHost("admin", "OPERATE");
         String token = tokenOf("admin");
 
-        MvcResult started = mvc.perform(bearer(post("/api/backup"), token).contentType(APPLICATION_JSON)
-                .content("{\"passphrase\":\"a-long-enough-passphrase\"}")).andReturn();
-        assertThat(started.getResponse().getStatus()).isEqualTo(200);
-        assertThat(started.getRequest().isAsyncStarted()).isTrue();
+        mvc.perform(bearer(get("/api/hosts"), token)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id=='" + hostId + "')]").isNotEmpty());
+        mvc.perform(bearer(post(url()), token).contentType(APPLICATION_JSON)
+                        .content(createJson("granted", YAML, null)))
+                .andExpect(status().isCreated());
+    }
 
-        MvcResult done = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch(started))
-                .andReturn();
-        assertThat(done.getResponse().getStatus()).isEqualTo(200);
-        assertThat(done.getResponse().getContentAsByteArray()).isNotEmpty();
+    @Test
+    void anAdminTokenGetsNoImplicitAccessToHostsWithoutGrant() throws Exception {
+        String token = tokenOf("admin");
+
+        mvc.perform(bearer(get("/api/hosts"), token)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id=='" + hostId + "')]").isEmpty());
+        mvc.perform(bearer(get(url()), token)).andExpect(status().isNotFound());
+        // the same user with a session is ADMIN and sees everything
+        mvc.perform(get(url()).session(login("admin").session())).andExpect(status().isOk());
+    }
+
+    @Test
+    void anAdminTokenCannotDeployHostLevelComposeFeatures() throws Exception {
+        grantHost("admin", "OPERATE");
+        String token = tokenOf("admin");
+        String privileged = "services:\n  web:\n    image: nginx\n    privileged: true\n";
+
+        mvc.perform(bearer(post(url()), token).contentType(APPLICATION_JSON)
+                        .content(createJson("bytoken", privileged, null)))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ADMIN_REQUIRED"));
+        // the same user in an interactive session may
+        mvc.perform(login("admin").write(post(url())).contentType(APPLICATION_JSON)
+                        .content(createJson("bysession", privileged, null)))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void tokensAreRefusedAtTheWebSocketHandshake() throws Exception {
+        for (String user : List.of("admin", "operator", "viewer")) {
+            mvc.perform(bearer(get("/ws"), tokenOf(user))).andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
+    void theTokenCountPerUserIsCapped() throws Exception {
+        Login admin = login("admin");
+        for (int i = 0; i < 3; i++) {
+            mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"t" + i + "\"}"))
+                    .andExpect(status().isCreated());
+        }
+
+        mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"one-too-many\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("TOKEN_LIMIT_REACHED"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM api_tokens", Integer.class)).isEqualTo(3);
+        // the cap is per user, and revoking frees a slot
+        mvc.perform(login("operator").write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"x\"}"))
+                .andExpect(status().isCreated());
+        String id = jdbc.queryForObject("SELECT id FROM api_tokens WHERE name = 't0'", UUID.class).toString();
+        mvc.perform(admin.write(delete(TOKENS + "/" + id))).andExpect(status().isNoContent());
+        mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"fits-again\"}"))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void parallelCreationsCannotExceedTheCap() throws Exception {
+        Login admin = login("admin");
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(8);
+        try {
+            List<java.util.concurrent.Future<Integer>> results = new java.util.ArrayList<>();
+            for (int i = 0; i < 8; i++) {
+                String name = "p" + i;
+                results.add(pool.submit(() -> mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON)
+                        .content("{\"name\":\"" + name + "\"}")).andReturn().getResponse().getStatus()));
+            }
+            for (var r : results) {
+                r.get();
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM api_tokens", Integer.class)).isEqualTo(3);
+    }
+
+    @Test
+    void sessionPasswordChangeRevokesAllOfTheUsersTokens() throws Exception {
+        String token = tokenOf("operator");
+        tokenOf("admin");
+        Login op = login("operator");
+
+        mvc.perform(op.write(post("/api/auth/password")).contentType(APPLICATION_JSON)
+                        .content("{\"currentPassword\":\"" + PASSWORD + "\",\"newPassword\":\"Another-Str0ng-Passw0rd-42!\"}"))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(bearer(get("/api/auth/me"), token)).andExpect(status().isUnauthorized());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM api_tokens t JOIN users u ON u.id = t.user_id "
+                + "WHERE u.username = 'operator'", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM api_tokens", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void passwordChangeWithATokenRevokesThatTokenToo() throws Exception {
+        String token = tokenOf("operator");
+
+        mvc.perform(bearer(post("/api/auth/password"), token).contentType(APPLICATION_JSON)
+                        .content("{\"currentPassword\":\"" + PASSWORD + "\",\"newPassword\":\"Another-Str0ng-Passw0rd-42!\"}"))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(bearer(get("/api/auth/me"), token)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void aFailedPasswordChangeKeepsTheTokens() throws Exception {
+        String token = tokenOf("operator");
+
+        mvc.perform(login("operator").write(post("/api/auth/password")).contentType(APPLICATION_JSON)
+                        .content("{\"currentPassword\":\"wrong-current-password\",\"newPassword\":\"Another-Str0ng-Passw0rd-42!\"}"))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(bearer(get("/api/auth/me"), token)).andExpect(status().isOk());
+    }
+
+    @Test
+    void failedBearerAttemptsLockTheAddressForRejectedCredentialsOnlyAndAreAuditedOnceWithoutSecrets() throws Exception {
+        String valid = tokenOf("operator");
+        String address = "203.0.113." + (1 + (int) (Math.random() * 200));
+        String guess = TokenCodec.newToken("shp_");
+
+        for (int i = 0; i < 5; i++) {
+            mvc.perform(bearer(get("/api/auth/me"), guess).with(from(address))).andExpect(status().isUnauthorized());
+        }
+        MvcResult locked = mvc.perform(bearer(get("/api/auth/me"), guess).with(from(address)))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value("TOO_MANY_ATTEMPTS")).andReturn();
+        mvc.perform(bearer(get("/api/auth/me"), TokenCodec.newToken("shp_")).with(from(address)))
+                .andExpect(status().isTooManyRequests());
+        // a valid token is never refused, not even from a locked address
+        mvc.perform(bearer(get("/api/auth/me"), valid).with(from(address))).andExpect(status().isOk());
+
+        assertThat(locked.getResponse().getHeader(HttpHeaders.RETRY_AFTER)).isNotNull();
+        mvc.perform(bearer(get("/api/auth/me"), valid).with(from("198.51.100.7"))).andExpect(status().isOk());
+        List<String> rows = jdbc.queryForList("SELECT details::text FROM audit_log WHERE action = 'LOGIN_THROTTLED' "
+                + "AND username = ?", String.class, address);
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0)).contains("BEARER").contains(address).doesNotContain(guess).doesNotContain(valid);
+    }
+
+    @Test
+    void aTokensAiChatEndpointsAreSessionOnly() throws Exception {
+        grantHost("admin", "OPERATE");
+        String token = tokenOf("admin");
+        String id = UUID.randomUUID().toString();
+
+        mvc.perform(bearer(post("/api/ai/sessions/" + id + "/messages"), token).contentType(APPLICATION_JSON)
+                .content("{\"content\":\"hi\"}")).andExpect(status().isForbidden());
+        mvc.perform(bearer(post("/api/ai/sessions/" + id + "/actions/" + id + "/confirm"), token))
+                .andExpect(status().isForbidden());
+        mvc.perform(bearer(post("/api/ai/sessions"), token).contentType(APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(bearer(get("/api/ai/sessions"), token)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/ai/sessions").session(login("admin").session())).andExpect(status().isOk());
+    }
+
+    @Test
+    void meReportsTheEffectiveRoleOfATokenButTheStoredRoleOfASession() throws Exception {
+        String token = tokenOf("admin");
+
+        mvc.perform(bearer(get("/api/auth/me"), token)).andExpect(jsonPath("$.role").value("OPERATOR"));
+        mvc.perform(get("/api/auth/me").session(login("admin").session())).andExpect(jsonPath("$.role").value("ADMIN"));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    dev.bethge.shipir.auth.token.ApiTokenService tokenService;
+    @org.springframework.beans.factory.annotation.Autowired
+    dev.bethge.shipir.auth.token.ApiTokenRepository tokenRepository;
+    @org.springframework.beans.factory.annotation.Autowired
+    org.springframework.transaction.PlatformTransactionManager txManager;
+
+    @Test
+    void revokeAllWaitsForAnInFlightCreationOfTheSameUser() throws Exception {
+        UUID userId = jdbc.queryForObject("SELECT id FROM users WHERE username = 'operator'", UUID.class);
+        var tx = new org.springframework.transaction.support.TransactionTemplate(txManager);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            tx.executeWithoutResult(status -> {
+                tokenRepository.lockUser(userId); // a creation in flight holds this lock until it commits
+                var revoke = pool.submit(() -> tokenService.revokeAllOf(userId));
+                try {
+                    Thread.sleep(700);
+                } catch (InterruptedException e) {
+                    throw new IllegalStateException(e);
+                }
+                assertThat(revoke.isDone()).as("revokeAllOf must wait for the lock").isFalse();
+                holder = revoke;
+            });
+            holder.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    private java.util.concurrent.Future<?> holder;
+
+    @Test
+    void malformedAndForeignBearerCredentialsCountAsFailuresToo() throws Exception {
+        String address = "203.0.113." + (1 + (int) (Math.random() * 200));
+        for (String junk : List.of("x", "shp_short", "a".repeat(5000), "ghp_" + "a".repeat(43), "")) {
+            mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + junk).with(from(address)))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        mvc.perform(bearer(get("/api/auth/me"), TokenCodec.newToken("shp_")).with(from(address)))
+                .andExpect(status().isTooManyRequests());
+    }
+
+    @Test
+    void validTokensAndRequestsWithoutBearerNeverCountAsFailures() throws Exception {
+        String valid = tokenOf("operator");
+        String address = "203.0.113." + (1 + (int) (Math.random() * 200));
+
+        for (int i = 0; i < 12; i++) {
+            mvc.perform(bearer(get("/api/auth/me"), valid).with(from(address))).andExpect(status().isOk());
+            mvc.perform(get("/api/auth/me").with(from(address))).andExpect(status().isUnauthorized());
+        }
+        mvc.perform(bearer(get("/api/auth/me"), valid).with(from(address))).andExpect(status().isOk());
+    }
+
+    private static org.springframework.test.web.servlet.request.RequestPostProcessor from(String address) {
+        return request -> {
+            request.setRemoteAddr(address);
+            return request;
+        };
     }
 }

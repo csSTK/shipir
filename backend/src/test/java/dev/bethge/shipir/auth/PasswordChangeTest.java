@@ -94,6 +94,27 @@ class PasswordChangeTest {
     }
 
     @Test
+    void successfulChangeRevokesApiTokensButAFailedOneDoesNot() throws Exception {
+        jdbc.update("DELETE FROM api_tokens");
+        String plain = dev.bethge.shipir.auth.token.TokenCodec.newToken("shp_");
+        jdbc.update("INSERT INTO api_tokens (user_id, name, token_hash, prefix, created_at, expires_at) "
+                        + "SELECT id, 'seeded', ?, ?, now(), now() + interval '30 days' FROM users WHERE username = 'admin'",
+                dev.bethge.shipir.auth.token.TokenCodec.sha256Hex(plain), plain.substring(0, 8));
+        Cookie csrf = csrfCookie();
+        MockHttpSession session = loginAdmin(ADMIN_PASSWORD, csrf);
+
+        assertThat(changePassword(session, csrf, "wrong-current-password", NEW_PASSWORD).getResponse().getStatus())
+                .isEqualTo(400);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM api_tokens", Integer.class)).isEqualTo(1);
+
+        assertThat(changePassword(session, csrf, ADMIN_PASSWORD, NEW_PASSWORD).getResponse().getStatus())
+                .isEqualTo(204);
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM api_tokens", Integer.class)).isZero();
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + plain)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void unauthenticatedPasswordChangeIs401() throws Exception {
         Cookie csrf = csrfCookie();
         mvc.perform(post("/api/auth/password")

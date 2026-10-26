@@ -126,6 +126,30 @@ class PasswordResetEndpointsTest {
     }
 
     @Test
+    void validCodeRevokesTheUsersApiTokensButAWrongCodeDoesNot() throws Exception {
+        insertToken();
+        requestReset(username);
+        confirm(username, wrong(sender.codes.get(0)), NEW_PASSWORD);
+        assertThat(tokenCount()).isEqualTo(1);
+
+        assertThat(confirm(username, sender.codes.get(0), NEW_PASSWORD).getResponse().getStatus()).isEqualTo(204);
+
+        assertThat(tokenCount()).isZero();
+    }
+
+    private void insertToken() {
+        String plain = dev.bethge.shipir.auth.token.TokenCodec.newToken("shp_");
+        jdbc.update("INSERT INTO api_tokens (user_id, name, token_hash, prefix, created_at, expires_at) "
+                        + "SELECT id, 'seeded', ?, ?, now(), now() + interval '30 days' FROM users WHERE username = ?",
+                dev.bethge.shipir.auth.token.TokenCodec.sha256Hex(plain), plain.substring(0, 8), username);
+    }
+
+    private int tokenCount() {
+        return jdbc.queryForObject("SELECT count(*) FROM api_tokens t JOIN users u ON u.id = t.user_id "
+                + "WHERE u.username = ?", Integer.class, username);
+    }
+
+    @Test
     void wrongCodeIsInvalidResetCode() throws Exception {
         requestReset(username);
         MvcResult r = confirm(username, wrong(sender.codes.get(0)), NEW_PASSWORD);
