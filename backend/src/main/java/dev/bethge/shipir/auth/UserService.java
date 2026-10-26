@@ -49,6 +49,12 @@ class UserService {
         apiTokens.revokeAllOf(user.getId());
     }
 
+    /** Stores the user's UI language (already validated by the request); null clears it. */
+    @Transactional
+    void changeLocale(String username, String locale) {
+        users.findByUsername(username).ifPresent(user -> user.changeLocale(locale));
+    }
+
     static final class InvalidCurrentPasswordException extends RuntimeException {
         InvalidCurrentPasswordException() {
             super("Current password is incorrect", null, false, false);

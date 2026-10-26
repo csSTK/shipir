@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiFetch } from '../shared/api/client.ts'
+import { applyLanguage } from '../shared/i18n/index.ts'
 import { App } from './App.tsx'
 import { queryClient } from './queryClient.ts'
 
@@ -26,7 +27,28 @@ const unauthorized = () => {
 beforeEach(() => queryClient.clear())
 afterEach(() => {
   cleanup()
+  applyLanguage('en')
   vi.resetAllMocks()
+})
+
+describe('App language', () => {
+  const user = { username: 'admin', role: 'ADMIN', setupRequired: false }
+  const shell = { 'GET /hosts/overview': () => [] }
+
+  it('shows the app in the language the user chose', async () => {
+    route({ ...shell, 'GET /auth/me': () => ({ ...user, locale: 'de' }) })
+    render(<App />)
+
+    expect(await screen.findByRole('link', { name: 'Umgebungen' })).toBeInTheDocument()
+    expect(document.documentElement.lang).toBe('de')
+  })
+
+  it('falls back to the browser language while the user has chosen none', async () => {
+    route({ ...shell, 'GET /auth/me': () => ({ ...user, locale: null }) })
+    render(<App />)
+
+    expect(await screen.findByRole('link', { name: 'Environments' })).toBeInTheDocument()
+  })
 })
 
 describe('App auth gate', () => {

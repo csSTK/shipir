@@ -1,32 +1,33 @@
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
+import { DEFAULT_LANGUAGE } from './language.ts'
 
 type Bundle = Record<string, string>
 
-/** One JSON file per namespace (= feature) under `locales/<lng>/`, bundled eagerly. */
-const modules = import.meta.glob<Bundle>('./locales/en/*.json', { eager: true, import: 'default' })
+/** One JSON file per namespace (= feature) under `locales/<lng>/`, all languages bundled eagerly. */
+const modules = import.meta.glob<Bundle>('./locales/*/*.json', { eager: true, import: 'default' })
 
-const en: Record<string, Bundle> = {}
+const resources: Record<string, Record<string, Bundle>> = {}
 for (const [file, bundle] of Object.entries(modules)) {
-  const namespace = file.replace('./locales/en/', '').replace('.json', '')
-  en[namespace] = bundle
+  const [, language, name] = /^\.\/locales\/([^/]+)\/(.+)\.json$/.exec(file)!
+  ;(resources[language] ??= {})[name] = bundle
 }
 
-export const DEFAULT_LANGUAGE = 'en'
-
 /**
- * Initialises i18next once. English is the only locale for now; the language is fixed, so tests and the
- * app always render the same text. Interpolated values are not escaped here, React escapes on render.
+ * Initialises i18next once, always in English (so tests render the same text); the app switches to the
+ * user's language after sign-in via `applyLanguage`. Missing German keys fall back to English. Interpolated
+ * values are not escaped here, React escapes on render.
  */
 void i18n.use(initReactI18next).init({
   lng: DEFAULT_LANGUAGE,
   fallbackLng: DEFAULT_LANGUAGE,
-  resources: { [DEFAULT_LANGUAGE]: en },
-  ns: Object.keys(en),
+  resources,
+  ns: Object.keys(resources[DEFAULT_LANGUAGE]),
   defaultNS: 'common',
   interpolation: { escapeValue: false },
   returnNull: false,
 })
 
 export { i18n }
+export { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, applyLanguage, browserLanguage, isSupportedLanguage, resolveLanguage, type Language } from './language.ts'
 export { dateTimeFormat, formatDate, formatDateTime, formatNumber, formatRelativeTime } from './format.ts'

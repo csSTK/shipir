@@ -115,7 +115,7 @@ export function UptimeCard({ hostId, deploymentId, canOperate }: { hostId: strin
                   <p className="uptime__meta">
                     {t('UptimeCard.urlEveryIntervalsecondsS', { url: displayUrl(c.url), intervalSeconds: c.intervalSeconds })}
                     {c.lastCheckedAt ? t('UptimeCard.checkedLocalestring', { date: formatDateTime(c.lastCheckedAt) }) : t('UptimeCard.notCheckedYet')}
-                    {last ? ` · ${last.statusCode ?? last.errorCode ?? 'no response'}` : ''}
+                    {last ? ` · ${last.statusCode ?? last.errorCode ?? t('UptimeCard.noResponse')}` : ''}
                   </p>
                   {last?.errorCode === 'EGRESS_DENIED' && (
                     <p className="uptime__meta">

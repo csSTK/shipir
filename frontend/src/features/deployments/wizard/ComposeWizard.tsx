@@ -72,6 +72,7 @@ function ResourceList({
 }) {
   const { t } = useTranslation('deployments')
   const singular = kind === 'networks' ? t('ComposeWizard.network') : t('ComposeWizard.volume')
+  const lowerCase = kind === 'networks' ? t('ComposeWizard.networkLowercase') : t('ComposeWizard.volumeLowercase')
   return (
     <section className="wz-section" aria-label={title}>
       <h3 className="wz-section__title">{title}</h3>
@@ -88,13 +89,13 @@ function ResourceList({
             <input type="checkbox" checked={r.external} onChange={(e) => onChange(patchAt(rows, i, { external: e.target.checked }))} />
             <span>{t('ComposeWizard.alreadyExists')}</span>
           </label>
-          <Button variant="ghost" aria-label={t('ComposeWizard.removeLowercaseValue', { lowerCase: singular.toLowerCase(), value: i + 1 })} onClick={() => onChange(remove(rows, i))}>
+          <Button variant="ghost" aria-label={t('ComposeWizard.removeLowercaseValue', { lowerCase, value: i + 1 })} onClick={() => onChange(remove(rows, i))}>
             {t('ComposeWizard.remove')}
           </Button>
         </div>
       ))}
       <Button variant="secondary" onClick={() => onChange([...rows, { name: '', driver: '', external: false }])}>
-        {t('ComposeWizard.addLowercase', { lowerCase: singular.toLowerCase() })}
+        {t('ComposeWizard.addLowercase', { lowerCase })}
       </Button>
     </section>
   )

@@ -2,6 +2,7 @@ export { LoginPage } from './LoginPage.tsx'
 export { SetupPage } from './SetupPage.tsx'
 export {
   CURRENT_USER_KEY,
+  useChangeLocale,
   useChangePassword,
   useConfirmPasswordReset,
   useCurrentUser,

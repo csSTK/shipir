@@ -59,5 +59,11 @@
   "TokensSection.theExpiryIsNotAllowed": "The expiry is not allowed. Choose a shorter lifetime.",
   "TokensSection.couldNotCreateTheToken": "Could not create the token. Please try again.",
   "TokensSection.days_one": "{{count}} day",
-  "TokensSection.days_other": "{{count}} days"
+  "TokensSection.days_other": "{{count}} days",
+  "AccountPage.language": "Language",
+  "AccountPage.automatic": "Automatic (browser language)",
+  "AccountPage.automaticFollowsYourBrowserLanguage": "Automatic follows your browser language.",
+  "AccountPage.couldNotSaveTheLanguage": "Could not save the language. Please try again.",
+  "AccountPage.language_en": "English",
+  "AccountPage.language_de": "Deutsch"
 }

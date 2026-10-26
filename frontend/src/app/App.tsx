@@ -14,7 +14,9 @@ import { AppShell } from './layout/AppShell.tsx'
 import { NotAllowedPage } from './layout/PlaceholderPages.tsx'
 import { useHostEvents } from '../shared/realtime/useHostEvents.ts'
 import { Providers } from './providers.tsx'
+import { Fragment, useLayoutEffect, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { applyLanguage, resolveLanguage } from '../shared/i18n/index.ts'
 
 /** Subscribes to docker events of the environment in the URL; leaving `/environments/:id/*` unsubscribes. */
 function HostEventsBridge() {
@@ -32,6 +34,11 @@ function AuthGate() {
   const { t } = useTranslation('app')
   const { data: user, isPending, isError } = useCurrentUser()
   const logout = useLogout()
+  // The user's language (or the browser's while none is chosen) applies before the first paint with the user.
+  const locale = user?.locale
+  useLayoutEffect(() => {
+    if (user) applyLanguage(resolveLanguage(locale))
+  }, [user, locale])
 
   if (isPending) return <div aria-busy="true" />
   if (isError) return <p role="alert">{t('App.couldNotReachTheServer')}</p>
@@ -83,11 +90,24 @@ function AuthGate() {
   )
 }
 
+/**
+ * Remounts the app tree when the language changes. Texts read through `i18n.t` in memoised column definitions
+ * and chart builders would otherwise keep the old language, and a remount is the one approach that cannot
+ * miss a spot. Server state lives in the QueryClient above, so nothing is refetched. The Account page
+ * gives the focus back to its language select.
+ */
+function LanguageBoundary({ children }: { children: ReactNode }) {
+  const { i18n } = useTranslation()
+  return <Fragment key={i18n.language}>{children}</Fragment>
+}
+
 export function App() {
   return (
     <Providers>
       <BrowserRouter>
-        <AuthGate />
+        <LanguageBoundary>
+          <AuthGate />
+        </LanguageBoundary>
       </BrowserRouter>
     </Providers>
   )

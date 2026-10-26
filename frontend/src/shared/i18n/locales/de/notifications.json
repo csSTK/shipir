@@ -1,0 +1,21 @@
+{
+  "NotificationsPage.markAsRead": "Als gelesen markieren",
+  "NotificationsPage.notifications": "Benachrichtigungen",
+  "NotificationsPage.unreadOnly": "Nur ungelesene",
+  "NotificationsPage.markAllAsRead": "Alle als gelesen markieren",
+  "NotificationsPage.couldNotLoadNotifications": "Die Benachrichtigungen konnten nicht geladen werden.",
+  "NotificationsPage.noUnreadNotifications": "Keine ungelesenen Benachrichtigungen.",
+  "NotificationsPage.noNotificationsYet": "Noch keine Benachrichtigungen.",
+  "NotificationsPage.hostAndDeploymentProblemsShow": "Probleme mit Hosts und Deployments erscheinen hier.",
+  "api.hostDown": "Host nicht erreichbar",
+  "api.hostUp": "Host wieder erreichbar",
+  "api.deploymentFailed": "Deployment fehlgeschlagen",
+  "api.containerCrashed": "Container abgestürzt",
+  "api.containerUnhealthy": "Container fehlerhaft",
+  "api.gitAutoUpdateFailed": "Git-Auto-Update fehlgeschlagen",
+  "api.imageUpdateApplied": "Image-Update angewendet",
+  "api.imageUpdateFailed": "Image-Update fehlgeschlagen",
+  "api.uptimeCheckDown": "Uptime-Check: nicht erreichbar",
+  "api.uptimeCheckUp": "Uptime-Check: wieder erreichbar",
+  "NotificationsPage.justNow": "gerade eben"
+}

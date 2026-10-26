@@ -61,6 +61,10 @@ public class User {
     @Column(name = "external_subject")
     private String externalSubject;
 
+    /** UI language ({@code en} or {@code de}); NULL until the user chooses one. */
+    @Column(length = 8)
+    private String locale;
+
     protected User() {
     }
 
@@ -96,6 +100,10 @@ public class User {
     public void changePasswordHash(String newPasswordHash, Instant changedAt) {
         this.passwordHash = newPasswordHash;
         this.passwordChangedAt = changedAt;
+    }
+
+    public void changeLocale(String newLocale) {
+        this.locale = newLocale;
     }
 
     public void changeRole(Role newRole) {
@@ -172,6 +180,10 @@ public class User {
 
     public Role getRole() {
         return role;
+    }
+
+    public String getLocale() {
+        return locale;
     }
 
     public Instant getCreatedAt() {

@@ -3,6 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { queryClient } from '../../app/queryClient.ts'
 import { ApiError, apiFetch } from '../../shared/api/client.ts'
+import { applyLanguage, i18n } from '../../shared/i18n/index.ts'
 import { AccountPage } from './AccountPage.tsx'
 
 vi.mock('../../shared/api/client.ts', async (importActual) => ({
@@ -31,10 +32,10 @@ function route(overrides: Record<string, () => unknown> = {}) {
   }) as typeof apiFetch)
 }
 
-function renderPage(externalIssuer: string | null = null) {
+function renderPage(externalIssuer: string | null = null, locale: string | null = null) {
   return render(
     <QueryClientProvider client={queryClient}>
-      <AccountPage user={{ username: 'pat', role: 'OPERATOR', externalIssuer }} />
+      <AccountPage user={{ username: 'pat', role: 'OPERATOR', externalIssuer, locale }} />
     </QueryClientProvider>,
   )
 }
@@ -50,6 +51,7 @@ const submit = () => screen.getByRole('button', { name: /change password/i })
 beforeEach(() => queryClient.clear())
 afterEach(() => {
   cleanup()
+  applyLanguage('en')
   vi.resetAllMocks()
 })
 
@@ -166,5 +168,41 @@ describe('AccountPage', () => {
     renderPage()
     fireEvent.click(await screen.findByRole('switch', { name: /host up/i }))
     expect(await screen.findByText(/could not save/i)).toBeInTheDocument()
+  })
+
+  it('shows the chosen language and defaults to automatic', () => {
+    route()
+    renderPage(null, 'de')
+    expect(screen.getByLabelText('Language')).toHaveValue('de')
+    cleanup()
+    renderPage(null, null)
+    expect(screen.getByLabelText('Language')).toHaveValue('')
+  })
+
+  it('saves the language choice and switches the UI immediately', async () => {
+    route()
+    renderPage()
+    fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'de' } })
+    await waitFor(() => expect(i18n.language).toBe('de'))
+    expect(apiFetchMock).toHaveBeenCalledWith('/auth/me/locale', { method: 'PUT', body: { locale: 'de' } })
+  })
+
+  it('clears the stored language when automatic is chosen', async () => {
+    route()
+    renderPage(null, 'de')
+    fireEvent.change(screen.getByLabelText('Language'), { target: { value: '' } })
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledWith('/auth/me/locale', { method: 'PUT', body: { locale: null } }))
+  })
+
+  it('keeps the language when saving fails and says so', async () => {
+    route({
+      'PUT /auth/me/locale': () => {
+        throw new ApiError(500, 'x')
+      },
+    })
+    renderPage()
+    fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'de' } })
+    expect(await screen.findByText(/could not save the language/i)).toBeInTheDocument()
+    expect(i18n.language).toBe('en')
   })
 })

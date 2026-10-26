@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError, apiFetch } from '../../shared/api/client.ts'
+import { applyLanguage, resolveLanguage } from '../../shared/i18n/index.ts'
 
 export type SetupStep = 'PASSWORD' | 'TWO_FACTOR' | 'ENVIRONMENT'
 
@@ -12,6 +13,8 @@ export interface CurrentUser {
   twoFactorEnabled?: boolean
   /** Issuer of the linked single sign-on identity; null/absent for local accounts. */
   externalIssuer?: string | null
+  /** Chosen UI language (`en`/`de`); null/absent while none is chosen (the browser language applies). */
+  locale?: string | null
 }
 
 /** Login answer for a user with 2FA: no session yet, a code is needed. */
@@ -44,6 +47,18 @@ export function useCurrentUser() {
     },
     retry: false,
     staleTime: Infinity,
+  })
+}
+
+/** Stores the user's UI language (null = follow the browser) and switches the UI once the server has it. */
+export function useChangeLocale() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (locale: string | null) => apiFetch<void>('/auth/me/locale', { method: 'PUT', body: { locale } }),
+    onSuccess: (_, locale) => {
+      applyLanguage(resolveLanguage(locale))
+      queryClient.setQueryData<CurrentUser | null>(CURRENT_USER_KEY, (user) => (user ? { ...user, locale } : user))
+    },
   })
 }
 

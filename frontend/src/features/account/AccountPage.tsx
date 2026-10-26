@@ -1,11 +1,12 @@
-import { useState, type FormEvent } from 'react'
-import { Badge, Button, Card, PageHeader, Skeleton, Switch, TextField } from '../../shared/ui/index.ts'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Badge, Button, Card, PageHeader, Select, Skeleton, Switch, TextField } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   CURRENT_USER_KEY,
   TwoFactorEnrollment,
   twoFactorErrorMessage,
+  useChangeLocale,
   useChangePassword,
   useDisableTwoFactor,
   type CurrentUser,
@@ -21,6 +22,7 @@ import {
 import { TokensSection } from './tokens/TokensSection.tsx'
 import { useTranslation } from 'react-i18next'
 import i18n from 'i18next'
+import { SUPPORTED_LANGUAGES } from '../../shared/i18n/index.ts'
 import './AccountPage.css'
 
 function passwordErrors(error: unknown): string[] {
@@ -103,6 +105,42 @@ function PasswordSection({ username }: { username: string }) {
         {changePassword.isPending ? t('AccountPage.saving') : t('AccountPage.changePassword')}
       </Button>
     </form>
+    </Card>
+  )
+}
+
+/** A language switch remounts the app (see `LanguageBoundary`); the new select takes the focus back. */
+let refocusLanguageSelect = false
+
+function LanguageSection({ locale }: { locale: string | null | undefined }) {
+  const { t } = useTranslation('account')
+  const change = useChangeLocale()
+  const select = useRef<HTMLSelectElement>(null)
+  useEffect(() => {
+    if (refocusLanguageSelect) select.current?.focus()
+    refocusLanguageSelect = false
+  }, [])
+  return (
+    <Card className="account__card">
+      <Select
+        ref={select}
+        label={t('AccountPage.language')}
+        value={locale ?? ''}
+        onChange={(e) => {
+          refocusLanguageSelect = true
+          change.mutate(e.target.value || null, { onError: () => (refocusLanguageSelect = false) })
+        }}
+        disabled={change.isPending}
+        help={t('AccountPage.automaticFollowsYourBrowserLanguage')}
+        error={change.isError ? t('AccountPage.couldNotSaveTheLanguage') : null}
+      >
+        <option value="">{t('AccountPage.automatic')}</option>
+        {SUPPORTED_LANGUAGES.map((language) => (
+          <option key={language} value={language}>
+            {t(`AccountPage.language_${language}`)}
+          </option>
+        ))}
+      </Select>
     </Card>
   )
 }
@@ -228,7 +266,7 @@ function TwoFactorSection({ enabled }: { enabled: boolean }) {
 export function AccountPage({
   user,
 }: {
-  user: Pick<CurrentUser, 'username' | 'role' | 'twoFactorEnabled' | 'externalIssuer'>
+  user: Pick<CurrentUser, 'username' | 'role' | 'twoFactorEnabled' | 'externalIssuer' | 'locale'>
 }) {
   const { t } = useTranslation('account')
   return (
@@ -251,6 +289,7 @@ export function AccountPage({
           )}
         </dl>
       </Card>
+      <LanguageSection locale={user.locale} />
       <PasswordSection username={user.username} />
       <TwoFactorSection enabled={user.twoFactorEnabled === true} />
       <TokensSection />

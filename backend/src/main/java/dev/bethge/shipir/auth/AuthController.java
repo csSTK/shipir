@@ -5,6 +5,7 @@ import dev.bethge.shipir.audit.AuditRecord;
 import dev.bethge.shipir.audit.AuditService;
 import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.auth.dto.CurrentUserResponse;
+import dev.bethge.shipir.auth.dto.LocaleRequest;
 import dev.bethge.shipir.auth.dto.LoginRequest;
 import dev.bethge.shipir.auth.dto.PasswordChangeRequest;
 import dev.bethge.shipir.auth.dto.PasswordPolicyErrorResponse;
@@ -33,6 +34,7 @@ import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -149,6 +151,12 @@ class AuthController {
                 .<ResponseEntity<?>>map(u -> ResponseEntity.ok(CurrentUserResponse.from(u, setupStatus.stepFor(u), ApiTokenAuthentication.effectiveRole(authentication, u.getRole()))))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(new ErrorResponse("UNAUTHENTICATED", "Authentication required")));
+    }
+
+    @PutMapping("/me/locale")
+    ResponseEntity<Void> changeLocale(@Valid @RequestBody LocaleRequest body, Authentication authentication) {
+        userService.changeLocale(authentication.getName(), body.locale());
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/password")

@@ -490,5 +490,8 @@
   "EnvEditor.addedSkippedLines_one": "Added {{added}}. Skipped line {{lines}}.",
   "EnvEditor.addedSkippedLines_other": "Added {{added}}. Skipped lines {{lines}}.",
   "EnvEditor.addedVariables_one": "Added {{count}} variable.",
-  "EnvEditor.addedVariables_other": "Added {{count}} variables."
+  "EnvEditor.addedVariables_other": "Added {{count}} variables.",
+  "UptimeCard.noResponse": "no response",
+  "ComposeWizard.networkLowercase": "network",
+  "ComposeWizard.volumeLowercase": "volume"
 }

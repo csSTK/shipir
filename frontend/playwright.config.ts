@@ -9,7 +9,7 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${port}`,
     trace: 'on-first-retry',
-    // The UI is English-only for now; a fixed locale keeps dates and numbers (Intl) identical on every machine.
+    // The UI follows the browser language while the user has none set; a fixed locale keeps the UI language and Intl output identical on every machine.
     locale: 'en-US',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
