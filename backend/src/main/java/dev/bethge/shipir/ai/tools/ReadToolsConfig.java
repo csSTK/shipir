@@ -10,6 +10,8 @@ import dev.bethge.shipir.host.HostOverviewService;
 import dev.bethge.shipir.host.HostResourcesService;
 import dev.bethge.shipir.host.HostService;
 import dev.bethge.shipir.notification.NotificationService;
+import dev.bethge.shipir.permission.PermissionGrantService;
+import dev.bethge.shipir.permission.TeamService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import tools.jackson.databind.ObjectMapper;
@@ -141,6 +143,38 @@ class ReadToolsConfig {
                     instant(a, "to");
                     return audit.find(intArg(a, "page", 0), intArg(a, "size", 20),
                             (String) a.get("action"), (String) a.get("username"), (String) a.get("from"), (String) a.get("to"));
+                });
+    }
+
+    /** Names and levels only. ADMIN-only: the registry neither offers nor executes it for other roles. */
+    @Bean
+    AiTool listAccessGrantsTool(PermissionGrantService grants, TeamService teams) {
+        Map<String, Object> props = new LinkedHashMap<>();
+        for (String key : List.of("hostId", "deploymentId", "userId", "teamId")) {
+            props.put(key, UUID_PROP);
+        }
+        return read("list_access_grants", "Access grants. Pass exactly one of hostId, deploymentId, userId, teamId.",
+                schema(props), Role.ADMIN, (a, c) -> {
+                    if (props.keySet().stream().filter(a::containsKey).count() != 1) {
+                        throw new ToolArgumentException("pass exactly one of hostId, deploymentId, userId, teamId");
+                    }
+                    if (a.containsKey("hostId")) {
+                        return grants.forHost(uuid(a, "hostId"));
+                    }
+                    if (a.containsKey("deploymentId")) {
+                        return grants.forDeployment(uuid(a, "deploymentId"));
+                    }
+                    if (a.containsKey("userId")) {
+                        return grants.get(uuid(a, "userId"));
+                    }
+                    UUID teamId = uuid(a, "teamId");
+                    var team = teams.get(teamId);
+                    var teamGrants = grants.getForTeam(teamId);
+                    Map<String, Object> out = new LinkedHashMap<>();
+                    out.put("name", team.name());
+                    out.put("members", team.members());
+                    out.put("grants", teamGrants.grants());
+                    return out;
                 });
     }
 

@@ -10,20 +10,29 @@ import org.springframework.context.ApplicationEventPublisher;
 import dev.bethge.shipir.permission.dto.GrantRequest;
 import dev.bethge.shipir.permission.dto.GrantResponse;
 import dev.bethge.shipir.permission.dto.PermissionsResponse;
+import dev.bethge.shipir.permission.dto.SubjectGrantResponse;
+import dev.bethge.shipir.permission.dto.SubjectGrantsResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
-/** ADMIN management of the grants of a user or a team. PUT replaces the complete set. */
+/**
+ * ADMIN management of the grants of a user or a team. PUT replaces the complete set. The read methods are public
+ * for the AI tool {@code list_access_grants}; callers must be ADMIN (the tool is registered for ADMIN only).
+ */
 @Service
-class PermissionGrantService {
+public class PermissionGrantService {
 
     private final PermissionRepository grants;
     private final UserRepository users;
@@ -46,7 +55,7 @@ class PermissionGrantService {
     }
 
     @Transactional(readOnly = true)
-    PermissionsResponse get(UUID userId) {
+    public PermissionsResponse get(UUID userId) {
         find(userId);
         return response(userId);
     }
@@ -99,9 +108,42 @@ class PermissionGrantService {
     }
 
     @Transactional(readOnly = true)
-    PermissionsResponse getForTeam(UUID teamId) {
+    public PermissionsResponse getForTeam(UUID teamId) {
         findTeam(teamId);
         return teamResponse(teamId);
+    }
+
+    /** Who may access the host: direct user grants and team grants, with names and levels only. */
+    @Transactional(readOnly = true)
+    public SubjectGrantsResponse forHost(UUID hostId) {
+        if (!hosts.existsById(hostId)) {
+            throw new PermissionException(HttpStatus.NOT_FOUND, "UNKNOWN_HOST", "Unknown host");
+        }
+        return subjectGrants(grants.findByHostId(hostId));
+    }
+
+    @Transactional(readOnly = true)
+    public SubjectGrantsResponse forDeployment(UUID deploymentId) {
+        if (deployments.hostIdOf(deploymentId).isEmpty()) {
+            throw new PermissionException(HttpStatus.NOT_FOUND, "UNKNOWN_DEPLOYMENT", "Unknown deployment");
+        }
+        return subjectGrants(grants.findByDeploymentId(deploymentId));
+    }
+
+    private SubjectGrantsResponse subjectGrants(List<Permission> permissions) {
+        Map<UUID, String> userNames = users.findAllById(permissions.stream().map(Permission::getUserId)
+                .filter(Objects::nonNull).collect(Collectors.toSet())).stream()
+                .collect(Collectors.toMap(User::getId, User::getUsername));
+        Map<UUID, String> teamNames = teams.findAllById(permissions.stream().map(Permission::getTeamId)
+                .filter(Objects::nonNull).collect(Collectors.toSet())).stream()
+                .collect(Collectors.toMap(Team::getId, Team::getName));
+        List<SubjectGrantResponse> list = permissions.stream().map(p -> p.getUserId() != null
+                        ? new SubjectGrantResponse("USER", p.getUserId(), userNames.get(p.getUserId()), p.getLevel())
+                        : new SubjectGrantResponse("TEAM", p.getTeamId(), teamNames.get(p.getTeamId()), p.getLevel()))
+                .sorted(Comparator.comparing(SubjectGrantResponse::subjectType)
+                        .thenComparing(g -> String.valueOf(g.subjectName()), String.CASE_INSENSITIVE_ORDER))
+                .toList();
+        return new SubjectGrantsResponse(list);
     }
 
     @Auditable(action = "TEAM_PERMISSIONS_UPDATE", targetType = "TEAM", targetId = "#teamId")

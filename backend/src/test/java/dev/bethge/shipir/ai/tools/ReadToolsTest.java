@@ -102,6 +102,7 @@ class ReadToolsTest {
     @BeforeEach
     void setUp() {
         jdbc.update("DELETE FROM audit_log");
+        jdbc.update("DELETE FROM teams");
         jdbc.update("DELETE FROM notifications");
         jdbc.update("DELETE FROM notification_webhooks");
         jdbc.update("DELETE FROM deployments");
@@ -383,7 +384,7 @@ class ReadToolsTest {
         assertThat(readTools(Role.ADMIN)).extracting(AiTool::name).containsExactlyInAnyOrder(
                 "list_hosts", "host_overview", "list_deployments", "get_managed_deployment", "list_deployment_versions",
                 "list_containers", "list_images", "list_networks", "list_volumes", "list_notifications",
-                "list_git_credentials", "list_audit_log", "list_config_files", "read_config_file");
+                "list_git_credentials", "list_audit_log", "list_config_files", "read_config_file", "list_access_grants");
         assertThat(readTools(Role.OPERATOR)).extracting(AiTool::name)
                 .hasSize(13).contains("list_git_credentials", "read_config_file").doesNotContain("list_audit_log");
         assertThat(readTools(Role.VIEWER)).extracting(AiTool::name)
@@ -433,7 +434,8 @@ class ReadToolsTest {
                 "get_managed_deployment", stack(hostId, deploymentId),
                 "list_deployment_versions", stack(hostId, deploymentId),
                 "list_config_files", stack(hostId, deploymentId),
-                "read_config_file", configArgs(hostId, deploymentId, "app.conf"));
+                "read_config_file", configArgs(hostId, deploymentId, "app.conf"),
+                "list_access_grants", "{\"hostId\":\"" + tcpHostId + "\"}");
         StringBuilder all = new StringBuilder();
         for (AiTool tool : readTools(Role.ADMIN)) {
             String args = argsByTool.getOrDefault(tool.name(),
@@ -560,5 +562,117 @@ class ReadToolsTest {
 
         assertThat(result.error()).isTrue();
         assertThat(result.content()).contains("INVALID_ARGUMENTS");
+    }
+
+    // ---- list_access_grants (ADMIN only) ----
+
+    private UUID team(String name, String member) {
+        jdbc.update("INSERT INTO teams (name) VALUES (?)", name);
+        UUID id = jdbc.queryForObject("SELECT id FROM teams WHERE name = ?", UUID.class, name);
+        if (member != null) {
+            jdbc.update("INSERT INTO team_members (team_id, user_id) SELECT ?, id FROM users WHERE username = ?", id, member);
+        }
+        return id;
+    }
+
+    private static String only(String key, UUID id) {
+        return "{\"" + key + "\":\"" + id + "\"}";
+    }
+
+    @Test
+    void listAccessGrantsForAHostNamesUsersAndTeamsWithLevels() {
+        UUID ops = team("ops", "viewer");
+        jdbc.update("INSERT INTO permissions (team_id, host_id, level) VALUES (?, ?, 'VIEW')", ops, hostId);
+
+        ToolResult result = run("list_access_grants", only("hostId", hostId), Role.ADMIN);
+
+        assertThat(result.error()).as(result.content()).isFalse();
+        JsonNode grants = mapper.readTree(result.content()).get("grants");
+        assertThat(grants).hasSize(3);
+        List<String> rows = new java.util.ArrayList<>();
+        for (JsonNode g : grants) {
+            assertThat(g.propertyNames()).containsExactlyInAnyOrder("subjectType", "subjectId", "subjectName", "level");
+            rows.add(g.get("subjectType").asString() + ":" + g.get("subjectName").asString() + ":" + g.get("level").asString());
+        }
+        assertThat(rows).containsExactlyInAnyOrder("USER:operator:OPERATE", "USER:viewer:VIEW", "TEAM:ops:VIEW");
+        assertThat(result.content()).doesNotContain("passwordHash").doesNotContain("email");
+    }
+
+    @Test
+    void listAccessGrantsForADeploymentOnlyReturnsGrantsOnThatDeployment() {
+        jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) SELECT id, ?, 'VIEW' FROM users WHERE username = 'viewer'",
+                deploymentId);
+
+        ToolResult result = run("list_access_grants", only("deploymentId", deploymentId), Role.ADMIN);
+
+        assertThat(result.error()).as(result.content()).isFalse();
+        JsonNode grants = mapper.readTree(result.content()).get("grants");
+        assertThat(grants).hasSize(1);
+        assertThat(grants.get(0).get("subjectName").asString()).isEqualTo("viewer");
+        assertThat(grants.get(0).get("subjectType").asString()).isEqualTo("USER");
+        assertThat(grants.get(0).get("level").asString()).isEqualTo("VIEW");
+    }
+
+    @Test
+    void listAccessGrantsForAUserReturnsTheirDirectGrants() {
+        UUID operator = ctx(Role.OPERATOR).userId();
+
+        ToolResult result = run("list_access_grants", only("userId", operator), Role.ADMIN);
+
+        assertThat(result.error()).as(result.content()).isFalse();
+        JsonNode grants = mapper.readTree(result.content()).get("grants");
+        assertThat(grants).hasSize(2);
+        for (JsonNode g : grants) {
+            assertThat(g.get("level").asString()).isEqualTo("OPERATE");
+            assertThat(g.get("hostId").asString()).isIn(hostId.toString(), tcpHostId.toString());
+        }
+    }
+
+    @Test
+    void listAccessGrantsForATeamReturnsMembersAndGrants() {
+        UUID ops = team("ops", "operator");
+        jdbc.update("INSERT INTO permissions (team_id, host_id, level) VALUES (?, ?, 'VIEW')", ops, hostId);
+
+        ToolResult result = run("list_access_grants", only("teamId", ops), Role.ADMIN);
+
+        assertThat(result.error()).as(result.content()).isFalse();
+        JsonNode json = mapper.readTree(result.content());
+        assertThat(json.get("name").asString()).isEqualTo("ops");
+        assertThat(json.get("members")).hasSize(1);
+        assertThat(json.get("members").get(0).get("username").asString()).isEqualTo("operator");
+        assertThat(json.get("grants")).hasSize(1);
+        assertThat(json.get("grants").get(0).get("hostId").asString()).isEqualTo(hostId.toString());
+        assertThat(json.get("grants").get(0).get("level").asString()).isEqualTo("VIEW");
+    }
+
+    @Test
+    void listAccessGrantsReportsUnknownIdsWithSpecificCodes() {
+        assertThat(run("list_access_grants", only("hostId", UUID.randomUUID()), Role.ADMIN).content())
+                .contains("UNKNOWN_HOST");
+        assertThat(run("list_access_grants", only("deploymentId", UUID.randomUUID()), Role.ADMIN).content())
+                .contains("UNKNOWN_DEPLOYMENT");
+        assertThat(run("list_access_grants", only("userId", UUID.randomUUID()), Role.ADMIN).content())
+                .contains("USER_NOT_FOUND");
+        assertThat(run("list_access_grants", only("teamId", UUID.randomUUID()), Role.ADMIN).content())
+                .contains("TEAM_NOT_FOUND");
+        assertThat(run("list_access_grants", only("userId", UUID.randomUUID()), Role.ADMIN).error()).isTrue();
+    }
+
+    @Test
+    void listAccessGrantsNeedsExactlyOneSubjectArgument() {
+        assertThat(run("list_access_grants", "{}", Role.ADMIN).content()).contains("INVALID_ARGUMENTS");
+        assertThat(run("list_access_grants", "{\"hostId\":\"" + hostId + "\",\"userId\":\"" + UUID.randomUUID() + "\"}",
+                Role.ADMIN).content()).contains("INVALID_ARGUMENTS");
+    }
+
+    @Test
+    void listAccessGrantsIsNotOfferedToOperatorsAndViewersAndExecuteIsDenied() {
+        for (Role role : List.of(Role.OPERATOR, Role.VIEWER)) {
+            assertThat(registry.toolsFor(role)).extracting(AiTool::name).doesNotContain("list_access_grants");
+            assertThat(registry.definitionsFor(role).toString()).doesNotContain("list_access_grants");
+            ToolResult denied = run("list_access_grants", only("hostId", hostId), role);
+            assertThat(denied.error()).isTrue();
+            assertThat(denied.content()).contains("UNKNOWN_TOOL").doesNotContain("operator").doesNotContain("viewer");
+        }
     }
 }

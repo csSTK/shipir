@@ -2,7 +2,7 @@ package dev.bethge.shipir.permission;
 
 import org.springframework.http.HttpStatus;
 
-class PermissionException extends RuntimeException {
+public class PermissionException extends RuntimeException {
 
     private final HttpStatus status;
     private final String code;
@@ -17,7 +17,7 @@ class PermissionException extends RuntimeException {
         return status;
     }
 
-    String code() {
+    public String code() {
         return code;
     }
 }

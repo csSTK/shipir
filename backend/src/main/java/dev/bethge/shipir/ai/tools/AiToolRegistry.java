@@ -5,6 +5,7 @@ import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.common.security.AiInvocationContext;
 import dev.bethge.shipir.compose.DeploymentException;
 import dev.bethge.shipir.config_editor.ConfigFileException;
+import dev.bethge.shipir.permission.PermissionException;
 import dev.bethge.shipir.git.GitException;
 import dev.bethge.shipir.git.GitOperationException;
 import dev.bethge.shipir.host.HostException;
@@ -228,6 +229,8 @@ public class AiToolRegistry {
             String message = e.details().isEmpty() ? e.getMessage() : e.getMessage() + ": " + String.join("; ", e.details());
             return ToolResult.error(e.code(), message);
         } catch (ConfigFileException e) {
+            return ToolResult.error(e.code(), e.getMessage());
+        } catch (PermissionException e) {
             return ToolResult.error(e.code(), e.getMessage());
         } catch (WebhookException e) {
             return ToolResult.error(e.code(), e.getMessage());

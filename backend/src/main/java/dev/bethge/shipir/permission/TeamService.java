@@ -52,7 +52,7 @@ public class TeamService {
     }
 
     @Transactional(readOnly = true)
-    TeamDetailResponse get(UUID id) {
+    public TeamDetailResponse get(UUID id) {
         return detail(find(id));
     }
 

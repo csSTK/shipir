@@ -16,6 +16,10 @@ interface PermissionRepository extends JpaRepository<Permission, UUID> {
 
     List<Permission> findByTeamId(UUID teamId);
 
+    List<Permission> findByHostId(UUID hostId);
+
+    List<Permission> findByDeploymentId(UUID deploymentId);
+
     void deleteByTeamId(UUID teamId);
 
     /** Everything that applies to the user: own grants plus grants of all teams the user belongs to. */
