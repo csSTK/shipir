@@ -323,3 +323,30 @@ export function specToState(spec: TemplateSpecInput): WizardState {
   })
   return { services: services.length > 0 ? services : [emptyService()], networks: (spec.networks ?? []).map(resource), volumes: (spec.volumes ?? []).map(resource) }
 }
+
+export interface FreePortSuggestion {
+  preferred: number
+  /** Null when no port is left at all. */
+  free: number | null
+}
+
+/** Distinct numeric host ports the wizard state asks for (blank "any" ports are skipped). */
+export function preferredHostPorts(state: WizardState): number[] {
+  const ports = state.services.flatMap((s) => s.ports.map((p) => (/^\d+$/.test(p.host.trim()) ? Number(p.host.trim()) : null)))
+  return ports.filter((p, i): p is number => p !== null && ports.indexOf(p) === i)
+}
+
+/** Swaps each host port that has a different free suggestion; everything else stays. */
+export function applyFreePorts(state: WizardState, suggestions: FreePortSuggestion[]): { state: WizardState; replaced: { from: number; to: number }[] } {
+  const target = new Map<number, number>()
+  for (const s of suggestions) if (s.free !== null && s.free !== s.preferred) target.set(s.preferred, s.free)
+  const replaced = [...target].map(([from, to]) => ({ from, to }))
+  const services = state.services.map((svc) => ({
+    ...svc,
+    ports: svc.ports.map((p) => {
+      const to = /^\d+$/.test(p.host.trim()) ? target.get(Number(p.host.trim())) : undefined
+      return to === undefined ? p : { ...p, host: String(to) }
+    }),
+  }))
+  return { state: { ...state, services }, replaced: replaced.filter((r) => state.services.some((s) => s.ports.some((p) => p.host.trim() === String(r.from)))) }
+}

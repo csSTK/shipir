@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildSpec, emptyDomain, emptyService, referencedEnvKeys, specToState, splitCommand, validatePort, validateWizard, type ServiceForm, type WizardState } from './model.ts'
+import { applyFreePorts, buildSpec, preferredHostPorts, emptyDomain, emptyService, referencedEnvKeys, specToState, splitCommand, validatePort, validateWizard, type ServiceForm, type WizardState } from './model.ts'
 
 function service(patch: Partial<ServiceForm>): ServiceForm {
   return { ...emptyService(), name: 'web', image: 'nginx:1.27', ...patch }
@@ -200,5 +200,34 @@ describe('specToState', () => {
     const s = specToState({ services: [{ name: 'a', image: 'x' }] })
     expect(s.services[0]).toMatchObject({ command: '', restart: '', ports: [], env: [], networks: [] })
     expect(specToState({}).services).toHaveLength(1)
+  })
+})
+
+describe('applyFreePorts', () => {
+  const seeded = specToState({
+    services: [
+      { name: 'a', image: 'x', ports: [{ host: 8080, container: 80 }, { host: 9090, container: 90 }, { container: 5000 }] },
+    ],
+    networks: [],
+    volumes: [],
+  })
+
+  it('replaces only clashing host ports and reports them', () => {
+    const r = applyFreePorts(seeded, [{ preferred: 8080, free: 8083 }, { preferred: 9090, free: 9090 }])
+    expect(r.state.services[0].ports.map((p) => p.host)).toEqual(['8083', '9090', ''])
+    expect(r.replaced).toEqual([{ from: 8080, to: 8083 }])
+  })
+
+  it('keeps the port when no free port is left', () => {
+    const r = applyFreePorts(seeded, [{ preferred: 8080, free: null }])
+    expect(r.state.services[0].ports[0].host).toBe('8080')
+    expect(r.replaced).toEqual([])
+  })
+})
+
+describe('preferredHostPorts', () => {
+  it('lists distinct numeric host ports', () => {
+    const s = specToState({ services: [{ name: 'a', image: 'x', ports: [{ host: 80, container: 1 }, { host: 80, container: 2 }, { container: 3 }] }], networks: [], volumes: [] })
+    expect(preferredHostPorts(s)).toEqual([80])
   })
 })

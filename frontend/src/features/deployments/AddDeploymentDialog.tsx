@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ApiError } from '../../shared/api/client.ts'
 import { useCurrentUser } from '../auth/index.ts'
@@ -6,8 +6,9 @@ import { useCreateDeployment, type EnvEntry } from './api.ts'
 import { EnvEditor, toPayload, validateEnv, YamlEditor } from './editor/index.ts'
 import { describeDeploymentError } from './deploymentErrors.ts'
 import { GitSourceFields, type GitFormValue } from './GitSourceFields.tsx'
-import { ComposeWizard, referencedEnvKeys, specToState, type WizardState } from './wizard/index.ts'
+import { ComposeWizard, applyFreePorts, preferredHostPorts, referencedEnvKeys, specToState, type WizardState } from './wizard/index.ts'
 import { TemplatePicker, type AppTemplate } from './templates/index.ts'
+import { fetchFreePorts } from './templates/api.ts'
 import './wizard/wizard.css'
 import './templates/templates.css'
 import { Button, Dialog } from '../../shared/ui/index.ts'
@@ -33,6 +34,9 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
   const [mode, setMode] = useState<'template' | 'yaml' | 'wizard'>('yaml')
   const [template, setTemplate] = useState<AppTemplate | null>(null)
   const [seed, setSeed] = useState<{ key: number; state?: WizardState }>({ key: 0 })
+  const latestPick = useRef(0)
+  const [checkingPorts, setCheckingPorts] = useState(false)
+  const [portNotices, setPortNotices] = useState<{ from: number; to: number }[]>([])
   const [problem, setProblem] = useState<string | null>(null)
   const [yamlError, setYamlError] = useState<{ message: string; details?: string[] } | null>(null)
 
@@ -49,8 +53,22 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
   }
 
   /** Fills the wizard from the template and pre-creates the env rows it needs; the wizard then works as usual. */
-  function pickTemplate(t: AppTemplate) {
-    const state = specToState(t.spec)
+  async function pickTemplate(t: AppTemplate) {
+    const pick = ++latestPick.current
+    let state = specToState(t.spec)
+    let replaced: { from: number; to: number }[] = []
+    const preferred = preferredHostPorts(state)
+    if (preferred.length > 0) {
+      setCheckingPorts(true)
+      try {
+        ;({ state, replaced } = applyFreePorts(state, await fetchFreePorts(hostId, preferred)))
+      } catch {
+        // Lookup failed: keep the template's own ports, the user can still edit them.
+      }
+    }
+    if (pick !== latestPick.current) return // a newer pick took over and owns the flag
+    setCheckingPorts(false)
+    setPortNotices(replaced)
     setTemplate(t)
     setSeed((current) => ({ key: current.key + 1, state }))
     addEnvKeys([...t.env.map((h) => h.key), ...referencedEnvKeys(state)])
@@ -139,8 +157,20 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
             </label>
           ))}
         </div>
-        {source === 'file' && mode === 'template' && <TemplatePicker onSelect={pickTemplate} selectedId={template?.id} />}
+        {source === 'file' && mode === 'template' && <TemplatePicker onSelect={(t) => void pickTemplate(t)} selectedId={template?.id} />}
+        {source === 'file' && mode === 'template' && checkingPorts && (
+          <p className="tp__hint" role="status">
+            {tr('AddDeploymentDialog.checkingFreePorts')}
+          </p>
+        )}
         <div hidden={source !== 'file' || mode !== 'wizard'}>
+          {portNotices.length > 0 && (
+            <ul className="tp-notice" role="status">
+              {portNotices.map((n) => (
+                <li key={n.from}>{tr('AddDeploymentDialog.portTakenUsing', { from: n.from, to: n.to })}</li>
+              ))}
+            </ul>
+          )}
           {template && template.env.length > 0 && (
             <div className="tp-vars">
               <p className="tp-vars__title">{tr('AddDeploymentDialog.variablesForName', { name: template.name })}</p>

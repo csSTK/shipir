@@ -42,8 +42,9 @@ const templates = [
   },
 ]
 
-function serve(list: unknown = templates) {
+function serve(list: unknown = templates, ports: unknown = { used: [], suggestions: [{ preferred: 8080, free: 8080 }] }) {
   apiFetch.mockImplementation((path: string) => {
+    if (path.startsWith('/hosts/h1/ports/free')) return ports instanceof Error ? Promise.reject(ports) : Promise.resolve(ports)
     if (path === '/auth/me') return Promise.resolve({ username: 'u', role: 'OPERATOR', setupRequired: false })
     if (path === '/templates') return list instanceof Error ? Promise.reject(list) : Promise.resolve(list)
     return Promise.reject(new ApiError(404, 'x', 'NOT_FOUND'))
@@ -102,6 +103,55 @@ describe('template picker', () => {
     fireEvent.change(screen.getByLabelText('Name', { exact: true }), { target: { value: 'mysite' } })
     fireEvent.click(await screen.findByRole('button', { name: /Nginx/ }))
     expect(screen.getByLabelText('Name', { exact: true })).toHaveValue('mysite')
-    expect(within(screen.getByRole('group', { name: 'Service 1' })).getByLabelText('Service 1 image')).toHaveValue('nginx:1.27')
+    expect(within(await screen.findByRole('group', { name: 'Service 1' })).getByLabelText('Service 1 image')).toHaveValue('nginx:1.27')
+  })
+
+  it('replaces a clashing host port, shows a notice and leaves the port editable', async () => {
+    serve(templates, { used: [{ port: 8080, protocol: 'tcp' }], suggestions: [{ preferred: 8080, free: 8083 }] })
+    open()
+    fireEvent.click(await screen.findByRole('button', { name: /Nginx/ }))
+    expect(await screen.findByText('Port 8080 was taken, using 8083.')).toBeInTheDocument()
+    expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/ports/free?preferred=8080')
+    const host = screen.getByLabelText('Service 1 port 1 host')
+    expect(host).toHaveValue('8083')
+    fireEvent.change(host, { target: { value: '9000' } })
+    expect(host).toHaveValue('9000')
+  })
+
+  it('leaves non-clashing ports untouched without a notice', async () => {
+    serve()
+    open()
+    fireEvent.click(await screen.findByRole('button', { name: /Nginx/ }))
+    expect(await screen.findByLabelText('Service 1 port 1 host')).toHaveValue('8080')
+    expect(screen.queryByText(/was taken/)).not.toBeInTheDocument()
+  })
+
+  it('falls back to the template defaults when the ports lookup fails', async () => {
+    serve(templates, new ApiError(500, 'boom', 'X'))
+    open()
+    fireEvent.click(await screen.findByRole('button', { name: /Nginx/ }))
+    expect(await screen.findByLabelText('Service 1 port 1 host')).toHaveValue('8080')
+    expect(screen.getByRole('radio', { name: 'Form wizard' })).toBeChecked()
+    expect(screen.queryByText(/was taken/)).not.toBeInTheDocument()
+  })
+
+  it('clears the checking hint when a later pick without ports wins over a slow one', async () => {
+    serve()
+    let release: (v: unknown) => void = () => {}
+    const base = apiFetch.getMockImplementation()!
+    apiFetch.mockImplementation((path: string) =>
+      path.startsWith('/hosts/h1/ports/free') ? new Promise((r) => (release = r)) : base(path),
+    )
+    open()
+    fireEvent.click(await screen.findByRole('button', { name: /Nginx/ }))
+    expect(await screen.findByText('Checking free ports…')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /WordPress/ }))
+    expect(await screen.findByLabelText('Service 1 image')).toHaveValue('wordpress:6')
+    release({ used: [], suggestions: [{ preferred: 8080, free: 8083 }] })
+    fireEvent.click(screen.getByRole('radio', { name: 'From template' }))
+    await waitFor(() => expect(screen.queryByText('Checking free ports…')).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('radio', { name: 'Form wizard' }))
+    expect(screen.getByLabelText('Service 1 image')).toHaveValue('wordpress:6')
+    expect(screen.queryByText(/was taken/)).not.toBeInTheDocument()
   })
 })

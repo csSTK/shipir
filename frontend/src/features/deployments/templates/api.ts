@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '../../../shared/api/client.ts'
-import type { TemplateSpecInput } from '../wizard/index.ts'
+import type { FreePortSuggestion, TemplateSpecInput } from '../wizard/index.ts'
 
 export interface TemplateEnvHint {
   key: string
@@ -28,4 +28,10 @@ export function useTemplates() {
     queryFn: () => apiFetch<AppTemplate[]>('/templates'),
     staleTime: Infinity,
   })
+}
+
+/** Free host ports for `preferred` on a host (`GET /api/hosts/{id}/ports/free`). */
+export async function fetchFreePorts(hostId: string, preferred: number[]): Promise<FreePortSuggestion[]> {
+  const res = await apiFetch<{ suggestions: FreePortSuggestion[] }>(`/hosts/${encodeURIComponent(hostId)}/ports/free?preferred=${preferred.join(',')}`)
+  return res.suggestions
 }

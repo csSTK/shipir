@@ -538,5 +538,7 @@
   "model.thisDomainIsAlreadyUsed": "This domain is already used by another service.",
   "model.useLettersDigitsDotsHyphens": "Use letters, digits, dots, hyphens and underscores; start with a letter or digit.",
   "ComposeWizard.proxyNameTRAEFIK": "Traefik",
-  "ComposeWizard.proxyNameCADDY": "Caddy"
+  "ComposeWizard.proxyNameCADDY": "Caddy",
+  "AddDeploymentDialog.checkingFreePorts": "Checking free ports…",
+  "AddDeploymentDialog.portTakenUsing": "Port {{from}} was taken, using {{to}}."
 }
