@@ -17,5 +17,7 @@ public record ExecProperties(
         /** Largest accepted input frame. */
         @DefaultValue("65536") int maxInputBytes,
         /** How often idle and abandoned consoles are looked for. */
-        @DefaultValue("10s") Duration sweepInterval) {
+        @DefaultValue("10s") Duration sweepInterval,
+        /** Lets OPERATORs with an OPERATE grant (host or owning deployment) open consoles; ADMINs always may. */
+        @DefaultValue("false") boolean operatorEnabled) {
 }

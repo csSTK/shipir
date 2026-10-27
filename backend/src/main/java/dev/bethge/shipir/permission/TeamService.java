@@ -3,9 +3,11 @@ package dev.bethge.shipir.permission;
 import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
+import dev.bethge.shipir.common.security.UserAccessChangedEvent;
 import dev.bethge.shipir.permission.dto.TeamDetailResponse;
 import dev.bethge.shipir.permission.dto.TeamMemberResponse;
 import dev.bethge.shipir.permission.dto.TeamResponse;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -34,9 +36,11 @@ public class TeamService {
     private final PermissionRepository grants;
     private final UserRepository users;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
     TeamService(TeamRepository teams, TeamMemberRepository members, PermissionRepository grants,
-                UserRepository users, Clock clock) {
+                UserRepository users, Clock clock, ApplicationEventPublisher events) {
+        this.events = events;
         this.teams = teams;
         this.members = members;
         this.grants = grants;
@@ -88,9 +92,11 @@ public class TeamService {
     @Transactional
     void delete(UUID id) {
         find(id);
+        Set<UUID> memberIds = members.findByTeam(id).stream().map(TeamMember::getUserId).collect(Collectors.toSet());
         // memberships and team grants go with it (ON DELETE CASCADE)
         teams.deleteById(id);
         teams.flush();
+        publishAccessChanged(memberIds);
     }
 
     /** Replaces the complete member set of the team. */
@@ -105,6 +111,10 @@ public class TeamService {
         }
         Set<UUID> current = members.findByTeam(id).stream().map(TeamMember::getUserId).collect(Collectors.toSet());
         applyDiff(id, current, wanted);
+        Set<UUID> changed = new HashSet<>(current);
+        changed.addAll(wanted);
+        changed.removeIf(u -> current.contains(u) && wanted.contains(u));
+        publishAccessChanged(changed);
         return detail(team);
     }
 
@@ -129,6 +139,16 @@ public class TeamService {
             }
         }
         members.flush();
+        users.findById(userId).ifPresent(u -> {
+            if (!wanted.equals(current)) {
+                events.publishEvent(new UserAccessChangedEvent(u.getUsername()));
+            }
+        });
+    }
+
+    /** Open consoles and subscriptions of these users are re-checked: their team access may have changed. */
+    private void publishAccessChanged(Set<UUID> userIds) {
+        users.findAllById(userIds).forEach(u -> events.publishEvent(new UserAccessChangedEvent(u.getUsername())));
     }
 
     private void applyDiff(UUID teamId, Set<UUID> current, Set<UUID> wanted) {

@@ -83,6 +83,11 @@ shipir:
     dir: ${SHIPIR_VOLUME_BACKUP_DIR:./data/volume-backups}
     scheduler-enabled: true
     tick: 1m
+  streaming:
+    exec:
+      # interactive container consoles are ADMIN only; true also lets OPERATORs with an OPERATE grant on the host
+      # or the owning deployment open one (shipr-bbzh.4)
+      operator-enabled: false
   container-files:
     max-bytes: 100MB
     max-scan-bytes: 64MB

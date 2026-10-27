@@ -39,17 +39,19 @@ public class PermissionGrantService {
     private final DockerHostRepository hosts;
     private final DeploymentDirectory deployments;
     private final TeamRepository teams;
+    private final TeamMemberRepository teamMembers;
     private final Clock clock;
     private final ApplicationEventPublisher events;
 
     PermissionGrantService(PermissionRepository grants, UserRepository users, DockerHostRepository hosts,
-                           DeploymentDirectory deployments, TeamRepository teams, Clock clock,
+                           DeploymentDirectory deployments, TeamRepository teams, TeamMemberRepository teamMembers, Clock clock,
                            ApplicationEventPublisher events) {
         this.grants = grants;
         this.users = users;
         this.hosts = hosts;
         this.deployments = deployments;
         this.teams = teams;
+        this.teamMembers = teamMembers;
         this.clock = clock;
         this.events = events;
     }
@@ -154,6 +156,8 @@ public class PermissionGrantService {
         grants.deleteByTeamId(teamId);
         grants.flush();
         grants.saveAll(entities);
+        users.findAllById(teamMembers.findByTeam(teamId).stream().map(TeamMember::getUserId).toList())
+                .forEach(u -> events.publishEvent(new UserAccessChangedEvent(u.getUsername())));
         return teamResponse(teamId);
     }
 

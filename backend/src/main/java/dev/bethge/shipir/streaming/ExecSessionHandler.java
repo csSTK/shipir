@@ -4,14 +4,18 @@ import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.audit.AuditLogEntry;
 import dev.bethge.shipir.audit.AuditRecord;
 import dev.bethge.shipir.audit.AuditService;
+import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.auth.UserRepository;
 import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
 import dev.bethge.shipir.docker.DockerConnectionException;
+import dev.bethge.shipir.docker.client.ContainerService;
 import dev.bethge.shipir.docker.client.ExecHandle;
 import dev.bethge.shipir.docker.client.ExecService;
+import dev.bethge.shipir.host.DockerHost;
 import dev.bethge.shipir.host.DockerHostRepository;
 import dev.bethge.shipir.host.HostEndpointResolver;
+import dev.bethge.shipir.host.ManagedDeploymentLookup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -35,10 +39,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiPredicate;
 import java.util.regex.Pattern;
 
 /**
- * Interactive console into a container (ADMIN only). {@link #start} opens the exec and returns a session id; the
+ * Interactive console into a container (ADMIN; OPERATOR only with {@code shipir.streaming.exec.operator-enabled} and
+ * OPERATE on the host or the container's managed deployment). {@link #start} opens the exec and returns a session id; the
  * owner subscribes to {@code /topic/exec/{id}} (output frames, see {@link ExecMessage}) and SENDs keystrokes to
  * {@code /app/exec/{id}/input} and a size to {@code /app/exec/{id}/resize}. Output produced before the subscription
  * is buffered. The exec is closed on process exit, UNSUBSCRIBE, disconnect, logout of the HTTP session it was
@@ -67,6 +73,9 @@ public class ExecSessionHandler {
         final String shell;
         final String username;
         final UUID userId;
+        final Role role;
+        /** Managed deployment owning the container (null = none); needed to re-check the OPERATE grant. */
+        final UUID deploymentId;
         final Instant startedAt;
         volatile String httpSessionId;
         // guarded by this
@@ -79,13 +88,15 @@ public class ExecSessionHandler {
         final Deque<ExecMessage> buffer = new ArrayDeque<>();
         int bufferedBytes;
 
-        Session(UUID hostId, String containerId, String shell, String username, UUID userId, String httpSessionId,
-                Instant now) {
+        Session(UUID hostId, String containerId, String shell, String username, UUID userId, Role role,
+                UUID deploymentId, String httpSessionId, Instant now) {
             this.hostId = hostId;
             this.containerId = containerId;
             this.shell = shell;
             this.username = username;
             this.userId = userId;
+            this.role = role;
+            this.deploymentId = deploymentId;
             this.httpSessionId = httpSessionId;
             this.startedAt = now;
             this.lastInput = now;
@@ -101,6 +112,9 @@ public class ExecSessionHandler {
     private final DockerHostRepository hosts;
     private final HostEndpointResolver endpoints;
     private final UserRepository users;
+    private final StreamAccess access;
+    private final ContainerService containers;
+    private final ManagedDeploymentLookup managedDeployments;
     private final StompFrameSender sender;
     private final AuditService audit;
     private final ExecProperties properties;
@@ -108,12 +122,16 @@ public class ExecSessionHandler {
     private final Clock clock;
 
     ExecSessionHandler(ExecService exec, DockerHostRepository hosts, HostEndpointResolver endpoints,
-                       UserRepository users, StompFrameSender sender, AuditService audit,
+                       UserRepository users, StreamAccess access, ContainerService containers,
+                       ManagedDeploymentLookup managedDeployments, StompFrameSender sender, AuditService audit,
                        ExecProperties properties, JsonMapper mapper, Clock clock) {
         this.exec = exec;
         this.hosts = hosts;
         this.endpoints = endpoints;
         this.users = users;
+        this.access = access;
+        this.containers = containers;
+        this.managedDeployments = managedDeployments;
         this.sender = sender;
         this.audit = audit;
         this.properties = properties;
@@ -121,10 +139,20 @@ public class ExecSessionHandler {
         this.clock = clock;
     }
 
-    /** Opens a console and returns its session id. Only the shells in {@link #ALLOWED_SHELLS} can be started. */
-    @Auditable(action = "EXEC_START", targetType = "CONTAINER", targetId = "#containerId")
+    /** Whether OPERATORs with an OPERATE grant may open consoles (ADMINs always may). */
+    public boolean operatorEnabled() {
+        return properties.operatorEnabled();
+    }
+
+    /**
+     * Opens a console and returns its session id. Only the shells in {@link #ALLOWED_SHELLS} can be started.
+     * {@code role} is the caller's role (audited); an OPERATOR additionally needs the feature flag (else 403), a
+     * visible host and container (else 404) and OPERATE on the host or the container's deployment (else 403).
+     */
+    @Auditable(action = "EXEC_START", targetType = "CONTAINER", targetId = "#containerId",
+            details = "{'role': #role.name()}")
     public String start(UUID hostId, String containerId, String shell, Integer cols, Integer rows,
-                        String username, String httpSessionId) {
+                        String username, Role role, String httpSessionId) {
         if (containerId == null || !CONTAINER_ID.matcher(containerId).matches()) {
             throw new ExecException(HttpStatus.BAD_REQUEST, "INVALID_RESOURCE_ID", "Invalid resource id");
         }
@@ -138,10 +166,18 @@ public class ExecSessionHandler {
             throw new ExecException(HttpStatus.BAD_REQUEST, "INVALID_SIZE",
                     "cols must be 1.." + MAX_COLS + " and rows 1.." + MAX_ROWS);
         }
+        if (role != Role.ADMIN && (role != Role.OPERATOR || !properties.operatorEnabled())) {
+            throw forbidden();
+        }
         var host = hosts.findById(hostId).orElseThrow(
                 () -> new ExecException(HttpStatus.NOT_FOUND, "HOST_NOT_FOUND", "Environment not found"));
+        UUID deploymentId = null;
+        if (role == Role.OPERATOR) {
+            deploymentId = authorizeOperator(username, host, containerId);
+        }
         UUID userId = users.findByUsername(username).map(u -> u.getId()).orElse(null);
-        Session session = new Session(hostId, containerId, chosenShell, username, userId, httpSessionId, clock.instant());
+        Session session = new Session(hostId, containerId, chosenShell, username, userId, role, deploymentId,
+                httpSessionId, clock.instant());
         synchronized (sessions) {
             long open = sessions.values().stream()
                     .filter(s -> s.username.equals(username) && !s.ended()).count();
@@ -163,12 +199,7 @@ public class ExecSessionHandler {
             }
         } catch (DockerConnectionException e) {
             sessions.remove(session.id);
-            throw switch (e.getCode()) {
-                case NOT_FOUND -> new ExecException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Container not found");
-                case INVALID_STATE -> new ExecException(HttpStatus.CONFLICT, "INVALID_CONTAINER_STATE",
-                        "The container is not running");
-                default -> new ExecException(HttpStatus.BAD_GATEWAY, e.getCode().name(), "Environment could not be reached");
-            };
+            throw translate(e);
         } catch (EncryptionKeyMissingException e) {
             sessions.remove(session.id);
             throw new ExecException(HttpStatus.BAD_GATEWAY, "ENCRYPTION_KEY_MISSING", "No encryption key is configured");
@@ -181,6 +212,50 @@ public class ExecSessionHandler {
             throw e;
         }
         return session.id;
+    }
+
+    private static ExecException forbidden() {
+        return new ExecException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied");
+    }
+
+    private static ExecException translate(DockerConnectionException e) {
+        return switch (e.getCode()) {
+            case NOT_FOUND -> new ExecException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Container not found");
+            case INVALID_STATE -> new ExecException(HttpStatus.CONFLICT, "INVALID_CONTAINER_STATE",
+                    "The container is not running");
+            default -> new ExecException(HttpStatus.BAD_GATEWAY, e.getCode().name(), "Environment could not be reached");
+        };
+    }
+
+    /**
+     * OPERATOR gate: 404 for a host without any grant, 404 for a container that does not exist on the host or is not
+     * visible (other deployment, unmanaged container with only a deployment grant), 403 when visible but the grant is
+     * VIEW only. Returns the owning managed deployment (null = none).
+     */
+    private UUID authorizeOperator(String username, DockerHost host, String containerId) {
+        UUID hostId = host.getId();
+        if (!access.hostVisible(username, hostId)) {
+            throw new ExecException(HttpStatus.NOT_FOUND, "HOST_NOT_FOUND", "Environment not found");
+        }
+        String project;
+        try {
+            project = containers.inspect(hostId, endpoints.endpointOf(host), containerId).composeProject();
+        } catch (DockerConnectionException e) {
+            throw translate(e);
+        } catch (EncryptionKeyMissingException e) {
+            throw new ExecException(HttpStatus.BAD_GATEWAY, "ENCRYPTION_KEY_MISSING", "No encryption key is configured");
+        } catch (SecretDecryptionException e) {
+            throw new ExecException(HttpStatus.BAD_GATEWAY, "DECRYPTION_FAILED",
+                    "Stored connection secrets could not be decrypted");
+        }
+        UUID deploymentId = project == null ? null : managedDeployments.managedDeploymentIds(hostId).get(project);
+        if (!access.containerVisible(username, hostId, deploymentId)) {
+            throw new ExecException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Container not found");
+        }
+        if (!access.mayExec(username, hostId, deploymentId, properties.operatorEnabled())) {
+            throw forbidden();
+        }
+        return deploymentId;
     }
 
     /** Is this the owner of the (still known) session? */
@@ -282,10 +357,22 @@ public class ExecSessionHandler {
         }
     }
 
-    /** Ends every open console of the user (they lost the ADMIN role, were disabled or deleted). */
-    public void revoke(String username) {
+    /**
+     * Ends every open console of the user that {@code stillAllowed} (host id, owning deployment id) no longer
+     * permits: role lost, user disabled or deleted, grant removed or downgraded.
+     */
+    public void revalidate(String username, BiPredicate<UUID, UUID> stillAllowed) {
         for (Session s : List.copyOf(sessions.values())) {
-            if (s.username.equals(username)) {
+            if (s.username.equals(username) && !stillAllowed.test(s.hostId, s.deploymentId)) {
+                finish(s, ExecMessage.Status.ENDED, "ACCESS_REVOKED");
+            }
+        }
+    }
+
+    /** Ends the consoles of containers that belonged to the deleted deployment (their grants are gone with it). */
+    public void endForDeployment(UUID deploymentId) {
+        for (Session s : List.copyOf(sessions.values())) {
+            if (deploymentId.equals(s.deploymentId)) {
                 finish(s, ExecMessage.Status.ENDED, "ACCESS_REVOKED");
             }
         }
@@ -390,7 +477,7 @@ public class ExecSessionHandler {
         try {
             audit.record(new AuditRecord(s.userId, s.username, "EXEC_END", AuditLogEntry.Outcome.SUCCESS,
                     "CONTAINER", s.containerId,
-                    Map.of("reason", reason, "hostId", s.hostId.toString(), "shell", s.shell,
+                    Map.of("reason", reason, "role", s.role.name(), "hostId", s.hostId.toString(), "shell", s.shell,
                             "durationSeconds", Duration.between(s.startedAt, s.endedAt).toSeconds())));
         } catch (RuntimeException e) {
             log.warn("Recording EXEC_END failed: {}", e.getClass().getSimpleName());

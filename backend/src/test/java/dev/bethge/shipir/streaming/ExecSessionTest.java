@@ -4,11 +4,16 @@ import dev.bethge.shipir.PostgresTestConfiguration;
 import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
+import dev.bethge.shipir.common.security.UserAccessChangedEvent;
+import dev.bethge.shipir.compose.execution.ComposeExecutionService;
+import dev.bethge.shipir.compose.execution.ComposeProcessResult;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.DockerErrorCode;
+import dev.bethge.shipir.docker.client.ContainerService;
 import dev.bethge.shipir.docker.client.ExecHandle;
 import dev.bethge.shipir.docker.client.ExecService;
+import dev.bethge.shipir.docker.dto.ContainerDetailsDto;
 import dev.bethge.shipir.host.DockerHost;
 import dev.bethge.shipir.host.DockerHostRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -64,7 +69,7 @@ import static org.mockito.Mockito.when;
 /** Real server and STOMP client; Docker is replaced by a scripted {@link ExecService}. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "shipir.streaming.exec.idle-timeout=2s", "shipir.streaming.exec.sweep-interval=200ms",
-        "shipir.streaming.exec.max-sessions-per-user=2"})
+        "shipir.streaming.exec.max-sessions-per-user=2", "shipir.streaming.exec.operator-enabled=true"})
 @Import(PostgresTestConfiguration.class)
 class ExecSessionTest {
 
@@ -85,6 +90,10 @@ class ExecSessionTest {
     org.springframework.context.ApplicationEventPublisher publisher;
     @MockitoBean
     ExecService execService;
+    @MockitoBean
+    ContainerService containerService;
+    @MockitoBean
+    ComposeExecutionService composeExecution;
 
     private final ExecHandle handle = mock(ExecHandle.class);
     private Consumer<byte[]> onOutput;
@@ -129,7 +138,11 @@ class ExecSessionTest {
         }
 
         HttpResponse<String> exec(String container, String body, boolean withCsrf) throws Exception {
-            var b = HttpRequest.newBuilder(URI.create(base() + "/api/hosts/" + hostId + "/containers/" + container + "/exec"))
+            return execOn(hostId, container, body, withCsrf);
+        }
+
+        HttpResponse<String> execOn(UUID host, String container, String body, boolean withCsrf) throws Exception {
+            var b = HttpRequest.newBuilder(URI.create(base() + "/api/hosts/" + host + "/containers/" + container + "/exec"))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body));
             if (withCsrf) {
@@ -216,10 +229,280 @@ class ExecSessionTest {
     // --- create ---
 
     @Test
-    void nonAdminsCannotCreateConsoles() throws Exception {
-        assertThat(new Client("execop", Role.OPERATOR).exec("web", "{}", true).statusCode()).isEqualTo(403);
-        assertThat(new Client("execviewer", Role.VIEWER).exec("web", "{}", true).statusCode()).isEqualTo(403);
+    void viewersCannotCreateConsolesEvenWithAnOperateGrant() throws Exception {
+        Client viewer = operatorClient("execviewer", Role.VIEWER);
+        grantHost(viewer, "OPERATE");
+        assertThat(viewer.exec("web", "{}", true).statusCode()).isEqualTo(403);
+        verifyNoConsoleOpened();
+    }
+
+    // --- OPERATOR (shipr-bbzh.4) ---
+
+    private void verifyNoConsoleOpened() {
         verify(execService, never()).open(any(), any(DockerEndpoint.class), anyString(), anyList(), anyInt(), anyInt(), any(), any());
+    }
+
+    private Client operatorClient(String prefix, Role role) throws Exception {
+        return new Client(prefix + "-" + UUID.randomUUID().toString().substring(0, 8), role);
+    }
+
+    private UUID userId(Client c) {
+        return users.findByUsername(c.username).orElseThrow().getId();
+    }
+
+    private void grantHost(Client c, String level) {
+        jdbc.update("INSERT INTO permissions (user_id, host_id, level) VALUES (?, ?, ?)", userId(c), hostId, level);
+    }
+
+    private UUID deployment(String name) {
+        return jdbc.queryForObject("INSERT INTO deployments (name, host_id, compose_file_path, created_by) "
+                + "VALUES (?, ?, 'x', ?) RETURNING id", UUID.class, name, hostId,
+                users.findByUsername("execadmin").orElseThrow().getId());
+    }
+
+    private void grantDeployment(Client c, UUID deploymentId, String level) {
+        jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) VALUES (?, ?, ?)", userId(c), deploymentId, level);
+    }
+
+    /** The container {@code id} exists on the host and belongs to the Compose project (null = not Compose). */
+    private void containerOf(String id, String project) {
+        when(containerService.inspect(eq(hostId), any(DockerEndpoint.class), eq(id))).thenReturn(
+                new ContainerDetailsDto(id, id, "nginx:1", "running", null, null, 0, null,
+                        List.of(), List.of(), false, false, List.of(), List.of(), Map.of(), List.of(), List.of(), null,
+                        project, project == null ? null : "web"));
+    }
+
+    @Test
+    void operatorWithHostOperateGrantGetsAConsoleAndStartAndEndNameTheRole() throws Exception {
+        Client op = operatorClient("execop", Role.OPERATOR);
+        grantHost(op, "OPERATE");
+        containerOf("plain", null);
+        String id = op.create("plain");
+        StompSession s = op.connect();
+        BlockingQueue<String> q = subscribe(s, "/topic/exec/" + id);
+        s.send("/app/exec/" + id + "/input", "ls\n".getBytes(StandardCharsets.UTF_8));
+        verify(handle, org.mockito.Mockito.timeout(5000)).write("ls\n".getBytes(StandardCharsets.UTF_8));
+        s.disconnect();
+        await().atMost(5, TimeUnit.SECONDS).until(() -> auditRows(op, "EXEC_END").size() == 1);
+        assertThat(auditRows(op, "EXEC_START").get(0).get("details").toString()).contains("\"role\"").contains("OPERATOR");
+        assertThat(auditRows(op, "EXEC_END").get(0).get("details").toString()).contains("\"role\"").contains("OPERATOR");
+    }
+
+    @Test
+    void operatorWithDeploymentOperateGrantGetsAConsoleInThatDeploymentOnly() throws Exception {
+        Client op = operatorClient("execop", Role.OPERATOR);
+        UUID mine = deployment("mine");
+        deployment("other");
+        grantDeployment(op, mine, "OPERATE");
+        containerOf("c-mine", "mine");
+        containerOf("c-other", "other");
+        containerOf("c-plain", null);
+        assertThat(op.exec("c-mine", "{}", true).statusCode()).isEqualTo(201);
+        // a container of a deployment without grant, and an unmanaged one, are not even visible
+        assertThat(op.exec("c-other", "{}", true).statusCode()).isEqualTo(404);
+        assertThat(op.exec("c-plain", "{}", true).statusCode()).isEqualTo(404);
+        verify(execService, org.mockito.Mockito.times(1))
+                .open(any(), any(DockerEndpoint.class), anyString(), anyList(), anyInt(), anyInt(), any(), any());
+    }
+
+    @Test
+    void operatorWithoutAnyGrantGets404() throws Exception {
+        Client op = operatorClient("execop", Role.OPERATOR);
+        containerOf("web", null);
+        assertThat(op.exec("web", "{}", true).statusCode()).isEqualTo(404);
+        verifyNoConsoleOpened();
+    }
+
+    @Test
+    void operatorWithViewOnlyGrantGets403() throws Exception {
+        Client op = operatorClient("execop", Role.OPERATOR);
+        Client op2 = operatorClient("execop", Role.OPERATOR);
+        UUID d = deployment("viewonly");
+        grantHost(op, "VIEW");
+        grantDeployment(op2, d, "VIEW");
+        containerOf("web", null);
+        containerOf("dweb", "viewonly");
+        assertThat(op.exec("web", "{}", true).statusCode()).isEqualTo(403);
+        assertThat(op2.exec("dweb", "{}", true).statusCode()).isEqualTo(403);
+        verifyNoConsoleOpened();
+    }
+
+    @Test
+    void operatorCannotReachAContainerThatIsNotOnTheHostOrAnotherHost() throws Exception {
+        Client op = operatorClient("execop", Role.OPERATOR);
+        grantHost(op, "OPERATE");
+        // foreign container id: the daemon of the granted host does not know it
+        when(containerService.inspect(eq(hostId), any(DockerEndpoint.class), eq("foreign")))
+                .thenThrow(new DockerConnectionException(DockerErrorCode.NOT_FOUND, "none", null));
+        assertThat(op.exec("foreign", "{}", true).statusCode()).isEqualTo(404);
+        // a container of a host the user has no grant on
+        UUID otherHost = hosts.save(DockerHost.tcp("exec-other-" + UUID.randomUUID(), "10.0.0.9", 2376,
+                new byte[]{1}, new byte[]{1}, new byte[]{1}, users.findByUsername("execadmin").orElseThrow().getId())).getId();
+        try {
+            var r = op.execOn(otherHost, "web", "{}", true);
+            assertThat(r.statusCode()).isEqualTo(404);
+            verify(containerService, never()).inspect(eq(otherHost), any(DockerEndpoint.class), anyString());
+        } finally {
+            hosts.deleteById(otherHost);
+        }
+        verifyNoConsoleOpened();
+    }
+
+    @Test
+    void operatorCannotSubscribeToAnotherUsersConsole() throws Exception {
+        Client op = operatorClient("execop", Role.OPERATOR);
+        Client thief = operatorClient("execthief", Role.OPERATOR);
+        grantHost(op, "OPERATE");
+        grantHost(thief, "OPERATE");
+        containerOf("web", null);
+        String id = op.create("web");
+        StompSession s = thief.connect();
+        subscribe(s, "/topic/exec/" + id);
+        s.send("/app/exec/" + id + "/input", SECRET_INPUT.getBytes(StandardCharsets.UTF_8));
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !s.isConnected());
+        verify(handle, never()).write(any());
+    }
+
+    @Test
+    void revokingTheGrantEndsTheOperatorsOpenConsole() throws Exception {
+        Client admin = admin();
+        Client op = operatorClient("execop", Role.OPERATOR);
+        grantHost(op, "OPERATE");
+        containerOf("web", null);
+        String id = op.create("web");
+        StompSession s = op.connect();
+        BlockingQueue<String> q = subscribe(s, "/topic/exec/" + id);
+        var r = admin.call(HttpRequest.newBuilder(URI.create(base() + "/api/users/" + userId(op) + "/permissions"))
+                .header("Content-Type", "application/json").header("X-XSRF-TOKEN", admin.jar.get("XSRF-TOKEN"))
+                .PUT(HttpRequest.BodyPublishers.ofString("{\"grants\":[]}")));
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
+        assertThat(q.poll(5, TimeUnit.SECONDS)).contains("ACCESS_REVOKED");
+        verify(handle, org.mockito.Mockito.timeout(5000)).close();
+        await().atMost(5, TimeUnit.SECONDS).until(
+                () -> auditRows(op, "EXEC_END").stream().anyMatch(row -> row.get("details").toString().contains("ACCESS_REVOKED")));
+    }
+
+    @Test
+    void downgradingTheGrantToViewEndsTheOperatorsOpenConsole() throws Exception {
+        Client admin = admin();
+        Client op = operatorClient("execop", Role.OPERATOR);
+        grantHost(op, "OPERATE");
+        containerOf("web", null);
+        String id = op.create("web");
+        StompSession s = op.connect();
+        BlockingQueue<String> q = subscribe(s, "/topic/exec/" + id);
+        var r = admin.call(HttpRequest.newBuilder(URI.create(base() + "/api/users/" + userId(op) + "/permissions"))
+                .header("Content-Type", "application/json").header("X-XSRF-TOKEN", admin.jar.get("XSRF-TOKEN"))
+                .PUT(HttpRequest.BodyPublishers.ofString("{\"grants\":[{\"hostId\":\"" + hostId + "\",\"level\":\"VIEW\"}]}")));
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
+        assertThat(q.poll(5, TimeUnit.SECONDS)).contains("ACCESS_REVOKED");
+    }
+
+    @Test
+    void demotingTheOperatorToViewerEndsTheConsole() throws Exception {
+        Client admin = admin();
+        Client op = operatorClient("execop", Role.OPERATOR);
+        grantHost(op, "OPERATE");
+        containerOf("web", null);
+        String id = op.create("web");
+        StompSession s = op.connect();
+        BlockingQueue<String> q = subscribe(s, "/topic/exec/" + id);
+        putRole(admin, op, "VIEWER");
+        assertThat(q.poll(5, TimeUnit.SECONDS)).contains("ACCESS_REVOKED");
+    }
+
+    // --- grant paths other than the user's own grant list ---
+
+    private UUID team(Client admin, String name) throws Exception {
+        var r = admin.call(HttpRequest.newBuilder(URI.create(base() + "/api/teams"))
+                .header("Content-Type", "application/json").header("X-XSRF-TOKEN", admin.jar.get("XSRF-TOKEN"))
+                .POST(HttpRequest.BodyPublishers.ofString("{\"name\":\"" + name + "\"}")));
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(201);
+        return UUID.fromString(json(r.body(), "id"));
+    }
+
+    private void adminPut(Client admin, String path, String body) throws Exception {
+        var r = admin.call(HttpRequest.newBuilder(URI.create(base() + path))
+                .header("Content-Type", "application/json").header("X-XSRF-TOKEN", admin.jar.get("XSRF-TOKEN"))
+                .PUT(HttpRequest.BodyPublishers.ofString(body)));
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
+    }
+
+    /** An OPERATOR whose only OPERATE grant on the host comes through a team, with an open and subscribed console. */
+    private record TeamConsole(Client admin, Client op, UUID teamId, StompSession session, BlockingQueue<String> frames) {
+    }
+
+    private TeamConsole teamConsole() throws Exception {
+        Client admin = admin();
+        Client op = operatorClient("execop", Role.OPERATOR);
+        UUID teamId = team(admin, "exec-" + UUID.randomUUID());
+        adminPut(admin, "/api/teams/" + teamId + "/members", "{\"userIds\":[\"" + userId(op) + "\"]}");
+        adminPut(admin, "/api/teams/" + teamId + "/permissions",
+                "{\"grants\":[{\"hostId\":\"" + hostId + "\",\"level\":\"OPERATE\"}]}");
+        containerOf("web", null);
+        String id = op.create("web");
+        StompSession s = op.connect();
+        return new TeamConsole(admin, op, teamId, s, subscribe(s, "/topic/exec/" + id));
+    }
+
+    @Test
+    void removingTheOperatorFromTheTeamEndsTheConsole() throws Exception {
+        TeamConsole t = teamConsole();
+        adminPut(t.admin, "/api/teams/" + t.teamId + "/members", "{\"userIds\":[]}");
+        assertThat(t.frames.poll(5, TimeUnit.SECONDS)).contains("ACCESS_REVOKED");
+    }
+
+    @Test
+    void removingTheTeamGrantEndsTheConsole() throws Exception {
+        TeamConsole t = teamConsole();
+        adminPut(t.admin, "/api/teams/" + t.teamId + "/permissions", "{\"grants\":[]}");
+        assertThat(t.frames.poll(5, TimeUnit.SECONDS)).contains("ACCESS_REVOKED");
+    }
+
+    @Test
+    void downgradingTheTeamGrantToViewEndsTheConsole() throws Exception {
+        TeamConsole t = teamConsole();
+        adminPut(t.admin, "/api/teams/" + t.teamId + "/permissions",
+                "{\"grants\":[{\"hostId\":\"" + hostId + "\",\"level\":\"VIEW\"}]}");
+        assertThat(t.frames.poll(5, TimeUnit.SECONDS)).contains("ACCESS_REVOKED");
+    }
+
+    @Test
+    void deletingTheTeamEndsTheConsole() throws Exception {
+        TeamConsole t = teamConsole();
+        var r = t.admin.call(HttpRequest.newBuilder(URI.create(base() + "/api/teams/" + t.teamId))
+                .header("X-XSRF-TOKEN", t.admin.jar.get("XSRF-TOKEN")).DELETE());
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(204);
+        assertThat(t.frames.poll(5, TimeUnit.SECONDS)).contains("ACCESS_REVOKED");
+    }
+
+    @Test
+    void deletingTheDeploymentEndsTheConsoleOfItsGrantHolder() throws Exception {
+        Client admin = admin();
+        Client op = operatorClient("execop", Role.OPERATOR);
+        UUID d = deployment("doomed");
+        grantDeployment(op, d, "OPERATE");
+        containerOf("web", "doomed");
+        when(composeExecution.execute(any(), any(), any(), any(DockerEndpoint.class), any(), any()))
+                .thenReturn(new ComposeProcessResult(0, false, List.of()));
+        String id = op.create("web");
+        StompSession s = op.connect();
+        BlockingQueue<String> q = subscribe(s, "/topic/exec/" + id);
+        var r = admin.call(HttpRequest.newBuilder(URI.create(base() + "/api/hosts/" + hostId + "/managed-deployments/" + d))
+                .header("X-XSRF-TOKEN", admin.jar.get("XSRF-TOKEN")).DELETE());
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(204);
+        assertThat(q.poll(5, TimeUnit.SECONDS)).contains("ACCESS_REVOKED");
+    }
+
+    @Test
+    void capabilitiesTellWhetherOperatorsMayUseConsoles() throws Exception {
+        Client viewer = operatorClient("execviewer", Role.VIEWER);
+        var r = viewer.call(HttpRequest.newBuilder(URI.create(base() + "/api/exec/capabilities")));
+        assertThat(r.statusCode()).isEqualTo(200);
+        assertThat(r.body()).contains("\"operatorEnabled\":true");
+        var anonymous = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(base() + "/api/exec/capabilities")).build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(anonymous.statusCode()).isEqualTo(401);
     }
 
     @Test
@@ -455,7 +738,7 @@ class ExecSessionTest {
         String id = owner.create("web");
         StompSession s = owner.connect();
         subscribe(s, "/topic/exec/" + id);
-        publisher.publishEvent(new dev.bethge.shipir.common.security.UserAccessChangedEvent(owner.username));
+        publisher.publishEvent(new UserAccessChangedEvent(owner.username));
         s.send("/app/exec/" + id + "/input", "ok".getBytes(StandardCharsets.UTF_8));
         verify(handle, org.mockito.Mockito.timeout(5000)).write("ok".getBytes(StandardCharsets.UTF_8));
         verify(handle, never()).close();
@@ -531,9 +814,10 @@ class ExecSessionTest {
         assertThat(start).hasSize(1);
         assertThat(start.get(0)).containsEntry("username", admin.username).containsEntry("target_id", "web")
                 .containsEntry("outcome", "SUCCESS");
+        assertThat(start.get(0).get("details").toString()).contains("ADMIN");
         var end = auditRows(admin, "EXEC_END");
         assertThat(end.get(0)).containsEntry("username", admin.username).containsEntry("target_id", "web");
-        assertThat(end.get(0).get("details").toString()).contains("DISCONNECTED");
+        assertThat(end.get(0).get("details").toString()).contains("DISCONNECTED").contains("ADMIN");
         List<String> everything = new ArrayList<>();
         jdbc.queryForList("SELECT * FROM audit_log").forEach(row -> everything.add(row.toString()));
         assertThat(everything.toString()).doesNotContain(SECRET_INPUT).doesNotContain(b64(SECRET_INPUT));

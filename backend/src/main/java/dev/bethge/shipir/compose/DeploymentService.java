@@ -2,6 +2,7 @@ package dev.bethge.shipir.compose;
 
 import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.auth.UserRepository;
+import dev.bethge.shipir.common.security.DeploymentRemovedEvent;
 import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
 import dev.bethge.shipir.common.security.SecretCipher;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
@@ -35,6 +36,7 @@ import dev.bethge.shipir.git.GitCheckout;
 import dev.bethge.shipir.git.GitRepositoryService;
 import dev.bethge.shipir.host.HostEndpointResolver;
 import dev.bethge.shipir.permission.CurrentAccess;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -72,12 +74,14 @@ public class DeploymentService {
     private final GitRepositoryService git;
     private final CurrentAccess access;
     private final ComposeSecurityPolicy policy;
+    private final ApplicationEventPublisher events;
 
     DeploymentService(DeploymentRepository deployments, DeploymentVersionRepository versions, DockerHostRepository hosts,
                  UserRepository users, HostEndpointResolver endpoints, ComposeFileRepository files,
                  ComposeValidationService validation, ComposeExecutionService execution, SecretCipher cipher,
                  Clock clock, PlatformTransactionManager txManager, DeploymentLocks locks,
-                 GitRepositoryService git, CurrentAccess access, ComposeSecurityPolicy policy) {
+                 GitRepositoryService git, CurrentAccess access, ComposeSecurityPolicy policy,
+                 ApplicationEventPublisher events) {
         this.deployments = deployments;
         this.versions = versions;
         this.hosts = hosts;
@@ -93,6 +97,7 @@ public class DeploymentService {
         this.git = git;
         this.access = access;
         this.policy = policy;
+        this.events = events;
     }
 
     /** Validated on-disk directory of a managed deployment (may not exist before the first write); for the config editor. */
@@ -443,6 +448,7 @@ public class DeploymentService {
         }
         deployments.delete(deployment);
         deployments.flush();
+        events.publishEvent(new DeploymentRemovedEvent(deployment.getId()));
         files.delete(hostId, deployment.getName());
     }
 

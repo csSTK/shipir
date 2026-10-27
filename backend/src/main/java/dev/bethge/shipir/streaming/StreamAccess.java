@@ -29,13 +29,45 @@ class StreamAccess {
         this.managedDeployments = managedDeployments;
     }
 
-    private Optional<PermissionSubject> subject(String username) {
-        return users.findByUsername(username).filter(u -> !u.isDisabled()).map(PermissionSubject::of);
+    /** Role of an enabled user, empty for unknown or disabled ones. */
+    Optional<Role> roleOf(String username) {
+        return subject(username).map(PermissionSubject::role);
     }
 
-    /** Enabled ADMIN, read from the database (the principal of an open WebSocket may be stale). */
-    boolean isAdmin(String username) {
-        return subject(username).map(s -> s.role() == Role.ADMIN).orElse(false);
+    /**
+     * May the user hold a console on a container of the host? ADMIN always; OPERATOR only when
+     * {@code operatorEnabled} and with OPERATE on the host or, for a container of a managed deployment, on that
+     * deployment ({@code deploymentId} null = not owned by a managed deployment, needs OPERATE on the host).
+     */
+    boolean mayExec(String username, UUID hostId, UUID deploymentId, boolean operatorEnabled) {
+        Optional<PermissionSubject> s = subject(username);
+        if (s.isEmpty()) {
+            return false;
+        }
+        if (s.get().role() == Role.ADMIN) {
+            return true;
+        }
+        if (s.get().role() != Role.OPERATOR || !operatorEnabled) {
+            return false;
+        }
+        return deploymentId == null ? permissions.canOperate(s.get(), hostId)
+                : permissions.canOperate(s.get(), hostId, deploymentId);
+    }
+
+    /** Console access for the container's owner: 404 unless the container is visible to the user. */
+    boolean containerVisible(String username, UUID hostId, UUID deploymentId) {
+        Optional<PermissionSubject> s = subject(username);
+        if (s.isEmpty()) {
+            return false;
+        }
+        if (permissions.hostFullyVisible(s.get(), hostId)) {
+            return true;
+        }
+        return deploymentId != null && permissions.canView(s.get(), hostId, deploymentId);
+    }
+
+    private Optional<PermissionSubject> subject(String username) {
+        return users.findByUsername(username).filter(u -> !u.isDisabled()).map(PermissionSubject::of);
     }
 
     /** Whole host visible (containers, logs, events). */

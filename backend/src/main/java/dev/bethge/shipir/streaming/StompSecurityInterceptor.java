@@ -90,8 +90,8 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                 }
                 var execTopic = EXEC_TOPIC.matcher(destination);
                 if (execTopic.matches()) {
-                    // console output: ADMIN who owns the session, one subscription
-                    if (!isAdmin(accessor) || !execSessions.attach(accessor.getUser().getName(), execTopic.group(1),
+                    // console output: ADMIN or OPERATOR who owns the session, one subscription
+                    if (!mayUseConsole(accessor) || !execSessions.attach(accessor.getUser().getName(), execTopic.group(1),
                             accessor.getSessionId(), accessor.getSubscriptionId())) {
                         throw new MessageDeliveryException("Subscription destination not allowed");
                     }
@@ -168,7 +168,7 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
             case SEND -> {
                 requireUser(accessor);
                 var send = EXEC_SEND.matcher(String.valueOf(accessor.getDestination()));
-                if (!send.matches() || !isAdmin(accessor)) {
+                if (!send.matches() || !mayUseConsole(accessor)) {
                     throw new MessageDeliveryException("Sending is not allowed");
                 }
                 String user = accessor.getUser().getName();
@@ -223,8 +223,9 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
         execSessions.detach(event.getSessionId(), null);
     }
 
-    private static boolean isAdmin(StompHeaderAccessor accessor) {
+    /** ADMIN or OPERATOR; whether the user really owns a console (and may still hold it) is checked per session. */
+    private static boolean mayUseConsole(StompHeaderAccessor accessor) {
         return accessor.getUser() instanceof Authentication auth && auth.getAuthorities().stream()
-                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()) || "ROLE_OPERATOR".equals(a.getAuthority()));
     }
 }
