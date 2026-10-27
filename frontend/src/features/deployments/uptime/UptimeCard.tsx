@@ -119,8 +119,7 @@ export function UptimeCard({ hostId, deploymentId, canOperate }: { hostId: strin
                   </p>
                   {last?.errorCode === 'EGRESS_DENIED' && (
                     <p className="uptime__meta">
-                      Shipir may not call this address. Private and internal addresses are blocked unless the server sets
-                      shipir.egress.allow-private-ranges.
+                      {t('UptimeCard.shipirMayNotCallThis')}
                     </p>
                   )}
                   {c.recentResults.length > 0 && (

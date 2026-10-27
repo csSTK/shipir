@@ -1,12 +1,11 @@
 import { Download, EllipsisVertical, Layers, Play, RotateCw } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ApiError } from '../../../shared/api/client.ts'
 import { Button, Card, EmptyState, IconButton, Menu, Skeleton } from '../../../shared/ui/index.ts'
 import { describeDeploymentError } from '../deploymentErrors.ts'
 import { useServiceAction, useServices, useSetProfiles, useStartAll, type ServiceAction } from './api.ts'
 import './services.css'
-
-const LABEL: Record<ServiceAction, string> = { restart: 'Restart', pull: 'Pull', up: 'Up' }
 
 function sameSet(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((x) => b.includes(x))
@@ -14,6 +13,7 @@ function sameSet(a: string[], b: string[]): boolean {
 
 /** Profile checkboxes; remounted (via `key`) when the saved profiles change, so the draft resets. */
 function ProfilePicker({ hostId, deploymentId, available, active }: { hostId: string; deploymentId: string; available: string[]; active: string[] }) {
+  const { t } = useTranslation('deployments')
   const save = useSetProfiles(hostId, deploymentId)
   const [selected, setSelected] = useState<string[]>(active)
   const [error, setError] = useState<string | null>(null)
@@ -21,7 +21,7 @@ function ProfilePicker({ hostId, deploymentId, available, active }: { hostId: st
   const names = [...new Set([...available, ...active])].sort()
 
   if (names.length === 0) {
-    return <p className="services__text">This Compose file defines no profiles.</p>
+    return <p className="services__text">{t('ServicesCard.noProfiles')}</p>
   }
 
   const toggle = (name: string) => setSelected((cur) => (cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name]))
@@ -29,7 +29,7 @@ function ProfilePicker({ hostId, deploymentId, available, active }: { hostId: st
   return (
     <div className="services__profiles">
       <fieldset className="services__fieldset">
-        <legend className="services__legend">Active profiles</legend>
+        <legend className="services__legend">{t('ServicesCard.activeProfiles')}</legend>
         <div className="services__chips">
           {names.map((name) => (
             <label key={name} className="services__chip">
@@ -39,7 +39,7 @@ function ProfilePicker({ hostId, deploymentId, available, active }: { hostId: st
           ))}
         </div>
       </fieldset>
-      <p className="services__text">Services behind an active profile are part of every deploy, start and update.</p>
+      <p className="services__text">{t('ServicesCard.profilesHint')}</p>
       {error && (
         <p role="alert" className="ui-error">
           {error}
@@ -51,10 +51,10 @@ function ProfilePicker({ hostId, deploymentId, available, active }: { hostId: st
           disabled={save.isPending || sameSet(selected, active)}
           onClick={() => {
             setError(null)
-            save.mutate([...selected].sort(), { onError: (e) => setError(describeDeploymentError(e, 'Could not save the profiles. Try again.')) })
+            save.mutate([...selected].sort(), { onError: (e) => setError(describeDeploymentError(e, t('ServicesCard.saveProfilesFailed'))) })
           }}
         >
-          Save profiles
+          {t('ServicesCard.saveProfiles')}
         </Button>
       </div>
     </div>
@@ -76,6 +76,7 @@ export function ServicesCard({
   /** Called with a label and the `runId` of a started run so the page can stream its output. */
   onRunStarted: (kind: string, runId: string) => void
 }) {
+  const { t } = useTranslation('deployments')
   const info = useServices(hostId, deploymentId, canOperate)
   const action = useServiceAction(hostId, deploymentId)
   const startAll = useStartAll(hostId, deploymentId)
@@ -89,12 +90,12 @@ export function ServicesCard({
 
   function run(service: string, act: ServiceAction) {
     setError(null)
-    const kind = `${LABEL[act]} ${service}`
+    const kind = t('ServicesCard.actionService', { action: (act === 'restart' ? t('ServicesCard.restart') : act === 'pull' ? t('ServicesCard.pull') : t('ServicesCard.up')), service })
     action.mutate(
       { service, action: act },
       {
         onSuccess: (r) => onRunStarted(kind, r.runId),
-        onError: (e) => setError(describeDeploymentError(e, `Could not start "${kind}". Try again.`)),
+        onError: (e) => setError(describeDeploymentError(e, t('ServicesCard.actionFailed', { kind }))),
       },
     )
   }
@@ -102,8 +103,8 @@ export function ServicesCard({
   function start() {
     setError(null)
     startAll.mutate(undefined, {
-      onSuccess: (r) => onRunStarted('Start', r.runId),
-      onError: (e) => setError(describeDeploymentError(e, 'Could not start the services. Try again.')),
+      onSuccess: (r) => onRunStarted(t('ServicesCard.start'), r.runId),
+      onError: (e) => setError(describeDeploymentError(e, t('ServicesCard.startAllFailed'))),
     })
   }
 
@@ -111,11 +112,11 @@ export function ServicesCard({
     <Card className="services" role="region" aria-labelledby={titleId}>
       <div className="services__head">
         <h3 className="services__title" id={titleId}>
-          Services
+          {t('ServicesCard.services')}
         </h3>
         {info.data && info.data.services.length > 0 && (
           <Button variant="secondary" onClick={start} disabled={pending}>
-            Start all
+            {t('ServicesCard.startAll')}
           </Button>
         )}
       </div>
@@ -124,23 +125,23 @@ export function ServicesCard({
       {info.isError && (
         <div className="services__error">
           <p role="alert" className="ui-error">
-            Could not load the services.
+            {t('ServicesCard.loadFailed')}
           </p>
-          <Button onClick={() => info.refetch()}>Retry</Button>
+          <Button onClick={() => info.refetch()}>{t('ServicesCard.retry')}</Button>
         </div>
       )}
-      {info.data?.services.length === 0 && <EmptyState icon={Layers} title="No services" description="The Compose file does not define any service." />}
+      {info.data?.services.length === 0 && <EmptyState icon={Layers} title={t('ServicesCard.noServices')} description={t('ServicesCard.noServicesDescription')} />}
       {info.data && info.data.services.length > 0 && (
-        <ul className="services__list" aria-label="Services">
+        <ul className="services__list" aria-label={t('ServicesCard.services')}>
           {info.data.services.map((name) => (
             <li key={name} className="services__row">
               <span className="services__name">{name}</span>
               <div className="services__actions">
-                <IconButton icon={RotateCw} aria-label={`Restart ${name}`} disabled={pending} onClick={() => run(name, 'restart')} />
-                <IconButton icon={Download} aria-label={`Pull image of ${name}`} disabled={pending} onClick={() => run(name, 'pull')} />
+                <IconButton icon={RotateCw} aria-label={t('ServicesCard.restartName', { name })} disabled={pending} onClick={() => run(name, 'restart')} />
+                <IconButton icon={Download} aria-label={t('ServicesCard.pullImageOf', { name })} disabled={pending} onClick={() => run(name, 'pull')} />
                 <Menu
-                  trigger={<IconButton icon={EllipsisVertical} aria-label={`More actions for ${name}`} disabled={pending} />}
-                  items={[{ label: 'Up', icon: <Play size={16} />, onSelect: () => run(name, 'up') }]}
+                  trigger={<IconButton icon={EllipsisVertical} aria-label={t('ServicesCard.moreActionsFor', { name })} disabled={pending} />}
+                  items={[{ label: t('ServicesCard.up'), icon: <Play size={16} />, onSelect: () => run(name, 'up') }]}
                 />
               </div>
             </li>
