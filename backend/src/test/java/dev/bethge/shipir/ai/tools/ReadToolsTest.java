@@ -155,6 +155,18 @@ class ReadToolsTest {
         return "{\"hostId\":\"" + id + "\"}";
     }
 
+    private static String configArgs(UUID host, UUID stack, String path) {
+        return "{\"hostId\":\"" + host + "\",\"deploymentId\":\"" + stack + "\",\"path\":\"" + path + "\"}";
+    }
+
+    private Path writeFile(String rel, String content) throws IOException {
+        Path dir = dev.bethge.shipir.common.security.SystemScope.call(() -> deployments.directoryOf(hostId, deploymentId));
+        Path file = dir.resolve(rel);
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, content);
+        return file;
+    }
+
     private static String stack(UUID host, UUID stack) {
         return "{\"hostId\":\"" + host + "\",\"deploymentId\":\"" + stack + "\"}";
     }
@@ -261,8 +273,10 @@ class ReadToolsTest {
 
         for (Role role : Role.values()) {
             for (AiTool tool : registry.toolsFor(role)) {
-                assertThat(tool.name()).as("no AI tool may read files").doesNotContainIgnoringCase("file")
-                        .doesNotContainIgnoringCase("config").doesNotContainIgnoringCase("env_");
+                if (!List.of("list_config_files", "read_config_file").contains(tool.name())) {
+                    assertThat(tool.name()).as("only the two config tools may touch files").doesNotContainIgnoringCase("file")
+                            .doesNotContainIgnoringCase("config").doesNotContainIgnoringCase("env_");
+                }
                 if (tool.write()) {
                     continue;
                 }
@@ -282,6 +296,7 @@ class ReadToolsTest {
             args.put(name, switch (name) {
                 case "hostId" -> hostId.toString();
                 case "deploymentId" -> deploymentId.toString();
+                case "path" -> ".env.production";
                 default -> "web";
             });
         }
@@ -368,11 +383,12 @@ class ReadToolsTest {
         assertThat(readTools(Role.ADMIN)).extracting(AiTool::name).containsExactlyInAnyOrder(
                 "list_hosts", "host_overview", "list_deployments", "get_managed_deployment", "list_deployment_versions",
                 "list_containers", "list_images", "list_networks", "list_volumes", "list_notifications",
-                "list_git_credentials", "list_audit_log");
+                "list_git_credentials", "list_audit_log", "list_config_files", "read_config_file");
         assertThat(readTools(Role.OPERATOR)).extracting(AiTool::name)
-                .hasSize(11).contains("list_git_credentials").doesNotContain("list_audit_log");
+                .hasSize(13).contains("list_git_credentials", "read_config_file").doesNotContain("list_audit_log");
         assertThat(readTools(Role.VIEWER)).extracting(AiTool::name)
-                .hasSize(10).doesNotContain("list_audit_log", "list_git_credentials");
+                .hasSize(12).contains("list_config_files", "read_config_file")
+                .doesNotContain("list_audit_log", "list_git_credentials");
     }
 
     @Test
@@ -401,7 +417,8 @@ class ReadToolsTest {
     }
 
     @Test
-    void secretsNeverAppearInAnyToolResult() {
+    void secretsNeverAppearInAnyToolResult() throws IOException {
+        writeFile("app.conf", "listen 80;\n");
         when(resources.deployments(any())).thenReturn(List.of(HostDeploymentResponse.of(
                 new dev.bethge.shipir.docker.dto.DeploymentSummaryDto("web", 1, 1,
                         dev.bethge.shipir.docker.dto.DeploymentSummaryDto.Status.RUNNING, null), deploymentId)));
@@ -414,7 +431,9 @@ class ReadToolsTest {
 
         Map<String, String> argsByTool = Map.of(
                 "get_managed_deployment", stack(hostId, deploymentId),
-                "list_deployment_versions", stack(hostId, deploymentId));
+                "list_deployment_versions", stack(hostId, deploymentId),
+                "list_config_files", stack(hostId, deploymentId),
+                "read_config_file", configArgs(hostId, deploymentId, "app.conf"));
         StringBuilder all = new StringBuilder();
         for (AiTool tool : readTools(Role.ADMIN)) {
             String args = argsByTool.getOrDefault(tool.name(),
@@ -429,5 +448,117 @@ class ReadToolsTest {
                 .doesNotContain(PEM_SECRET)
                 .doesNotContain(WEBHOOK_SECRET)
                 .doesNotContain("hooks.example");
+    }
+
+    // ---- list_config_files / read_config_file ----
+
+    @Test
+    void configToolsReturnTreeAndContentForAViewableDeployment() throws IOException {
+        writeFile("nginx/default.conf", "server { listen 80; }\n");
+
+        for (Role role : Role.values()) {
+            ToolResult tree = run("list_config_files", stack(hostId, deploymentId), role);
+            assertThat(tree.error()).as(tree.content()).isFalse();
+            assertThat(mapper.readTree(tree.content())).extracting(n -> n.get("path").asString())
+                    .contains("nginx", "nginx/default.conf").doesNotContain("compose.yaml", ".env");
+
+            ToolResult file = run("read_config_file", configArgs(hostId, deploymentId, "nginx/default.conf"), role);
+            assertThat(file.error()).as(file.content()).isFalse();
+            assertThat(mapper.readTree(file.content()).get("content").asString()).isEqualTo("server { listen 80; }\n");
+        }
+    }
+
+    @Test
+    void configToolsAreNotFoundForInvisibleHostAndDeployment() throws IOException {
+        writeFile("app.conf", "visible-only-with-grant");
+        jdbc.update("DELETE FROM permissions");
+
+        for (String tool : List.of("list_config_files", "read_config_file")) {
+            ToolResult result = run(tool, configArgs(hostId, deploymentId, "app.conf"), Role.VIEWER);
+            if (tool.equals("list_config_files")) {
+                result = run(tool, stack(hostId, deploymentId), Role.VIEWER);
+            }
+            assertThat(result.error()).as(tool).isTrue();
+            assertThat(result.content()).contains("NOT_FOUND").doesNotContain("visible-only-with-grant").doesNotContain("app.conf");
+        }
+        ToolResult unknown = run("read_config_file", configArgs(hostId, UUID.randomUUID(), "app.conf"), Role.ADMIN);
+        assertThat(unknown.error()).isTrue();
+        assertThat(unknown.content()).contains("NOT_FOUND");
+    }
+
+    @Test
+    void readConfigFileNeverReturnsEnvLikeContentNotEvenToOperatorsAndAdmins() throws IOException {
+        String secret = "ENV-FILE-SECRET-789";
+        for (String name : List.of(".env.production", "db.env", "tls.pem", "tls.key", "secrets/token.txt", "Repo/.ENV")) {
+            writeFile(name, "PASSWORD=" + secret + "\n");
+        }
+
+        for (Role role : Role.values()) {
+            for (String name : List.of(".env.production", "db.env", "tls.pem", "tls.key", "secrets/token.txt",
+                    "Repo/.ENV", "x/../db.env", "./secrets/./token.txt")) {
+                ToolResult result = run("read_config_file", configArgs(hostId, deploymentId, name), role);
+                assertThat(result.error()).as(role + " " + name).isTrue();
+                assertThat(result.content()).contains(name.contains("..") ? "INVALID_PATH" : "ENV_FILE_RESTRICTED")
+                        .doesNotContain(secret);
+            }
+        }
+    }
+
+    @Test
+    void readConfigFileDeniesExcludedSymlinkAndTraversalPaths() throws IOException {
+        writeFile("app.conf", "ok");
+        Path dir = dev.bethge.shipir.common.security.SystemScope.call(() -> deployments.directoryOf(hostId, deploymentId));
+        Path outside = Files.createTempFile("shipir-outside-", ".txt");
+        Files.writeString(outside, "OUTSIDE-SECRET");
+        Files.createSymbolicLink(dir.resolve("link.conf"), outside);
+        Files.createDirectories(dir.resolve("realdir"));
+        Files.writeString(dir.resolve("realdir/inner.conf"), "INNER");
+        Files.createSymbolicLink(dir.resolve("linkdir"), dir.resolve("realdir"));
+        Files.writeString(dir.resolve(".env"), "API_TOKEN=" + ENV_SECRET);
+
+        ToolResult control = run("read_config_file", configArgs(hostId, deploymentId, "app.conf"), Role.OPERATOR);
+        assertThat(control.error()).as(control.content()).isFalse();
+        assertThat(control.content()).contains("\"content\":\"ok\"");
+
+        Map<String, String> expectedCodes = new java.util.LinkedHashMap<>();
+        expectedCodes.put("compose.yaml", "EXCLUDED_PATH");
+        expectedCodes.put(".env", "EXCLUDED_PATH");
+        expectedCodes.put(".shipir-backups/x", "EXCLUDED_PATH");
+        expectedCodes.put("../secret", "INVALID_PATH");
+        expectedCodes.put("../../etc/passwd", "INVALID_PATH");
+        expectedCodes.put("/etc/passwd", "INVALID_PATH");
+        expectedCodes.put("%2e%2e/%2e%2e/etc/passwd", "INVALID_PATH");
+        expectedCodes.put("..%2f..%2fetc/passwd", "INVALID_PATH");
+        expectedCodes.put("app.conf/../../x", "INVALID_PATH");
+        expectedCodes.put("link.conf", "INVALID_PATH");
+        expectedCodes.put("linkdir/inner.conf", "INVALID_PATH");
+        expectedCodes.forEach((path, code) -> {
+            ToolResult result = run("read_config_file", configArgs(hostId, deploymentId, path), Role.OPERATOR);
+            assertThat(result.error()).as(path + " -> " + result.content()).isTrue();
+            assertThat(mapper.readTree(result.content()).get("error").asString()).as(path).isEqualTo(code);
+            assertThat(result.content()).doesNotContain("OUTSIDE-SECRET").doesNotContain("INNER")
+                    .doesNotContain(ENV_SECRET).doesNotContain("root:");
+        });
+        ToolResult tree = run("list_config_files", stack(hostId, deploymentId), Role.OPERATOR);
+        assertThat(tree.error()).as(tree.content()).isFalse();
+        assertThat(tree.content()).contains("app.conf").doesNotContain("link.conf").doesNotContain("linkdir");
+    }
+
+    @Test
+    void largeConfigFileIsTruncatedWithTheNote() throws IOException {
+        writeFile("big.conf", "line of config\n".repeat(2000));
+
+        ToolResult result = run("read_config_file", configArgs(hostId, deploymentId, "big.conf"), Role.VIEWER);
+
+        assertThat(result.error()).isFalse();
+        assertThat(result.content()).contains("RESULT TRUNCATED").hasSizeLessThan(5000);
+    }
+
+    @Test
+    void readConfigFileRequiresAPathArgument() {
+        ToolResult result = run("read_config_file", stack(hostId, deploymentId), Role.VIEWER);
+
+        assertThat(result.error()).isTrue();
+        assertThat(result.content()).contains("INVALID_ARGUMENTS");
     }
 }

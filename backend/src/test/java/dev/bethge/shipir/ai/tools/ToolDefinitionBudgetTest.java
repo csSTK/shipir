@@ -19,10 +19,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ToolDefinitionBudgetTest {
 
-    /** Approximate tokens (chars / 4). Before shortening: 9956 chars (about 2490 tokens); now 7154 chars (about 1788 tokens); the budget (1790) is 71.9% of the old size. */
-    // Adding a tool or a longer description means deliberately bumping this budget. Keep it at about 72% or less of the
+    /** Approximate tokens (chars / 4). Before shortening: 9956 chars (about 2490 tokens); then 7154 chars (about 1788 tokens); now 7738 chars (about 1934 tokens) after adding list_config_files and read_config_file; the budget (1940) is 77.9% of the old size. */
+    // Adding a tool or a longer description means deliberately bumping this budget. Bumped from 1790 to 1940 for the two config
+    // file read tools (shipr-006w.2, 584 chars, descriptions already minimal); keep it at about 78% or less of the
     // 9956 chars measured before shortening, so the saving is not given back piecemeal.
-    private static final int BUDGET_TOKENS = 1_790;
+    private static final int BUDGET_TOKENS = 1_940;
 
     private static final ObjectMapper MAPPER = JsonMapper.builder().build();
 

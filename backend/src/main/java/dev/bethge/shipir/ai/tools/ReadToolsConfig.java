@@ -5,6 +5,7 @@ import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.git.GitCredentialService;
 import dev.bethge.shipir.compose.DeploymentRunService;
 import dev.bethge.shipir.compose.DeploymentService;
+import dev.bethge.shipir.config_editor.ConfigFileService;
 import dev.bethge.shipir.host.HostOverviewService;
 import dev.bethge.shipir.host.HostResourcesService;
 import dev.bethge.shipir.host.HostService;
@@ -58,6 +59,22 @@ class ReadToolsConfig {
     AiTool getManagedDeploymentTool(DeploymentService deployments) {
         return read("get_managed_deployment", "One managed deployment: status, Compose YAML, env variable names.",
                 deploymentSchema(), Role.VIEWER, (a, c) -> deployments.get(uuid(a, "hostId"), uuid(a, "deploymentId")));
+    }
+
+    @Bean
+    AiTool listConfigFilesTool(ConfigFileService files) {
+        return read("list_config_files", "File tree of a managed deployment's directory.",
+                deploymentSchema(), Role.VIEWER, (a, c) -> files.tree(uuid(a, "hostId"), uuid(a, "deploymentId")));
+    }
+
+    /** Env-like files are refused by the service whatever the role; the registry caps the size of the result. */
+    @Bean
+    AiTool readConfigFileTool(ConfigFileService files) {
+        Map<String, Object> props = Map.of("hostId", UUID_PROP, "deploymentId", UUID_PROP,
+                "path", Map.of("type", "string"));
+        return read("read_config_file", "Text of a config file; path relative to the deployment directory.",
+                schema(props, "hostId", "deploymentId", "path"), Role.VIEWER,
+                (a, c) -> files.readWithoutSecrets(uuid(a, "hostId"), uuid(a, "deploymentId"), (String) a.get("path")));
     }
 
     @Bean

@@ -129,6 +129,20 @@ public class ConfigFileService {
         return response(t);
     }
 
+    /**
+     * Like {@link #read} but for callers that must never see secrets (the AI assistant): env-like files are refused
+     * with the same error as for a viewer, whatever the caller's access level.
+     */
+    public ConfigFileResponse readWithoutSecrets(UUID hostId, UUID id, String path) {
+        Target t = target(hostId, id, path, false);
+        if (EnvLikeFiles.matches(t.rel())) {
+            throw new ConfigFileException(HttpStatus.FORBIDDEN, "ENV_FILE_RESTRICTED",
+                    "Environment and secret files cannot be read here");
+        }
+        requireFile(t.file());
+        return response(t);
+    }
+
     @Auditable(action = "CONFIG_FILE_WRITE", targetType = "CONFIG_FILE",
             targetId = "T(dev.bethge.shipir.config_editor.ConfigFileService).auditTarget(#id, #path)")
     public ConfigFileResponse write(UUID hostId, UUID id, String path, String content) {

@@ -4,6 +4,7 @@ import dev.bethge.shipir.ai.llm.LlmToolDefinition;
 import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.common.security.AiInvocationContext;
 import dev.bethge.shipir.compose.DeploymentException;
+import dev.bethge.shipir.config_editor.ConfigFileException;
 import dev.bethge.shipir.git.GitException;
 import dev.bethge.shipir.git.GitOperationException;
 import dev.bethge.shipir.host.HostException;
@@ -226,6 +227,8 @@ public class AiToolRegistry {
             // details name the offending fields (e.g. "ref: must not be blank") so the model can correct the call
             String message = e.details().isEmpty() ? e.getMessage() : e.getMessage() + ": " + String.join("; ", e.details());
             return ToolResult.error(e.code(), message);
+        } catch (ConfigFileException e) {
+            return ToolResult.error(e.code(), e.getMessage());
         } catch (WebhookException e) {
             return ToolResult.error(e.code(), e.getMessage());
         } catch (GitException e) {

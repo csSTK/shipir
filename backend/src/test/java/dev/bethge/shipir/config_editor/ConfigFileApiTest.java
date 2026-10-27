@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -77,6 +78,7 @@ class ConfigFileApiTest {
     @Autowired UserRepository users;
     @Autowired PasswordEncoder encoder;
     @Autowired ComposeFileRepository files;
+    @Autowired ConfigFileService service;
     @MockitoBean ComposeExecutionService execution;
 
     UUID hostId;
@@ -245,6 +247,27 @@ class ConfigFileApiTest {
                         .contentType(APPLICATION_JSON).content("{\"backupId\":\"20260101000000000-abcdef12\"}"))
                 .andExpect(status().isForbidden());
         assertThat(Files.readString(dir.resolve("repo/conf/app.conf"))).isEqualTo("a=1\n");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @ValueSource(strings = {"operator", "admin"})
+    void readWithoutSecretsRefusesEnvLikeFilesEvenWhereReadSucceeds(String username) throws Exception {
+        Files.writeString(dir.resolve("db.env"), "PASSWORD=hunter2\n");
+        Files.writeString(dir.resolve("app.conf"), "listen 80;\n");
+        var previous = org.springframework.security.core.context.SecurityContextHolder.getContext();
+        org.springframework.security.core.context.SecurityContextHolder.setContext(
+                new org.springframework.security.core.context.SecurityContextImpl(
+                        org.springframework.security.authentication.UsernamePasswordAuthenticationToken.authenticated(username, null,
+                                List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + username.toUpperCase())))));
+        try {
+            UUID id = UUID.fromString(deploymentId);
+            assertThat(service.read(hostId, id, "db.env").content()).contains("hunter2");
+            assertThatThrownBy(() -> service.readWithoutSecrets(hostId, id, "db.env"))
+                    .isInstanceOfSatisfying(ConfigFileException.class, e -> assertThat(e.code()).isEqualTo("ENV_FILE_RESTRICTED"));
+            assertThat(service.readWithoutSecrets(hostId, id, "app.conf").content()).isEqualTo("listen 80;\n");
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.setContext(previous);
+        }
     }
 
     // ---- env-like files are not readable by view-only users ----
