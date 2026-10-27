@@ -141,6 +141,12 @@ public class HostResourcesService {
         return ref != null && imageUpdates.hasUpdate(hostId, ref.key());
     }
 
+    /** Every container of a viewable host, unfiltered. For aggregate facts only (e.g. taken ports), never list it out. */
+    List<ContainerDto> allContainers(UUID hostId) {
+        requireView(hostId);
+        return call(hostId, containers::listContainers);
+    }
+
     /** Containers of a fully visible host; with deployment grants only: those of the visible managed deployments. */
     public List<ContainerDto> containers(UUID hostId) {
         requireView(hostId);
