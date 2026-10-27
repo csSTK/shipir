@@ -217,7 +217,8 @@ Decided in epic shipr-9sm. An in-app chat that can do what the signed-in user ca
 - **Audit:** actions are audited as the user, with details marking AI origin.
 - **API key:** set by ADMIN at `/settings/ai`, encrypted via `SecretCipher`, only a hint is returned, never logged.
 - **Sessions are owner-only.** The owner may share a session read-only with ADMINs (for debugging) and revoke it. Old sessions are purged by the retention job.
-- **Out of scope:** config_editor tools, permission tools (feature not built yet), exec terminal, RAG/embeddings.
+- **In scope, read-only (shipr-006w):** the config_editor read tools (list and read config files inside a deployment directory, under the config editor's rules: `compose.yaml`, `.env` and other env-like files are never exposed) and the permission read tool (ADMIN-only, lists access grants). Both features are built, so the assistant can answer questions about them. Read-only only.
+- **Out of scope:** config_editor write tools (file edits, backup restore), permission write tools (grant, change, revoke), env-like files and `compose.yaml`/`.env` (read or write), exec terminal, RAG/embeddings. Reason for keeping writes out: a model that edits files or changes access rights is a prompt-injection risk even behind Confirm.
 
 ## Security (non-negotiable)
 
