@@ -1,12 +1,18 @@
 package dev.bethge.shipir.compose.template;
 
 import dev.bethge.shipir.compose.generator.ComposeGeneratorService;
+import dev.bethge.shipir.compose.generator.model.EnvVarSpec;
+import dev.bethge.shipir.compose.generator.model.PortSpec;
+import dev.bethge.shipir.compose.generator.model.ServiceSpec;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.ClassPathResource;
 import tools.jackson.dataformat.yaml.YAMLMapper;
 
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -54,6 +60,73 @@ class TemplateCatalogTest {
             assertThat(t.description()).isNotBlank();
             assertThat(t.logo()).isNotBlank();
         });
+    }
+
+    @Test
+    void bundledCatalogIncludesTheCuratedSelfHostedApps() {
+        assertThat(bundled().all().stream().map(AppTemplate::id).toList())
+                .contains("vaultwarden", "gitea", "grafana", "jellyfin", "home-assistant", "nextcloud");
+    }
+
+    @Test
+    void bundledImagesArePinnedAndNeverLatest() {
+        for (AppTemplate t : bundled().all()) {
+            for (ServiceSpec s : services(t)) {
+                assertThat(s.image())
+                        .as("image of %s/%s", t.id(), s.name())
+                        .matches(".+:[^:/]+")
+                        .doesNotEndWith(":latest");
+            }
+        }
+    }
+
+    @Test
+    void bundledHostPortsAreUniqueAcrossTemplates() {
+        Map<Integer, String> owners = new HashMap<>();
+        for (AppTemplate t : bundled().all()) {
+            for (ServiceSpec s : services(t)) {
+                if (s.ports() == null) {
+                    continue;
+                }
+                for (PortSpec port : s.ports()) {
+                    if (port.host() != null) {
+                        String owner = t.id() + "/" + s.name();
+                        assertThat(owners.put(port.host(), owner))
+                                .as("host port %d used by %s and %s", port.host(), owners.get(port.host()), owner)
+                                .isNull();
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    void credentialsAreReferencedFromSecretHintsNeverWrittenIntoTheSpec() {
+        for (AppTemplate t : bundled().all()) {
+            for (ServiceSpec s : services(t)) {
+                for (EnvVarSpec env : environment(s)) {
+                    if (env.key().matches("(?i).*(PASSWORD|TOKEN|SECRET|KEY).*")) {
+                        assertThat(env.value())
+                                .as("%s/%s env %s must not carry a literal value", t.id(), s.name(), env.key())
+                                .isNull();
+                        assertThat(env.ref())
+                                .as("%s/%s env %s must reference a secret hint", t.id(), s.name(), env.key())
+                                .isNotBlank();
+                        assertThat(t.env().stream().anyMatch(h -> h.key().equals(env.ref()) && h.secret()))
+                                .as("%s declares secret hint %s", t.id(), env.ref())
+                                .isTrue();
+                    }
+                }
+            }
+        }
+    }
+
+    private static List<ServiceSpec> services(AppTemplate t) {
+        return t.spec().services();
+    }
+
+    private static List<EnvVarSpec> environment(ServiceSpec s) {
+        return s.environment() == null ? List.of() : s.environment();
     }
 
     @Test

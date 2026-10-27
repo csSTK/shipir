@@ -313,5 +313,279 @@
         }
       ]
     }
+  },
+  {
+    "id": "vaultwarden",
+    "name": "Vaultwarden",
+    "description": "Lightweight Bitwarden-compatible password manager. Open port 8083 after the first deploy. Browsers need HTTPS for the web vault, so put it behind a domain.",
+    "logo": "vaultwarden",
+    "env": [
+      {
+        "key": "ADMIN_TOKEN",
+        "description": "Token for the /admin page. Use an Argon2 PHC hash or a long random string.",
+        "secret": true
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "vaultwarden",
+          "image": "vaultwarden/server:1.32.5",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 8083,
+              "container": 80,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "ADMIN_TOKEN",
+              "ref": "ADMIN_TOKEN"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "vw-data",
+              "target": "/data",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "vw-data",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "gitea",
+    "name": "Gitea",
+    "description": "Self-hosted Git service with a web UI. Open port 3000 after the first deploy to finish the setup. SSH is not published.",
+    "logo": "gitea",
+    "env": [],
+    "spec": {
+      "services": [
+        {
+          "name": "gitea",
+          "image": "gitea/gitea:1.22",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 3000,
+              "container": 3000,
+              "protocol": "tcp"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "gitea-data",
+              "target": "/data",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "gitea-data",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "grafana",
+    "name": "Grafana",
+    "description": "Dashboards and alerting for metrics and logs. Open port 3100 after the first deploy and log in as admin with the password you set.",
+    "logo": "grafana",
+    "env": [
+      {
+        "key": "GF_SECURITY_ADMIN_PASSWORD",
+        "description": "Password of the initial admin user",
+        "secret": true
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "grafana",
+          "image": "grafana/grafana:11.2.0",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 3100,
+              "container": 3000,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "GF_SECURITY_ADMIN_PASSWORD",
+              "ref": "GF_SECURITY_ADMIN_PASSWORD"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "grafana-data",
+              "target": "/var/lib/grafana",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "grafana-data",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "jellyfin",
+    "name": "Jellyfin",
+    "description": "Media server for movies, shows and music. Open port 8096 after the first deploy. No media folder is mounted; add a bind mount for your library in the wizard.",
+    "logo": "jellyfin",
+    "env": [],
+    "spec": {
+      "services": [
+        {
+          "name": "jellyfin",
+          "image": "jellyfin/jellyfin:10.9.11",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 8096,
+              "container": 8096,
+              "protocol": "tcp"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "jellyfin-config",
+              "target": "/config",
+              "readOnly": false
+            },
+            {
+              "source": "jellyfin-cache",
+              "target": "/cache",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "jellyfin-config",
+          "external": false
+        },
+        {
+          "name": "jellyfin-cache",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "home-assistant",
+    "name": "Home Assistant",
+    "description": "Home automation hub. Open port 8123 after the first deploy. Runs on bridge networking, so device discovery that needs the host network does not work.",
+    "logo": "home-assistant",
+    "env": [],
+    "spec": {
+      "services": [
+        {
+          "name": "homeassistant",
+          "image": "homeassistant/home-assistant:2024.9.3",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 8123,
+              "container": 8123,
+              "protocol": "tcp"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "ha-config",
+              "target": "/config",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "ha-config",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "nextcloud",
+    "name": "Nextcloud",
+    "description": "Self-hosted file sync and sharing. Open port 8084 after the first deploy. Set the trusted domains to the names you open it with, or Nextcloud refuses them.",
+    "logo": "nextcloud",
+    "env": [
+      {
+        "key": "NEXTCLOUD_ADMIN_PASSWORD",
+        "description": "Password of the initial admin user (username admin)",
+        "secret": true
+      },
+      {
+        "key": "NEXTCLOUD_TRUSTED_DOMAINS",
+        "description": "Space-separated host names or IPs you open Nextcloud with, e.g. 192.168.1.10 cloud.example.com",
+        "secret": false
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "nextcloud",
+          "image": "nextcloud:29-apache",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 8084,
+              "container": 80,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "NEXTCLOUD_ADMIN_USER",
+              "value": "admin"
+            },
+            {
+              "key": "NEXTCLOUD_ADMIN_PASSWORD",
+              "ref": "NEXTCLOUD_ADMIN_PASSWORD"
+            },
+            {
+              "key": "NEXTCLOUD_TRUSTED_DOMAINS",
+              "ref": "NEXTCLOUD_TRUSTED_DOMAINS"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "nextcloud-data",
+              "target": "/var/www/html",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "nextcloud-data",
+          "external": false
+        }
+      ]
+    }
   }
 ]
