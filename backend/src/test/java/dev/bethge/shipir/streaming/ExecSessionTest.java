@@ -495,6 +495,28 @@ class ExecSessionTest {
     }
 
     @Test
+    void anApiTokenNeverOpensAConsoleEvenForAnOperatorWithAnOperateGrantAndTheFlagOn() throws Exception {
+        Client op = operatorClient("execop", Role.OPERATOR);
+        grantHost(op, "OPERATE");
+        containerOf("web", null);
+        var created = op.call(HttpRequest.newBuilder(URI.create(base() + "/api/account/tokens"))
+                .header("Content-Type", "application/json").header("X-XSRF-TOKEN", op.jar.get("XSRF-TOKEN"))
+                .POST(HttpRequest.BodyPublishers.ofString("{\"name\":\"ci\"}")));
+        assertThat(created.statusCode()).as(created.body()).isEqualTo(201);
+        String token = json(created.body(), "token");
+        // the session works (asserted at the end), so the 403 is caused by the bearer token alone
+        for (String target : new String[]{"web", "unknown"}) {
+            var r = HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                            URI.create(base() + "/api/hosts/" + hostId + "/containers/" + target + "/exec"))
+                    .header("Authorization", "Bearer " + token).header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(r.statusCode()).as(target + " " + r.body()).isEqualTo(403);
+        }
+        verifyNoConsoleOpened();
+        assertThat(op.exec("web", "{}", true).statusCode()).isEqualTo(201);
+    }
+
+    @Test
     void capabilitiesTellWhetherOperatorsMayUseConsoles() throws Exception {
         Client viewer = operatorClient("execviewer", Role.VIEWER);
         var r = viewer.call(HttpRequest.newBuilder(URI.create(base() + "/api/exec/capabilities")));

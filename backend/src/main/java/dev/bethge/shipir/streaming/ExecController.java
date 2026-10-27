@@ -1,6 +1,7 @@
 package dev.bethge.shipir.streaming;
 
 import dev.bethge.shipir.auth.Role;
+import dev.bethge.shipir.auth.token.ApiTokenAuthentication;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
@@ -16,7 +17,8 @@ import java.util.UUID;
 
 /**
  * Creates an interactive console in a container. SecurityConfig lets ADMIN and OPERATOR through; the handler
- * decides (OPERATOR needs the feature flag and an OPERATE grant). VIEWER is refused in SecurityConfig.
+ * decides (OPERATOR needs the feature flag and an OPERATE grant). VIEWER is refused in SecurityConfig. API-token
+ * requests get 403 before any lookup: interactive consoles are session-only.
  */
 @RestController
 @RequestMapping("/api/hosts/{hostId}/containers/{containerId}/exec")
@@ -35,6 +37,10 @@ class ExecController {
     ResponseEntity<ExecSessionResponse> create(@PathVariable UUID hostId, @PathVariable String containerId,
                                                @RequestBody(required = false) ExecRequest body,
                                                Authentication authentication, HttpServletRequest request) {
+        if (authentication instanceof ApiTokenAuthentication) {
+            // a bearer token is non-interactive and unscoped: consoles are session-only, whatever the role or flag
+            throw new ExecException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied");
+        }
         HttpSession http = request.getSession(false);
         ExecRequest req = body == null ? new ExecRequest(null, null, null) : body;
         Role role = access.roleOf(authentication.getName()).orElseThrow(
