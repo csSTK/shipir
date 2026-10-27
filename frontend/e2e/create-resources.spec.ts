@@ -28,6 +28,7 @@ test.beforeEach(({ api }) => {
 
 test('operator creates a container; ADMIN-only options are absent', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', as('OPERATOR'))
+  api.mock('GET', '/api/exec/capabilities', { body: { operatorEnabled: false } })
   api.mock('POST', '/api/hosts/a/containers', { status: 201, body: { id: 'c1', name: 'web' } })
   await page.goto('/environments/a/containers')
   await page.getByRole('button', { name: 'Create container' }).click()
@@ -58,6 +59,7 @@ test('container server error stays inline', async ({ page, api }) => {
 
 test('operator creates a network and a volume, name conflict is inline', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', as('OPERATOR'))
+  api.mock('GET', '/api/exec/capabilities', { body: { operatorEnabled: false } })
   api.mock('POST', '/api/hosts/a/networks', { status: 201, body: { id: 'n1', name: 'backend' } })
   await page.goto('/environments/a/networks')
   await page.getByRole('button', { name: 'Create network' }).click()

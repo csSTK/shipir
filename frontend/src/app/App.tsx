@@ -3,7 +3,7 @@ import { EnvironmentDashboard, EnvironmentsOverview } from '../features/hosts/in
 import { AccountPage } from '../features/account/index.ts'
 import { AiSettingsPage, AuditLogPage, BackupSettingsPage, GitCredentialsSettingsPage, OidcSettingsPage, RegistriesSettingsPage, RetentionSettingsPage, SharedChatSessionsPage, TeamsSettingsPage, UsersSettingsPage, WebhooksSettingsPage } from '../features/settings/index.ts'
 import { ChatPage } from '../features/ai-chat/index.ts'
-import { ContainersPage, ContainerLogsPage, ContainerConsolePage, ContainerDetailsPage } from '../features/containers/index.ts'
+import { ContainersPage, ContainerLogsPage, ContainerConsolePage, ContainerDetailsPage, useConsoleAccess } from '../features/containers/index.ts'
 import { ImagesPage } from '../features/images/index.ts'
 import { NetworksPage } from '../features/networks/index.ts'
 import { VolumesPage } from '../features/volumes/index.ts'
@@ -28,6 +28,13 @@ function HostEventsBridge() {
 function LegacyStacksRedirect() {
   const { id, deploymentId } = useParams()
   return <Navigate to={`/environments/${id}/deployments${deploymentId ? `/${deploymentId}` : ''}`} replace />
+}
+
+/** Console page for ADMIN and, while operator exec is enabled, OPERATOR; the server still checks per-container permission. */
+function ConsoleRoute() {
+  const { allowed, pending } = useConsoleAccess()
+  if (pending) return <div aria-busy="true" />
+  return allowed ? <ContainerConsolePage /> : <NotAllowedPage />
 }
 
 function AuthGate() {
@@ -64,7 +71,7 @@ function AuthGate() {
         <Route path="/environments/:id/containers" element={<ContainersPage />} />
         <Route path="/environments/:id/containers/:cid" element={<ContainerDetailsPage />} />
         <Route path="/environments/:id/containers/:cid/logs" element={<ContainerLogsPage />} />
-        <Route path="/environments/:id/containers/:cid/console" element={isAdmin ? <ContainerConsolePage /> : <NotAllowedPage />} />
+        <Route path="/environments/:id/containers/:cid/console" element={<ConsoleRoute />} />
         <Route path="/environments/:id/images" element={<ImagesPage />} />
         <Route path="/environments/:id/networks" element={<NetworksPage />} />
         <Route path="/environments/:id/volumes" element={<VolumesPage />} />

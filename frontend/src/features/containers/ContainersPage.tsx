@@ -9,6 +9,7 @@ import { describeResourceError, formatSize } from '../hosts/format.ts'
 import { useContainerStats, type StatSample } from '../../shared/realtime/useContainerStats.ts'
 import { Badge, Button, PageHeader, ResourceTable, Sparkline, StatusDot, type MenuEntry, type ResourceColumn } from '../../shared/ui/index.ts'
 import type { RowActions } from '../../shared/ui/ResourceTable.tsx'
+import { useCanOpenConsole } from './exec/api.ts'
 import { ConfirmDialog } from '../deployments/ConfirmDialog.tsx'
 import { actionsFor, describeActionError, useContainerAction, useContainers, useDeleteContainer, type Container, type ContainerAction } from './api.ts'
 import { CreateContainerDialog } from './CreateContainerDialog.tsx'
@@ -223,6 +224,7 @@ export function ContainersPage() {
     )
   }
   const isAdmin = user?.role === 'ADMIN'
+  const canConsole = useCanOpenConsole()
   const navigate = useNavigate()
   const { series } = useContainerStats(id)
   const deployments = useDeployments(id)
@@ -252,7 +254,7 @@ export function ContainersPage() {
       primary.push({ label: LABELS[toggle][0], icon: TOGGLE_ICONS[toggle], onSelect: () => run(c, toggle), disabled: busy })
     }
     primary.push({ label: t('ContainersPage.logs'), icon: ScrollText, onSelect: () => navigate(`${c.id}/logs`) })
-    if (isAdmin && c.state === 'running') {
+    if (canConsole && c.state === 'running') {
       primary.push({ label: t('ContainersPage.console'), icon: SquareTerminal, onSelect: () => navigate(`${c.id}/console`) })
     }
     const menu: MenuEntry[] = []

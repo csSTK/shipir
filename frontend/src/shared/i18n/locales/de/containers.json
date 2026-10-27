@@ -189,6 +189,7 @@
   "api.theTerminalSizeIsNot": "Die Terminalgröße ist ungültig.",
   "api.couldNotReachTheDocker": "Der Docker-Host ist nicht erreichbar.",
   "api.theConnectionToTheDocker": "Bei der Verbindung zum Docker-Host ist eine Zeitüberschreitung aufgetreten.",
+  "api.youDontHavePermissionToOpen": "Du hast keine Berechtigung, eine Konsole für diesen Container zu öffnen.",
   "api.couldNotOpenTheConsole": "Die Konsole konnte nicht geöffnet werden.",
   "ContainerFilesPanel.files": "Dateien",
   "ContainerFilesPanel.fileToUpload": "Hochzuladende Datei",

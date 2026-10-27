@@ -189,6 +189,7 @@
   "api.theTerminalSizeIsNot": "The terminal size is not valid.",
   "api.couldNotReachTheDocker": "Could not reach the Docker host.",
   "api.theConnectionToTheDocker": "The connection to the Docker host timed out.",
+  "api.youDontHavePermissionToOpen": "You don't have permission to open a console for this container.",
   "api.couldNotOpenTheConsole": "Could not open the console.",
   "ContainerFilesPanel.files": "Files",
   "ContainerFilesPanel.fileToUpload": "File to upload",

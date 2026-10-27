@@ -10,6 +10,7 @@ import { ContainerResourcesDialog } from '../ContainerResourcesDialog.tsx'
 import { CreateContainerDialog } from '../CreateContainerDialog.tsx'
 import { ContainerFilesPanel } from '../files/ContainerFilesPanel.tsx'
 import { describeDetailsError, isNotFound, useContainerDetails, type ContainerDetails, type ContainerPort } from './api.ts'
+import { useCanOpenConsole } from '../exec/api.ts'
 import { useTranslation } from 'react-i18next'
 import { dateTimeFormat, formatNumber, ONE_DECIMAL } from '../../../shared/i18n/format.ts'
 import './ContainerDetailsPage.css'
@@ -275,11 +276,12 @@ function Health({ health }: { health: NonNullable<ContainerDetails['health']> })
   )
 }
 
-/** `/environments/:id/containers/:cid`: inspect data of one container, read-only; links to logs and (ADMIN) console. */
+/** `/environments/:id/containers/:cid`: inspect data of one container, read-only; links to logs and (ADMIN, permitted OPERATOR) console. */
 export function ContainerDetailsPage() {
   const { t } = useTranslation('containers')
   const { id: hostId = '', cid = '' } = useParams()
   const { data: user } = useCurrentUser()
+  const canConsole = useCanOpenConsole()
   const { data: c, isPending, error, refetch } = useContainerDetails(hostId, cid)
   const navigate = useNavigate()
   const [dialog, setDialog] = useState<'edit' | 'duplicate' | 'limits' | null>(null)
@@ -356,7 +358,7 @@ export function ContainerDetailsPage() {
                 <Link className="ui-btn ui-btn--secondary ui-btn--md" to={`${base}/${cid}/logs`}>
                   {t('ContainerDetailsPage.logs')}
                 </Link>
-                {user?.role === 'ADMIN' && c.state === 'running' && (
+                {canConsole && c.state === 'running' && (
                   <Link className="ui-btn ui-btn--secondary ui-btn--md" to={`${base}/${cid}/console`}>
                     {t('ContainerDetailsPage.console')}
                   </Link>

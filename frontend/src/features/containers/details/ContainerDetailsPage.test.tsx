@@ -6,6 +6,7 @@ import { ApiError } from '../../../shared/api/client.ts'
 import { ContainerDetailsPage } from './ContainerDetailsPage.tsx'
 
 let role = 'ADMIN'
+let operatorEnabled = false
 const apiFetch = vi.fn()
 vi.mock('../../../shared/api/client.ts', async (importActual) => ({
   ...(await importActual<typeof import('../../../shared/api/client.ts')>()),
@@ -54,6 +55,7 @@ const details = {
 function renderPage(respond: () => unknown) {
   apiFetch.mockImplementation((path: string) => {
     if (path === '/auth/me') return Promise.resolve({ username: 'u', role, setupRequired: false })
+    if (path === '/exec/capabilities') return Promise.resolve({ operatorEnabled })
     if (path.includes('/stats/history')) return Promise.resolve({ range: '24h', from: '', to: '', bucketSeconds: 60, seriesTotal: 0, truncated: false, series: [] })
     return Promise.resolve().then(respond)
   })
@@ -122,6 +124,21 @@ describe('ContainerDetailsPage', () => {
     role = 'ADMIN'
     renderPage(() => details)
     expect(await screen.findByRole('link', { name: 'Console' })).toHaveAttribute('href', '/environments/h1/containers/c1/console')
+  })
+
+  it('offers console to an OPERATOR only when operator exec is enabled, never to a VIEWER', async () => {
+    operatorEnabled = true
+    role = 'OPERATOR'
+    renderPage(() => details)
+    expect(await screen.findByRole('link', { name: 'Console' })).toHaveAttribute('href', '/environments/h1/containers/c1/console')
+    cleanup()
+    apiFetch.mockReset()
+    role = 'VIEWER'
+    renderPage(() => details)
+    await screen.findByRole('link', { name: 'Logs' })
+    expect(screen.queryByRole('link', { name: 'Console' })).not.toBeInTheDocument()
+    expect(apiFetch.mock.calls.map((c) => c[0])).not.toContain('/exec/capabilities')
+    operatorEnabled = false
   })
 
   it('omits health when the container has no healthcheck', async () => {

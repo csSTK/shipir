@@ -167,6 +167,37 @@ describe('ContainersPage', () => {
       expect(menuItems()).toEqual(['Details', 'Delete'])
     })
 
+    describe('console action', () => {
+      function mockCaps(operatorEnabled: boolean) {
+        apiFetch.mockImplementation((path: string) => {
+          if (path === '/auth/me') return Promise.resolve({ username: 'u', role: apiFetchRole, setupRequired: false })
+          if (path === '/exec/capabilities') return Promise.resolve({ operatorEnabled })
+          return Promise.resolve(path === '/hosts/h1/containers' ? containers : [])
+        })
+      }
+
+      it('shows Console to an OPERATOR when operator exec is enabled', async () => {
+        mockCaps(true)
+        renderAt('/environments/h1/containers', 'OPERATOR')
+        expect(await screen.findByRole('button', { name: 'Console web' })).toBeInTheDocument()
+      })
+
+      it('hides Console from an OPERATOR when operator exec is disabled', async () => {
+        mockCaps(false)
+        renderAt('/environments/h1/containers', 'OPERATOR')
+        await screen.findByRole('button', { name: 'Logs web' })
+        expect(screen.queryByRole('button', { name: 'Console web' })).toBeNull()
+      })
+
+      it('never shows Console to a VIEWER, even when operator exec is enabled', async () => {
+        mockCaps(true)
+        renderAt('/environments/h1/containers', 'VIEWER')
+        await screen.findByRole('button', { name: 'Logs web' })
+        expect(screen.queryByRole('button', { name: 'Console web' })).toBeNull()
+        expect(apiFetch.mock.calls.map((c) => c[0])).not.toContain('/exec/capabilities')
+      })
+    })
+
     it('hides lifecycle actions for viewers but keeps logs and details', async () => {
       mockApi()
       renderAt('/environments/h1/containers', 'VIEWER')

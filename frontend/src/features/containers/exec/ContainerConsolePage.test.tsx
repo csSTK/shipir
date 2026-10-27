@@ -143,4 +143,12 @@ describe('ContainerConsolePage', () => {
     expect(open).not.toHaveBeenCalled()
     expect(screen.getByRole('status')).toHaveTextContent('Not connected')
   })
+
+  it('explains a 403 as missing permission for this container', async () => {
+    apiFetch.mockRejectedValue(new ApiError(403, 'x', 'FORBIDDEN'))
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent("You don't have permission to open a console for this container.")
+    expect(open).not.toHaveBeenCalled()
+  })
 })

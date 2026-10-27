@@ -42,7 +42,7 @@ function decodeBase64(data: string): Uint8Array {
   return bytes
 }
 
-/** `/environments/:id/containers/:cid/console` (ADMIN): interactive shell in a running container. */
+/** `/environments/:id/containers/:cid/console` (ADMIN, OPERATOR when enabled): interactive shell in a running container. */
 export function ContainerConsolePage() {
   const { t } = useTranslation('containers')
   const { id: hostId = '', cid = '' } = useParams()

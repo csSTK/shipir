@@ -5,6 +5,7 @@ import { applyLanguage } from '../shared/i18n/index.ts'
 import { App } from './App.tsx'
 import { queryClient } from './queryClient.ts'
 
+vi.mock('../features/containers/exec/ContainerConsolePage.tsx', () => ({ ContainerConsolePage: () => <h1>Console page</h1> }))
 vi.mock('../shared/api/client.ts', async (importActual) => ({
   ...(await importActual<typeof import('../shared/api/client.ts')>()),
   apiFetch: vi.fn(),
@@ -152,6 +153,53 @@ describe('App auth gate', () => {
 
     expect(await screen.findByRole('heading', { name: 'Retention' })).toBeInTheDocument()
     window.history.pushState({}, '', '/')
+  })
+})
+
+describe('console route gate', () => {
+  afterEach(() => window.history.pushState({}, '', '/'))
+
+  const capabilityCalls = () => apiFetchMock.mock.calls.map((c) => c[0]).filter((p) => p === '/exec/capabilities')
+
+  function routeAs(role: string, capabilities: () => unknown) {
+    window.history.pushState({}, '', '/environments/h1/containers/c1/console')
+    route({
+      'GET /auth/me': () => ({ username: 'u', role, setupRequired: false }),
+      'GET /hosts/overview': () => [],
+      'GET /exec/capabilities': capabilities,
+    })
+  }
+
+  it.each([
+    ['VIEWER', false],
+    ['VIEWER', true],
+    ['OPERATOR', false],
+  ])('shows not-allowed to a %s when operator exec is %s', async (role, operatorEnabled) => {
+    routeAs(role, () => ({ operatorEnabled }))
+    render(<App />)
+
+    expect(await screen.findByText(/not allowed to view/i)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Console page' })).not.toBeInTheDocument()
+    if (role === 'VIEWER') expect(capabilityCalls()).toEqual([])
+  })
+
+  it('opens the console page for an OPERATOR when operator exec is enabled', async () => {
+    routeAs('OPERATOR', () => ({ operatorEnabled: true }))
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: 'Console page' })).toBeInTheDocument()
+  })
+
+  it('does not show not-allowed to an OPERATOR while the capabilities are loading', async () => {
+    let resolve: (v: unknown) => void = () => {}
+    const pending = new Promise((r) => (resolve = r))
+    routeAs('OPERATOR', () => pending)
+    render(<App />)
+
+    await waitFor(() => expect(capabilityCalls()).toHaveLength(1))
+    expect(screen.queryByText(/not allowed to view/i)).not.toBeInTheDocument()
+    resolve({ operatorEnabled: true })
+    expect(await screen.findByRole('heading', { name: 'Console page' })).toBeInTheDocument()
   })
 })
 

@@ -1,6 +1,7 @@
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { ApiError, apiFetch } from '../../../shared/api/client.ts'
 import i18n from 'i18next'
+import { useCurrentUser } from '../../auth/index.ts'
 
 export type Shell = '/bin/sh' | '/bin/bash'
 
@@ -25,7 +26,35 @@ export function useStartExec(hostId: string, containerId: string) {
   })
 }
 
+/** Response of `GET /api/exec/capabilities`. */
+interface ExecCapabilities {
+  operatorEnabled: boolean
+}
+
+/**
+ * Whether to offer the console: always to ADMIN, to OPERATOR only while the server enables operator exec, never
+ * to VIEWER. The server stays authoritative (per host/deployment permission), so a 403 is still handled on the page.
+ */
+export function useConsoleAccess(): { allowed: boolean; pending: boolean } {
+  const { data: user } = useCurrentUser()
+  const role = user?.role
+  const capabilities = useQuery({
+    queryKey: ['exec', 'capabilities'],
+    queryFn: () => apiFetch<ExecCapabilities>('/exec/capabilities'),
+    enabled: role === 'OPERATOR',
+  })
+  return {
+    allowed: role === 'ADMIN' || (role === 'OPERATOR' && capabilities.data?.operatorEnabled === true),
+    pending: role === 'OPERATOR' && capabilities.isPending,
+  }
+}
+
+export function useCanOpenConsole(): boolean {
+  return useConsoleAccess().allowed
+}
+
 const ERROR_TEXT: Record<string, string> = {
+  get FORBIDDEN() { return i18n.t('containers:api.youDontHavePermissionToOpen') },
   get INVALID_CONTAINER_STATE() { return i18n.t('containers:api.theContainerIsNotRunning') },
   get EXEC_LIMIT_REACHED() { return i18n.t('containers:api.tooManyConsolesAreOpen') },
   get RESOURCE_NOT_FOUND() { return i18n.t('containers:api.thisContainerNoLongerExists') },
