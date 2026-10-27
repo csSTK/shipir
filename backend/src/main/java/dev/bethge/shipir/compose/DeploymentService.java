@@ -349,13 +349,16 @@ public class DeploymentService {
                                     java.util.function.Consumer<String> onLine, Path overrideFile, List<String> services) {
         ComposeOptions options = ComposeOptions.ofProfiles(deployment.getProfiles())
                 .withServices(services == null ? List.of() : services);
+        // the deployment's own compose file (null = default compose.yaml; Git checkout file otherwise) also with an override on top
+        Path composeFile = composeFileOf(deployment);
         if (options.isEmpty()) {
             return overrideFile == null
-                    ? execution.execute(deployment.getHostId(), deployment.getName(), command, endpoint, onLine, composeFileOf(deployment))
-                    : execution.execute(deployment.getHostId(), deployment.getName(), command, endpoint, onLine, null, overrideFile);
+                    ? execution.execute(deployment.getHostId(), deployment.getName(), command, endpoint, onLine, composeFile)
+                    : execution.execute(deployment.getHostId(), deployment.getName(), command, endpoint, onLine, composeFile,
+                            overrideFile);
         }
         return execution.execute(deployment.getHostId(), deployment.getName(), command, endpoint, onLine,
-                overrideFile == null ? composeFileOf(deployment) : null, overrideFile, options);
+                composeFile, overrideFile, options);
     }
 
     @Auditable(action = "DEPLOYMENT_UPDATE", targetType = "DEPLOYMENT", targetId = "#id")
