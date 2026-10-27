@@ -6,6 +6,7 @@ import YamlWorker from 'monaco-yaml/yaml.worker?worker'
 import { useSyncExternalStore } from 'react'
 import composeSchema from './compose-spec.json'
 import { useTranslation } from 'react-i18next'
+import { editorFontSize } from './editorFontSize.ts'
 
 // Bundle Monaco from node_modules: no CDN loader, workers come from Vite.
 self.MonacoEnvironment = {
@@ -65,7 +66,7 @@ export default function MonacoYamlEditor({ value, onChange, readOnly, label, hei
         ariaLabel: label,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
-        fontSize: 13,
+        fontSize: editorFontSize(),
         tabSize: 2,
         insertSpaces: true,
         automaticLayout: true,

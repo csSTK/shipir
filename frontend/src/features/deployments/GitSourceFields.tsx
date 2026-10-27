@@ -1,3 +1,4 @@
+import { Select, TextField } from '../../shared/ui/index.ts'
 import { useGitCredentials } from '../settings/api.ts'
 import { useTranslation } from 'react-i18next'
 
@@ -12,20 +13,26 @@ export interface GitFormValue {
 function CredentialSelect({ value, onChange }: { value: string; onChange: (id: string) => void }) {
   const { t } = useTranslation('deployments')
   const credentials = useGitCredentials()
+  const credentialHelp = credentials.isError
+    ? t('GitSourceFields.couldNotLoadTheCredentials')
+    : credentials.data?.length === 0
+      ? t('GitSourceFields.noCredentialsYetAddOne')
+      : undefined
   return (
-    <label className="ui-form-field">
-      <span>{t('GitSourceFields.credential')}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} disabled={credentials.isPending}>
+    <Select
+      label={t('GitSourceFields.credential')}
+      help={credentialHelp}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={credentials.isPending}
+    >
         <option value="">{t('GitSourceFields.nonePublicRepository')}</option>
         {credentials.data?.map((c) => (
           <option key={c.id} value={c.id}>
             {c.name}
           </option>
         ))}
-      </select>
-      {credentials.isError && <small className="ui-hint">{t('GitSourceFields.couldNotLoadTheCredentials')}</small>}
-      {credentials.data?.length === 0 && <small className="ui-hint">{t('GitSourceFields.noCredentialsYetAddOne')}</small>}
-    </label>
+    </Select>
   )
 }
 
@@ -43,19 +50,12 @@ export function GitSourceFields({
   const set = (patch: Partial<GitFormValue>) => onChange({ ...value, ...patch })
   return (
     <div className="ui-form">
-      <label className="ui-form-field">
-        <span>{t('GitSourceFields.repositoryUrl')}</span>
-        <input value={value.repoUrl} onChange={(e) => set({ repoUrl: e.target.value })} placeholder="https://github.com/owner/repo.git" autoComplete="off" spellCheck={false} inputMode="url" />
-      </label>
+      <TextField
+        label={t('GitSourceFields.repositoryUrl')}
+        value={value.repoUrl} onChange={(e) => set({ repoUrl: e.target.value })} placeholder="https://github.com/owner/repo.git" autoComplete="off" spellCheck={false} inputMode="url" />
       <div className="ui-form-row">
-        <label className="ui-form-field">
-          <span>{t('GitSourceFields.branchOrTag')}</span>
-          <input value={value.ref} onChange={(e) => set({ ref: e.target.value })} autoComplete="off" spellCheck={false} />
-        </label>
-        <label className="ui-form-field">
-          <span>{t('GitSourceFields.filePathInRepository')}</span>
-          <input value={value.composePath} onChange={(e) => set({ composePath: e.target.value })} autoComplete="off" spellCheck={false} />
-        </label>
+        <TextField label={t('GitSourceFields.branchOrTag')} value={value.ref} onChange={(e) => set({ ref: e.target.value })} autoComplete="off" spellCheck={false} />
+        <TextField label={t('GitSourceFields.filePathInRepository')} value={value.composePath} onChange={(e) => set({ composePath: e.target.value })} autoComplete="off" spellCheck={false} />
       </div>
       {isAdmin ? (
         <CredentialSelect value={value.credentialId} onChange={(credentialId) => set({ credentialId })} />

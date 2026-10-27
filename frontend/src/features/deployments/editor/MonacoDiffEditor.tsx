@@ -3,6 +3,7 @@ import * as monaco from 'monaco-editor'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import { useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
+import { editorFontSize } from './editorFontSize.ts'
 
 self.MonacoEnvironment = { getWorker: () => new EditorWorker() }
 loader.config({ monaco })
@@ -43,7 +44,7 @@ export default function MonacoDiffEditor({ original, modified, label, height, si
         useInlineViewWhenSpaceIsLimited: true,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
-        fontSize: 13,
+        fontSize: editorFontSize(),
         automaticLayout: true,
         wordWrap: 'on',
         renderOverviewRuler: false,

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSetAutoUpdate, type GitInfo } from './api.ts'
 import { describePollError, describeDeploymentError } from './deploymentErrors.ts'
-import { Button, Card, Switch } from '../../shared/ui/index.ts'
+import { Button, Card, Switch, TextField } from '../../shared/ui/index.ts'
 import { useTranslation } from 'react-i18next'
 import { formatDateTime } from '../../shared/i18n/format.ts'
 
@@ -62,9 +62,9 @@ export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploy
           }}
         />
         <p className="sd-muted">{t('GitSourcePanel.checksTheRepositoryRegularlyAnd')}</p>
-        <label className="ui-form-field sd-auto__interval">
-          <span>{t('GitSourcePanel.checkEveryMinutes')}</span>
-          <input
+        <div className="sd-auto__interval">
+          <TextField
+            label={t('GitSourcePanel.checkEveryMinutes')}
             type="number"
             min={1}
             step={1}
@@ -76,7 +76,7 @@ export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploy
               setSaved(false)
             }}
           />
-        </label>
+        </div>
         {canWrite && (
           <div>
             <Button variant="secondary" onClick={submit} disabled={save.isPending}>

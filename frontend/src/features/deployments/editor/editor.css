@@ -2,13 +2,13 @@
 .ed-yaml {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .ed-yaml__frame {
   overflow: hidden;
   border: 1px solid var(--color-border);
-  border-radius: 12px;
-  transition: border-color 0.15s ease;
+  border-radius: var(--radius-md);
+  transition: border-color var(--duration-fast) ease;
 }
 .ed-yaml__frame:focus-within {
   border-color: var(--color-accent);
@@ -31,8 +31,8 @@
   margin: 0;
 }
 .ed-yaml__error ul {
-  margin: 6px 0 0;
-  padding-left: 18px;
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-4);
 }
 .ed-yaml__error code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -42,7 +42,7 @@
 .ed-env {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -51,25 +51,25 @@
 }
 .ed-env legend {
   padding: 0;
-  margin-bottom: 6px;
+  margin-bottom: var(--space-2);
 }
 .ed-env__item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .ed-env__row {
   display: grid;
   grid-template-columns: 1fr 1.4fr auto;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .ed-env__row input,
 .ed-env__paste textarea {
   font: inherit;
   font-size: var(--text-body-size);
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: var(--color-surface-sunken);
   color: inherit;
   min-width: 0;
@@ -90,12 +90,12 @@
 .ed-env__tools {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .ed-env__paste {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-2);
 }
 .ed-hint {
   margin: 0;

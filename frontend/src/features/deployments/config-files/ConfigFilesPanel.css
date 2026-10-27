@@ -1,7 +1,7 @@
 .cf-body {
   display: grid;
   grid-template-columns: minmax(10rem, 14rem) 1fr;
-  gap: 16px;
+  gap: var(--space-4);
 }
 .cf-tree {
   list-style: none;
@@ -9,7 +9,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-1);
   font-size: var(--text-small-size);
 }
 .cf-dir {
@@ -19,11 +19,11 @@
   all: unset;
   box-sizing: border-box;
   width: 100%;
-  padding: 6px 10px;
-  border-radius: 8px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   overflow-wrap: anywhere;
-  transition: transform 0.12s ease-out, background-color 0.15s ease;
+  transition: transform var(--duration-press) ease-out, background-color var(--duration-fast) ease;
 }
 .cf-file:hover {
   background: var(--color-surface-hover);
@@ -49,17 +49,17 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-3);
 }
 .cf-file-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .cf-sub {
-  margin: 6px 0 0;
+  margin: var(--space-2) 0 0;
   font-size: var(--text-body-size);
 }
 .cf-backups {
@@ -68,26 +68,26 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-2);
   font-size: var(--text-small-size);
 }
 .cf-backups li {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .cf-new {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .cf-new input {
   font: inherit;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: var(--color-surface-sunken);
   color: inherit;
   min-width: 14rem;

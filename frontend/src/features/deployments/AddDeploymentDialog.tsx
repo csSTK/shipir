@@ -11,7 +11,7 @@ import { TemplatePicker, type AppTemplate } from './templates/index.ts'
 import { fetchFreePorts } from './templates/api.ts'
 import './wizard/wizard.css'
 import './templates/templates.css'
-import { Button, Dialog } from '../../shared/ui/index.ts'
+import { Button, Dialog, TextField } from '../../shared/ui/index.ts'
 import { useTranslation } from 'react-i18next'
 
 const EMPTY_GIT_FORM: GitFormValue = { repoUrl: '', ref: 'main', composePath: 'compose.yaml', credentialId: '' }
@@ -131,10 +131,7 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
   return (
     <Dialog size="lg" open onOpenChange={(open) => !open && onClose()} title={tr('AddDeploymentDialog.addDeployment')}>
       <form onSubmit={submit} className="ui-form">
-        <label className="ui-form-field">
-          <span>{tr('AddDeploymentDialog.name')}</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" spellCheck={false} />
-        </label>
+        <TextField label={tr('AddDeploymentDialog.name')} value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" spellCheck={false} />
         <div className="wz-modes" role="radiogroup" aria-label={tr('AddDeploymentDialog.source')}>
           {([['file', tr('AddDeploymentDialog.newFile')], ['git', tr('AddDeploymentDialog.gitRepository')]] as const).map(([value, label]) => (
             <label key={value} className="wz-mode">

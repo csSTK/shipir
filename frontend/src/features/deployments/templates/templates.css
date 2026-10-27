@@ -2,7 +2,7 @@
 .tp {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .tp__hint {
   margin: 0;
@@ -15,7 +15,7 @@
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-  gap: 10px;
+  gap: var(--space-3);
   max-height: 320px;
   overflow-y: auto;
 }
@@ -26,12 +26,12 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px;
+  gap: var(--space-1);
+  padding: var(--space-3);
   border: 1px solid var(--color-border);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: transform 0.12s ease-out, background-color 0.15s ease, border-color 0.15s ease;
+  transition: transform var(--duration-press) ease-out, background-color var(--duration-fast) ease, border-color var(--duration-fast) ease;
 }
 .tp__card:hover {
   background: var(--color-surface-sunken);
@@ -50,7 +50,7 @@
 .tp__logo {
   width: 2rem;
   height: 2rem;
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   display: grid;
   place-items: center;
   font-weight: 600;
@@ -71,21 +71,21 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .tp__card {
-    transition: background-color 0.15s ease, border-color 0.15s ease;
+    transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease;
   }
   .tp__card:active {
     transform: none;
   }
 }
 .tp-vars {
-  margin-bottom: 12px;
-  padding: 12px 14px;
-  border-radius: 14px;
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-3);
+  border-radius: var(--radius-md);
   background: var(--color-surface-sunken);
   font-size: var(--text-small-size);
 }
 .tp-vars__title {
-  margin: 0 0 6px;
+  margin: 0 0 var(--space-2);
   font-weight: 600;
 }
 .tp-vars__list {
@@ -94,7 +94,7 @@
   line-height: 1.5;
 }
 .tp-vars__note {
-  margin: 6px 0 0;
+  margin: var(--space-2) 0 0;
   opacity: 0.7;
 }
 

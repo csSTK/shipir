@@ -3,7 +3,7 @@
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 .sd-back {
   align-self: flex-start;
@@ -16,7 +16,7 @@
   text-decoration: underline;
 }
 .sd-back:focus-visible {
-  outline: 2px solid AccentColor;
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 .sd-head {
@@ -24,7 +24,7 @@
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .sd-title {
   margin: 0;
@@ -37,8 +37,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 12px;
-  margin-top: 8px;
+  gap: var(--space-1) var(--space-3);
+  margin-top: var(--space-2);
 }
 .sd-muted {
   margin: 0;
@@ -47,16 +47,16 @@
 }
 .sd-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .sd-panel {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 16px;
-  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, currentColor 5%, transparent);
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
 }
 .sd-panel__title {
   margin: 0;
@@ -69,21 +69,21 @@
   padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-2);
 }
 .sd-keys li {
-  padding: 2px 8px;
-  border-radius: 8px;
-  background: color-mix(in srgb, currentColor 8%, transparent);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
 }
 .sd-deploy {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 12px 16px;
-  border-radius: 14px;
-  background: color-mix(in srgb, AccentColor 14%, transparent);
-  animation: sd-in 0.25s ease-out;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-soft);
+  animation: sd-in var(--duration-base) ease-out;
 }
 .sd-versions {
   list-style: none;
@@ -95,9 +95,9 @@
 .sd-version {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 0;
-  border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-border);
 }
 .sd-version:first-child {
   border-top: 0;
@@ -106,7 +106,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-1);
   min-width: 0;
 }
 .sd-version__source {
@@ -114,12 +114,12 @@
 }
 .sd-version__tags {
   display: flex;
-  gap: 6px;
+  gap: var(--space-2);
 }
 .sd-skeleton {
   height: 12rem;
-  border-radius: 14px;
-  background: color-mix(in srgb, currentColor 8%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
   animation: sd-pulse 1.4s ease-in-out infinite;
 }
 @keyframes sd-in {
@@ -147,25 +147,25 @@
 }
 @media (prefers-contrast: more) {
   .sd-panel {
-    border-color: currentColor;
+    border-color: var(--color-text);
   }
 }
 .sd-panel__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .sd-panel__actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .sd-git {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 6px 16px;
+  gap: var(--space-2) var(--space-4);
   margin: 0;
   font-size: var(--text-small-size);
 }
@@ -180,9 +180,9 @@
 .sd-auto {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
 }
 .sd-auto__interval {
   max-width: 14rem;
