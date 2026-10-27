@@ -169,4 +169,13 @@ class ComposeGeneratorDomainTest {
         assertThat(violations(new DomainSpec("a.example.org", 80, ProxyType.TRAEFIK, network), null))
                 .anyMatch(v -> v.contains("domain.network"));
     }
+
+    @Test
+    void defaultNetworkIsRejectedBecauseComposeWouldDeclareItExternal() {
+        // "default" is Compose's own project network; declaring it external yields a broken network reference.
+        assertThat(violations(new DomainSpec("a.example.org", 80, ProxyType.TRAEFIK, "default"), null))
+                .anyMatch(v -> v.contains("domain.network"));
+        assertThat(violations(new DomainSpec("a.example.org", 80, ProxyType.CADDY, "default"), null))
+                .anyMatch(v -> v.contains("domain.network"));
+    }
 }

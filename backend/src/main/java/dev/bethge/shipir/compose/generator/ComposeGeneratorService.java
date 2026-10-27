@@ -41,6 +41,8 @@ public class ComposeGeneratorService {
             "(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+");
     /** Docker's own network name rule (uppercase and dots allowed); no quotes, whitespace, slashes or colons. */
     private static final Pattern DOCKER_NETWORK = Pattern.compile("[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}");
+    /** Compose's implicit project network; it cannot be declared as an external proxy network. */
+    private static final String COMPOSE_DEFAULT_NETWORK = "default";
     private static final Set<String> RESTART = Set.of("no", "always", "on-failure", "unless-stopped");
     private static final Set<String> PROTOCOLS = Set.of("tcp", "udp");
     /** Only used for the syntax checks of PathValidationUtil; the real deployment directory is not known here. */
@@ -204,7 +206,10 @@ public class ComposeGeneratorService {
         if (d.proxy() == null) {
             errors.add(at + ".domain.proxy: must be TRAEFIK or CADDY");
         }
-        if (d.network() != null && !DOCKER_NETWORK.matcher(d.network()).matches()) {
+        if (d.network() != null && COMPOSE_DEFAULT_NETWORK.equals(d.network())) {
+            // Compose's own project network; emitting it as "external: true" makes the file unresolvable.
+            errors.add(at + ".domain.network: 'default' is Compose's own network; choose a network that exists on the host");
+        } else if (d.network() != null && !DOCKER_NETWORK.matcher(d.network()).matches()) {
             errors.add(at + ".domain.network: invalid network name");
         }
         if (d.host() != null && d.port() != null && d.proxy() != null && DOMAIN_HOST.matcher(d.host()).matches()) {

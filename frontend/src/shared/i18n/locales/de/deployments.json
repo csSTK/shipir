@@ -465,6 +465,7 @@
   "ComposeWizard.network": "Netzwerk",
   "ComposeWizard.volume": "Volume",
   "ComposeWizard.couldNotGenerateTheCompose": "Die Compose-Datei konnte nicht erzeugt werden. Versuche es erneut.",
+  "model.networkDefaultIsReserved": "„default“ ist das eigene Netzwerk von Compose. Wähle ein Netzwerk, das auf dem Host existiert.",
   "model.enterAPort": "Gib einen Port ein.",
   "model.useAPortFrom1": "Verwende einen Port von 1 bis 65535.",
   "model.useLowercaseLettersDigitsHyphens": "Verwende Kleinbuchstaben, Ziffern, Bindestriche und Unterstriche.",

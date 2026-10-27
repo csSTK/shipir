@@ -169,7 +169,8 @@ export function validateWizard(state: WizardState): WizardProblems {
       const port = validatePort(d.port, true)
       if (port) set(`${p}.domain.port`, port)
       const network = d.network.trim()
-      if (network !== '' && !DOCKER_NETWORK.test(network)) set(`${p}.domain.network`, i18n.t('deployments:model.useLettersDigitsDotsHyphens'))
+      if (network === 'default') set(`${p}.domain.network`, i18n.t('deployments:model.networkDefaultIsReserved'))
+      else if (network !== '' && !DOCKER_NETWORK.test(network)) set(`${p}.domain.network`, i18n.t('deployments:model.useLettersDigitsDotsHyphens'))
     }
     s.ports.forEach((r, j) => {
       const c = validatePort(r.container, true)

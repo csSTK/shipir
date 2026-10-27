@@ -161,6 +161,10 @@ describe('service domain', () => {
     expect(validateWizard(state([service({ domain: domain({ network: '-x' }) })])).fields.has('services.0.domain.network')).toBe(true)
     expect(validateWizard(state([service({ domain: domain({ network: 'a'.repeat(129) }) })])).fields.has('services.0.domain.network')).toBe(true)
   })
+  it("rejects the network 'default', which Compose cannot resolve as external", () => {
+    expect(validateWizard(state([service({ domain: domain({ network: 'default' }) })])).fields.has('services.0.domain.network')).toBe(true)
+    expect(validateWizard(state([service({ domain: domain({ network: ' default ' }) })])).fields.has('services.0.domain.network')).toBe(true)
+  })
   it('flags a host used by two services', () => {
     const p = validateWizard(state([service({ domain: domain({}) }), service({ name: 'api', domain: domain({}) })]))
     expect(p.fields.get('services.1.domain.host')).toMatch(/another service/)
