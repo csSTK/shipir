@@ -20,7 +20,7 @@
         <java.version>25</java.version>
         <bouncycastle.version>1.86</bouncycastle.version>
         <docker-java.version>3.7.1</docker-java.version>
-        <jgit.version>7.7.1.202607240634-r</jgit.version>
+        <jgit.version>7.8.0.202609011348-r</jgit.version>
     </properties>
 
     <dependencies>
@@ -80,7 +80,7 @@
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>3.0.3</version>
+            <version>3.2.0</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -132,7 +132,7 @@
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
             <artifactId>archunit-junit5</artifactId>
-            <version>1.4.1</version>
+            <version>1.5.1</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
