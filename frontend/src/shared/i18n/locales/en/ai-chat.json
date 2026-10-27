@@ -63,5 +63,15 @@
   "AssistantDock.statusRunning": "The assistant is answering",
   "AssistantDock.statusPending_one": "1 action is waiting for your confirmation",
   "AssistantDock.statusPending_other": "{{count}} actions are waiting for your confirmation",
-  "AssistantDock.statusReady": "The assistant has an answer"
+  "AssistantDock.statusReady": "The assistant has an answer",
+  "ViewContext.viewing": "Viewing: {{name}}",
+  "ViewContext.remove": "Remove view context: {{name}}",
+  "ViewContext.page.OVERVIEW": "Environments",
+  "ViewContext.page.HOST": "Environment",
+  "ViewContext.page.DEPLOYMENT": "Deployments",
+  "ViewContext.page.CONTAINER": "Containers",
+  "ViewContext.page.IMAGES": "Images",
+  "ViewContext.page.NETWORKS": "Networks",
+  "ViewContext.page.VOLUMES": "Volumes",
+  "ViewContext.page.SETTINGS": "Settings"
 }

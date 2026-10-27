@@ -41,6 +41,15 @@ export interface ChatSessionDetail {
   messages: ChatMessage[]
 }
 
+/** What the user is looking at; the server drops ids it cannot resolve for this user. */
+export interface ViewContext {
+  page: 'OVERVIEW' | 'HOST' | 'DEPLOYMENT' | 'CONTAINER' | 'IMAGES' | 'NETWORKS' | 'VOLUMES' | 'SETTINGS' | 'OTHER'
+  hostId?: string
+  deploymentId?: string
+  containerId?: string
+}
+export type ViewPage = ViewContext['page']
+
 export interface ActionResult {
   messageId: string
   status: ActionStatus
@@ -107,8 +116,8 @@ export function useDeleteChatSession(id: string) {
 
 export function useSendChatMessage(id: string) {
   return useMutation({
-    mutationFn: (content: string) =>
-      apiFetch<{ runId: string }>(`/ai/sessions/${id}/messages`, { method: 'POST', body: { content } }),
+    mutationFn: ({ content, context }: { content: string; context?: ViewContext }) =>
+      apiFetch<{ runId: string }>(`/ai/sessions/${id}/messages`, { method: 'POST', body: context ? { content, context } : { content } }),
   })
 }
 

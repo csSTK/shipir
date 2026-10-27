@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
+import { Link, MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiFetch } from '../../shared/api/client.ts'
 import type { TopicHandlers } from '../../shared/realtime/stomp.ts'
@@ -16,6 +16,8 @@ import { AssistantDock } from './AssistantDock.tsx'
 import { ChatDockProvider } from './ChatDockProvider.tsx'
 import { useChatDock } from './useChatDock.ts'
 
+const HOST = '11111111-1111-1111-1111-111111111111'
+const DEP = '22222222-2222-2222-2222-222222222222'
 const stamp = '2026-10-23T10:00:00Z'
 const session = (id: string, title: string) => ({ id, title, sharedWithAdmin: false, createdAt: stamp, updatedAt: stamp, ownerUsername: null })
 
@@ -47,6 +49,7 @@ function renderAt(path: string) {
         <ChatDockProvider>
           <AssistantDock isAdmin={false} narrow={false} />
           <Unread />
+          <Link to={`/environments/${HOST}/images`}>go images</Link>
         </ChatDockProvider>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -211,5 +214,59 @@ describe('AssistantDock', () => {
     fireEvent.click(icon())
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     expect(vi.mocked(apiFetch).mock.calls.slice(writes).some(([, o]) => (o as { method?: string } | undefined)?.method === 'POST')).toBe(false)
+  })
+
+  describe('view context', () => {
+    const sentBodies = () =>
+      vi.mocked(apiFetch).mock.calls.filter(([p]) => p === '/ai/sessions/n1/messages').map(([, o]) => (o as { body: object }).body)
+
+    async function openNewChat() {
+      fireEvent.click(icon())
+      fireEvent.click(await screen.findByRole('button', { name: 'New chat' }))
+      return screen.findByLabelText('Message')
+    }
+    const ask = async (text: string) => {
+      fireEvent.change(await screen.findByLabelText('Message'), { target: { value: text } })
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+      await waitFor(() => expect(screen.getByLabelText('Message')).toBeEnabled(), { timeout: 100 }).catch(() => {})
+    }
+
+    it('sends host and deployment ids and shows a chip on a deployment page', async () => {
+      renderAt(`/environments/${HOST}/deployments/${DEP}`)
+      await openNewChat()
+      expect(screen.getByText(/Viewing:/)).toBeInTheDocument()
+      await ask('why is it down?')
+      await waitFor(() => expect(sentBodies()).toEqual([{ content: 'why is it down?', context: { page: 'DEPLOYMENT', hostId: HOST, deploymentId: DEP } }]))
+    })
+
+    it('sends no context for that message after the chip was removed, then shows it again', async () => {
+      renderAt(`/environments/${HOST}/deployments/${DEP}`)
+      await openNewChat()
+      fireEvent.click(screen.getByRole('button', { name: /Remove view context/ }))
+      expect(screen.queryByText(/Viewing:/)).not.toBeInTheDocument()
+      await ask('first')
+      await waitFor(() => expect(sentBodies()).toEqual([{ content: 'first' }]))
+      expect(await screen.findByText(/Viewing:/)).toBeInTheDocument()
+    })
+
+    it('follows navigation between messages', async () => {
+      renderAt(`/environments/${HOST}/deployments/${DEP}`)
+      await openNewChat()
+      await ask('one')
+      await waitFor(() => expect(sentBodies()).toHaveLength(1))
+      fireEvent.click(screen.getByRole('link', { name: 'go images' }))
+      frame({ type: 'DONE', outcome: 'COMPLETE' })
+      await waitFor(() => expect(screen.getByLabelText('Message')).toBeEnabled())
+      await ask('two')
+      await waitFor(() => expect(sentBodies()[1]).toEqual({ content: 'two', context: { page: 'IMAGES', hostId: HOST } }))
+    })
+
+    it('shows no chip and sends no context on other pages', async () => {
+      renderAt('/containers')
+      await openNewChat()
+      expect(screen.queryByText(/Viewing:/)).not.toBeInTheDocument()
+      await ask('hi')
+      await waitFor(() => expect(sentBodies()).toEqual([{ content: 'hi' }]))
+    })
   })
 })

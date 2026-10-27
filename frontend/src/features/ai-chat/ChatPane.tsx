@@ -13,6 +13,8 @@ import {
   type ChatSession,
 } from './api.ts'
 import { MessageList } from './MessageList.tsx'
+import { ViewContextChip } from './ViewContextChip.tsx'
+import { useViewContext } from './useViewContext.ts'
 import { toolLabel } from './toolLabel.ts'
 import { IDLE_STREAM, useChatDock } from './useChatDock.ts'
 import { useTranslation } from 'react-i18next'
@@ -121,6 +123,11 @@ export function ChatPane({ sessionId, isAdmin, compact = false }: { sessionId: s
     return view(sessionId)
   }, [sessionId, open, view])
   const stream = dock.sessionId === sessionId ? dock.stream : IDLE_STREAM
+  const viewing = useViewContext()
+  // Removing the chip drops the context for the next message only; it is keyed to the page so another page shows it again.
+  const [dismissed, setDismissed] = useState<string | null>(null)
+  const viewKey = viewing.context ? JSON.stringify(viewing.context) : null
+  const showChip = viewing.context !== null && viewing.label !== null && dismissed !== viewKey
   const [draft, setDraft] = useState('')
   const [optimistic, setOptimistic] = useState<{ text: string; baseCount: number } | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
@@ -156,8 +163,9 @@ export function ChatPane({ sessionId, isAdmin, compact = false }: { sessionId: s
     setProblem(null)
     setDraft('')
     setOptimistic({ text: content, baseCount: messages.length })
+    setDismissed(null)
     stream.start()
-    send.mutate(content, {
+    send.mutate({ content, context: showChip ? viewing.context ?? undefined : undefined }, {
       onError: (err) => {
         setOptimistic(null)
         stream.stop()
@@ -224,6 +232,7 @@ export function ChatPane({ sessionId, isAdmin, compact = false }: { sessionId: s
           />
         </div>
       )}
+      {showChip && viewing.label && <ViewContextChip label={viewing.label} onRemove={() => setDismissed(viewKey)} />}
       <form className="chat-composer" onSubmit={submit}>
         <label className="chat-composer__label" htmlFor="chat-input">
           {t('ChatPane.message')}

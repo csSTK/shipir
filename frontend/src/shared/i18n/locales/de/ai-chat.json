@@ -63,5 +63,15 @@
   "AssistantDock.statusRunning": "Der Assistent antwortet gerade",
   "AssistantDock.statusPending_one": "1 Aktion wartet auf deine Bestätigung",
   "AssistantDock.statusPending_other": "{{count}} Aktionen warten auf deine Bestätigung",
-  "AssistantDock.statusReady": "Der Assistent hat eine Antwort"
+  "AssistantDock.statusReady": "Der Assistent hat eine Antwort",
+  "ViewContext.viewing": "Du siehst: {{name}}",
+  "ViewContext.remove": "Ansicht als Kontext entfernen: {{name}}",
+  "ViewContext.page.OVERVIEW": "Umgebungen",
+  "ViewContext.page.HOST": "Umgebung",
+  "ViewContext.page.DEPLOYMENT": "Deployments",
+  "ViewContext.page.CONTAINER": "Container",
+  "ViewContext.page.IMAGES": "Images",
+  "ViewContext.page.NETWORKS": "Netzwerke",
+  "ViewContext.page.VOLUMES": "Volumes",
+  "ViewContext.page.SETTINGS": "Einstellungen"
 }

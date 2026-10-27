@@ -181,3 +181,53 @@ test('reduced motion: the running icon does not spin', async ({ page, api }) => 
   await expect(spinner).toBeVisible()
   await expect(spinner).toHaveCSS('animation-name', 'none')
 })
+
+const HOST = '11111111-1111-1111-1111-111111111111'
+
+/** Reads the JSON body of the next POST to the chat messages endpoint. */
+function nextMessageBody(page: Page) {
+  return page.waitForRequest((r) => r.method() === 'POST' && r.url().endsWith('/api/ai/sessions/s1/messages')).then((r) => r.postDataJSON())
+}
+
+test('the chip shows what the assistant sees and context follows navigation between messages', async ({ page, api }) => {
+  setup(api)
+  api.mock('GET', `/api/hosts/${HOST}/images`, { body: [] })
+  const broker = await mockBroker(page)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Open assistant' }).click()
+  const panel = page.getByRole('dialog', { name: 'Assistant' })
+  await panel.getByRole('combobox', { name: 'Chat' }).selectOption('s1')
+  await expect(panel.getByText('Viewing: Environments')).toBeVisible()
+
+  const first = nextMessageBody(page)
+  await panel.getByLabel('Message').fill('one')
+  await panel.getByRole('button', { name: 'Send' }).click()
+  expect(await first).toEqual({ content: 'one', context: { page: 'OVERVIEW' } })
+  await broker.emit({ runId: RUN, type: 'DONE', outcome: 'COMPLETE' })
+
+  // Client-side navigation: the panel and its chat stay open.
+  await page.evaluate((path) => {
+    history.pushState({}, '', path)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }, `/environments/${HOST}/images`)
+  await expect(panel.getByText('Viewing: Images')).toBeVisible()
+  const second = nextMessageBody(page)
+  await panel.getByLabel('Message').fill('two')
+  await panel.getByRole('button', { name: 'Send' }).click()
+  expect(await second).toEqual({ content: 'two', context: { page: 'IMAGES', hostId: HOST } })
+})
+
+test('removing the chip sends the message without context', async ({ page, api }) => {
+  setup(api)
+  await mockBroker(page)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Open assistant' }).click()
+  const panel = page.getByRole('dialog', { name: 'Assistant' })
+  await panel.getByRole('combobox', { name: 'Chat' }).selectOption('s1')
+  await panel.getByRole('button', { name: /Remove view context/ }).click()
+  await expect(panel.getByText(/Viewing:/)).toHaveCount(0)
+  const body = nextMessageBody(page)
+  await panel.getByLabel('Message').fill('no context please')
+  await panel.getByRole('button', { name: 'Send' }).click()
+  expect(await body).toEqual({ content: 'no context please' })
+})
