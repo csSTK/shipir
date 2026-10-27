@@ -181,5 +181,11 @@
   "kinds.image": "Image",
   "kinds.volume": "Volume",
   "kinds.network": "Netzwerk",
-  "deleteResource.resourceInUse": "Diese Ressource wird verwendet oder ist geschützt und kann nicht gelöscht werden."
+  "deleteResource.resourceInUse": "Diese Ressource wird verwendet oder ist geschützt und kann nicht gelöscht werden.",
+  "DiskUsageCard.largestItems": "Größte Elemente",
+  "DiskUsageCard.noItemsToShow": "Keine Elemente zum Anzeigen.",
+  "DiskUsageCard.image": "Image",
+  "DiskUsageCard.container": "Container",
+  "DiskUsageCard.volume": "Volume",
+  "DiskUsageCard.unknown": "unbekannt"
 }
