@@ -5,12 +5,15 @@ import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.client.DockerSystemService;
 import dev.bethge.shipir.docker.dto.DiskUsageDto;
 import dev.bethge.shipir.docker.dto.DiskUsageDto.CategoryUsage;
+import dev.bethge.shipir.docker.dto.DiskUsageDto.LargestItem;
+import dev.bethge.shipir.docker.dto.DiskUsageDto.LargestItem.Category;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -28,7 +31,8 @@ class HostDiskUsageApiTest extends HostApiTestBase {
             new CategoryUsage(2, 1092588L, 2000L),
             new CategoryUsage(2, 400L, 300L),
             new CategoryUsage(3, 5096L, 1000L),
-            new CategoryUsage(2, 1000L, 700L));
+            new CategoryUsage(2, 1000L, 700L),
+            List.of(new LargestItem(Category.IMAGE, "alpine:latest", 5608L), new LargestItem(Category.VOLUME, "data", 4096L)));
 
     private UUID host;
     private UUID hidden;
@@ -62,7 +66,12 @@ class HostDiskUsageApiTest extends HostApiTestBase {
                 .andExpect(jsonPath("$.images.reclaimableSize").value(2000))
                 .andExpect(jsonPath("$.containers.reclaimableSize").value(300))
                 .andExpect(jsonPath("$.volumes.count").value(3))
-                .andExpect(jsonPath("$.buildCache.reclaimableSize").value(700));
+                .andExpect(jsonPath("$.buildCache.reclaimableSize").value(700))
+                .andExpect(jsonPath("$.largest.length()").value(2))
+                .andExpect(jsonPath("$.largest[0].category").value("IMAGE"))
+                .andExpect(jsonPath("$.largest[0].name").value("alpine:latest"))
+                .andExpect(jsonPath("$.largest[0].size").value(5608))
+                .andExpect(jsonPath("$.largest[1].category").value("VOLUME"));
     }
 
     @Test

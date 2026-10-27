@@ -2,10 +2,10 @@ import { RefreshCw } from 'lucide-react'
 import { ApiError } from '../../shared/api/client.ts'
 import { Button, Card, IconButton, Skeleton } from '../../shared/ui/index.ts'
 import { formatSize, plural } from './format.ts'
-import { useDiskUsage, type DiskCategory, type DiskUsage } from './diskUsage.ts'
+import { useDiskUsage, type DiskCategory, type DiskUsage, type LargestCategory, type LargestItem } from './diskUsage.ts'
 import './DiskUsageCard.css'
 
-type CategoryKey = keyof DiskUsage
+type CategoryKey = 'images' | 'containers' | 'volumes' | 'buildCache'
 
 const CATEGORIES: { key: CategoryKey; label: string; noun: [singular: string, plural: string] }[] = [
   { key: 'images', label: 'Images', noun: ['image', 'images'] },
@@ -13,6 +13,13 @@ const CATEGORIES: { key: CategoryKey; label: string; noun: [singular: string, pl
   { key: 'volumes', label: 'Volumes', noun: ['volume', 'volumes'] },
   { key: 'buildCache', label: 'Build cache', noun: ['entry', 'entries'] },
 ]
+
+const LARGEST_LABEL: Record<LargestCategory, string> = {
+  IMAGE: 'Image',
+  CONTAINER: 'Container',
+  VOLUME: 'Volume',
+  BUILD_CACHE: 'Build cache',
+}
 
 const size = (bytes: number | null) => (bytes === null ? 'unknown' : formatSize(bytes))
 
@@ -36,6 +43,27 @@ function Bar({ usage, total }: { usage: DiskUsage; total: number }) {
           ) : null
         })}
     </div>
+  )
+}
+
+function Largest({ items }: { items: LargestItem[] }) {
+  return (
+    <section className="disk__largest">
+      <h4 className="disk__subtitle">Largest items</h4>
+      {items.length === 0 ? (
+        <p className="disk__note">No items to show.</p>
+      ) : (
+        <ol className="disk__top" aria-label="Largest items">
+          {items.map((item, index) => (
+            <li key={`${item.category}-${item.name}-${index}`} className="disk__item">
+              <span className="disk__itemname">{item.name}</span>
+              <span className="disk__kind">{LARGEST_LABEL[item.category]}</span>
+              <span className="disk__num">{formatSize(item.size)}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
   )
 }
 
@@ -121,6 +149,7 @@ export function DiskUsageCard({ hostId, onCleanUp }: { hostId: string; onCleanUp
           <Row key={key} categoryKey={key} label={label} noun={noun} category={value} />
         ))}
       </ul>
+      <Largest items={data.largest ?? []} />
       {onCleanUp && (
         <div className="disk__foot">
           <Button onClick={onCleanUp}>Review cleanup</Button>

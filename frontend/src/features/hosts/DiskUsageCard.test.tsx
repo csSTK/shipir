@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../shared/api/client.ts'
 import { DiskUsageCard } from './DiskUsageCard.tsx'
@@ -23,6 +23,11 @@ const usage = {
   containers: { count: 7, totalSize: 300 * MIB, reclaimableSize: 0 },
   volumes: { count: 4, totalSize: 2 * GIB, reclaimableSize: 512 * MIB },
   buildCache: { count: 3, totalSize: 100 * MIB, reclaimableSize: null },
+  largest: [
+    { category: 'VOLUME', name: 'pgdata', size: 2 * GIB },
+    { category: 'IMAGE', name: 'postgres:16', size: 600 * MIB },
+    { category: 'BUILD_CACHE', name: 'Build cache abc123', size: 100 * MIB },
+  ],
 }
 
 /** The legend row whose text starts with the category label (list items have no name from content). */
@@ -63,6 +68,28 @@ describe('DiskUsageCard', () => {
     expect(buildCache).toHaveTextContent('unknown')
     expect(buildCache).not.toHaveTextContent('0 B')
     expect(screen.getByRole('img', { name: /Disk usage/ })).toHaveAccessibleName(/Build cache unknown/)
+  })
+
+  it('lists the largest items ranked with category label and readable size', async () => {
+    apiFetch.mockResolvedValue(usage)
+    renderCard()
+    const list = await screen.findByRole('list', { name: 'Largest items' })
+    const items = within(list).getAllByRole('listitem')
+    expect(items).toHaveLength(3)
+    expect(items[0]).toHaveTextContent('pgdata')
+    expect(items[0]).toHaveTextContent('Volume')
+    expect(items[0]).toHaveTextContent('2 GiB')
+    expect(items[1]).toHaveTextContent('postgres:16')
+    expect(items[1]).toHaveTextContent('Image')
+    expect(items[1]).toHaveTextContent('600 MiB')
+    expect(items[2]).toHaveTextContent('Build cache')
+  })
+
+  it('shows an empty state when there are no largest items', async () => {
+    apiFetch.mockResolvedValue({ ...usage, largest: [] })
+    renderCard()
+    expect(await screen.findByText('No items to show.')).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Largest items' })).not.toBeInTheDocument()
   })
 
   it('shows a loading state while the first request is pending', () => {

@@ -8,12 +8,16 @@ import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.dto.DiskUsageDto;
 import dev.bethge.shipir.docker.dto.DiskUsageDto.CategoryUsage;
+import dev.bethge.shipir.docker.dto.DiskUsageDto.LargestItem;
+import dev.bethge.shipir.docker.dto.DiskUsageDto.LargestItem.Category;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -69,6 +73,78 @@ class DockerDiskUsageReaderTest {
         assertThat(usage.buildCache().count()).isEqualTo(2);
         assertThat(usage.buildCache().totalSize()).isEqualTo(1000L);
         assertThat(usage.buildCache().reclaimableSize()).isEqualTo(700L);
+    }
+
+    @Test
+    void largestListsItemsAcrossCategoriesBySizeDescendingWithTiesByCategory() {
+        DiskUsageDto usage = DockerDiskUsageReader.parse(200, body(SAMPLE));
+
+        // the volume of unknown size (-1) is left out; 300/300 tie: container before build cache
+        assertThat(usage.largest()).containsExactly(
+                new LargestItem(Category.IMAGE, "alpine:latest", 5608L),
+                new LargestItem(Category.VOLUME, "data", 4096L),
+                new LargestItem(Category.IMAGE, "busybox:old", 2000L),
+                new LargestItem(Category.VOLUME, "old", 1000L),
+                new LargestItem(Category.BUILD_CACHE, "Build cache b1", 700L),
+                new LargestItem(Category.CONTAINER, "c2", 300L),
+                new LargestItem(Category.BUILD_CACHE, "Build cache b2", 300L),
+                new LargestItem(Category.CONTAINER, "c1", 100L));
+    }
+
+    @Test
+    void largestIsCappedAtTenKeepingTheBiggest() {
+        String volumes = IntStream.rangeClosed(1, 15)
+                .mapToObj(i -> "{\"Name\": \"v" + i + "\", \"UsageData\": {\"Size\": " + i * 10 + ", \"RefCount\": 1}}")
+                .collect(Collectors.joining(","));
+        DiskUsageDto usage = DockerDiskUsageReader.parse(200, body("{\"Volumes\": [" + volumes + "]}"));
+
+        assertThat(usage.largest()).hasSize(10);
+        assertThat(usage.largest().getFirst()).isEqualTo(new LargestItem(Category.VOLUME, "v15", 150L));
+        assertThat(usage.largest().getLast()).isEqualTo(new LargestItem(Category.VOLUME, "v6", 60L));
+    }
+
+    @Test
+    void largestSkipsNullAndNegativeSizes() {
+        DiskUsageDto usage = DockerDiskUsageReader.parse(200, body("""
+                {"Images": [{"Id": "sha256:aaa", "RepoTags": ["a:1"], "Size": -3}, {"Id": "sha256:bbb", "RepoTags": ["b:1"]}],
+                 "Containers": [{"Names": ["/web"], "State": "exited", "SizeRw": null}],
+                 "BuildCache": [{"ID": "x", "Size": -1}]}
+                """));
+
+        assertThat(usage.largest()).isEmpty();
+    }
+
+    @Test
+    void largestIsEmptyWhenNothingIsReported() {
+        assertThat(DockerDiskUsageReader.parse(200, body("{}")).largest()).isEmpty();
+    }
+
+    @Test
+    void largestNamesAreSafeDisplayStrings() {
+        DiskUsageDto usage = DockerDiskUsageReader.parse(200, body("""
+                {"Images": [
+                   {"Id": "sha256:0123456789abcdef0123", "RepoTags": ["<none>:<none>"], "Size": 50},
+                   {"Id": "sha256:fedcba9876543210ffff", "RepoTags": [], "Size": 40}],
+                 "Containers": [
+                   {"Id": "cafe", "Names": ["/web-1", "/other/alias"], "State": "running", "SizeRw": 30,
+                    "Command": "run --password=secret", "Labels": {"token": "secret"}},
+                   {"Id": "0123456789abcdef0123456789", "State": "running", "SizeRw": 20}],
+                 "BuildCache": [{"ID": "abcdefghijklmnop", "Description": "RUN echo $SECRET_TOKEN", "Size": 10}],
+                 "Volumes": [{"Name": "bad\\u0007name\\n", "UsageData": {"Size": 5, "RefCount": 0}}]}
+                """));
+
+        assertThat(usage.largest()).extracting(LargestItem::name).containsExactly(
+                "0123456789ab", "fedcba987654", "web-1", "0123456789ab", "Build cache abcdefghijkl", "badname");
+        assertThat(usage.largest().toString()).doesNotContain("secret", "SECRET");
+    }
+
+    @Test
+    void largestNamesAreTruncated() {
+        String longName = "v".repeat(500);
+        DiskUsageDto usage = DockerDiskUsageReader.parse(200, body(
+                "{\"Volumes\": [{\"Name\": \"" + longName + "\", \"UsageData\": {\"Size\": 5, \"RefCount\": 0}}]}"));
+
+        assertThat(usage.largest().getFirst().name()).hasSizeLessThanOrEqualTo(128);
     }
 
     @Test

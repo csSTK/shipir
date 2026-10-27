@@ -19,6 +19,10 @@ const usage = {
   containers: { count: 3, totalSize: 300 * 1024 ** 2, reclaimableSize: 0 },
   volumes: { count: 4, totalSize: 2 * 1024 ** 3, reclaimableSize: 512 * 1024 ** 2 },
   buildCache: { count: null, totalSize: null, reclaimableSize: null },
+  largest: [
+    { category: 'VOLUME', name: 'pgdata', size: 2 * 1024 ** 3 },
+    { category: 'IMAGE', name: 'postgres:16', size: 600 * 1024 ** 2 },
+  ],
 }
 const as = (role: string) => ({ body: { username: 'u', role, setupRequired: false } })
 
@@ -36,6 +40,20 @@ test('shows the breakdown with reclaimable amounts and unknown values', async ({
   await expect(page.getByText('Reclaimable 800 MiB')).toBeVisible()
   await expect(page.getByText('Reclaimable unknown')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Review cleanup' })).toHaveCount(0)
+})
+
+test('lists the largest items and an empty state', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', as('VIEWER'))
+  api.mock('GET', '/api/hosts/a/disk-usage', { body: usage })
+  await page.goto('/environments/a')
+  const list = page.getByRole('list', { name: 'Largest items' })
+  await expect(list.getByRole('listitem')).toHaveCount(2)
+  await expect(list.getByRole('listitem').first()).toContainText('pgdata')
+  await expect(list.getByRole('listitem').first()).toContainText('Volume')
+  await expect(list.getByRole('listitem').first()).toContainText('2 GiB')
+  api.mock('GET', '/api/hosts/a/disk-usage', { body: { ...usage, largest: [] } })
+  await page.getByRole('button', { name: 'Refresh disk usage' }).click()
+  await expect(page.getByText('No items to show.')).toBeVisible()
 })
 
 test('deployment-only access explains the restriction', async ({ page, api }) => {

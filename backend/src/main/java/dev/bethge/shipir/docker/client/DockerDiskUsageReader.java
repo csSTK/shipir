@@ -9,12 +9,16 @@ import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.dto.DiskUsageDto;
 import dev.bethge.shipir.docker.dto.DiskUsageDto.CategoryUsage;
+import dev.bethge.shipir.docker.dto.DiskUsageDto.LargestItem;
+import dev.bethge.shipir.docker.dto.DiskUsageDto.LargestItem.Category;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.function.ToLongFunction;
 
@@ -36,6 +40,9 @@ final class DockerDiskUsageReader {
     /** Upper bound for the response body; a real daemon answer is far smaller. */
     static final int MAX_BYTES = 16 * 1024 * 1024;
 
+    private static final int LARGEST_LIMIT = 10;
+    private static final int SHORT_ID = 12;
+    private static final int MAX_NAME = 128;
     private static final String PATH = "/system/df";
     private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -61,7 +68,7 @@ final class DockerDiskUsageReader {
             throw invalid("status " + status);
         }
         RawDiskUsage raw = readBounded(body);
-        return new DiskUsageDto(images(raw), containers(raw), volumes(raw), buildCache(raw));
+        return new DiskUsageDto(images(raw), containers(raw), volumes(raw), buildCache(raw), largest(raw));
     }
 
     private static RawDiskUsage readBounded(InputStream body) {
@@ -127,6 +134,83 @@ final class DockerDiskUsageReader {
         return new CategoryUsage(entries.size(), total, capped(reclaimable, total));
     }
 
+    /**
+     * The biggest objects across all categories. Only items with a known positive size qualify (a missing or negative
+     * size is "not computed", not a size). Names are display strings built from ids and names only, never from labels,
+     * commands or descriptions, which can hold secrets. Ties break by category, then name, so the order is stable.
+     */
+    private static List<LargestItem> largest(RawDiskUsage raw) {
+        List<LargestItem> items = new ArrayList<>();
+        if (raw.images() != null) {
+            for (RawImage image : raw.images()) {
+                add(items, Category.IMAGE, imageName(image), image.size());
+            }
+        }
+        if (raw.containers() != null) {
+            for (RawContainer container : raw.containers()) {
+                add(items, Category.CONTAINER, containerName(container), container.sizeRw());
+            }
+        }
+        if (raw.volumes() != null) {
+            for (RawVolume volume : raw.volumes()) {
+                Long size = volume.usageData() == null ? null : volume.usageData().size();
+                add(items, Category.VOLUME, display(volume.name()), size);
+            }
+        }
+        if (raw.buildCache() != null) {
+            for (RawBuildCache entry : raw.buildCache()) {
+                String id = shortId(entry.id());
+                add(items, Category.BUILD_CACHE, id.isEmpty() ? "Build cache entry" : "Build cache " + id, entry.size());
+            }
+        }
+        items.sort(Comparator.comparingLong(LargestItem::size).reversed()
+                .thenComparing(LargestItem::category).thenComparing(LargestItem::name));
+        return List.copyOf(items.subList(0, Math.min(LARGEST_LIMIT, items.size())));
+    }
+
+    private static void add(List<LargestItem> items, Category category, String name, Long size) {
+        if (size != null && size > 0) {
+            items.add(new LargestItem(category, name, size));
+        }
+    }
+
+    private static String imageName(RawImage image) {
+        if (image.repoTags() != null) {
+            for (String tag : image.repoTags()) {
+                if (tag != null && !tag.startsWith("<none>") && !display(tag).isEmpty()) {
+                    return display(tag);
+                }
+            }
+        }
+        return shortId(image.id());
+    }
+
+    private static String containerName(RawContainer container) {
+        if (container.names() != null) {
+            for (String name : container.names()) {
+                String shown = display(name == null ? null : name.replaceFirst("^/", ""));
+                if (!shown.isEmpty()) {
+                    return shown;
+                }
+            }
+        }
+        return shortId(container.id());
+    }
+
+    private static String shortId(String id) {
+        String bare = id == null ? "" : id.replaceFirst("^sha256:", "");
+        return display(bare.length() > SHORT_ID ? bare.substring(0, SHORT_ID) : bare);
+    }
+
+    /** Control characters are dropped and the length capped, so a name is safe to show as plain text. */
+    private static String display(String text) {
+        if (text == null) {
+            return "";
+        }
+        String clean = text.replaceAll("\\p{Cntrl}", "").strip();
+        return clean.length() > MAX_NAME ? clean.substring(0, MAX_NAME) : clean;
+    }
+
     /** Missing and negative sizes count as 0: Docker uses -1 for "not computed" (volumes), which is not a size. */
     private static long size(Long value) {
         return value == null || value < 0 ? 0 : value;
@@ -166,15 +250,17 @@ final class DockerDiskUsageReader {
 
     /** {@code Containers} is the number of containers using the image; 0 = unused. */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record RawImage(@JsonProperty("Size") Long size, @JsonProperty("Containers") Long containers) {
+    private record RawImage(@JsonProperty("Id") String id, @JsonProperty("RepoTags") List<String> repoTags,
+                          @JsonProperty("Size") Long size, @JsonProperty("Containers") Long containers) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record RawContainer(@JsonProperty("State") String state, @JsonProperty("SizeRw") Long sizeRw) {
+    private record RawContainer(@JsonProperty("Id") String id, @JsonProperty("Names") List<String> names,
+                                @JsonProperty("State") String state, @JsonProperty("SizeRw") Long sizeRw) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record RawVolume(@JsonProperty("UsageData") RawUsageData usageData) {
+    private record RawVolume(@JsonProperty("Name") String name, @JsonProperty("UsageData") RawUsageData usageData) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -182,6 +268,7 @@ final class DockerDiskUsageReader {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record RawBuildCache(@JsonProperty("Size") Long size, @JsonProperty("InUse") Boolean inUse) {
+    private record RawBuildCache(@JsonProperty("ID") String id, @JsonProperty("Size") Long size,
+                                 @JsonProperty("InUse") Boolean inUse) {
     }
 }

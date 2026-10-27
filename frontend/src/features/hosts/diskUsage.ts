@@ -8,11 +8,21 @@ export interface DiskCategory {
   reclaimableSize: number | null
 }
 
+export type LargestCategory = 'IMAGE' | 'CONTAINER' | 'VOLUME' | 'BUILD_CACHE'
+
+/** One of the biggest objects (max 10, biggest first); `name` is a display string from the server. */
+export interface LargestItem {
+  category: LargestCategory
+  name: string
+  size: number
+}
+
 export interface DiskUsage {
   images: DiskCategory
   containers: DiskCategory
   volumes: DiskCategory
   buildCache: DiskCategory
+  largest: LargestItem[]
 }
 
 /** The endpoint takes about 3 s, so the data is kept for a long time and refreshed on demand only. */
