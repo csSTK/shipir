@@ -302,12 +302,14 @@ public class DeploymentService {
         return get(hostId, id);
     }
 
-    /** Services and profiles named in the deployment's compose file; services behind a profile are included. */
+    /** Services and profiles named in the deployment's compose file; services behind a profile are included. Non-ADMIN: 403 ADMIN_REQUIRED if the file references files outside the deployment dir. */
     public ServicesResponse services(UUID hostId, UUID id) {
         requireView(hostId, id);
         DockerHost host = requireHost(hostId);
         Deployment deployment = requireDeployment(hostId, id);
         DockerEndpoint endpoint = endpointOf(host);
+        // compose reads env_file/include before it lists anything: non-ADMIN callers must not trigger that for outside files
+        enforceFileAccess(hostId, deployment.getName(), composeFileOf(deployment), access.isAdmin());
         return new ServicesResponse(composeNames(deployment, ComposeCommand.CONFIG_SERVICES, endpoint),
                 composeNames(deployment, ComposeCommand.CONFIG_PROFILES, endpoint));
     }
