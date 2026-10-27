@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { Maximize2, Plus, Sparkles, X } from 'lucide-react'
@@ -26,12 +26,17 @@ function DockPanel({ isAdmin, narrow, onClose }: { isAdmin: boolean; narrow: boo
   const hidden = reduced ? { opacity: 0 } : narrow ? { opacity: 0, y: '100%' } : { opacity: 0, scale: 0.92, y: 12 }
   const shown = reduced ? { opacity: 1 } : narrow ? { opacity: 1, y: 0 } : { opacity: 1, scale: 1, y: 0 }
 
-  function onKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Escape' && !e.defaultPrevented) {
-      e.stopPropagation()
-      onClose()
+  // Document level: sending disables the composer and drops focus to the body, where a panel listener would miss Escape.
+  // Something inside that already handled the key (a dialog, an open popup) calls preventDefault and keeps it.
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+  useEffect(() => {
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented) closeRef.current()
     }
-  }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   const newChat = () => create.mutate(undefined, { onSuccess: (s) => dock.open(s.id) })
 
@@ -46,7 +51,6 @@ function DockPanel({ isAdmin, narrow, onClose }: { isAdmin: boolean; narrow: boo
       animate={shown}
       exit={hidden}
       transition={reduced ? fade : springSmooth}
-      onKeyDown={onKeyDown}
     >
       <header className="assistant-dock__header">
         <select

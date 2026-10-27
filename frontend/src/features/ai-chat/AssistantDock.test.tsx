@@ -162,6 +162,29 @@ describe('AssistantDock', () => {
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   }
+  it('closes with Escape after sending a message even though focus left the panel', async () => {
+    renderAt('/containers')
+    fireEvent.click(icon())
+    fireEvent.click(await screen.findByRole('button', { name: 'New chat' }))
+    fireEvent.change(await screen.findByLabelText('Message'), { target: { value: 'hello' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(screen.getByLabelText('Message')).toBeDisabled())
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(icon()).toHaveFocus()
+  })
+
+  it('leaves Escape alone when something inside already handled it', async () => {
+    renderAt('/containers')
+    fireEvent.click(icon())
+    const panel = await screen.findByRole('dialog', { name: 'Assistant' })
+    const handled = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    handled.preventDefault()
+    panel.dispatchEvent(handled)
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
   const status = () => screen.getByTestId('assistant-dock-status')
 
   it('shows a spinner and announces while an answer runs with the panel closed', async () => {
