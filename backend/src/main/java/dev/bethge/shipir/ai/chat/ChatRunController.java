@@ -39,7 +39,7 @@ class ChatRunController {
     @PostMapping("/messages")
     ResponseEntity<ChatRunResponse> send(Authentication auth, @PathVariable UUID id,
                                          @Valid @RequestBody SendChatMessageRequest request) {
-        UUID runId = orchestrator.send(context(auth), id, request.content());
+        UUID runId = orchestrator.send(context(auth), id, request.content(), request.context());
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ChatRunResponse(runId));
     }
 

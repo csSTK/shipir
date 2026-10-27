@@ -35,7 +35,10 @@ class ChatSessionController {
     private final ChatSessionService service;
     private final UserRepository users;
 
-    ChatSessionController(ChatSessionService service, UserRepository users) {
+    private final ChatOrchestrator orchestrator;
+
+    ChatSessionController(ChatSessionService service, UserRepository users, ChatOrchestrator orchestrator) {
+        this.orchestrator = orchestrator;
         this.service = service;
         this.users = users;
     }
@@ -76,6 +79,7 @@ class ChatSessionController {
     @DeleteMapping("/sessions/{id}")
     ResponseEntity<Void> delete(Authentication auth, @PathVariable UUID id) {
         service.delete(userId(auth), id);
+        orchestrator.forget(id);
         return ResponseEntity.noContent().build();
     }
 
