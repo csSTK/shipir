@@ -225,7 +225,9 @@ class ComposeExecutionServiceTest {
         assertThat(result.success()).isFalse();
         assertThat(Path.of(line(lines, "CERT:").substring(5))).doesNotExist();
         long childPid = Long.parseLong(Files.readString(pidFile).trim());
-        assertThat(ProcessHandle.of(childPid).map(ProcessHandle::isAlive).orElse(false)).isFalse();
+        // SIGKILL is delivered asynchronously, so give the child a moment to actually die
+        org.awaitility.Awaitility.await().atMost(Duration.ofSeconds(5))
+                .until(() -> !ProcessHandle.of(childPid).map(ProcessHandle::isAlive).orElse(false));
     }
 
     @Test

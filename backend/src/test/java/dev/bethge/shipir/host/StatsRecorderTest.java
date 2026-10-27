@@ -238,7 +238,7 @@ class StatsRecorderTest {
             var warns = appender.list.stream().filter(e -> e.getLevel() == ch.qos.logback.classic.Level.WARN).toList();
             assertThat(warns).hasSize(2); // one host over the cap, two ticks
             assertThat(warns.get(0).getFormattedMessage()).contains("3").contains("2")
-                    .doesNotContain("c1").doesNotContain("c3");
+                    .doesNotContainPattern("\\bc1\\b").doesNotContainPattern("\\bc3\\b"); // host UUID may contain "c3" by chance
         } finally {
             logger.detachAppender(appender);
         }
