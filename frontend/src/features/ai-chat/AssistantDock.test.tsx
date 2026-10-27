@@ -162,7 +162,7 @@ describe('AssistantDock', () => {
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   }
-  const status = () => screen.getByRole('status')
+  const status = () => screen.getByTestId('assistant-dock-status')
 
   it('shows a spinner and announces while an answer runs with the panel closed', async () => {
     renderAt('/containers')

@@ -152,8 +152,8 @@ export function AssistantDock({ isAdmin, narrow }: { isAdmin: boolean; narrow: b
         )}
         {status === 'ready' && <span className="assistant-dock__dot" aria-hidden="true" />}
       </button>
-      {/* Polite live region: always mounted so changes are announced; it also describes the icon. */}
-      <p id="assistant-dock-status" role="status" aria-live="polite" className="assistant-dock__live">
+      {/* Polite live region (no role=status, so it never collides with page-level status queries): always mounted so changes are announced; it also describes the icon. */}
+      <p id="assistant-dock-status" data-testid="assistant-dock-status" aria-live="polite" aria-atomic="true" className="assistant-dock__live">
         {statusText}
       </p>
     </div>

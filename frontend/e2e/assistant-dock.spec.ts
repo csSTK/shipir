@@ -125,11 +125,11 @@ test('navigate away mid-answer: the icon spins, then shows an answer-ready dot u
   await expect(page).toHaveURL(/\/$/)
   const icon = page.getByRole('button', { name: 'Open assistant' })
   await expect(icon).toHaveAttribute('data-status', 'running')
-  await expect(page.getByRole('status')).toHaveText('The assistant is answering')
+  await expect(page.getByTestId('assistant-dock-status')).toHaveText('The assistant is answering')
 
   await broker.emit({ runId: RUN, type: 'DONE', outcome: 'COMPLETE' })
   await expect(icon).toHaveAttribute('data-status', 'ready')
-  await expect(page.getByRole('status')).toHaveText('The assistant has an answer')
+  await expect(page.getByTestId('assistant-dock-status')).toHaveText('The assistant has an answer')
 
   await icon.click()
   await expect(page.getByRole('dialog', { name: 'Assistant' })).toBeVisible()
@@ -159,7 +159,7 @@ test('a pending action shows a count badge on the icon; clicking it only opens t
   const icon = page.getByRole('button', { name: 'Open assistant' })
   await expect(icon).toHaveAttribute('data-status', 'pending')
   await expect(icon.getByText('1', { exact: true })).toBeVisible()
-  await expect(page.getByRole('status')).toHaveText('1 action is waiting for your confirmation')
+  await expect(page.getByTestId('assistant-dock-status')).toHaveText('1 action is waiting for your confirmation')
 
   await icon.click()
   await expect(page.getByRole('dialog', { name: 'Assistant' })).toBeVisible()
