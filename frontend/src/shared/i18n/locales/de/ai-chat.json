@@ -59,5 +59,9 @@
   "AssistantDock.startTitle": "Hallo, wie kann ich helfen?",
   "AssistantDock.startDescription": "Frag nach deinen Umgebungen oder setze einen früheren Chat fort.",
   "AssistantDock.chooseChat": "Chat auswählen",
-  "AssistantDock.couldNotStartChat": "Der Chat konnte nicht gestartet werden. Versuche es erneut."
+  "AssistantDock.couldNotStartChat": "Der Chat konnte nicht gestartet werden. Versuche es erneut.",
+  "AssistantDock.statusRunning": "Der Assistent antwortet gerade",
+  "AssistantDock.statusPending_one": "1 Aktion wartet auf deine Bestätigung",
+  "AssistantDock.statusPending_other": "{{count}} Aktionen warten auf deine Bestätigung",
+  "AssistantDock.statusReady": "Der Assistent hat eine Antwort"
 }

@@ -105,3 +105,79 @@ test('reduced motion still opens and closes the dock', async ({ page, api }) => 
   await page.getByRole('button', { name: 'Close assistant' }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
 })
+
+test('navigate away mid-answer: the icon spins, then shows an answer-ready dot until the chat is opened', async ({ page, api }) => {
+  setup(api)
+  const broker = await mockBroker(page)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Open assistant' }).click()
+  const panel = page.getByRole('dialog', { name: 'Assistant' })
+  await panel.getByRole('combobox', { name: 'Chat' }).selectOption('s1')
+  await panel.getByLabel('Message').fill('How many deployments run?')
+  await panel.getByRole('button', { name: 'Send' }).click()
+  await broker.emit({ runId: RUN, type: 'TOKEN', text: 'Let me look' })
+  await expect(panel.getByText('Let me look')).toBeVisible()
+
+  // Full page, then away to another page: the answer keeps streaming and only the icon reports it.
+  await panel.getByRole('link', { name: 'Open full size' }).click()
+  await expect(page).toHaveURL(/\/assistant\/s1$/)
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Environments' }).click()
+  await expect(page).toHaveURL(/\/$/)
+  const icon = page.getByRole('button', { name: 'Open assistant' })
+  await expect(icon).toHaveAttribute('data-status', 'running')
+  await expect(page.getByRole('status')).toHaveText('The assistant is answering')
+
+  await broker.emit({ runId: RUN, type: 'DONE', outcome: 'COMPLETE' })
+  await expect(icon).toHaveAttribute('data-status', 'ready')
+  await expect(page.getByRole('status')).toHaveText('The assistant has an answer')
+
+  await icon.click()
+  await expect(page.getByRole('dialog', { name: 'Assistant' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(icon).toHaveAttribute('data-status', 'idle')
+})
+
+test('a pending action shows a count badge on the icon; clicking it only opens the panel', async ({ page, api }) => {
+  setup(api)
+  api.mock('GET', '/api/ai/sessions/s1', {
+    body: {
+      session: session('s1', 'Deploy help'),
+      messages: [
+        {
+          id: 'm2', seq: 2, role: 'TOOL', content: 'Waiting', status: 'PENDING', toolCallId: 'c1', createdAt: now,
+          toolCalls: [{ id: 'c1', name: 'run_deployment', arguments: {}, token: 't', description: 'Deploy "shop"' }],
+        },
+      ],
+    },
+  })
+  // No confirm/reject mock on purpose: the fixture fails the test if the badge click resolved the action.
+  await mockBroker(page)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Open assistant' }).click()
+  await page.getByRole('combobox', { name: 'Chat' }).selectOption('s1')
+  await page.keyboard.press('Escape')
+  const icon = page.getByRole('button', { name: 'Open assistant' })
+  await expect(icon).toHaveAttribute('data-status', 'pending')
+  await expect(icon.getByText('1', { exact: true })).toBeVisible()
+  await expect(page.getByRole('status')).toHaveText('1 action is waiting for your confirmation')
+
+  await icon.click()
+  await expect(page.getByRole('dialog', { name: 'Assistant' })).toBeVisible()
+})
+
+test('reduced motion: the running icon does not spin', async ({ page, api }) => {
+  setup(api)
+  const broker = await mockBroker(page)
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Open assistant' }).click()
+  const panel = page.getByRole('dialog', { name: 'Assistant' })
+  await panel.getByRole('combobox', { name: 'Chat' }).selectOption('s1')
+  await panel.getByLabel('Message').fill('hi')
+  await panel.getByRole('button', { name: 'Send' }).click()
+  await broker.emit({ runId: RUN, type: 'TOKEN', text: 'x' })
+  await page.keyboard.press('Escape')
+  const spinner = page.locator('.assistant-dock__spinner')
+  await expect(spinner).toBeVisible()
+  await expect(spinner).toHaveCSS('animation-name', 'none')
+})

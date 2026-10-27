@@ -14,6 +14,7 @@
 }
 
 .assistant-dock__icon {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -48,6 +49,65 @@
 .assistant-dock__icon--away {
   opacity: 0;
   pointer-events: none;
+}
+
+.assistant-dock__spinner {
+  width: var(--space-5);
+  height: var(--space-5);
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: var(--radius-pill);
+  animation: assistant-dock-spin 700ms linear infinite;
+}
+
+@keyframes assistant-dock-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Count of actions waiting for Confirm; the badge is part of the icon button, so a click only opens the panel. */
+.assistant-dock__badge {
+  position: absolute;
+  top: calc(var(--space-1) * -1);
+  right: calc(var(--space-1) * -1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--space-5);
+  height: var(--space-5);
+  padding: 0 var(--space-1);
+  border: 2px solid var(--color-surface);
+  border-radius: var(--radius-pill);
+  background: var(--color-warn-solid);
+  color: var(--color-on-accent);
+  font-size: var(--text-caption-size);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* An answer finished while the panel was closed. */
+.assistant-dock__dot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--space-3);
+  height: var(--space-3);
+  border: 2px solid var(--color-surface);
+  border-radius: var(--radius-pill);
+  background: var(--color-ok-solid);
+}
+
+.assistant-dock__live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .assistant-dock__panel {
@@ -145,6 +205,15 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
+}
+
+/* Reduced motion: no spinning, the spinner becomes a still ring. */
+@media (prefers-reduced-motion: reduce) {
+  .assistant-dock__spinner {
+    animation: none;
+    border-right-color: currentColor;
+    opacity: 0.6;
+  }
 }
 
 @media (prefers-reduced-transparency: reduce) {

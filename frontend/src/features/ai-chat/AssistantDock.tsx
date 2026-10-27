@@ -9,6 +9,8 @@ import { ChatPane } from './ChatPane.tsx'
 import { useChatDock } from './useChatDock.ts'
 import './AssistantDock.css'
 
+type DockStatus = 'idle' | 'running' | 'pending' | 'ready'
+
 const fade = { type: 'tween', duration: 0.12, ease: 'linear' } as const
 
 function DockPanel({ isAdmin, narrow, onClose }: { isAdmin: boolean; narrow: boolean; onClose: () => void }) {
@@ -102,6 +104,7 @@ export function AssistantDock({ isAdmin, narrow }: { isAdmin: boolean; narrow: b
   const { pathname } = useLocation()
   const [open, setOpen] = useState(false)
   const icon = useRef<HTMLButtonElement>(null)
+  const dock = useChatDock()
   const onChatPage = pathname === '/assistant' || pathname.startsWith('/assistant/')
   // The full page is the chat there, so the panel does not wait to pop open again afterwards.
   if (onChatPage && open) setOpen(false)
@@ -112,6 +115,17 @@ export function AssistantDock({ isAdmin, narrow }: { isAdmin: boolean; narrow: b
     icon.current?.focus()
   }
 
+  // While the panel is open the user sees the chat itself, so the icon only reports status when it is closed.
+  const status: DockStatus = open ? 'idle' : dock.stream.running ? 'running' : dock.pendingCount > 0 ? 'pending' : dock.unread ? 'ready' : 'idle'
+  const statusText =
+    status === 'running'
+      ? t('AssistantDock.statusRunning')
+      : status === 'pending'
+        ? t('AssistantDock.statusPending', { count: dock.pendingCount })
+        : status === 'ready'
+          ? t('AssistantDock.statusReady')
+          : ''
+
   return (
     <div className="assistant-dock">
       <AnimatePresence>{open && <DockPanel isAdmin={isAdmin} narrow={narrow} onClose={close} />}</AnimatePresence>
@@ -121,11 +135,27 @@ export function AssistantDock({ isAdmin, narrow }: { isAdmin: boolean; narrow: b
         className={`assistant-dock__icon${open ? ' assistant-dock__icon--away' : ''}`}
         aria-label={t('AssistantDock.openAssistant')}
         aria-expanded={open}
+        aria-describedby="assistant-dock-status"
+        data-status={status}
         tabIndex={open ? -1 : 0}
         onClick={() => setOpen(true)}
       >
-        <Sparkles size={24} strokeWidth={1.75} aria-hidden="true" />
+        {status === 'running' ? (
+          <span className="assistant-dock__spinner" aria-hidden="true" />
+        ) : (
+          <Sparkles size={24} strokeWidth={1.75} aria-hidden="true" />
+        )}
+        {status === 'pending' && (
+          <span className="assistant-dock__badge" aria-hidden="true">
+            {dock.pendingCount > 99 ? '99+' : dock.pendingCount}
+          </span>
+        )}
+        {status === 'ready' && <span className="assistant-dock__dot" aria-hidden="true" />}
       </button>
+      {/* Polite live region: always mounted so changes are announced; it also describes the icon. */}
+      <p id="assistant-dock-status" role="status" aria-live="polite" className="assistant-dock__live">
+        {statusText}
+      </p>
     </div>
   )
 }

@@ -149,4 +149,67 @@ describe('AssistantDock', () => {
     await screen.findByRole('dialog')
     await waitFor(() => expect(screen.getByTestId('unread')).toHaveTextContent('false'))
   })
+
+  async function askThenClose() {
+    fireEvent.click(icon())
+    fireEvent.click(await screen.findByRole('button', { name: 'New chat' }))
+    fireEvent.change(await screen.findByLabelText('Message'), { target: { value: 'hello' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(vi.mocked(apiFetch)).toHaveBeenCalledWith('/ai/sessions/n1/messages', expect.anything()))
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  }
+  const status = () => screen.getByRole('status')
+
+  it('shows a spinner and announces while an answer runs with the panel closed', async () => {
+    renderAt('/containers')
+    expect(icon()).toHaveAttribute('data-status', 'idle')
+    expect(status()).toHaveTextContent('')
+    await askThenClose()
+    await waitFor(() => expect(icon()).toHaveAttribute('data-status', 'running'))
+    expect(icon().querySelector('.assistant-dock__spinner')).not.toBeNull()
+    expect(status()).toHaveTextContent('The assistant is answering')
+    expect(icon()).toHaveAccessibleDescription('The assistant is answering')
+  })
+
+  it('shows an answer-ready dot after DONE while closed and clears it when opened', async () => {
+    renderAt('/containers')
+    await askThenClose()
+    frame({ type: 'TOKEN', text: 'x' })
+    frame({ type: 'DONE', outcome: 'COMPLETE' })
+    await waitFor(() => expect(icon()).toHaveAttribute('data-status', 'ready'))
+    expect(icon().querySelector('.assistant-dock__dot')).not.toBeNull()
+    expect(icon().querySelector('.assistant-dock__spinner')).toBeNull()
+    expect(status()).toHaveTextContent('The assistant has an answer')
+    fireEvent.click(icon())
+    await screen.findByRole('dialog')
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(icon()).toHaveAttribute('data-status', 'idle')
+    expect(status()).toHaveTextContent('')
+  })
+
+  it('shows a count badge for pending actions that only opens the panel', async () => {
+    messages = [
+      { id: 'm1', seq: 1, role: 'USER', content: 'deploy', status: null, createdAt: stamp },
+      ...[2, 3].map((n) => ({
+        id: `m${n}`, seq: n, role: 'TOOL', content: 'Waiting', status: 'PENDING', toolCallId: `c${n}`, createdAt: stamp,
+        toolCalls: [{ id: `c${n}`, name: 'run_deployment', arguments: {}, token: 't', description: 'Deploy "shop"' }],
+      })),
+    ]
+    renderAt('/containers')
+    fireEvent.click(icon())
+    const picker = await screen.findByRole('combobox', { name: 'Chat' })
+    await within(picker).findByRole('option', { name: 'Deploy help' })
+    fireEvent.change(picker, { target: { value: 's1' } })
+    await waitFor(() => expect(vi.mocked(apiFetch)).toHaveBeenCalledWith('/ai/sessions/s1'))
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(icon().querySelector('.assistant-dock__badge')).toHaveTextContent('2'))
+    expect(status()).toHaveTextContent('2 actions are waiting for your confirmation')
+    const writes = vi.mocked(apiFetch).mock.calls.length
+    fireEvent.click(icon())
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(vi.mocked(apiFetch).mock.calls.slice(writes).some(([, o]) => (o as { method?: string } | undefined)?.method === 'POST')).toBe(false)
+  })
 })
