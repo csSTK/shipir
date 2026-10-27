@@ -39,6 +39,8 @@ export const test = base.extend<{ api: ApiMock }>({
         [key('GET', '/api/notifications/unread-count'), { body: { count: 0 } }],
         // The login page asks for it; default to single sign-on off, specs override.
         [key('GET', '/api/auth/oidc/config'), { body: { enabled: false, displayName: null, localLoginEnabled: true } }],
+        // OPERATOR logins ask whether operator exec is enabled; default to off, specs override.
+        [key('GET', '/api/exec/capabilities'), { body: { operatorEnabled: false } }],
       ])
       const unmocked: string[] = []
 
