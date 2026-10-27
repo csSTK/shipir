@@ -12,6 +12,7 @@ vi.mock('../../shared/api/client.ts', async (importActual) => ({
 const subscribe = vi.fn()
 vi.mock('../../shared/realtime/stomp.ts', () => ({ subscribeToTopic: (...a: unknown[]) => subscribe(...a) }))
 
+import { ChatDockProvider } from './ChatDockProvider.tsx'
 import { ChatPage } from './ChatPage.tsx'
 
 const apiFetchMock = vi.mocked(apiFetch)
@@ -42,10 +43,12 @@ function renderAt(path: string, role: 'ADMIN' | 'OPERATOR' = 'OPERATOR') {
   render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route path="/assistant" element={<ChatPage role={role} />} />
-          <Route path="/assistant/:sessionId" element={<ChatPage role={role} />} />
-        </Routes>
+        <ChatDockProvider>
+          <Routes>
+            <Route path="/assistant" element={<ChatPage role={role} />} />
+            <Route path="/assistant/:sessionId" element={<ChatPage role={role} />} />
+          </Routes>
+        </ChatDockProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   )

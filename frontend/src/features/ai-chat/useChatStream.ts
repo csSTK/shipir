@@ -26,9 +26,10 @@ function parseFrame(body: string): Frame | null {
 
 /**
  * Live view of the assistant's run in one chat: streamed text and tool activity.
+ * `null` means no session: nothing is subscribed. Changing the session unsubscribes and clears the live state.
  * Stored messages stay the source of truth: on DONE `onDone` refreshes them (awaited), then the live state clears.
  */
-export function useChatStream(sessionId: string, onDone: () => Promise<unknown> | void) {
+export function useChatStream(sessionId: string | null, onDone: () => Promise<unknown> | void) {
   const [text, setText] = useState('')
   const [activity, setActivity] = useState<Activity[]>([])
   const [running, setRunning] = useState(false)
@@ -56,6 +57,7 @@ export function useChatStream(sessionId: string, onDone: () => Promise<unknown> 
   }, [waiting, waitFrames])
 
   useEffect(() => {
+    if (sessionId === null) return
     const unsubscribe = subscribeToTopic(`/topic/chat/${sessionId}`, {
       onState: setConnection,
       onMessage: (body) => {
@@ -84,7 +86,11 @@ export function useChatStream(sessionId: string, onDone: () => Promise<unknown> 
         }
       },
     })
-    return unsubscribe
+    return () => {
+      unsubscribe()
+      clear()
+      setConnection('connecting')
+    }
   }, [sessionId, clear])
 
   return { text, activity, running, rateLimitWait, connection, start: () => setRunning(true), stop: clear }

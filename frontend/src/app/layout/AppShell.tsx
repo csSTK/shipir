@@ -2,6 +2,7 @@ import { Menu as MenuIcon, Search, Ship } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { ChatDockProvider } from '../../features/ai-chat/ChatDockProvider.tsx'
 import type { CurrentUser } from '../../features/auth/index.ts'
 import { IconButton, springSmooth } from '../../shared/ui/index.ts'
 import { CommandPalette } from './CommandPalette.tsx'
@@ -45,60 +46,62 @@ export function AppShell({ user, onSignOut, signingOut, children }: Props) {
   }, [])
   const drawerOpen = navOpen
   return (
-    <div className="shell">
-      <header className="shell__bar">
-        {narrow && (
-          <IconButton
-            icon={MenuIcon}
-            aria-label={t('AppShell.navigation')}
-            aria-expanded={navOpen}
-            aria-controls="app-sidebar"
-            onClick={() => setNavOpen((value) => !value)}
-          />
-        )}
-        <Link to="/" className="shell__brand">
-          <Ship size={20} strokeWidth={1.75} aria-hidden="true" />
-          {t('AppShell.shipir')}
-        </Link>
-        <EnvironmentSwitcher />
-        <span className="shell__spacer" />
-        <button type="button" className="shell__search" aria-label={t('AppShell.search')} onClick={() => setPaletteOpen(true)}>
-          <Search size={16} strokeWidth={1.75} aria-hidden="true" />
-          <span className="shell__search-label">{t('AppShell.search2')}</span>
-          <kbd aria-hidden="true">{/Mac|iPhone|iPad/.test(navigator.platform) ? t('AppShell.k') : t('AppShell.ctrlK')}</kbd>
-        </button>
-        <UserMenu user={user} onSignOut={onSignOut} signingOut={signingOut} />
-      </header>
-      <div className="shell__body">
-        {!narrow && <Sidebar role={user.role} onNavigate={() => setNavOpen(false)} />}
-        <main className="shell__content">
-          <div className="shell__page">{children}</div>
-        </main>
-      </div>
-      <AnimatePresence>
-        {drawerOpen && (
-          <div className="shell__drawer-layer">
-            <motion.div
-              className="shell__scrim"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.12 }}
-              onClick={() => setNavOpen(false)}
+    <ChatDockProvider>
+      <div className="shell">
+        <header className="shell__bar">
+          {narrow && (
+            <IconButton
+              icon={MenuIcon}
+              aria-label={t('AppShell.navigation')}
+              aria-expanded={navOpen}
+              aria-controls="app-sidebar"
+              onClick={() => setNavOpen((value) => !value)}
             />
-            <motion.div
-              className="shell__drawer"
-              initial={reduced ? { opacity: 0 } : { x: '-100%' }}
-              animate={reduced ? { opacity: 1 } : { x: 0 }}
-              exit={reduced ? { opacity: 0 } : { x: '-100%' }}
-              transition={reduced ? { duration: 0.12 } : springSmooth}
-            >
-              <Sidebar role={user.role} drawer onNavigate={() => setNavOpen(false)} />
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-      <CommandPalette role={user.role} open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-    </div>
+          )}
+          <Link to="/" className="shell__brand">
+            <Ship size={20} strokeWidth={1.75} aria-hidden="true" />
+            {t('AppShell.shipir')}
+          </Link>
+          <EnvironmentSwitcher />
+          <span className="shell__spacer" />
+          <button type="button" className="shell__search" aria-label={t('AppShell.search')} onClick={() => setPaletteOpen(true)}>
+            <Search size={16} strokeWidth={1.75} aria-hidden="true" />
+            <span className="shell__search-label">{t('AppShell.search2')}</span>
+            <kbd aria-hidden="true">{/Mac|iPhone|iPad/.test(navigator.platform) ? t('AppShell.k') : t('AppShell.ctrlK')}</kbd>
+          </button>
+          <UserMenu user={user} onSignOut={onSignOut} signingOut={signingOut} />
+        </header>
+        <div className="shell__body">
+          {!narrow && <Sidebar role={user.role} onNavigate={() => setNavOpen(false)} />}
+          <main className="shell__content">
+            <div className="shell__page">{children}</div>
+          </main>
+        </div>
+        <AnimatePresence>
+          {drawerOpen && (
+            <div className="shell__drawer-layer">
+              <motion.div
+                className="shell__scrim"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.12 }}
+                onClick={() => setNavOpen(false)}
+              />
+              <motion.div
+                className="shell__drawer"
+                initial={reduced ? { opacity: 0 } : { x: '-100%' }}
+                animate={reduced ? { opacity: 1 } : { x: 0 }}
+                exit={reduced ? { opacity: 0 } : { x: '-100%' }}
+                transition={reduced ? { duration: 0.12 } : springSmooth}
+              >
+                <Sidebar role={user.role} drawer onNavigate={() => setNavOpen(false)} />
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+        <CommandPalette role={user.role} open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      </div>
+    </ChatDockProvider>
   )
 }

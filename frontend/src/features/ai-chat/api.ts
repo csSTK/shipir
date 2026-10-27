@@ -59,10 +59,11 @@ export function useChatSessions() {
   })
 }
 
-export function useChatSession(id: string) {
+export function useChatSession(id: string, enabled = true) {
   return useQuery({
     queryKey: sessionKey(id),
     queryFn: () => apiFetch<ChatSessionDetail>(`/ai/sessions/${id}`),
+    enabled,
   })
 }
 

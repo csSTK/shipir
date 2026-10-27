@@ -1,0 +1,48 @@
+import { createContext, useContext } from 'react'
+import type { ConnectionState } from '../../shared/realtime/stomp.ts'
+import type { Activity } from './useChatStream.ts'
+
+export interface ChatStream {
+  text: string
+  activity: Activity[]
+  running: boolean
+  rateLimitWait: number | null
+  connection: ConnectionState
+  start: () => void
+  stop: () => void
+}
+
+export const IDLE_STREAM: ChatStream = {
+  text: '',
+  activity: [],
+  running: false,
+  rateLimitWait: null,
+  connection: 'connecting',
+  start: () => {},
+  stop: () => {},
+}
+
+export interface ChatDock {
+  /** The session whose run is followed (exactly one STOMP subscription), or null. */
+  sessionId: string | null
+  /** Live state of the active session's run. */
+  stream: ChatStream
+  /** The active session's run finished while nobody was viewing it. Cleared by `view`. */
+  unread: boolean
+  /** Number of write actions in the active session still waiting for Confirm/Reject. */
+  pendingCount: number
+  /** Makes a session the active one (switching unsubscribes the previous one). */
+  open: (sessionId: string) => void
+  /** Registers a visible view (page or dock) of a session and clears its unread flag. Returns the unregister function. */
+  view: (sessionId: string) => () => void
+  /** The session was deleted: unsubscribe if it is the active one. */
+  forget: (sessionId: string) => void
+}
+
+export const ChatDockContext = createContext<ChatDock | null>(null)
+
+export function useChatDock(): ChatDock {
+  const dock = useContext(ChatDockContext)
+  if (!dock) throw new Error('useChatDock needs a ChatDockProvider')
+  return dock
+}

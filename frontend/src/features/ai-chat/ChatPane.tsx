@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Check, Clock, Pencil, Send, Trash2, Wrench, X } from 'lucide-react'
 import { Button, ConfirmDialog, EmptyState, Skeleton, Switch } from '../../shared/ui/index.ts'
@@ -14,7 +14,7 @@ import {
 } from './api.ts'
 import { MessageList } from './MessageList.tsx'
 import { toolLabel } from './toolLabel.ts'
-import { useChatStream } from './useChatStream.ts'
+import { IDLE_STREAM, useChatDock } from './useChatDock.ts'
 import { useTranslation } from 'react-i18next'
 import i18n from 'i18next'
 
@@ -25,6 +25,7 @@ const SEND_ERRORS: Record<string, string> = {
 
 function Header({ session }: { session: ChatSession }) {
   const { t } = useTranslation('ai-chat')
+  const dock = useChatDock()
   const update = useUpdateChatSession(session.id)
   const remove = useDeleteChatSession(session.id)
   const navigate = useNavigate()
@@ -92,7 +93,14 @@ function Header({ session }: { session: ChatSession }) {
         confirmLabel={t('ChatPane.delete')}
         danger
         loading={remove.isPending}
-        onConfirm={() => remove.mutate(undefined, { onSuccess: () => navigate('/assistant') })}
+        onConfirm={() =>
+          remove.mutate(undefined, {
+            onSuccess: () => {
+              dock.forget(session.id)
+              navigate('/assistant')
+            },
+          })
+        }
       />
     </header>
   )
@@ -105,7 +113,14 @@ export function ChatPane({ sessionId, isAdmin }: { sessionId: string; isAdmin: b
   const refresh = useRefreshSession(sessionId)
   const send = useSendChatMessage(sessionId)
   const resolve = useResolveAction(sessionId)
-  const stream = useChatStream(sessionId, refresh)
+  const dock = useChatDock()
+  const { open, view } = dock
+  // The run state lives in the dock provider, so leaving this page does not stop a running answer.
+  useEffect(() => {
+    open(sessionId)
+    return view(sessionId)
+  }, [sessionId, open, view])
+  const stream = dock.sessionId === sessionId ? dock.stream : IDLE_STREAM
   const [draft, setDraft] = useState('')
   const [optimistic, setOptimistic] = useState<{ text: string; baseCount: number } | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
