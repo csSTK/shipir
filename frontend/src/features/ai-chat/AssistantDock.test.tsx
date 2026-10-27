@@ -1,0 +1,152 @@
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { apiFetch } from '../../shared/api/client.ts'
+import type { TopicHandlers } from '../../shared/realtime/stomp.ts'
+
+vi.mock('../../shared/api/client.ts', async (importActual) => ({
+  ...(await importActual<typeof import('../../shared/api/client.ts')>()),
+  apiFetch: vi.fn(),
+}))
+const subscribe = vi.fn()
+vi.mock('../../shared/realtime/stomp.ts', () => ({ subscribeToTopic: (...a: unknown[]) => subscribe(...a) }))
+
+import { AssistantDock } from './AssistantDock.tsx'
+import { ChatDockProvider } from './ChatDockProvider.tsx'
+import { useChatDock } from './useChatDock.ts'
+
+const stamp = '2026-10-23T10:00:00Z'
+const session = (id: string, title: string) => ({ id, title, sharedWithAdmin: false, createdAt: stamp, updatedAt: stamp, ownerUsername: null })
+
+let handlers: TopicHandlers
+let sessions: ReturnType<typeof session>[]
+let messages: object[]
+const frame = (body: object) => act(() => handlers.onMessage(JSON.stringify(body)))
+
+function Unread() {
+  return <p data-testid="unread">{String(useChatDock().unread)}</p>
+}
+
+function renderAt(path: string) {
+  vi.mocked(apiFetch).mockImplementation((p: string, options?: { method?: string }) => {
+    const method = options?.method ?? 'GET'
+    if (method === 'GET' && p.startsWith('/ai/sessions?')) return Promise.resolve({ items: sessions })
+    if (method === 'POST' && p === '/ai/sessions') return Promise.resolve(session('n1', 'New chat'))
+    if (method === 'GET' && p.startsWith('/ai/sessions/')) {
+      const id = p.split('/')[3]
+      return Promise.resolve({ session: sessions.find((s) => s.id === id) ?? session(id, 'New chat'), messages })
+    }
+    if (method === 'POST' && p.endsWith('/messages')) return Promise.resolve({ runId: 'r' })
+    return Promise.reject(new Error(`unmocked ${method} ${p}`))
+  })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[path]}>
+        <ChatDockProvider>
+          <AssistantDock isAdmin={false} narrow={false} />
+          <Unread />
+        </ChatDockProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
+const icon = () => screen.getByRole('button', { name: 'Open assistant' })
+
+beforeEach(() => {
+  sessions = [session('s1', 'Deploy help'), session('s2', 'Old chat')]
+  messages = []
+  subscribe.mockReset()
+  subscribe.mockImplementation((_d: string, h: TopicHandlers) => {
+    handlers = h
+    h.onState('connected')
+    return vi.fn()
+  })
+})
+afterEach(cleanup)
+
+describe('AssistantDock', () => {
+  it('shows a keyboard reachable icon with a name on normal pages', () => {
+    renderAt('/containers')
+    expect(icon()).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('is hidden on the full size assistant pages', () => {
+    renderAt('/assistant/s1')
+    expect(screen.queryByRole('button', { name: 'Open assistant' })).not.toBeInTheDocument()
+  })
+
+  it('opens a panel with the same sessions as the assistant page and moves focus into it', async () => {
+    renderAt('/containers')
+    fireEvent.click(icon())
+    const panel = await screen.findByRole('dialog', { name: 'Assistant' })
+    expect(panel).toContainElement(document.activeElement as HTMLElement)
+    const picker = await within(panel).findByRole('combobox', { name: 'Chat' })
+    await waitFor(() => expect(within(picker).getAllByRole('option').map((o) => o.textContent)).toEqual(expect.arrayContaining(['Deploy help', 'Old chat'])))
+  })
+
+  it('opens the picked chat and links to its full size page', async () => {
+    renderAt('/containers')
+    fireEvent.click(icon())
+    const picker = await screen.findByRole('combobox', { name: 'Chat' })
+    await within(picker).findByRole('option', { name: 'Old chat' })
+    fireEvent.change(picker, { target: { value: 's2' } })
+    expect(await screen.findByLabelText('Message')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open full size' })).toHaveAttribute('href', '/assistant/s2')
+  })
+
+  it('starts a new chat from the panel', async () => {
+    renderAt('/containers')
+    fireEvent.click(icon())
+    fireEvent.click(await screen.findByRole('button', { name: 'New chat' }))
+    expect(await screen.findByLabelText('Message')).toBeInTheDocument()
+    expect(vi.mocked(apiFetch)).toHaveBeenCalledWith('/ai/sessions', expect.objectContaining({ method: 'POST' }))
+    expect(screen.getByRole('link', { name: 'Open full size' })).toHaveAttribute('href', '/assistant/n1')
+  })
+
+  it('shows a streamed answer after asking', async () => {
+    renderAt('/containers')
+    fireEvent.click(icon())
+    fireEvent.click(await screen.findByRole('button', { name: 'New chat' }))
+    fireEvent.change(await screen.findByLabelText('Message'), { target: { value: 'hello' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(vi.mocked(apiFetch)).toHaveBeenCalledWith('/ai/sessions/n1/messages', expect.anything()))
+    frame({ type: 'TOKEN', text: 'Two deployments run.' })
+    expect(await screen.findByText('Two deployments run.')).toBeInTheDocument()
+  })
+
+  it('closes with Escape and returns focus to the icon', async () => {
+    renderAt('/containers')
+    fireEvent.click(icon())
+    const panel = await screen.findByRole('dialog', { name: 'Assistant' })
+    fireEvent.keyDown(panel, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(icon()).toHaveFocus()
+  })
+
+  it('closes with the close button', async () => {
+    renderAt('/containers')
+    fireEvent.click(icon())
+    fireEvent.click(await screen.findByRole('button', { name: 'Close assistant' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(icon()).toHaveFocus()
+  })
+
+  it('only counts as viewing the chat while the panel is open', async () => {
+    renderAt('/containers')
+    fireEvent.click(icon())
+    fireEvent.click(await screen.findByRole('button', { name: 'New chat' }))
+    await screen.findByLabelText('Message')
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    frame({ type: 'TOKEN', text: 'x' })
+    frame({ type: 'DONE', outcome: 'COMPLETE' })
+    await waitFor(() => expect(screen.getByTestId('unread')).toHaveTextContent('true'))
+    fireEvent.click(icon())
+    await screen.findByRole('dialog')
+    await waitFor(() => expect(screen.getByTestId('unread')).toHaveTextContent('false'))
+  })
+})

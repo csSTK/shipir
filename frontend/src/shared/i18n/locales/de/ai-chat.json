@@ -49,5 +49,15 @@
   "SessionList.couldNotStartAChat": "Der Chat konnte nicht gestartet werden. Versuche es erneut.",
   "SessionList.chats": "Chats",
   "SessionList.couldNotLoadYourChats": "Deine Chats konnten nicht geladen werden.",
-  "SessionList.noChatsYet": "Noch keine Chats."
+  "SessionList.noChatsYet": "Noch keine Chats.",
+  "AssistantDock.openAssistant": "Assistent öffnen",
+  "AssistantDock.closeAssistant": "Assistent schließen",
+  "AssistantDock.assistant": "Assistent",
+  "AssistantDock.chat": "Chat",
+  "AssistantDock.newChat": "Neuer Chat",
+  "AssistantDock.openFullSize": "In voller Größe öffnen",
+  "AssistantDock.startTitle": "Hallo, wie kann ich helfen?",
+  "AssistantDock.startDescription": "Frag nach deinen Umgebungen oder setze einen früheren Chat fort.",
+  "AssistantDock.chooseChat": "Chat auswählen",
+  "AssistantDock.couldNotStartChat": "Der Chat konnte nicht gestartet werden. Versuche es erneut."
 }

@@ -106,8 +106,8 @@ function Header({ session }: { session: ChatSession }) {
   )
 }
 
-/** One open chat: header, history, live stream and composer. Mount with `key={sessionId}`. */
-export function ChatPane({ sessionId, isAdmin }: { sessionId: string; isAdmin: boolean }) {
+/** One open chat: header, history, live stream and composer. Mount with `key={sessionId}`. `compact` (the dock) drops the header, its title and actions live on the full page. */
+export function ChatPane({ sessionId, isAdmin, compact = false }: { sessionId: string; isAdmin: boolean; compact?: boolean }) {
   const { t } = useTranslation('ai-chat')
   const detail = useChatSession(sessionId)
   const refresh = useRefreshSession(sessionId)
@@ -213,7 +213,7 @@ export function ChatPane({ sessionId, isAdmin }: { sessionId: string; isAdmin: b
 
   return (
     <div className="chat-pane">
-      <Header key={`${session.id}:${session.title}`} session={session} />
+      {!compact && <Header key={`${session.id}:${session.title}`} session={session} />}
       <MessageList messages={messages} busyMessageId={busyId} actionErrors={actionErrors} onResolve={onResolve} live={live} />
       {notConfigured && (
         <div role="status">

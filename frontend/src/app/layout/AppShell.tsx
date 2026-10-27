@@ -2,6 +2,7 @@ import { Menu as MenuIcon, Search, Ship } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { AssistantDock } from '../../features/ai-chat/AssistantDock.tsx'
 import { ChatDockProvider } from '../../features/ai-chat/ChatDockProvider.tsx'
 import type { CurrentUser } from '../../features/auth/index.ts'
 import { IconButton, springSmooth } from '../../shared/ui/index.ts'
@@ -100,6 +101,7 @@ export function AppShell({ user, onSignOut, signingOut, children }: Props) {
             </div>
           )}
         </AnimatePresence>
+        <AssistantDock isAdmin={user.role === 'ADMIN'} narrow={narrow} />
         <CommandPalette role={user.role} open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       </div>
     </ChatDockProvider>

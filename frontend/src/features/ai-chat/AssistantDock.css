@@ -1,0 +1,154 @@
+.assistant-dock {
+  position: fixed;
+  right: var(--space-5);
+  bottom: var(--space-5);
+  z-index: var(--z-dropdown);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.assistant-dock > * {
+  pointer-events: auto;
+}
+
+.assistant-dock__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-7);
+  height: var(--space-7);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transition:
+    transform var(--duration-press) var(--ease-out),
+    opacity var(--duration-base) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+
+.assistant-dock__icon:hover {
+  background: var(--color-accent-hover);
+}
+
+.assistant-dock__icon:active {
+  transform: scale(var(--press-scale));
+}
+
+.assistant-dock__icon:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-md), var(--shadow-focus);
+}
+
+/* The panel opens over the icon's spot, so the icon steps aside while it is open. */
+.assistant-dock__icon--away {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.assistant-dock__panel {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(26rem, calc(100vw - var(--space-6)));
+  height: min(40rem, calc(100dvh - var(--space-8) - var(--space-7)));
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  transform-origin: bottom right;
+}
+
+.assistant-dock__panel:focus-visible {
+  outline: none;
+}
+
+/* Phone width: a bottom sheet across the screen. */
+.assistant-dock__panel--sheet {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: auto;
+  height: 85dvh;
+  border-bottom: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  transform-origin: bottom center;
+}
+
+.assistant-dock__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.assistant-dock__picker {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-body-size);
+  font-weight: var(--weight-semibold);
+}
+
+.assistant-dock__picker:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-focus);
+}
+
+.assistant-dock__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.assistant-dock__full {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent-text);
+  font-size: var(--text-small-size);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  transition: transform var(--duration-press) var(--ease-out);
+}
+
+.assistant-dock__full:active {
+  transform: scale(var(--press-scale));
+}
+
+.assistant-dock__full:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.assistant-dock__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .assistant-dock__panel {
+    background: var(--color-surface);
+  }
+}
