@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../shared/api/client.ts'
-import { Badge, Button, Card, PageHeader, Skeleton } from '../../shared/ui/index.ts'
+import { Badge, Button, Card, ConfirmDialog, PageHeader, Skeleton } from '../../shared/ui/index.ts'
 import { useCurrentUser } from '../auth/index.ts'
 import {
   useDeleteDeployment,
@@ -17,7 +17,6 @@ import {
   type DeploymentVersion,
 } from './api.ts'
 import { VersionDiff } from './diff/index.ts'
-import { ConfirmDialog } from './ConfirmDialog.tsx'
 import { DeploymentRunPanel, type StartedRun } from './DeploymentRunPanel.tsx'
 import { GitSourcePanel } from './GitSourcePanel.tsx'
 import { ImageAutoUpdatePanel } from './ImageAutoUpdatePanel.tsx'
@@ -313,35 +312,37 @@ export function DeploymentDetailPage() {
       </Card>
 
       {dialog?.kind === 'stop' && (
-        <ConfirmDialog title={t('DeploymentDetailPage.stopDeployment')} confirmLabel={t('DeploymentDetailPage.stop')} pending={stop.isPending} error={dialogError} onConfirm={confirmStop} onClose={closeDialog}>
+        <ConfirmDialog title={t('DeploymentDetailPage.stopDeployment')} confirmLabel={t('DeploymentDetailPage.stop')} loading={stop.isPending} error={dialogError} onConfirm={confirmStop} open onOpenChange={(open) => !open && closeDialog()}>
           <Trans t={t} i18nKey="DeploymentDetailPage.stopNameItsContainersAre" values={{ name: data.name }} components={{ strong: <strong /> }} />
         </ConfirmDialog>
       )}
       {dialog?.kind === 'deploy' && (
         <ConfirmDialog
+          size="xl"
           title={t('DeploymentDetailPage.deployChanges')}
           confirmLabel={t('DeploymentDetailPage.deploy')}
           error={dialogError}
           onConfirm={confirmDeploy}
-          onClose={closeDialog}
+          open onOpenChange={(open) => !open && closeDialog()}
           details={<VersionDiff hostId={hostId} deploymentId={deploymentId} versionId={dialog.draftId} />}
         >
           <Trans t={t} i18nKey="DeploymentDetailPage.deployNameWithTheseChanges" values={{ name: data.name }} components={{ strong: <strong /> }} />
         </ConfirmDialog>
       )}
       {dialog?.kind === 'delete' && (
-        <ConfirmDialog title={t('DeploymentDetailPage.deleteDeployment')} confirmLabel={t('DeploymentDetailPage.delete')} danger pending={remove.isPending} error={dialogError} onConfirm={confirmDelete} onClose={closeDialog}>
+        <ConfirmDialog title={t('DeploymentDetailPage.deleteDeployment')} confirmLabel={t('DeploymentDetailPage.delete')} danger loading={remove.isPending} error={dialogError} onConfirm={confirmDelete} open onOpenChange={(open) => !open && closeDialog()}>
           <Trans t={t} i18nKey="DeploymentDetailPage.deleteNameItsContainersAre" values={{ name: data.name }} components={{ strong: <strong /> }} />
         </ConfirmDialog>
       )}
       {dialog?.kind === 'rollback' && (
         <ConfirmDialog
+          size="xl"
           title={t('DeploymentDetailPage.rollBackDeployment')}
           confirmLabel={t('DeploymentDetailPage.rollBack')}
-          pending={rollback.isPending}
+          loading={rollback.isPending}
           error={dialogError}
           onConfirm={() => confirmRollback(dialog.version)}
-          onClose={closeDialog}
+          open onOpenChange={(open) => !open && closeDialog()}
           details={<VersionDiff hostId={hostId} deploymentId={deploymentId} versionId={dialog.version.id} />}
         >
           <Trans t={t} i18nKey="DeploymentDetailPage.redeployNameWithTheVersion" values={{ name: data.name, date: formatDate(dialog.version.createdAt) }} components={{ strong: <strong /> }} />

@@ -136,14 +136,11 @@ export function ContainerFilesPanel({ hostId, containerId }: { hostId: string; c
               <span className="cfiles__meta">{e.type === 'FILE' ? formatSize(e.size) : ''}</span>
               <span className="cfiles__meta">{e.modified ? dateFormat.format(new Date(e.modified)) : ''}</span>
               {(e.type === 'FILE' || e.type === 'DIRECTORY') && (
-                <a
-                  className="ui-btn ui-btn--ghost ui-btn--sm"
-                  href={downloadUrl(hostId, containerId, e.path)}
-                  download
-                  aria-label={t('ContainerFilesPanel.downloadName', { name: e.name })}
-                >
-                  {t('ContainerFilesPanel.download')}
-                </a>
+                <Button asChild variant="ghost" size="sm">
+                  <a href={downloadUrl(hostId, containerId, e.path)} download aria-label={t('ContainerFilesPanel.downloadName', { name: e.name })}>
+                    {t('ContainerFilesPanel.download')}
+                  </a>
+                </Button>
               )}
             </li>
           ))}

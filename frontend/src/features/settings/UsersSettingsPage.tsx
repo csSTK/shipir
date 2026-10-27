@@ -1,8 +1,7 @@
 import { Ban, CircleCheck, KeyRound, RotateCcw, ShieldOff, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { ApiError } from '../../shared/api/client.ts'
-import { Badge, Button, Card, ConfirmDialog, Dialog, ResourceTable, Select, Switch, TextField, type ResourceColumn } from '../../shared/ui/index.ts'
-import type { RowActions } from '../../shared/ui/ResourceTable.tsx'
+import { Badge, Button, Card, ConfirmDialog, Dialog, ResourceTable, Select, Switch, TextField, type ResourceColumn, type RowActions } from '../../shared/ui/index.ts'
 import {
   useChangeUserRole,
   useCreateUser,

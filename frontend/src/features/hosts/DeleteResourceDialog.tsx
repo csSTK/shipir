@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ConfirmDialog } from '../deployments/ConfirmDialog.tsx'
+import { ConfirmDialog } from '../../shared/ui/index.ts'
 import { resourceNoun, type ResourceKind } from './createResource.ts'
 import { describeDeleteError } from './deleteResource.ts'
 import { useTranslation } from 'react-i18next'
@@ -38,7 +38,7 @@ export function DeleteResourceDialog({ kind, name, forceOption = false, warning 
   }
 
   return (
-    <ConfirmDialog title={t('DeleteResourceDialog.deleteKind', { kind: noun })} confirmLabel={t('DeleteResourceDialog.delete')} danger pending={pending} error={error} onConfirm={() => void confirm()} onClose={onClose}>
+    <ConfirmDialog title={t('DeleteResourceDialog.deleteKind', { kind: noun })} confirmLabel={t('DeleteResourceDialog.delete')} danger loading={pending} error={error} onConfirm={() => void confirm()} open onOpenChange={(open) => !open && onClose()}>
       <Trans t={t} i18nKey="DeleteResourceDialog.deleteKindNameThisCannot" values={{ kind: noun, name }} components={{ strong: <strong /> }} />
       {warning && (
         <span className="delres__warning" role="note">

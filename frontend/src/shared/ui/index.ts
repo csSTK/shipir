@@ -1,6 +1,6 @@
 import './FormLayout.css'
 export { ResourceTable } from './ResourceTable.tsx'
-export type { ResourceColumn } from './ResourceTable.tsx'
+export type { ResourceColumn, RowAction, RowActions } from './ResourceTable.tsx'
 export { Sparkline } from './Sparkline.tsx'
 export { Badge, StatusDot } from './Badge.tsx'
 export type { BadgeTone } from './Badge.tsx'

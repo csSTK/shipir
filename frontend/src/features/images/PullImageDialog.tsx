@@ -33,7 +33,7 @@ export function PullImageDialog({ hostId, initialReference = '', onClose }: Prop
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()} title={t('PullImageDialog.pullImage')}>
+    <Dialog size="lg" open onOpenChange={(open) => !open && onClose()} title={t('PullImageDialog.pullImage')}>
       {runId ? (
         <>
           <DeployOutput title={t('PullImageDialog.pullingTrim', { reference: reference.trim() })} runId={runId} onFinished={() => void refresh()} />

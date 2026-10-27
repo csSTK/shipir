@@ -16,10 +16,12 @@ interface DialogProps {
   children?: ReactNode
   /** Action buttons, right-aligned. */
   footer?: ReactNode
+  /** Width: `md` for confirmations (default), `lg` for forms, `xl` for diffs and editors. */
+  size?: 'md' | 'lg' | 'xl'
 }
 
 /** Modal dialog: scrim, focus trapped and restored, Esc/scrim close, spring (fade under reduced motion). */
-export function Dialog({ open, onOpenChange, title, description, children, footer }: DialogProps) {
+export function Dialog({ open, onOpenChange, title, description, children, footer, size = 'md' }: DialogProps) {
   const { t } = useTranslation('common')
   const pop = usePopMotion(springSmooth, 0.96)
   const fade = useFadeMotion()
@@ -45,7 +47,7 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
                   opener.current?.focus()
                 }}
               >
-                <motion.div className="ui-dialog" {...pop}>
+                <motion.div className={`ui-dialog ui-dialog--${size}`} {...pop}>
                   <div className="ui-dialog__head">
                     <RadixDialog.Title className="ui-dialog__title">{title}</RadixDialog.Title>
                     <RadixDialog.Close className="ui-dialog__close" aria-label={t('Dialog.close')}>
@@ -78,8 +80,14 @@ interface ConfirmDialogProps {
   loading?: boolean
   onConfirm: () => void
   children?: ReactNode
+  /** Inline error shown below the content (role=alert). */
+  error?: string | null
+  /** Rendered below the text (e.g. a diff). */
+  details?: ReactNode
+  size?: 'md' | 'lg' | 'xl'
 }
 
+/** Confirmation dialog; `children` is the message, `details` extra content, `error` an inline failure. */
 export function ConfirmDialog({
   open,
   onOpenChange,
@@ -91,6 +99,9 @@ export function ConfirmDialog({
   loading = false,
   onConfirm,
   children,
+  error = null,
+  details,
+  size,
 }: ConfirmDialogProps) {
   return (
     <Dialog
@@ -98,6 +109,7 @@ export function ConfirmDialog({
       onOpenChange={onOpenChange}
       title={title}
       description={description}
+      size={size}
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
@@ -109,7 +121,13 @@ export function ConfirmDialog({
         </>
       }
     >
-      {children}
+      {children ? <div className="ui-dialog-text">{children}</div> : null}
+      {details}
+      {error && (
+        <p role="alert" className="ui-error">
+          {error}
+        </p>
+      )}
     </Dialog>
   )
 }

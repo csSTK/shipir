@@ -25,6 +25,7 @@ export function EditTagsDialog({ env, open, onClose }: { env: HostOverview; open
 
   return (
     <Dialog
+      size="lg"
       open={open}
       onOpenChange={(next) => !next && onClose()}
       title={t('EditTagsDialog.editTags')}

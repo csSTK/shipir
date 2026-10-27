@@ -22,7 +22,7 @@ export function CreateVolumeDialog({ hostId, onClose }: { hostId: string; onClos
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()} title={t('CreateVolumeDialog.createVolume')}>
+    <Dialog size="lg" open onOpenChange={(open) => !open && onClose()} title={t('CreateVolumeDialog.createVolume')}>
       <form className="ui-form" onSubmit={submit} noValidate>
         <label className="ui-form-field">
           {t('CreateVolumeDialog.name')}

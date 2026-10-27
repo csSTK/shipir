@@ -62,6 +62,7 @@ function CreateTokenDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog
+      size="lg"
       open
       onOpenChange={(open) => !open && onClose()}
       title={tr('TokensSection.createApiToken')}

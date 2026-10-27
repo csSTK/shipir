@@ -355,13 +355,13 @@ export function ContainerDetailsPage() {
             }
             actions={
               <nav className="cdetails__nav" aria-label={t('ContainerDetailsPage.containerViews')}>
-                <Link className="ui-btn ui-btn--secondary ui-btn--md" to={`${base}/${cid}/logs`}>
-                  {t('ContainerDetailsPage.logs')}
-                </Link>
+                <Button asChild>
+                  <Link to={`${base}/${cid}/logs`}>{t('ContainerDetailsPage.logs')}</Link>
+                </Button>
                 {canConsole && c.state === 'running' && (
-                  <Link className="ui-btn ui-btn--secondary ui-btn--md" to={`${base}/${cid}/console`}>
-                    {t('ContainerDetailsPage.console')}
-                  </Link>
+                  <Button asChild>
+                    <Link to={`${base}/${cid}/console`}>{t('ContainerDetailsPage.console')}</Link>
+                  </Button>
                 )}
               </nav>
             }

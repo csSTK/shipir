@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { FileText, GitBranch, PackagePlus, Play, Square, Trash2 } from 'lucide-react'
 import { describeResourceError } from '../hosts/format.ts'
 import { useCurrentUser } from '../auth/index.ts'
-import { Badge, Button, PageHeader, ResourceTable, type MenuEntry, type ResourceColumn } from '../../shared/ui/index.ts'
+import { Badge, Button, ConfirmDialog, PageHeader, ResourceTable, type MenuEntry, type ResourceColumn, type RowActions } from '../../shared/ui/index.ts'
 import {
   useDeployDeployment,
   useManagedDeployments,
@@ -16,8 +16,6 @@ import {
 } from './api.ts'
 import { AdoptDeploymentDialog } from './AdoptDeploymentDialog.tsx'
 import { AddDeploymentDialog } from './AddDeploymentDialog.tsx'
-import { ConfirmDialog } from './ConfirmDialog.tsx'
-import type { RowActions } from '../../shared/ui/ResourceTable.tsx'
 import { describeDeploymentError } from './deploymentErrors.ts'
 import { useTranslation } from 'react-i18next'
 import { Trans } from '../../shared/i18n/Trans.tsx'
@@ -257,10 +255,10 @@ export function DeploymentsPage() {
           title={t('DeploymentsPage.removeDeployment')}
           confirmLabel={t('DeploymentsPage.remove')}
           danger
-          pending={remove.isPending}
+          loading={remove.isPending}
           error={removeError}
           onConfirm={confirmRemove}
-          onClose={closeRemove}
+          open onOpenChange={(open) => !open && closeRemove()}
         >
           <Trans t={t} i18nKey="DeploymentsPage.stopAndRemoveTheContainers" values={{ removing }} components={{ strong: <strong />, code: <code /> }} />
           <label className="deployments__check">

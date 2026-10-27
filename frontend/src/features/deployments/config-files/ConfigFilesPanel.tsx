@@ -1,5 +1,4 @@
 import { lazy, Suspense, useId, useState } from 'react'
-import { ConfirmDialog } from '../ConfirmDialog.tsx'
 import '../editor/editor.css'
 import {
   describeConfigError,
@@ -14,7 +13,7 @@ import {
   type ConfigFileBackup,
 } from './api.ts'
 import './ConfigFilesPanel.css'
-import { Button, Card } from '../../../shared/ui/index.ts'
+import { Button, Card, ConfirmDialog } from '../../../shared/ui/index.ts'
 import { useTranslation } from 'react-i18next'
 import { Trans } from '../../../shared/i18n/Trans.tsx'
 import { formatDateTime, formatNumber, ONE_DECIMAL } from '../../../shared/i18n/format.ts'
@@ -181,7 +180,7 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
             setSelected(pending)
             setPending(null)
           }}
-          onClose={() => setPending(null)}
+          open onOpenChange={(open) => { if (!open) setPending(null) }}
         >
           <Trans t={t} i18nKey="ConfigFilesPanel.selectedHasUnsavedChangesDiscard" values={{ selected }} components={{ strong: <strong /> }} />
         </ConfirmDialog>
@@ -354,7 +353,7 @@ function FileEditor({
       )}
 
       {dialog === 'delete' && (
-        <ConfirmDialog title={t('ConfigFilesPanel.deleteFile')} confirmLabel={t('ConfigFilesPanel.delete')} danger pending={remove.isPending} error={dialogError} onConfirm={confirmDelete} onClose={() => { setDialog(null); setDialogError(null) }}>
+        <ConfirmDialog title={t('ConfigFilesPanel.deleteFile')} confirmLabel={t('ConfigFilesPanel.delete')} danger loading={remove.isPending} error={dialogError} onConfirm={confirmDelete} open onOpenChange={(open) => { if (!open) { setDialog(null); setDialogError(null) } }}>
           <Trans t={t} i18nKey="ConfigFilesPanel.deletePathABackupOf" values={{ path: file.path }} components={{ strong: <strong /> }} />
         </ConfirmDialog>
       )}
@@ -362,10 +361,10 @@ function FileEditor({
         <ConfirmDialog
           title={t('ConfigFilesPanel.restoreBackup')}
           confirmLabel={t('ConfigFilesPanel.restore')}
-          pending={restore.isPending}
+          loading={restore.isPending}
           error={dialogError}
           onConfirm={() => confirmRestore(dialog.backup)}
-          onClose={() => { setDialog(null); setDialogError(null) }}
+          open onOpenChange={(open) => { if (!open) { setDialog(null); setDialogError(null) } }}
         >
           <Trans t={t} i18nKey="ConfigFilesPanel.replaceTheContentOfPath" values={{ path: file.path }} components={{ strong: <strong /> }} /> {formatDateTime(dialog.backup.createdAt)}{t('ConfigFilesPanel.unsavedChangesAreLost')}
         </ConfirmDialog>

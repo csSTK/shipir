@@ -38,7 +38,7 @@ export function TagImageDialog({ hostId, image, onClose }: Props) {
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()} title={t('TagImageDialog.tagImage')}>
+    <Dialog size="lg" open onOpenChange={(open) => !open && onClose()} title={t('TagImageDialog.tagImage')}>
       <form className="ui-form" onSubmit={submit}>
         <TextField
           label={t('TagImageDialog.repository')}

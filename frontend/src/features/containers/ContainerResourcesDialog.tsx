@@ -55,7 +55,7 @@ export function ContainerResourcesDialog({ hostId, container, onClose }: { hostI
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()} title={t('ContainerResourcesDialog.resourceLimits')} description={t('ContainerResourcesDialog.appliedToNameWithoutRestarting', { name: container.name })}>
+    <Dialog size="lg" open onOpenChange={(open) => !open && onClose()} title={t('ContainerResourcesDialog.resourceLimits')} description={t('ContainerResourcesDialog.appliedToNameWithoutRestarting', { name: container.name })}>
       <form className="ui-form" onSubmit={submit} noValidate>
         <div className="ui-form-row">
           <label className="ui-form-field">

@@ -129,7 +129,7 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()} title={tr('AddDeploymentDialog.addDeployment')}>
+    <Dialog size="lg" open onOpenChange={(open) => !open && onClose()} title={tr('AddDeploymentDialog.addDeployment')}>
       <form onSubmit={submit} className="ui-form">
         <label className="ui-form-field">
           <span>{tr('AddDeploymentDialog.name')}</span>

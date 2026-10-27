@@ -49,7 +49,7 @@ export function BackupSchedulesDialog({ hostId, volumes, initialVolume, onClose 
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()} title={t('BackupSchedulesDialog.backupSchedules')} description={t('BackupSchedulesDialog.automaticBackupsAreStoredOn')}>
+    <Dialog size="lg" open onOpenChange={(open) => !open && onClose()} title={t('BackupSchedulesDialog.backupSchedules')} description={t('BackupSchedulesDialog.automaticBackupsAreStoredOn')}>
       <div className="vbackup__stack">
         {schedules.isPending ? (
           <p className="ui-hint">{t('BackupSchedulesDialog.loading')}</p>

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Download } from 'lucide-react'
-import { Toolbar } from '../../../shared/ui/index.ts'
+import { Button, Toolbar } from '../../../shared/ui/index.ts'
 import type { TailOption } from './logStream.ts'
 import { useTranslation } from 'react-i18next'
 import i18n from 'i18next'
@@ -41,9 +41,11 @@ export function LogOptions<T extends TailOption>({ tails, tail, onTail, timestam
         </label>
         {children}
         {downloadHref ? (
-          <a className="ui-btn ui-btn--secondary ui-btn--sm logv__download" href={downloadHref} download>
-            <Download size={16} strokeWidth={1.75} aria-hidden="true" /> {tr('LogOptions.download')}
-          </a>
+          <Button asChild size="sm" className="logv__download">
+            <a href={downloadHref} download>
+              <Download size={16} strokeWidth={1.75} aria-hidden="true" /> {tr('LogOptions.download')}
+            </a>
+          </Button>
         ) : null}
       </Toolbar>
       <p className="logv__note">{tr('LogOptions.downloadsAreCappedInSize')}</p>

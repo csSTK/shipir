@@ -135,6 +135,63 @@ describe('Dialog', () => {
   })
 })
 
+describe('Button asChild', () => {
+  it('renders the child element with button classes and keeps its label', () => {
+    render(
+      <Button asChild variant="ghost-danger" size="sm">
+        <a href="/x">Go</a>
+      </Button>,
+    )
+    const link = screen.getByRole('link', { name: 'Go' })
+    expect(link).toHaveAttribute('href', '/x')
+    expect(link).toHaveClass('ui-btn', 'ui-btn--ghost-danger', 'ui-btn--sm')
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+})
+
+describe('Button asChild handlers', () => {
+  it('forwards onClick and ref, and ignores clicks while loading', () => {
+    const fn = vi.fn()
+    const ref = { current: null as HTMLButtonElement | null }
+    const { rerender } = render(
+      <Button asChild onClick={fn} ref={ref}>
+        <a href="#x">Go</a>
+      </Button>,
+    )
+    fireEvent.click(screen.getByRole('link', { name: 'Go' }))
+    expect(fn).toHaveBeenCalledTimes(1)
+    expect(ref.current).toBe(screen.getByRole('link', { name: 'Go' }))
+    rerender(
+      <Button asChild onClick={fn} loading>
+        <a href="#x">Go</a>
+      </Button>,
+    )
+    fireEvent.click(screen.getByRole('link', { name: 'Go' }))
+    expect(fn).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Dialog size', () => {
+  it('sets the size modifier class', async () => {
+    render(<Dialog open onOpenChange={() => {}} title="Wide" size="lg">body</Dialog>)
+    expect((await screen.findByRole('dialog')).className).toContain('ui-dialog--lg')
+  })
+})
+
+describe('ConfirmDialog extras', () => {
+  it('shows details and an inline error and disables confirm while loading', async () => {
+    const onConfirm = vi.fn()
+    render(
+      <ConfirmDialog open onOpenChange={() => {}} title="Roll back?" confirmLabel="Roll back" loading error="Failed" details={<div>diff here</div>} onConfirm={onConfirm}>
+        Sure?
+      </ConfirmDialog>,
+    )
+    expect(await screen.findByText('diff here')).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('Failed')
+    expect(screen.getByRole('button', { name: 'Roll back' })).toBeDisabled()
+  })
+})
+
 describe('ConfirmDialog', () => {
   it('confirms and cancels', async () => {
     const onConfirm = vi.fn()

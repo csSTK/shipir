@@ -62,7 +62,7 @@ export function AdoptDeploymentDialog({ hostId, project, onClose }: { hostId: st
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()} title={t('AdoptDeploymentDialog.adoptDeployment')}>
+    <Dialog size="lg" open onOpenChange={(open) => !open && onClose()} title={t('AdoptDeploymentDialog.adoptDeployment')}>
       <form onSubmit={submit} className="ui-form">
         <p className="ui-dialog-text">
           <Trans t={t} i18nKey="AdoptDeploymentDialog.shipirTakesProjectUnderIts" values={{ project }} components={{ strong: <strong /> }} />

@@ -7,10 +7,8 @@ import { useImages, withTag, type Image } from '../images/api.ts'
 import { DeleteResourceDialog } from '../hosts/DeleteResourceDialog.tsx'
 import { describeResourceError, formatSize } from '../hosts/format.ts'
 import { useContainerStats, type StatSample } from '../../shared/realtime/useContainerStats.ts'
-import { Badge, Button, PageHeader, ResourceTable, Sparkline, StatusDot, type MenuEntry, type ResourceColumn } from '../../shared/ui/index.ts'
-import type { RowActions } from '../../shared/ui/ResourceTable.tsx'
+import { Badge, Button, ConfirmDialog, PageHeader, ResourceTable, Sparkline, StatusDot, type MenuEntry, type ResourceColumn, type RowActions } from '../../shared/ui/index.ts'
 import { useCanOpenConsole } from './exec/api.ts'
-import { ConfirmDialog } from '../deployments/ConfirmDialog.tsx'
 import { actionsFor, describeActionError, useContainerAction, useContainers, useDeleteContainer, type Container, type ContainerAction } from './api.ts'
 import { CreateContainerDialog } from './CreateContainerDialog.tsx'
 import { useTranslation } from 'react-i18next'
@@ -320,9 +318,9 @@ export function ContainersPage() {
           title={t('ContainersPage.killContainer')}
           confirmLabel={act.isPending ? t('ContainersPage.killing') : t('ContainersPage.kill')}
           danger
-          pending={act.isPending}
+          loading={act.isPending}
           onConfirm={() => run(killTarget, 'kill')}
-          onClose={() => setKillTarget(null)}
+          open onOpenChange={(open) => { if (!open) setKillTarget(null) }}
         >
           {t('ContainersPage.killNameImmediatelyTheContainer', { name: killTarget.name })}
         </ConfirmDialog>

@@ -1,8 +1,7 @@
 import { KeyRound, Pencil, Trash2, Users } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { ApiError } from '../../shared/api/client.ts'
-import { Button, ConfirmDialog, Dialog, ResourceTable, TextField, type ResourceColumn } from '../../shared/ui/index.ts'
-import type { RowActions } from '../../shared/ui/ResourceTable.tsx'
+import { Button, ConfirmDialog, Dialog, ResourceTable, TextField, type ResourceColumn, type RowActions } from '../../shared/ui/index.ts'
 import {
   useCreateTeam,
   useDeleteTeam,

@@ -112,7 +112,7 @@ export function BuildImageDialog({ hostId, onClose }: Props) {
   const setArg = (n: number, value: string) => setBuildArgs((args) => args.map((a, i) => (i === n ? value : a)))
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()} title={t('BuildImageDialog.buildImage')}>
+    <Dialog size="lg" open onOpenChange={(open) => !open && onClose()} title={t('BuildImageDialog.buildImage')}>
       {runId ? (
         <>
           <DeployOutput title={t('BuildImageDialog.buildingTrim', { tag: tag.trim() })} runId={runId} onFinished={() => void refresh()} />

@@ -91,7 +91,7 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
     )
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()} title={TITLES[mode]}>
+    <Dialog size="lg" open onOpenChange={(open) => !open && onClose()} title={TITLES[mode]}>
       <form className="ui-form ccd" onSubmit={submit} noValidate>
         <div className="ui-form-row">
           <div className="ccd__field">

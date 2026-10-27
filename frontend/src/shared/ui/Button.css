@@ -68,6 +68,16 @@
   background: var(--color-bad-solid);
   color: var(--color-on-accent);
 }
+.ui-btn--ghost-danger {
+  background: transparent;
+  color: var(--color-bad);
+}
+.ui-btn--ghost-danger:hover:not(:disabled) {
+  background: var(--color-bad-soft);
+}
+a.ui-btn {
+  text-decoration: none;
+}
 .ui-btn__spinner {
   width: 1em;
   height: 1em;

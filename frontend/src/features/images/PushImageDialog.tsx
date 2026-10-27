@@ -30,6 +30,7 @@ export function PushImageDialog({ hostId, image, onClose }: Props) {
 
   return (
     <Dialog
+      size="lg"
       open
       onOpenChange={(open) => !open && onClose()}
       title={tr('PushImageDialog.pushImage')}

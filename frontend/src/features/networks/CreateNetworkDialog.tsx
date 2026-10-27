@@ -30,7 +30,7 @@ export function CreateNetworkDialog({ hostId, isAdmin, onClose }: { hostId: stri
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()} title={t('CreateNetworkDialog.createNetwork')}>
+    <Dialog size="lg" open onOpenChange={(open) => !open && onClose()} title={t('CreateNetworkDialog.createNetwork')}>
       <form className="ui-form" onSubmit={submit} noValidate>
         <label className="ui-form-field">
           {t('CreateNetworkDialog.name')}

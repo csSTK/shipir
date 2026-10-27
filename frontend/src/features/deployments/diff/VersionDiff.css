@@ -64,9 +64,6 @@
 .vd-env__item--removed .vd-env__tag {
   color: var(--color-bad);
 }
-.ui-dialog:has(.vd) {
-  width: min(60rem, 100%);
-}
 @media (max-width: 720px) {
   .vd-legend {
     display: none;
