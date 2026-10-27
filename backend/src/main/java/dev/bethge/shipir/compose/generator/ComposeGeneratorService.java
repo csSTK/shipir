@@ -39,6 +39,8 @@ public class ComposeGeneratorService {
     /** Lower-case DNS name with at least two labels (no localhost, no IP-less single labels), max 253 chars. */
     private static final Pattern DOMAIN_HOST = Pattern.compile(
             "(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+");
+    /** Traefik entrypoint and cert resolver names; they end up in labels, so a strict charset. */
+    private static final Pattern TRAEFIK_NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.-]{0,62}");
     /** Docker's own network name rule (uppercase and dots allowed); no quotes, whitespace, slashes or colons. */
     private static final Pattern DOCKER_NETWORK = Pattern.compile("[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}");
     /** Compose's implicit project network; it cannot be declared as an external proxy network. */
@@ -195,6 +197,18 @@ public class ComposeGeneratorService {
         }
     }
 
+    /** Entrypoint and resolver names go into labels, so they get a strict charset; Traefik only. Blank means default. */
+    private void validateTraefikName(String at, String value, ProxyType proxy, List<String> errors) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        if (proxy == ProxyType.CADDY) {
+            errors.add(at + ": only applies to Traefik");
+        } else if (!TRAEFIK_NAME.matcher(value).matches()) {
+            errors.add(at + ": use letters, digits, dots, hyphens and underscores; start with a letter or digit");
+        }
+    }
+
     private void validateDomain(String at, ServiceSpec s, List<String> errors) {
         DomainSpec d = s.domain();
         if (d.host() == null || !DOMAIN_HOST.matcher(d.host()).matches()) {
@@ -212,6 +226,8 @@ public class ComposeGeneratorService {
         } else if (d.network() != null && !DOCKER_NETWORK.matcher(d.network()).matches()) {
             errors.add(at + ".domain.network: invalid network name");
         }
+        validateTraefikName(at + ".domain.entrypoint", d.entrypoint(), d.proxy(), errors);
+        validateTraefikName(at + ".domain.certResolver", d.certResolver(), d.proxy(), errors);
         if (d.host() != null && d.port() != null && d.proxy() != null && DOMAIN_HOST.matcher(d.host()).matches()) {
             for (String key : proxyLabels(s.name(), d).keySet()) {
                 if (orEmpty(s.labels()).containsKey(key)) {
@@ -415,8 +431,9 @@ public class ComposeGeneratorService {
 
     /**
      * Routing labels of a proxy. Traefik: router and service are named after the domain (unique per host, unlike the
-     * Compose service name), TLS via the {@code websecure} entrypoint and {@code letsencrypt} resolver of the bundled
-     * Traefik template. Caddy: caddy-docker-proxy labels. The domain is already validated, so it holds no backtick.
+     * Compose service name), TLS via the entrypoint and resolver of the domain, by default {@code websecure} and
+     * {@code letsencrypt} of the bundled Traefik template. Caddy: caddy-docker-proxy labels.
+     * The domain is already validated, so it holds no backtick.
      */
     private Map<String, String> proxyLabels(String service, DomainSpec d) {
         Map<String, String> labels = new LinkedHashMap<>();
@@ -428,14 +445,19 @@ public class ComposeGeneratorService {
                 labels.put("traefik.docker.network", d.network());
             }
             labels.put(router + ".rule", "Host(`" + d.host() + "`)");
-            labels.put(router + ".entrypoints", "websecure");
-            labels.put(router + ".tls.certresolver", "letsencrypt");
+            labels.put(router + ".entrypoints", orDefault(d.entrypoint(), DomainSpec.DEFAULT_ENTRYPOINT));
+            labels.put(router + ".tls.certresolver",
+                    orDefault(d.certResolver(), DomainSpec.DEFAULT_CERT_RESOLVER));
             labels.put("traefik.http.services." + id + ".loadbalancer.server.port", String.valueOf(d.port()));
         } else {
             labels.put("caddy", d.host());
             labels.put("caddy.reverse_proxy", "{{upstreams " + d.port() + "}}");
         }
         return labels;
+    }
+
+    private static String orDefault(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 
     private String portString(PortSpec p) {

@@ -103,6 +103,10 @@ function ResourceList({
   )
 }
 
+// Defaults of Shipir's Traefik template; the backend uses the same when the fields are empty.
+const DEFAULT_ENTRYPOINT = 'websecure'
+const DEFAULT_CERT_RESOLVER = 'letsencrypt'
+
 function DomainSection({
   n,
   service,
@@ -201,6 +205,17 @@ function DomainSection({
           <input aria-label={t('ComposeWizard.serviceNDomainNetwork', { n })} value={d.network} onChange={(e) => setOwn({ network: e.target.value })} autoComplete="off" spellCheck={false} />
         </Field>
       </div>
+      {d.proxy === 'TRAEFIK' && (
+        <div className="wz-row wz-row--two">
+          <Field label={t('ComposeWizard.httpsEntrypointOptional')} error={err('entrypoint')}>
+            <input aria-label={t('ComposeWizard.serviceNDomainEntrypoint', { n })} value={d.entrypoint} placeholder={DEFAULT_ENTRYPOINT} onChange={(e) => setOwn({ entrypoint: e.target.value })} autoComplete="off" spellCheck={false} />
+          </Field>
+          <Field label={t('ComposeWizard.certResolverOptional')} error={err('certResolver')}>
+            <input aria-label={t('ComposeWizard.serviceNDomainCertResolver', { n })} value={d.certResolver} placeholder={DEFAULT_CERT_RESOLVER} onChange={(e) => setOwn({ certResolver: e.target.value })} autoComplete="off" spellCheck={false} />
+          </Field>
+        </div>
+      )}
+      {d.proxy === 'TRAEFIK' && <small className="wz-hint">{t('ComposeWizard.traefikNamesHint')}</small>}
     </fieldset>
   )
 }

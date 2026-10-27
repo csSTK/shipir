@@ -31,6 +31,10 @@ export interface DomainForm {
   proxy: ProxyType
   /** Network the proxy is attached to; empty = none. */
   network: string
+  /** Traefik only: HTTPS entrypoint name; empty = Shipir's template default (`websecure`). */
+  entrypoint: string
+  /** Traefik only: ACME cert resolver name; empty = template default (`letsencrypt`). */
+  certResolver: string
 }
 export interface ServiceForm {
   /** Stable React key, never sent. */
@@ -69,7 +73,7 @@ export interface ComposeSpecPayload {
     volumes: { source: string; target: string; readOnly: boolean }[]
     networks: string[]
     labels: null
-    domain: { host: string; port: number; proxy: ProxyType; network: string | null } | null
+    domain: { host: string; port: number; proxy: ProxyType; network: string | null; entrypoint?: string; certResolver?: string } | null
     dependsOn: string[]
   }[]
   networks: { name: string; driver: string | null; external: boolean }[]
@@ -80,11 +84,12 @@ const NAME = /^[a-z0-9][a-z0-9_-]{0,62}$/
 const DRIVER = /^[a-z0-9][a-z0-9_.-]{0,62}$/
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/
 const DOMAIN_HOST = /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/
+const TRAEFIK_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/
 const DOCKER_NETWORK = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/
 const IMAGE = /^[^\s'"\\]+$/
 
 export function emptyDomain(): DomainForm {
-  return { host: '', port: '', proxy: 'TRAEFIK', network: '' }
+  return { host: '', port: '', proxy: 'TRAEFIK', network: '', entrypoint: '', certResolver: '' }
 }
 
 let nextUid = 1
@@ -171,6 +176,10 @@ export function validateWizard(state: WizardState): WizardProblems {
       const network = d.network.trim()
       if (network === 'default') set(`${p}.domain.network`, i18n.t('deployments:model.networkDefaultIsReserved'))
       else if (network !== '' && !DOCKER_NETWORK.test(network)) set(`${p}.domain.network`, i18n.t('deployments:model.useLettersDigitsDotsHyphens'))
+      for (const key of ['entrypoint', 'certResolver'] as const) {
+        const v = d[key].trim()
+        if (d.proxy === 'TRAEFIK' && v !== '' && !TRAEFIK_NAME.test(v)) set(`${p}.domain.${key}`, i18n.t('deployments:model.useLettersDigitsDotsHyphens'))
+      }
     }
     s.ports.forEach((r, j) => {
       const c = validatePort(r.container, true)
@@ -249,7 +258,15 @@ export function buildSpec(state: WizardState): ComposeSpecPayload {
         domain:
           s.domain.host.trim() === ''
             ? null
-            : { host: s.domain.host.trim(), port: Number(s.domain.port), proxy: s.domain.proxy, network: orNull(s.domain.network) },
+            : {
+                host: s.domain.host.trim(),
+                port: Number(s.domain.port),
+                proxy: s.domain.proxy,
+                network: orNull(s.domain.network),
+                // Traefik-only names; omitted when blank so the backend keeps its defaults.
+                ...(s.domain.proxy === 'TRAEFIK' && s.domain.entrypoint.trim() !== '' && { entrypoint: s.domain.entrypoint.trim() }),
+                ...(s.domain.proxy === 'TRAEFIK' && s.domain.certResolver.trim() !== '' && { certResolver: s.domain.certResolver.trim() }),
+              },
         dependsOn: s.dependsOn.filter((d) => serviceNames.has(d) && d !== s.name.trim()),
       }
     }),
@@ -281,7 +298,7 @@ export interface TemplateSpecInput {
     environment?: { key: string; value?: string | null; ref?: string | null }[] | null
     volumes?: { source: string; target: string; readOnly?: boolean | null }[] | null
     networks?: string[] | null
-    domain?: { host: string; port: number; proxy: string; network?: string | null } | null
+    domain?: { host: string; port: number; proxy: string; network?: string | null; entrypoint?: string | null; certResolver?: string | null } | null
     dependsOn?: string[] | null
   }[] | null
   networks?: { name: string; driver?: string | null; external?: boolean | null }[] | null
@@ -314,7 +331,7 @@ export function specToState(spec: TemplateSpecInput): WizardState {
     networks: s.networks ?? [],
     dependsOn: s.dependsOn ?? [],
     domain: s.domain
-      ? { host: s.domain.host, port: String(s.domain.port), proxy: s.domain.proxy === 'CADDY' ? ('CADDY' as const) : ('TRAEFIK' as const), network: s.domain.network ?? '' }
+      ? { host: s.domain.host, port: String(s.domain.port), proxy: s.domain.proxy === 'CADDY' ? ('CADDY' as const) : ('TRAEFIK' as const), network: s.domain.network ?? '', entrypoint: s.domain.entrypoint ?? '', certResolver: s.domain.certResolver ?? '' }
       : emptyDomain(),
   }))
   const resource = (r: { name: string; driver?: string | null; external?: boolean | null }): ResourceForm => ({

@@ -60,6 +60,24 @@ describe('wizard domain section', () => {
     expect(body.spec.services[0].domain).toEqual({ host: 'app.example.com', port: 80, proxy: 'TRAEFIK', network: 'proxy' })
   })
 
+  it('exposes Traefik entrypoint and cert resolver, sends them and hides them for Caddy', async () => {
+    serve({ proxy: 'TRAEFIK', container: 'traefik', network: 'proxy' })
+    open()
+    await within(group()).findByText(/Traefik detected/)
+    fireEvent.change(screen.getByLabelText('Service 1 name'), { target: { value: 'web' } })
+    fireEvent.change(screen.getByLabelText('Service 1 image'), { target: { value: 'nginx' } })
+    fireEvent.change(screen.getByLabelText('Service 1 domain host'), { target: { value: 'app.example.com' } })
+    fireEvent.change(screen.getByLabelText('Service 1 domain port'), { target: { value: '80' } })
+    fireEvent.change(screen.getByLabelText('Service 1 domain entrypoint'), { target: { value: 'https' } })
+    fireEvent.change(screen.getByLabelText('Service 1 domain cert resolver'), { target: { value: 'le' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Preview YAML' }))
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/compose/generate', expect.anything()))
+    const body = apiFetch.mock.calls.find((c) => c[0] === '/compose/generate')![1].body
+    expect(body.spec.services[0].domain).toEqual({ host: 'app.example.com', port: 80, proxy: 'TRAEFIK', network: 'proxy', entrypoint: 'https', certResolver: 'le' })
+    fireEvent.change(screen.getByLabelText('Service 1 domain proxy'), { target: { value: 'CADDY' } })
+    expect(screen.queryByLabelText('Service 1 domain entrypoint')).not.toBeInTheDocument()
+  })
+
   it('shows a field error for an invalid domain and does not call generate', async () => {
     serve({ proxy: null, container: null, network: null })
     open()

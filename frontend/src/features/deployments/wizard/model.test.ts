@@ -146,6 +146,30 @@ describe('service domain', () => {
     const withNet = state([service({ domain: domain({ proxy: 'CADDY', network: 'proxy' }) })])
     expect(buildSpec(withNet).services[0].domain).toEqual({ host: 'app.example.com', port: 8080, proxy: 'CADDY', network: 'proxy' })
   })
+  it('sends a custom Traefik entrypoint and cert resolver, omits them when blank or for Caddy', () => {
+    const custom = state([service({ domain: domain({ entrypoint: ' https ', certResolver: 'le' }) })])
+    expect(buildSpec(custom).services[0].domain).toEqual({ host: 'app.example.com', port: 8080, proxy: 'TRAEFIK', network: null, entrypoint: 'https', certResolver: 'le' })
+    const blank = buildSpec(state([service({ domain: domain({ entrypoint: ' ', certResolver: '' }) })])).services[0].domain
+    expect(blank).not.toHaveProperty('entrypoint')
+    expect(blank).not.toHaveProperty('certResolver')
+    const caddy = buildSpec(state([service({ domain: domain({ proxy: 'CADDY', entrypoint: 'https', certResolver: 'le' }) })])).services[0].domain
+    expect(caddy).not.toHaveProperty('entrypoint')
+    expect(caddy).not.toHaveProperty('certResolver')
+  })
+  it('rejects invalid entrypoint and cert resolver names', () => {
+    for (const bad of ['web secure', '-x', 'a`b', 'x,y', 'a'.repeat(64)]) {
+      const f = validateWizard(state([service({ domain: domain({ entrypoint: bad, certResolver: bad }) })])).fields
+      expect(f.has('services.0.domain.entrypoint')).toBe(true)
+      expect(f.has('services.0.domain.certResolver')).toBe(true)
+    }
+    expect(validateWizard(state([service({ domain: domain({ entrypoint: 'web-secure_1', certResolver: 'le.prod' }) })])).fields.size).toBe(0)
+  })
+  it('round-trips entrypoint and cert resolver through specToState', () => {
+    const spec = { services: [{ name: 'web', image: 'nginx', domain: { host: 'a.example.org', port: 80, proxy: 'TRAEFIK', entrypoint: 'https', certResolver: 'le' } }] }
+    const d = specToState(spec as never).services[0].domain
+    expect(d.entrypoint).toBe('https')
+    expect(d.certResolver).toBe('le')
+  })
   it('accepts valid domains', () => {
     expect(validateWizard(state([service({ domain: domain({ network: 'proxy_net-1' }) })])).fields.size).toBe(0)
     expect(validateWizard(state([service({ domain: emptyDomain() })])).fields.size).toBe(0)

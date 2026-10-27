@@ -105,6 +105,46 @@ class ComposeGeneratorDomainTest {
                 .anyMatch(v -> v.contains("label caddy"));
     }
 
+    @Test
+    void goldenTraefikLabelsWithCustomEntrypointAndResolver() {
+        String yaml = generator.generate(spec(
+                app(new DomainSpec("blog.example.com", 2368, ProxyType.TRAEFIK, null, "https", "le"), null, null), null));
+        assertThat(yaml).isEqualTo("""
+                services:
+                  app:
+                    image: ghost:5
+                    labels:
+                      traefik.enable: "true"
+                      traefik.http.routers.blog-example-com.rule: Host(`blog.example.com`)
+                      traefik.http.routers.blog-example-com.entrypoints: https
+                      traefik.http.routers.blog-example-com.tls.certresolver: le
+                      traefik.http.services.blog-example-com.loadbalancer.server.port: "2368"
+                """);
+    }
+
+    @Test
+    void blankEntrypointAndResolverFallBackToDefaults() {
+        String yaml = generator.generate(spec(
+                app(new DomainSpec("a.example.org", 80, ProxyType.TRAEFIK, null, "", null), null, null), null));
+        assertThat(yaml).contains("entrypoints: websecure").contains("certresolver: letsencrypt");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"web secure", "a\nb", "x,y", "`x`", "x\"", "-x", "a/b"})
+    void invalidEntrypointAndResolverAreRejected(String value) {
+        assertThat(violations(new DomainSpec("a.example.org", 80, ProxyType.TRAEFIK, null, value, null), null))
+                .anyMatch(v -> v.contains("domain.entrypoint"));
+        assertThat(violations(new DomainSpec("a.example.org", 80, ProxyType.TRAEFIK, null, null, value), null))
+                .anyMatch(v -> v.contains("domain.certResolver"));
+    }
+
+    @Test
+    void entrypointAndResolverOnCaddyAreRejected() {
+        assertThat(violations(new DomainSpec("a.example.org", 80, ProxyType.CADDY, null, "https", "le"), null))
+                .anyMatch(v -> v.contains("domain.entrypoint"))
+                .anyMatch(v -> v.contains("domain.certResolver"));
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"", "UPPER.example.com", "no_underscore.example.com", "a b.example.com",
             "x.example.com`)||Host(`y", "localhost", "-a.example.com", "a..example.com", "http://a.example.com",
