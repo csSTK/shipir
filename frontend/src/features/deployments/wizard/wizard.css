@@ -68,6 +68,22 @@
 .wz-row--resource {
   grid-template-columns: 1fr 1fr auto auto;
 }
+.wz-row--domain {
+  grid-template-columns: 2fr 1fr 1fr 1.5fr;
+}
+.wz-detect {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.wz-detect .wz-hint {
+  flex-basis: 100%;
+}
+.wz-detect__ok {
+  color: var(--color-ok);
+  font-size: var(--text-small-size);
+}
 .wz-field {
   display: flex;
   flex-direction: column;
@@ -180,6 +196,7 @@
   .wz-row--two,
   .wz-row--port,
   .wz-row--env,
+  .wz-row--domain,
   .wz-row--resource {
     grid-template-columns: 1fr;
   }

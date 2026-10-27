@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildSpec, emptyService, referencedEnvKeys, specToState, splitCommand, validatePort, validateWizard, type ServiceForm, type WizardState } from './model.ts'
+import { buildSpec, emptyDomain, emptyService, referencedEnvKeys, specToState, splitCommand, validatePort, validateWizard, type ServiceForm, type WizardState } from './model.ts'
 
 function service(patch: Partial<ServiceForm>): ServiceForm {
   return { ...emptyService(), name: 'web', image: 'nginx:1.27', ...patch }
@@ -119,9 +119,10 @@ describe('buildSpec', () => {
           volumes: [{ source: 'data', target: '/data', readOnly: true }],
           networks: ['front'],
           labels: null,
+          domain: null,
           dependsOn: ['db'],
         },
-        { name: 'db', image: 'postgres:16', command: null, restart: null, ports: [], environment: [], volumes: [], networks: [], labels: null, dependsOn: [] },
+        { name: 'db', image: 'postgres:16', command: null, restart: null, ports: [], environment: [], volumes: [], networks: [], labels: null, domain: null, dependsOn: [] },
       ],
       networks: [{ name: 'front', driver: null, external: false }],
       volumes: [{ name: 'data', driver: 'local', external: false }],
@@ -130,6 +131,44 @@ describe('buildSpec', () => {
   it('lists referenced env keys once', () => {
     const s = state([service({ env: [{ key: 'A', value: 'K', ref: true }, { key: 'B', value: 'K', ref: true }, { key: 'C', value: 'lit', ref: false }] })])
     expect(referencedEnvKeys(s)).toEqual(['K'])
+  })
+})
+
+const domain = (patch: Partial<ServiceForm['domain']>) => ({ ...emptyDomain(), host: 'app.example.com', port: '8080', proxy: 'TRAEFIK' as const, ...patch })
+
+describe('service domain', () => {
+  it('is not sent while the host is empty', () => {
+    expect(buildSpec(state([service({ domain: domain({ host: ' ' }) })])).services[0].domain).toBeNull()
+  })
+  it('is sent trimmed, with an optional network as null', () => {
+    const s = state([service({ domain: domain({ host: ' app.example.com ', network: '' }) })])
+    expect(buildSpec(s).services[0].domain).toEqual({ host: 'app.example.com', port: 8080, proxy: 'TRAEFIK', network: null })
+    const withNet = state([service({ domain: domain({ proxy: 'CADDY', network: 'proxy' }) })])
+    expect(buildSpec(withNet).services[0].domain).toEqual({ host: 'app.example.com', port: 8080, proxy: 'CADDY', network: 'proxy' })
+  })
+  it('accepts valid domains', () => {
+    expect(validateWizard(state([service({ domain: domain({ network: 'proxy_net-1' }) })])).fields.size).toBe(0)
+    expect(validateWizard(state([service({ domain: emptyDomain() })])).fields.size).toBe(0)
+  })
+  it.each(['localhost', 'App.Example.com', 'a..com', '-a.example.com', 'a.example.com.', 'a b.com', 'http://a.com', 'a_b.example.com'])('rejects host %j', (host) => {
+    expect(validateWizard(state([service({ domain: domain({ host }) })])).fields.get('services.0.domain.host')).toMatch(/domain name/)
+  })
+  it('requires a valid port when a host is set', () => {
+    expect(validateWizard(state([service({ domain: domain({ port: '' }) })])).fields.get('services.0.domain.port')).toBe('Enter a port.')
+    expect(validateWizard(state([service({ domain: domain({ port: '70000' }) })])).fields.get('services.0.domain.port')).toMatch(/1 to 65535/)
+  })
+  it('validates the network name like Docker', () => {
+    expect(validateWizard(state([service({ domain: domain({ network: '-x' }) })])).fields.has('services.0.domain.network')).toBe(true)
+    expect(validateWizard(state([service({ domain: domain({ network: 'a'.repeat(129) }) })])).fields.has('services.0.domain.network')).toBe(true)
+  })
+  it('flags a host used by two services', () => {
+    const p = validateWizard(state([service({ domain: domain({}) }), service({ name: 'api', domain: domain({}) })]))
+    expect(p.fields.get('services.1.domain.host')).toMatch(/another service/)
+    expect(p.fields.has('services.0.domain.host')).toBe(false)
+  })
+  it('round-trips through specToState', () => {
+    const spec = buildSpec(state([service({ domain: domain({ network: 'proxy' }) })]))
+    expect(buildSpec(specToState(spec)).services[0].domain).toEqual(spec.services[0].domain)
   })
 })
 

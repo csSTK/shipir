@@ -20,6 +20,18 @@ export interface MountRow {
   target: string
   readOnly: boolean
 }
+export const PROXY_TYPES = ['TRAEFIK', 'CADDY'] as const
+export type ProxyType = (typeof PROXY_TYPES)[number]
+
+/** Public domain of a service behind a reverse proxy; unused while `host` is empty. */
+export interface DomainForm {
+  host: string
+  /** Container port the proxy forwards to. */
+  port: string
+  proxy: ProxyType
+  /** Network the proxy is attached to; empty = none. */
+  network: string
+}
 export interface ServiceForm {
   /** Stable React key, never sent. */
   uid: number
@@ -33,6 +45,7 @@ export interface ServiceForm {
   volumes: MountRow[]
   networks: string[]
   dependsOn: string[]
+  domain: DomainForm
 }
 export interface ResourceForm {
   name: string
@@ -56,6 +69,7 @@ export interface ComposeSpecPayload {
     volumes: { source: string; target: string; readOnly: boolean }[]
     networks: string[]
     labels: null
+    domain: { host: string; port: number; proxy: ProxyType; network: string | null } | null
     dependsOn: string[]
   }[]
   networks: { name: string; driver: string | null; external: boolean }[]
@@ -65,11 +79,17 @@ export interface ComposeSpecPayload {
 const NAME = /^[a-z0-9][a-z0-9_-]{0,62}$/
 const DRIVER = /^[a-z0-9][a-z0-9_.-]{0,62}$/
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/
+const DOMAIN_HOST = /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/
+const DOCKER_NETWORK = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/
 const IMAGE = /^[^\s'"\\]+$/
+
+export function emptyDomain(): DomainForm {
+  return { host: '', port: '', proxy: 'TRAEFIK', network: '' }
+}
 
 let nextUid = 1
 export function emptyService(): ServiceForm {
-  return { uid: nextUid++, name: '', image: '', command: '', restart: '', ports: [], env: [], volumes: [], networks: [], dependsOn: [] }
+  return { uid: nextUid++, name: '', image: '', command: '', restart: '', ports: [], env: [], volumes: [], networks: [], dependsOn: [], domain: emptyDomain() }
 }
 export function initialState(): WizardState {
   return { services: [emptyService()], networks: [], volumes: [] }
@@ -129,6 +149,7 @@ export function validateWizard(state: WizardState): WizardProblems {
   const nameMsg = i18n.t('deployments:model.useLowercaseLettersDigitsHyphens')
   const declaredVolumes = new Set(state.volumes.map((v) => v.name.trim()))
   const names = new Set<string>()
+  const hosts = new Set<string>()
 
   if (state.services.length === 0) general.push(i18n.t('deployments:model.addAtLeastOneService'))
 
@@ -139,6 +160,17 @@ export function validateWizard(state: WizardState): WizardProblems {
     else if (names.has(name)) set(`${p}.name`, i18n.t('deployments:model.serviceNamesMustBeUnique'))
     names.add(name)
     if (!IMAGE.test(s.image.trim())) set(`${p}.image`, i18n.t('deployments:model.enterAnImageSuchAs'))
+    const d = s.domain
+    const host = d.host.trim()
+    if (host !== '') {
+      if (!DOMAIN_HOST.test(host)) set(`${p}.domain.host`, i18n.t('deployments:model.enterALowercaseDomainName'))
+      else if (hosts.has(host)) set(`${p}.domain.host`, i18n.t('deployments:model.thisDomainIsAlreadyUsed'))
+      hosts.add(host)
+      const port = validatePort(d.port, true)
+      if (port) set(`${p}.domain.port`, port)
+      const network = d.network.trim()
+      if (network !== '' && !DOCKER_NETWORK.test(network)) set(`${p}.domain.network`, i18n.t('deployments:model.useLettersDigitsDotsHyphens'))
+    }
     s.ports.forEach((r, j) => {
       const c = validatePort(r.container, true)
       if (c) set(`${p}.ports.${j}.container`, c)
@@ -213,6 +245,10 @@ export function buildSpec(state: WizardState): ComposeSpecPayload {
         // Selections of renamed or removed networks/services are dropped.
         networks: s.networks.filter((n) => networkNames.has(n)),
         labels: null,
+        domain:
+          s.domain.host.trim() === ''
+            ? null
+            : { host: s.domain.host.trim(), port: Number(s.domain.port), proxy: s.domain.proxy, network: orNull(s.domain.network) },
         dependsOn: s.dependsOn.filter((d) => serviceNames.has(d) && d !== s.name.trim()),
       }
     }),
@@ -244,6 +280,7 @@ export interface TemplateSpecInput {
     environment?: { key: string; value?: string | null; ref?: string | null }[] | null
     volumes?: { source: string; target: string; readOnly?: boolean | null }[] | null
     networks?: string[] | null
+    domain?: { host: string; port: number; proxy: string; network?: string | null } | null
     dependsOn?: string[] | null
   }[] | null
   networks?: { name: string; driver?: string | null; external?: boolean | null }[] | null
@@ -275,6 +312,9 @@ export function specToState(spec: TemplateSpecInput): WizardState {
     volumes: (s.volumes ?? []).map((v) => ({ source: v.source, target: v.target, readOnly: v.readOnly === true })),
     networks: s.networks ?? [],
     dependsOn: s.dependsOn ?? [],
+    domain: s.domain
+      ? { host: s.domain.host, port: String(s.domain.port), proxy: s.domain.proxy === 'CADDY' ? ('CADDY' as const) : ('TRAEFIK' as const), network: s.domain.network ?? '' }
+      : emptyDomain(),
   }))
   const resource = (r: { name: string; driver?: string | null; external?: boolean | null }): ResourceForm => ({
     name: r.name,

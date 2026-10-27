@@ -155,7 +155,7 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
               <p className="tp-vars__note">{tr('AddDeploymentDialog.fillInTheirValuesAfter')}</p>
             </div>
           )}
-          <ComposeWizard key={seed.key} initial={seed.state} onContinue={continueInEditor} />
+          <ComposeWizard hostId={hostId} active={source === 'file' && mode === 'wizard'} key={seed.key} initial={seed.state} onContinue={continueInEditor} />
         </div>
         <div className="ui-form" hidden={source !== 'file' || mode !== 'yaml'}>
           <div className="ui-form-field">

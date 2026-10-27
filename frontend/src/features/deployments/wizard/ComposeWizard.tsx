@@ -1,12 +1,14 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useId, useRef, useState, type ReactNode } from 'react'
 import { ApiError } from '../../../shared/api/client.ts'
-import { useGenerateCompose } from '../api.ts'
+import { useDetectedProxy, useGenerateCompose, useTraefikTemplate, type DetectedProxy } from '../api.ts'
 import { YamlEditor } from '../editor/index.ts'
 import {
   buildSpec,
   emptyService,
   hasProblems,
   initialState,
+  PROXY_TYPES,
+  type ProxyType,
   referencedEnvKeys,
   RESTART_POLICIES,
   validateWizard,
@@ -101,11 +103,114 @@ function ResourceList({
   )
 }
 
+function DomainSection({
+  n,
+  service,
+  fields,
+  detected,
+  onChange,
+}: {
+  n: number
+  service: ServiceForm
+  fields: Map<string, string>
+  detected: DetectedProxy | undefined
+  onChange: (patch: Partial<ServiceForm>) => void
+}) {
+  const { t } = useTranslation('deployments')
+  const template = useTraefikTemplate()
+  const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const d = service.domain
+  const err = (k: string) => fields.get(`services.${n - 1}.domain.${k}`)
+  // Fields the user edited themselves are never overwritten by the prefill.
+  const touched = useRef(new Set<string>())
+  const set = (patch: Partial<ServiceForm['domain']>) => onChange({ domain: { ...d, ...patch } })
+  const setOwn = (patch: Partial<ServiceForm['domain']>) => {
+    for (const k of Object.keys(patch)) touched.current.add(k)
+    set(patch)
+  }
+
+  // The first time a host is typed, untouched proxy, network and port take what is known.
+  function setHost(host: string) {
+    if (d.host.trim() === '' && host.trim() !== '') {
+      const own = touched.current
+      set({
+        host,
+        proxy: own.has('proxy') ? d.proxy : (detected?.proxy ?? d.proxy),
+        network: own.has('network') ? d.network : (detected?.network ?? d.network),
+        port: own.has('port') ? d.port : d.port || (service.ports[0]?.container.trim() ?? ''),
+      })
+    } else set({ host })
+  }
+
+  function copyTemplate() {
+    setCopy('idle')
+    template.mutate(undefined, {
+      onSuccess: async (r) => {
+        try {
+          // `navigator.clipboard` does not exist on non-secure contexts (plain http).
+          await navigator.clipboard.writeText(r.yaml)
+          setCopy('copied')
+        } catch {
+          setCopy('failed')
+        }
+      },
+      onError: () => setCopy('failed'),
+    })
+  }
+
+  return (
+    <fieldset className="wz-group" aria-label={t('ComposeWizard.serviceNDomain', { n })}>
+      <legend>{t('ComposeWizard.domain')}</legend>
+      {detected?.proxy ? (
+        <p className="wz-hint" role="status">
+          {t('ComposeWizard.proxyDetected', {
+            proxy: t(`ComposeWizard.proxyName${detected.proxy}`),
+            container: detected.container ?? t('ComposeWizard.container').toLowerCase(),
+          })}
+          {detected.network ? ` ${t('ComposeWizard.onNetwork', { network: detected.network })}` : ''}. {t('ComposeWizard.fillInADomain')}
+        </p>
+      ) : (
+        detected && (
+          <div className="wz-detect">
+            <p className="wz-hint" role="status">{t('ComposeWizard.noReverseProxyDetected')}</p>
+            <Button variant="secondary" onClick={copyTemplate} disabled={template.isPending}>
+              {t('ComposeWizard.copyTraefikTemplate')}
+            </Button>
+            {copy === 'copied' && <small className="wz-detect__ok">{t('ComposeWizard.copied')}</small>}
+            {copy === 'failed' && <small className="wz-field__error">{t('ComposeWizard.couldNotCopyTheTemplate')}</small>}
+          </div>
+        )
+      )}
+      <div className="wz-row wz-row--domain">
+        <Field label={t('ComposeWizard.domainOptional')} error={err('host')}>
+          <input aria-label={t('ComposeWizard.serviceNDomainHost', { n })} value={d.host} placeholder="app.example.com" onChange={(e) => setHost(e.target.value)} autoComplete="off" spellCheck={false} />
+        </Field>
+        <Field label={t('ComposeWizard.containerPort')} error={err('port')}>
+          <input aria-label={t('ComposeWizard.serviceNDomainPort', { n })} inputMode="numeric" value={d.port} onChange={(e) => setOwn({ port: e.target.value })} />
+        </Field>
+        <Field label={t('ComposeWizard.proxy')}>
+          <select aria-label={t('ComposeWizard.serviceNDomainProxy', { n })} value={d.proxy} onChange={(e) => setOwn({ proxy: e.target.value as ProxyType })}>
+            {PROXY_TYPES.map((p) => (
+              <option key={p} value={p}>
+                {t(`ComposeWizard.proxyName${p}`)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('ComposeWizard.proxyNetworkOptional')} error={err('network')}>
+          <input aria-label={t('ComposeWizard.serviceNDomainNetwork', { n })} value={d.network} onChange={(e) => setOwn({ network: e.target.value })} autoComplete="off" spellCheck={false} />
+        </Field>
+      </div>
+    </fieldset>
+  )
+}
+
 function ServiceCard({
   index,
   service,
   state,
   fields,
+  detected,
   onChange,
   onRemove,
 }: {
@@ -113,6 +218,7 @@ function ServiceCard({
   service: ServiceForm
   state: WizardState
   fields: Map<string, string>
+  detected: DetectedProxy | undefined
   onChange: (patch: Partial<ServiceForm>) => void
   onRemove: () => void
 }) {
@@ -230,6 +336,8 @@ function ServiceCard({
         </Button>
       </fieldset>
 
+      <DomainSection n={n} service={service} fields={fields} detected={detected} onChange={onChange} />
+
       <Toggle name={`${p}-networks`} label={t('ComposeWizard.networks')} options={networkNames} selected={service.networks} onChange={(networks) => onChange({ networks })} />
       <Toggle name={`${p}-depends`} label={t('ComposeWizard.startsAfter')} options={others} selected={service.dependsOn} onChange={(dependsOn) => onChange({ dependsOn })} />
     </fieldset>
@@ -241,7 +349,19 @@ function ServiceCard({
  * `initial` seeds the form once (remount with a new `key` to reseed, e.g. from a template).
  * `onContinue` receives the YAML and the deployment variables the form references (to be filled in the env editor).
  */
-export function ComposeWizard({ onContinue, initial }: { onContinue: (yaml: string, envKeys: string[]) => void; initial?: WizardState }) {
+export function ComposeWizard({
+  hostId,
+  active = true,
+  onContinue,
+  initial,
+}: {
+  hostId: string
+  /** False while the wizard is mounted but hidden: proxy detection is then not requested. */
+  active?: boolean
+  onContinue: (yaml: string, envKeys: string[]) => void
+  initial?: WizardState
+}) {
+  const detected = useDetectedProxy(hostId, active).data
   const { t } = useTranslation('deployments')
   const previewId = useId()
   const generate = useGenerateCompose()
@@ -281,6 +401,7 @@ export function ComposeWizard({ onContinue, initial }: { onContinue: (yaml: stri
           service={s}
           state={state}
           fields={fields}
+          detected={detected}
           onChange={(patch) => setService(i, patch)}
           onRemove={() => change({ ...state, services: remove(state.services, i) })}
         />

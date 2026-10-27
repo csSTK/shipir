@@ -17,8 +17,14 @@ const key = (method: string, path: string) => `${method.toUpperCase()} ${path}`
 /** Empty usage history: the container details page and the dashboard fetch it on every visit; specs override per host. */
 const EMPTY_HISTORY = { range: '24h', from: '2026-10-24T10:00:00Z', to: '2026-10-25T10:00:00Z', bucketSeconds: 60, seriesTotal: 0, truncated: false, series: [] }
 
+/** No reverse proxy detected: the add-deployment wizard asks for it whenever the dialog is open; specs override. */
+const NO_PROXY = { proxy: null, container: null, network: null }
+
 function defaultFor(method: string, path: string): MockResponse | undefined {
-  return method === 'GET' && /^\/api\/hosts\/[^/]+\/stats\/history$/.test(path) ? { body: EMPTY_HISTORY } : undefined
+  if (method !== 'GET') return undefined
+  if (/^\/api\/hosts\/[^/]+\/stats\/history$/.test(path)) return { body: EMPTY_HISTORY }
+  if (/^\/api\/hosts\/[^/]+\/proxy$/.test(path)) return { body: NO_PROXY }
+  return undefined
 }
 
 /**

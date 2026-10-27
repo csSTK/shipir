@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../shared/api/client.ts'
-import type { ComposeSpecPayload } from './wizard/model.ts'
+import type { ComposeSpecPayload, ProxyType } from './wizard/model.ts'
 
 export type DeploymentStatus = 'RUNNING' | 'PARTIAL' | 'STOPPED'
 
@@ -321,5 +321,28 @@ export function useAdoptDeployment(hostId: string) {
     mutationFn: ({ project, ...body }: AdoptInput) =>
       apiFetch<ManagedDeploymentDetail>(`/hosts/${hostId}/deployments/${encodeURIComponent(project)}/adopt`, { method: 'POST', body }),
     onSuccess: () => void invalidate(),
+  })
+}
+
+/** `GET /api/hosts/{id}/proxy`: the reverse proxy running on the host; all null when none is detected. */
+export interface DetectedProxy {
+  proxy: ProxyType | null
+  container: string | null
+  network: string | null
+}
+
+export function useDetectedProxy(hostId: string, enabled = true) {
+  return useQuery({
+    queryKey: ['hosts', hostId, 'proxy'],
+    queryFn: () => apiFetch<DetectedProxy>(`/hosts/${hostId}/proxy`),
+    enabled,
+    refetchOnWindowFocus: false,
+  })
+}
+
+/** Bundled Traefik Compose file (`GET /api/compose/proxy-templates/traefik`), fetched when the user asks for it. */
+export function useTraefikTemplate() {
+  return useMutation({
+    mutationFn: () => apiFetch<{ yaml: string }>('/compose/proxy-templates/traefik'),
   })
 }
