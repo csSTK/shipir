@@ -95,7 +95,7 @@ test('in-use refusal stays inline', async ({ page, api }) => {
   await page.getByRole('button', { name: 'More actions for pgdata' }).click()
   await page.getByRole('menuitem', { name: 'Delete' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click()
-  await expect(page.getByRole('dialog').getByRole('alert')).toHaveText('Volume is used by container db.')
+  await expect(page.getByRole('dialog').getByRole('alert')).toHaveText('This resource is in use or protected and cannot be deleted.')
 })
 
 test('viewer sees no delete action', async ({ page, api }) => {

@@ -105,12 +105,12 @@ describe('resource deletion', () => {
     expect(screen.queryByRole('note')).not.toBeInTheDocument()
   })
 
-  it('keeps the dialog open and shows the server message on RESOURCE_IN_USE', async () => {
+  it('keeps the dialog open and shows a translated message on RESOURCE_IN_USE', async () => {
     serve('ADMIN', () => Promise.reject(new ApiError(409, JSON.stringify({ code: 'RESOURCE_IN_USE', message: 'Network is used by 2 containers.' }), 'RESOURCE_IN_USE')))
     renderPage('networks', <NetworksPage />)
     await openDelete('backend')
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Network is used by 2 containers.')
+    expect(await screen.findByRole('alert')).toHaveTextContent('This resource is in use or protected and cannot be deleted.')
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 

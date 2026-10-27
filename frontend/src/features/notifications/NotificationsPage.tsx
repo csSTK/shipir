@@ -73,7 +73,7 @@ function Row({ item, onRead }: { item: AppNotification; onRead: (id: string) => 
       </span>
       <span className={`notif__type notif__type--${style.tone}`}>{NOTIFICATION_TYPE_LABELS[item.type]}</span>
       <div className="notif__body">
-        <p className="notif__message">{item.message}</p>
+        <p className="notif__message">{t(`NotificationsPage.message.${item.type}`, { host: item.hostName, target: target?.label ?? item.hostName })}</p>
         <p className="notif__meta">
           {item.hostId ? (
             <Link to={`/environments/${item.hostId}`}>{item.hostName}</Link>

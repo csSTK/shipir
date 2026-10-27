@@ -24,7 +24,7 @@ test('badge shows the unread count and opening the page lists notifications', as
   await page.goto('/')
   await expect(page.getByLabel('2 unread')).toBeVisible()
   await page.getByRole('link', { name: /^Notifications/ }).click()
-  await expect(page.getByText('Staging is unreachable (a)')).toBeVisible()
+  await expect(page.getByText('Environment "Staging" is down.').first()).toBeVisible()
 })
 
 test('mark as read lowers the badge, mark all read clears it', async ({ page, api }) => {
@@ -78,13 +78,13 @@ test('image update notifications render without crashing', async ({ page, api })
   api.mock('GET', '/api/notifications', {
     body: {
       content: [
-        { ...item('a', false), type: 'IMAGE_UPDATE_APPLIED', message: 'shop images updated' },
+        { ...item('a', false), type: 'IMAGE_UPDATE_APPLIED', message: 'shop images updated', deploymentId: 'd1', deploymentName: 'shop' },
         { ...item('b', false), type: 'IMAGE_UPDATE_FAILED', message: 'shop image update failed' },
       ],
       totalElements: 2,
     },
   })
   await page.goto('/notifications')
-  await expect(page.getByText('shop images updated')).toBeVisible()
+  await expect(page.getByText('Image update applied to "shop".')).toBeVisible()
   await expect(page.getByText('Image update failed', { exact: true })).toBeVisible()
 })

@@ -186,5 +186,6 @@
   "DiskUsageCard.image": "Image",
   "DiskUsageCard.container": "Container",
   "DiskUsageCard.volume": "Volume",
-  "DiskUsageCard.unknown": "unknown"
+  "DiskUsageCard.unknown": "unknown",
+  "deleteResource.resourceInUse": "This resource is in use or protected and cannot be deleted."
 }

@@ -515,5 +515,6 @@
   "ServicesCard.restartName": "Restart {{name}}",
   "ServicesCard.pullImageOf": "Pull image of {{name}}",
   "ServicesCard.moreActionsFor": "More actions for {{name}}",
-  "UptimeCard.shipirMayNotCallThis": "Shipir may not call this address. Private and internal addresses are blocked unless the server sets shipir.egress.allow-private-ranges."
+  "UptimeCard.shipirMayNotCallThis": "Shipir may not call this address. Private and internal addresses are blocked unless the server sets shipir.egress.allow-private-ranges.",
+  "UptimeCheckDialog.theCheckIsInvalid": "The check is invalid."
 }

@@ -17,5 +17,15 @@
   "api.imageUpdateFailed": "Image update failed",
   "api.uptimeCheckDown": "Uptime check down",
   "api.uptimeCheckUp": "Uptime check up",
-  "NotificationsPage.justNow": "just now"
+  "NotificationsPage.justNow": "just now",
+  "NotificationsPage.message.HOST_DOWN": "Environment \"{{host}}\" is down.",
+  "NotificationsPage.message.HOST_UP": "Environment \"{{host}}\" is back up.",
+  "NotificationsPage.message.DEPLOYMENT_FAILED": "Deployment \"{{target}}\" failed.",
+  "NotificationsPage.message.CONTAINER_CRASHED": "Container \"{{target}}\" crashed.",
+  "NotificationsPage.message.CONTAINER_UNHEALTHY": "Container \"{{target}}\" is unhealthy.",
+  "NotificationsPage.message.GIT_AUTO_UPDATE_FAILED": "Git auto-update of \"{{target}}\" failed.",
+  "NotificationsPage.message.IMAGE_UPDATE_APPLIED": "Image update applied to \"{{target}}\".",
+  "NotificationsPage.message.IMAGE_UPDATE_FAILED": "Image update of \"{{target}}\" failed.",
+  "NotificationsPage.message.UPTIME_DOWN": "Uptime check of \"{{target}}\" is down.",
+  "NotificationsPage.message.UPTIME_UP": "Uptime check of \"{{target}}\" is back up."
 }

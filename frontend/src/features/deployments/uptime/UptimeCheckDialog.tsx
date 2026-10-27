@@ -54,7 +54,7 @@ function describe(error: unknown): { field?: keyof Form; message: string } {
     if (error.code === 'UPTIME_CHECK_LIMIT') return { message: i18n.t('deployments:UptimeCheckDialog.thisDeploymentAlreadyHasThe') }
     if (error.code === 'UPTIME_CHECK_NOT_FOUND') return { message: i18n.t('deployments:UptimeCheckDialog.thisCheckNoLongerExists') }
     if (error.status === 403) return { message: i18n.t('deployments:UptimeCheckDialog.youAreNotAllowedTo') }
-    if (error.status === 400 || error.status === 422) return { message: error.details?.join(' ') || error.message }
+    if (error.status === 400 || error.status === 422) return { message: [i18n.t('deployments:UptimeCheckDialog.theCheckIsInvalid'), ...(error.details ?? [])].join(' ') }
   }
   return { message: i18n.t('deployments:UptimeCheckDialog.couldNotSaveTheCheck') }
 }

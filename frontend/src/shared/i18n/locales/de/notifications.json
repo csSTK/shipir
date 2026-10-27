@@ -17,5 +17,15 @@
   "api.imageUpdateFailed": "Image-Update fehlgeschlagen",
   "api.uptimeCheckDown": "Uptime-Check: nicht erreichbar",
   "api.uptimeCheckUp": "Uptime-Check: wieder erreichbar",
-  "NotificationsPage.justNow": "gerade eben"
+  "NotificationsPage.justNow": "gerade eben",
+  "NotificationsPage.message.HOST_DOWN": "Umgebung \"{{host}}\" ist nicht erreichbar.",
+  "NotificationsPage.message.HOST_UP": "Umgebung \"{{host}}\" ist wieder erreichbar.",
+  "NotificationsPage.message.DEPLOYMENT_FAILED": "Deployment \"{{target}}\" ist fehlgeschlagen.",
+  "NotificationsPage.message.CONTAINER_CRASHED": "Container \"{{target}}\" ist abgestürzt.",
+  "NotificationsPage.message.CONTAINER_UNHEALTHY": "Container \"{{target}}\" ist nicht gesund.",
+  "NotificationsPage.message.GIT_AUTO_UPDATE_FAILED": "Git-Auto-Update von \"{{target}}\" ist fehlgeschlagen.",
+  "NotificationsPage.message.IMAGE_UPDATE_APPLIED": "Image-Update für \"{{target}}\" wurde angewendet.",
+  "NotificationsPage.message.IMAGE_UPDATE_FAILED": "Image-Update von \"{{target}}\" ist fehlgeschlagen.",
+  "NotificationsPage.message.UPTIME_DOWN": "Uptime-Check von \"{{target}}\" meldet einen Ausfall.",
+  "NotificationsPage.message.UPTIME_UP": "Uptime-Check von \"{{target}}\" ist wieder erfolgreich."
 }

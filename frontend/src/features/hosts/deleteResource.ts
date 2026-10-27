@@ -25,23 +25,12 @@ export function useDeleteResourceMutation<V>(hostId: string, collection: string,
   })
 }
 
-/** `ApiError.message` is the raw response body; the human text is its `message` field. */
-function serverMessage(error: ApiError): string {
-  try {
-    const parsed: unknown = JSON.parse(error.message)
-    if (parsed && typeof parsed === 'object' && 'message' in parsed && typeof parsed.message === 'string' && parsed.message) return parsed.message
-  } catch {
-    // not JSON: use the text as is
-  }
-  return error.message
-}
-
-/** Maps a failed delete to a message; `RESOURCE_IN_USE` shows the server's own explanation. */
+/** Maps a failed delete to a translated message. */
 export function describeDeleteError(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case 'RESOURCE_IN_USE':
-        return serverMessage(error)
+        return i18n.t('hosts:deleteResource.resourceInUse')
       case 'RESOURCE_NOT_FOUND':
         return i18n.t('hosts:deleteResource.thisResourceNoLongerExists')
       case 'INVALID_RESOURCE_ID':

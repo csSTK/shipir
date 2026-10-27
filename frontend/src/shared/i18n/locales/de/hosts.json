@@ -180,5 +180,6 @@
   "kinds.container": "Container",
   "kinds.image": "Image",
   "kinds.volume": "Volume",
-  "kinds.network": "Netzwerk"
+  "kinds.network": "Netzwerk",
+  "deleteResource.resourceInUse": "Diese Ressource wird verwendet oder ist geschützt und kann nicht gelöscht werden."
 }

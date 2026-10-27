@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { queryClient } from '../../app/queryClient.ts'
 import { apiFetch } from '../../shared/api/client.ts'
+import { i18n } from '../../shared/i18n/index.ts'
 import { NotificationsPage } from './NotificationsPage.tsx'
 import { NOTIFICATION_TYPES, NOTIFICATION_TYPE_LABELS, useUnreadCount, type NotificationType } from './api.ts'
 
@@ -132,8 +133,8 @@ describe('NotificationsPage', () => {
   it('renders the image update types with labels instead of crashing', async () => {
     items = [imageApplied, imageFailed]
     renderPage()
-    expect(await screen.findByText('web images updated')).toBeInTheDocument()
-    expect(screen.getByText('web image update failed')).toBeInTheDocument()
+    expect(await screen.findByText('Image update applied to "web".')).toBeInTheDocument()
+    expect(screen.getByText('Image update of "web" failed.')).toBeInTheDocument()
     expect(screen.getByText('Image update applied')).toBeInTheDocument()
     expect(screen.getByText('Image update failed')).toBeInTheDocument()
   })
@@ -141,8 +142,8 @@ describe('NotificationsPage', () => {
   it('renders the uptime types with labels instead of crashing', async () => {
     items = [uptimeDown, uptimeUp]
     renderPage()
-    expect(await screen.findByText('Uptime check "home" is down')).toBeInTheDocument()
-    expect(screen.getByText('Uptime check "home" is back up')).toBeInTheDocument()
+    expect(await screen.findByText('Uptime check of "web" is down.')).toBeInTheDocument()
+    expect(screen.getByText('Uptime check of "web" is back up.')).toBeInTheDocument()
     expect(screen.getByText('Uptime check down')).toBeInTheDocument()
     expect(screen.getByText('Uptime check up')).toBeInTheDocument()
   })
@@ -157,8 +158,8 @@ describe('NotificationsPage', () => {
 
   it('lists notifications, linking only hosts that still exist', async () => {
     renderPage()
-    expect(await screen.findByText('Staging is unreachable')).toBeInTheDocument()
-    expect(screen.getByText('Old box is back')).toBeInTheDocument()
+    expect(await screen.findByText('Environment "Staging" is down.')).toBeInTheDocument()
+    expect(screen.getByText('Environment "Old box" is back up.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Staging' })).toHaveAttribute('href', '/environments/h1')
     expect(screen.queryByRole('link', { name: 'Old box' })).toBeNull()
     expect(screen.getByText('Host down')).toBeInTheDocument()
@@ -196,10 +197,10 @@ describe('NotificationsPage', () => {
 
   it('filters to unread', async () => {
     renderPage()
-    await screen.findByText('Old box is back')
+    await screen.findByText('Environment "Old box" is back up.')
     fireEvent.click(screen.getByRole('checkbox', { name: 'Unread only' }))
-    await waitFor(() => expect(screen.queryByText('Old box is back')).toBeNull())
-    expect(await screen.findByText('Staging is unreachable')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('Environment "Old box" is back up.')).toBeNull())
+    expect(await screen.findByText('Environment "Staging" is down.')).toBeInTheDocument()
   })
 
   it('marks one as read and lowers the badge', async () => {
@@ -230,4 +231,24 @@ describe('NotificationsPage', () => {
     renderPage()
     expect(await screen.findByRole('alert', {}, { timeout: 5000 })).toHaveTextContent('Could not load notifications.')
   }, 10_000)
+
+  it('builds the message text in German from type and names, not from the stored English message', async () => {
+    items = [down, up, deployFailed, crashed, gitFailed, imageApplied, imageFailed, uptimeDown, uptimeUp]
+    await i18n.changeLanguage('de')
+    try {
+      renderPage()
+      expect(await screen.findByText('Umgebung "Staging" ist nicht erreichbar.')).toBeInTheDocument()
+      expect(screen.getByText('Umgebung "Old box" ist wieder erreichbar.')).toBeInTheDocument()
+      expect(screen.getByText('Deployment "web" ist fehlgeschlagen.')).toBeInTheDocument()
+      expect(screen.getByText('Container "nginx" ist abgestürzt.')).toBeInTheDocument()
+      expect(screen.getByText('Git-Auto-Update von "web" ist fehlgeschlagen.')).toBeInTheDocument()
+      expect(screen.getByText('Image-Update für "web" wurde angewendet.')).toBeInTheDocument()
+      expect(screen.getByText('Image-Update von "web" ist fehlgeschlagen.')).toBeInTheDocument()
+      expect(screen.getByText('Uptime-Check von "web" meldet einen Ausfall.')).toBeInTheDocument()
+      expect(screen.getByText('Uptime-Check von "web" ist wieder erfolgreich.')).toBeInTheDocument()
+      expect(screen.queryByText('Staging is unreachable')).toBeNull()
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
 })

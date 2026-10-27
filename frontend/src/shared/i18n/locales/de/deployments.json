@@ -515,5 +515,6 @@
   "ServicesCard.restartName": "{{name}} neu starten",
   "ServicesCard.pullImageOf": "Image von {{name}} pullen",
   "ServicesCard.moreActionsFor": "Weitere Aktionen für {{name}}",
-  "UptimeCard.shipirMayNotCallThis": "Shipir darf diese Adresse nicht aufrufen. Private und interne Adressen sind gesperrt, solange der Server shipir.egress.allow-private-ranges nicht setzt."
+  "UptimeCard.shipirMayNotCallThis": "Shipir darf diese Adresse nicht aufrufen. Private und interne Adressen sind gesperrt, solange der Server shipir.egress.allow-private-ranges nicht setzt.",
+  "UptimeCheckDialog.theCheckIsInvalid": "Der Check ist ungültig."
 }
