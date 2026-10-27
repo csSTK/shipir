@@ -18,6 +18,7 @@ import dev.bethge.shipir.host.dto.PullImageResponse;
 import dev.bethge.shipir.host.dto.UpdateContainerResourcesRequest;
 import dev.bethge.shipir.docker.dto.VolumeDto;
 import org.springframework.http.HttpStatus;
+import dev.bethge.shipir.host.dto.ProxyDetectionResponse;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -72,6 +73,11 @@ class HostResourcesController {
     @GetMapping("/networks")
     List<NetworkDto> networks(@PathVariable UUID id) {
         return service.networks(id);
+    }
+
+    @GetMapping("/proxy")
+    ProxyDetectionResponse proxy(@PathVariable UUID id) {
+        return service.proxy(id);
     }
 
     @GetMapping("/volumes")

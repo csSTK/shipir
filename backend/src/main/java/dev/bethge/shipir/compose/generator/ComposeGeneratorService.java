@@ -3,9 +3,11 @@ package dev.bethge.shipir.compose.generator;
 import dev.bethge.shipir.common.util.PathValidationException;
 import dev.bethge.shipir.common.util.PathValidationUtil;
 import dev.bethge.shipir.compose.generator.model.ComposeSpec;
+import dev.bethge.shipir.compose.generator.model.DomainSpec;
 import dev.bethge.shipir.compose.generator.model.EnvVarSpec;
 import dev.bethge.shipir.compose.generator.model.NetworkSpec;
 import dev.bethge.shipir.compose.generator.model.PortSpec;
+import dev.bethge.shipir.compose.generator.model.ProxyType;
 import dev.bethge.shipir.compose.generator.model.ServiceSpec;
 import dev.bethge.shipir.compose.generator.model.VolumeMountSpec;
 import dev.bethge.shipir.compose.generator.model.VolumeSpec;
@@ -34,6 +36,11 @@ public class ComposeGeneratorService {
     private static final Pattern DRIVER = Pattern.compile("[a-z0-9][a-z0-9_.-]{0,62}");
     private static final Pattern LABEL_KEY = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.\\-/]{0,254}");
     private static final Pattern IMAGE = Pattern.compile("[^\\s'\"\\\\]+");
+    /** Lower-case DNS name with at least two labels (no localhost, no IP-less single labels), max 253 chars. */
+    private static final Pattern DOMAIN_HOST = Pattern.compile(
+            "(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+");
+    /** Docker's own network name rule (uppercase and dots allowed); no quotes, whitespace, slashes or colons. */
+    private static final Pattern DOCKER_NETWORK = Pattern.compile("[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}");
     private static final Set<String> RESTART = Set.of("no", "always", "on-failure", "unless-stopped");
     private static final Set<String> PROTOCOLS = Set.of("tcp", "udp");
     /** Only used for the syntax checks of PathValidationUtil; the real deployment directory is not known here. */
@@ -87,6 +94,33 @@ public class ComposeGeneratorService {
             }
         }
         detectCycle(spec.services(), errors);
+        detectDomainClashes(spec.services(), errors);
+    }
+
+    /** One domain per service and no two services may share a host or, for Traefik, a router name. */
+    private void detectDomainClashes(List<ServiceSpec> services, List<String> errors) {
+        Set<String> hosts = new HashSet<>();
+        Map<String, String> routerIds = new LinkedHashMap<>();
+        for (ServiceSpec s : services) {
+            if (s == null || s.name() == null || s.domain() == null || s.domain().host() == null
+                    || !DOMAIN_HOST.matcher(s.domain().host()).matches()) {
+                continue;
+            }
+            String host = s.domain().host();
+            String at = "services." + s.name() + ".domain.host";
+            if (!hosts.add(host)) {
+                errors.add(at + ": already used by another service");
+            } else if (s.domain().proxy() == ProxyType.TRAEFIK) {
+                String other = routerIds.putIfAbsent(routerId(host), host);
+                if (other != null) {
+                    errors.add(at + ": Traefik router name collides with the one of " + other);
+                }
+            }
+        }
+    }
+
+    private static String routerId(String host) {
+        return host.replace('.', '-');
     }
 
     private Set<String> declared(String scope, List<String> names, List<String> errors) {
@@ -147,11 +181,37 @@ public class ComposeGeneratorService {
                 errors.add(at + ".labels: value must not be null");
             }
         }
+        if (s.domain() != null) {
+            validateDomain(at, s, errors);
+        }
         for (String d : orEmpty(s.dependsOn())) {
             if (d == null || !serviceNames.contains(d)) {
                 errors.add(at + ".depends_on: unknown service");
             } else if (d.equals(s.name())) {
                 errors.add(at + ".depends_on: a service cannot depend on itself");
+            }
+        }
+    }
+
+    private void validateDomain(String at, ServiceSpec s, List<String> errors) {
+        DomainSpec d = s.domain();
+        if (d.host() == null || !DOMAIN_HOST.matcher(d.host()).matches()) {
+            errors.add(at + ".domain.host: must be a lower-case domain name such as app.example.com");
+        }
+        if (d.port() == null || !validPort(d.port())) {
+            errors.add(at + ".domain.port: container port must be 1-65535");
+        }
+        if (d.proxy() == null) {
+            errors.add(at + ".domain.proxy: must be TRAEFIK or CADDY");
+        }
+        if (d.network() != null && !DOCKER_NETWORK.matcher(d.network()).matches()) {
+            errors.add(at + ".domain.network: invalid network name");
+        }
+        if (d.host() != null && d.port() != null && d.proxy() != null && DOMAIN_HOST.matcher(d.host()).matches()) {
+            for (String key : proxyLabels(s.name(), d).keySet()) {
+                if (orEmpty(s.labels()).containsKey(key)) {
+                    errors.add(at + ".labels: label " + key + " is set by the domain and cannot be set manually");
+                }
             }
         }
     }
@@ -256,11 +316,17 @@ public class ComposeGeneratorService {
             services.put(s.name(), serviceTree(s));
         }
         root.put("services", services);
-        if (!orEmpty(spec.networks()).isEmpty()) {
-            Map<String, Object> networks = new LinkedHashMap<>();
-            for (NetworkSpec n : spec.networks()) {
-                networks.put(n.name(), resourceTree(n.driver(), n.external()));
+        Map<String, Object> networks = new LinkedHashMap<>();
+        for (NetworkSpec n : orEmpty(spec.networks())) {
+            networks.put(n.name(), resourceTree(n.driver(), n.external()));
+        }
+        // A proxy network named by a domain but not declared is the proxy's own, so it already exists.
+        for (ServiceSpec s : spec.services()) {
+            if (s.domain() != null && s.domain().network() != null) {
+                networks.putIfAbsent(s.domain().network(), resourceTree(null, true));
             }
+        }
+        if (!networks.isEmpty()) {
             root.put("networks", networks);
         }
         if (!orEmpty(spec.volumes()).isEmpty()) {
@@ -307,18 +373,64 @@ public class ComposeGeneratorService {
         if (!orEmpty(s.volumes()).isEmpty()) {
             m.put("volumes", s.volumes().stream().map(this::mountString).toList());
         }
-        if (!orEmpty(s.networks()).isEmpty()) {
-            m.put("networks", s.networks());
+        List<String> networks = serviceNetworks(s);
+        if (!networks.isEmpty()) {
+            m.put("networks", networks);
         }
-        if (!orEmpty(s.labels()).isEmpty()) {
-            Map<String, String> labels = new LinkedHashMap<>();
-            s.labels().forEach((k, v) -> labels.put(k, escapeDollar(v)));
+        Map<String, String> labels = new LinkedHashMap<>();
+        orEmpty(s.labels()).forEach((k, v) -> labels.put(k, escapeDollar(v)));
+        if (s.domain() != null) {
+            labels.putAll(proxyLabels(s.name(), s.domain()));
+        }
+        if (!labels.isEmpty()) {
             m.put("labels", labels);
         }
         if (!orEmpty(s.dependsOn()).isEmpty()) {
             m.put("depends_on", s.dependsOn());
         }
         return m;
+    }
+
+    /**
+     * Joining the proxy network must not cut the service off its project network: a service that lists networks
+     * explicitly no longer gets "default", so it is added when the service listed none.
+     */
+    private List<String> serviceNetworks(ServiceSpec s) {
+        List<String> networks = new ArrayList<>(orEmpty(s.networks()));
+        if (s.domain() != null && s.domain().network() != null) {
+            if (networks.isEmpty()) {
+                networks.add("default");
+            }
+            if (!networks.contains(s.domain().network())) {
+                networks.add(s.domain().network());
+            }
+        }
+        return networks;
+    }
+
+    /**
+     * Routing labels of a proxy. Traefik: router and service are named after the domain (unique per host, unlike the
+     * Compose service name), TLS via the {@code websecure} entrypoint and {@code letsencrypt} resolver of the bundled
+     * Traefik template. Caddy: caddy-docker-proxy labels. The domain is already validated, so it holds no backtick.
+     */
+    private Map<String, String> proxyLabels(String service, DomainSpec d) {
+        Map<String, String> labels = new LinkedHashMap<>();
+        if (d.proxy() == ProxyType.TRAEFIK) {
+            String id = routerId(d.host());
+            String router = "traefik.http.routers." + id;
+            labels.put("traefik.enable", "true");
+            if (d.network() != null) {
+                labels.put("traefik.docker.network", d.network());
+            }
+            labels.put(router + ".rule", "Host(`" + d.host() + "`)");
+            labels.put(router + ".entrypoints", "websecure");
+            labels.put(router + ".tls.certresolver", "letsencrypt");
+            labels.put("traefik.http.services." + id + ".loadbalancer.server.port", String.valueOf(d.port()));
+        } else {
+            labels.put("caddy", d.host());
+            labels.put("caddy.reverse_proxy", "{{upstreams " + d.port() + "}}");
+        }
+        return labels;
     }
 
     private String portString(PortSpec p) {

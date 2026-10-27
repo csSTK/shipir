@@ -68,6 +68,15 @@ class ComposeGeneratorApiTest {
                 .cookie(anon).header("X-XSRF-TOKEN", anon.getValue());
     }
 
+    private MockHttpSession sessionOf(String username) throws Exception {
+        Cookie anon = mvc.perform(get("/api/auth/me")).andReturn().getResponse().getCookie("XSRF-TOKEN");
+        MvcResult r = mvc.perform(post("/api/auth/login").cookie(anon).header("X-XSRF-TOKEN", anon.getValue())
+                .contentType(APPLICATION_JSON)
+                .content("{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, PASSWORD))).andReturn();
+        assertThat(r.getResponse().getStatus()).isEqualTo(200);
+        return (MockHttpSession) r.getRequest().getSession(false);
+    }
+
     @Test
     void operatorGetsYaml() throws Exception {
         mvc.perform(generate("operator", VALID))
@@ -91,6 +100,44 @@ class ComposeGeneratorApiTest {
     @Test
     void anonymousUnauthorized() throws Exception {
         mvc.perform(generate(null, VALID)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void serviceWithDomainGetsProxyLabels() throws Exception {
+        String body = """
+                {"spec":{"services":[{"name":"web","image":"nginx",
+                  "domain":{"host":"blog.example.com","port":80,"proxy":"CADDY","network":null}}]}}""";
+        mvc.perform(generate("operator", body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.yaml").value(org.hamcrest.Matchers.containsString("caddy: blog.example.com")));
+    }
+
+    @Test
+    void backtickPayloadInDomainHostIs400WithViolation() throws Exception {
+        String body = """
+                {"spec":{"services":[{"name":"web","image":"nginx",
+                  "domain":{"host":"x.example.com`) || Host(`y","port":80,"proxy":"TRAEFIK","network":null}}]}}""";
+        mvc.perform(generate("operator", body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_COMPOSE_SPEC"))
+                .andExpect(jsonPath("$.details[0]").value(org.hamcrest.Matchers.containsString("domain.host")));
+    }
+
+    @Test
+    void everyRoleCanReadTheTraefikTemplate() throws Exception {
+        for (String user : new String[] {"viewer", "operator"}) {
+            mvc.perform(get("/api/compose/proxy-templates/traefik").session(sessionOf(user)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.yaml").value(org.hamcrest.Matchers.containsString("image: traefik:v3.1")));
+        }
+    }
+
+    @Test
+    void unknownProxyTemplateIs404AndAnonymousIs401() throws Exception {
+        mvc.perform(get("/api/compose/proxy-templates/caddy").session(sessionOf("operator")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PROXY_TEMPLATE_NOT_FOUND"));
+        mvc.perform(get("/api/compose/proxy-templates/traefik")).andExpect(status().isUnauthorized());
     }
 
     @Test

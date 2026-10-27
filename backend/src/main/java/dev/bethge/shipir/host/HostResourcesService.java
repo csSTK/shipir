@@ -32,6 +32,7 @@ import dev.bethge.shipir.host.dto.HostDeploymentResponse;
 import dev.bethge.shipir.host.dto.PrunePreviewResponse;
 import dev.bethge.shipir.host.dto.PruneRequest;
 import dev.bethge.shipir.host.dto.PruneResponse;
+import dev.bethge.shipir.host.dto.ProxyDetectionResponse;
 import dev.bethge.shipir.docker.dto.VolumeDto;
 import dev.bethge.shipir.common.net.EgressPolicy;
 import dev.bethge.shipir.compose.execution.RegistryAuthSource;
@@ -200,6 +201,16 @@ public class HostResourcesService {
     public List<NetworkDto> networks(UUID hostId) {
         requireView(hostId);
         return access.hostFullyVisible(hostId) ? call(hostId, networks::list) : List.of();
+    }
+
+    /** Reverse proxy (Traefik or caddy-docker-proxy) running on a fully visible host; none otherwise. */
+    public ProxyDetectionResponse proxy(UUID hostId) {
+        requireView(hostId);
+        if (!access.hostFullyVisible(hostId)) {
+            return ProxyDetectionResponse.none();
+        }
+        return call(hostId, (id, endpoint) -> ProxyDetector.detect(containers.listContainers(id, endpoint),
+                containerId -> containers.inspect(id, endpoint, containerId)));
     }
 
     public List<VolumeDto> volumes(UUID hostId) {

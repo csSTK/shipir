@@ -1,0 +1,32 @@
+# Traefik reverse proxy with automatic HTTPS (Let's Encrypt, TLS challenge).
+# Set ACME_EMAIL in the .env file of this deployment. Ports 80 and 443 must be reachable from the internet.
+# Services get routed by labels (Shipir's wizard writes them when you enter a domain) and join the "proxy" network.
+services:
+  traefik:
+    image: traefik:v3.1
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=proxy
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?set ACME_EMAIL in .env}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      # Mounting the Docker socket is root-equivalent on this host (read-only does not limit the API). Only ADMINs may deploy this.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+    networks:
+      - proxy
+volumes:
+  letsencrypt: {}
+networks:
+  proxy:
+    name: proxy
