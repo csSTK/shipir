@@ -42,7 +42,7 @@ class UserLocaleTest {
     @BeforeEach
     void resetAdmin() {
         // A VIEWER has no setup step beyond the password (an ADMIN would be gated until a host exists).
-        jdbc.update("DELETE FROM users WHERE username = 'viewer'");
+        jdbc.update("DELETE FROM users WHERE username IN ('viewer', 'fresh')");
         jdbc.update("INSERT INTO users (username, password_hash, role, password_changed_at) VALUES ('viewer', ?, 'VIEWER', now())",
                 encoder.encode(ADMIN_PASSWORD));
     }
@@ -130,5 +130,25 @@ class UserLocaleTest {
                         .cookie(csrf).header("X-XSRF-TOKEN", csrf.getValue())
                         .contentType(APPLICATION_JSON).content("{\"locale\":\"de\"}"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void putLocaleIsBlockedBySetupGateUntilThePasswordIsChanged() throws Exception {
+        // password_changed_at NULL = the initial password step is still pending, so the gate is active.
+        jdbc.update("INSERT INTO users (username, password_hash, role) VALUES ('fresh', ?, 'VIEWER')", encoder.encode(ADMIN_PASSWORD));
+        Cookie csrf = csrfCookie();
+        MvcResult login = mvc.perform(post("/api/auth/login")
+                .cookie(csrf).header("X-XSRF-TOKEN", csrf.getValue())
+                .contentType(APPLICATION_JSON)
+                .content("{\"username\":\"fresh\",\"password\":\"%s\"}".formatted(ADMIN_PASSWORD))).andReturn();
+        MockHttpSession session = (MockHttpSession) login.getRequest().getSession(false);
+
+        mvc.perform(put("/api/auth/me/locale").session(session)
+                        .cookie(csrf).header("X-XSRF-TOKEN", csrf.getValue())
+                        .contentType(APPLICATION_JSON).content("{\"locale\":\"de\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("SETUP_REQUIRED"));
+
+        assertThat(jdbc.queryForObject("SELECT locale FROM users WHERE username = 'fresh'", String.class)).isNull();
     }
 }

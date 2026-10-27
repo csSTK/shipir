@@ -52,6 +52,40 @@ describe('App language', () => {
   })
 })
 
+describe('App language without a session', () => {
+  afterEach(() => vi.unstubAllGlobals())
+  const germanBrowser = () => vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['de-DE'])
+
+  it('shows the login page in the browser language', async () => {
+    germanBrowser()
+    route({ 'GET /auth/me': unauthorized })
+    render(<App />)
+
+    expect(await screen.findByLabelText('Benutzername')).toBeInTheDocument()
+  })
+
+  it('falls back to the browser language after the user logs out', async () => {
+    germanBrowser()
+    let loggedIn = true
+    route({
+      'GET /auth/me': () => (loggedIn ? { username: 'admin', role: 'ADMIN', setupRequired: false, locale: 'en' } : unauthorized()),
+      'GET /hosts/overview': () => [],
+      'POST /auth/logout': () => {
+        loggedIn = false
+      },
+    })
+    render(<App />)
+    expect(await screen.findByRole('link', { name: 'Environments' })).toBeInTheDocument()
+
+    const trigger = screen.getByRole('button', { name: /admin/ })
+    trigger.focus()
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Sign out' }))
+
+    expect(await screen.findByLabelText('Benutzername')).toBeInTheDocument()
+  })
+})
+
 describe('App auth gate', () => {
   it('renders the login page when /me answers 401', async () => {
     route({ 'GET /auth/me': unauthorized })

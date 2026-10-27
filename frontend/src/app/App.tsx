@@ -41,11 +41,13 @@ function AuthGate() {
   const { t } = useTranslation('app')
   const { data: user, isPending, isError } = useCurrentUser()
   const logout = useLogout()
-  // The user's language (or the browser's while none is chosen) applies before the first paint with the user.
+  // The user's language (or the browser's while none is chosen) applies before the first paint. Without a
+  // session (login, reset, setup, after logout) it is the browser language, never the previous user's.
   const locale = user?.locale
+  const settled = !isPending && !isError
   useLayoutEffect(() => {
-    if (user) applyLanguage(resolveLanguage(locale))
-  }, [user, locale])
+    if (settled) applyLanguage(resolveLanguage(locale))
+  }, [settled, locale])
 
   if (isPending) return <div aria-busy="true" />
   if (isError) return <p role="alert">{t('App.couldNotReachTheServer')}</p>

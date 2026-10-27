@@ -40,4 +40,11 @@ test.describe('browser language German', () => {
     await page.goto('/')
     await expect(page.getByRole('link', { name: 'Umgebungen' })).toBeVisible()
   })
+
+  test('shows the login page in the browser language without a session', async ({ page, api }) => {
+    api.mock('GET', '/api/auth/me', { status: 401, body: { message: 'unauthorized' } })
+    await page.goto('/')
+    await expect(page.getByLabel('Benutzername')).toBeVisible()
+    await expect(page.locator('html')).toHaveAttribute('lang', 'de')
+  })
 })
