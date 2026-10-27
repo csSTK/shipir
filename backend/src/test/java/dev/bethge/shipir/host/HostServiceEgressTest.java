@@ -23,7 +23,7 @@ class HostServiceEgressTest {
 
     private HostService service(boolean allowPrivate) {
         return new HostService(null, null, null, docker, null, null,
-                new EgressPolicy(new EgressProperties(allowPrivate)), null, null);
+                new EgressPolicy(new EgressProperties(allowPrivate)), null, null, null);
     }
 
     private static ConnectionTestRequest tcp(String host) {

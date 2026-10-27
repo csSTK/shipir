@@ -4,6 +4,7 @@ import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.auth.UserRepository;
 import dev.bethge.shipir.common.net.EgressDeniedException;
 import dev.bethge.shipir.common.net.EgressPolicy;
+import dev.bethge.shipir.common.security.HostRemovedEvent;
 import dev.bethge.shipir.common.security.SecretCipher;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
@@ -18,6 +19,7 @@ import dev.bethge.shipir.host.dto.CreateHostRequest;
 import dev.bethge.shipir.host.dto.HostResponse;
 import dev.bethge.shipir.host.dto.SetHostTagsRequest;
 import dev.bethge.shipir.permission.CurrentAccess;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -44,11 +46,13 @@ public class HostService {
     private final CurrentAccess access;
     private final EgressPolicy egress;
     private final HostTagService tags;
+    private final ApplicationEventPublisher events;
     private final TransactionTemplate tx;
 
     HostService(DockerHostRepository hosts, UserRepository users, SecretCipher cipher,
                 DockerSystemService docker, DockerHostConnectionManager connections, CurrentAccess access,
-                EgressPolicy egress, HostTagService tags, PlatformTransactionManager transactions) {
+                EgressPolicy egress, HostTagService tags, ApplicationEventPublisher events,
+                PlatformTransactionManager transactions) {
         this.hosts = hosts;
         this.users = users;
         this.cipher = cipher;
@@ -57,6 +61,7 @@ public class HostService {
         this.access = access;
         this.egress = egress;
         this.tags = tags;
+        this.events = events;
         this.tx = new TransactionTemplate(transactions);
     }
 
@@ -202,6 +207,7 @@ public class HostService {
         hosts.delete(find(id));
         hosts.flush();
         connections.evict(id);
+        events.publishEvent(new HostRemovedEvent(id));
     }
 
     private DockerHost find(UUID id) {

@@ -193,6 +193,24 @@ public class DockerEventStreamService {
         }
     }
 
+    /** Drops every subscription on a deleted host, whoever holds it. */
+    void dropHost(UUID hostId) {
+        List<HostStream> all;
+        synchronized (streams) {
+            all = new ArrayList<>(streams.values());
+        }
+        for (HostStream stream : all) {
+            if (!stream.hostId.equals(hostId)) {
+                continue;
+            }
+            List<Subscription> dropped;
+            synchronized (stream) {
+                dropped = List.copyOf(stream.subscribers);
+            }
+            dropped.forEach(s -> unsubscribe(s.sessionId, s.subscriptionId));
+        }
+    }
+
     int subscriberCount(UUID hostId) {
         HostStream stream;
         synchronized (streams) {

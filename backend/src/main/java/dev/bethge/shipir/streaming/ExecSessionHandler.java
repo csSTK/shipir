@@ -378,6 +378,15 @@ public class ExecSessionHandler {
         }
     }
 
+    /** Ends every open console on the host (it was deleted). */
+    public void revokeHost(UUID hostId) {
+        for (Session s : List.copyOf(sessions.values())) {
+            if (s.hostId.equals(hostId)) {
+                finish(s, ExecMessage.Status.ENDED, "ACCESS_REVOKED");
+            }
+        }
+    }
+
     // public: this bean is proxied for @Auditable, and event/scheduling callbacks only reach the target through public methods
     @EventListener
     public void onHttpSessionDestroyed(HttpSessionDestroyedEvent event) {

@@ -133,6 +133,20 @@ class DockerEventStreamServiceTest {
     }
 
     @Test
+    void dropHostEndsEverySubscriptionOfThatHostAndClosesTheStream() {
+        service.subscribe(hostId, "alice", "s1", "a");
+        service.subscribe(hostId, "bob", "s2", "b");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> stub.sinks.size() == 1);
+
+        service.dropHost(java.util.UUID.randomUUID());
+        assertThat(service.subscriberCount(hostId)).isEqualTo(2);
+
+        service.dropHost(hostId);
+        assertThat(service.subscriberCount(hostId)).isZero();
+        await().atMost(5, TimeUnit.SECONDS).until(() -> stub.closed.get() == 1);
+    }
+
+    @Test
     void connectedStatusThenDebouncedBatchOfDistinctEvents() {
         service.subscribe(hostId, "u", "s1", "a");
         await().atMost(5, TimeUnit.SECONDS).until(() -> !stub.sinks.isEmpty());

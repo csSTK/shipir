@@ -211,6 +211,24 @@ public class LogStreamHandler {
         }
     }
 
+    /** Drops every subscription on a deleted host, whoever holds it. */
+    void dropHost(UUID hostId) {
+        List<Stream> all;
+        synchronized (streams) {
+            all = new ArrayList<>(streams.values());
+        }
+        for (Stream stream : all) {
+            if (!stream.target.hostId().equals(hostId)) {
+                continue;
+            }
+            List<Subscription> dropped;
+            synchronized (stream) {
+                dropped = List.copyOf(stream.subscribers);
+            }
+            dropped.forEach(s -> unsubscribe(s.sessionId, s.subscriptionId));
+        }
+    }
+
     /** Subscribers of a container across all option variants. */
     int subscriberCount(Target target) {
         List<Stream> matching;

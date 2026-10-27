@@ -1,6 +1,7 @@
 package dev.bethge.shipir.streaming;
 
 import dev.bethge.shipir.common.security.DeploymentRemovedEvent;
+import dev.bethge.shipir.common.security.HostRemovedEvent;
 import dev.bethge.shipir.common.security.UserAccessChangedEvent;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -42,5 +43,13 @@ class AccessRevalidator {
                 (hostId, deploymentId) -> access.mayExec(user, hostId, deploymentId, execSessions.operatorEnabled()));
         logStreams.revalidate(user, hostId -> access.hostFullyVisible(user, hostId));
         eventStreams.revalidate(user, hostId -> access.hostFullyVisible(user, hostId));
+    }
+
+    /** A deleted host takes its consoles and log/event subscriptions with it. */
+    @TransactionalEventListener(fallbackExecution = true)
+    void onHostRemoved(HostRemovedEvent event) {
+        execSessions.revokeHost(event.hostId());
+        logStreams.dropHost(event.hostId());
+        eventStreams.dropHost(event.hostId());
     }
 }
