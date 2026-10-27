@@ -31,6 +31,7 @@ This is a learning and portfolio project focused on Java backend development. Th
 - **Deployments (Compose projects):**
   - Create deployments from a bundled app template (nginx, postgres, wordpress, ...), with a form wizard that generates the YAML, or write it yourself in an advanced editor with schema validation.
   - Deploy, stop and pull, with live output.
+  - **Domains and HTTPS:** a service in the wizard can get a domain. Shipir detects a running Traefik or caddy-docker-proxy on the host and generates the proxy labels and network (Traefik routers expect an entrypoint `websecure` and a resolver `letsencrypt`). Without a proxy, the wizard offers a bundled Traefik template (needs an ADMIN to deploy, as it mounts the Docker socket).
   - Every deploy is versioned, so you can see history and roll back.
   - Environment variables per deployment, stored encrypted.
   - Deployments from a (private) Git repository with an access token: Pull & redeploy, and optional polling that redeploys on new commits.
