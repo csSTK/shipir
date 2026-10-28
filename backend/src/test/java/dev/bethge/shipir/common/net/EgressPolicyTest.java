@@ -34,6 +34,20 @@ class EgressPolicyTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"0.0.0.1", "0.1.2.3", "0.255.255.255", "192.0.0.0", "192.0.0.1", "192.0.0.255",
+            "198.18.0.0", "198.18.5.5", "198.19.255.255", "::ffff:0.1.2.3", "64:ff9b::c612:101"})
+    void deniesZeroNetworkIetfProtocolAndBenchmarkRanges(String literal) throws Exception {
+        assertThat(allowed(deny(), literal)).as(literal).isFalse();
+        assertThat(allowed(allowPrivate(), literal)).as(literal + " with opt-in").isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"1.0.0.1", "192.0.1.1", "192.0.2.1", "198.17.255.255", "198.20.0.0"})
+    void allowsAddressesJustOutsideSpecialUseRanges(String literal) throws Exception {
+        assertThat(allowed(deny(), literal)).as(literal).isTrue();
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"93.184.216.34", "8.8.8.8", "172.32.0.1", "2606:4700:4700::1111", "::ffff:8.8.8.8"})
     void allowsPublicAddresses(String literal) throws Exception {
         assertThat(allowed(deny(), literal)).as(literal).isTrue();

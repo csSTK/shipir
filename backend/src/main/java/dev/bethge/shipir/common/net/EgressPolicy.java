@@ -22,7 +22,7 @@ import java.util.Set;
  *   <li>{@link #dnsResolver()}: the same pinned resolution for other Apache HttpClient based code;</li>
  *   <li>{@link #resolve(String)}: for code that opens its own sockets.</li>
  * </ul>
- * Denied: unspecified/any-local, link-local (169.254/16, fe80::/10), multicast, broadcast/reserved, known cloud metadata
+ * Denied: unspecified/any-local, 0.0.0.0/8, 192.0.0.0/24, 198.18.0.0/15, link-local (169.254/16, fe80::/10), multicast, broadcast/reserved, known cloud metadata
  * addresses and hostnames, and (unless {@code shipir.egress.allow-private-ranges}) loopback, RFC 1918, ULA and CGNAT.
  * IPv4-mapped and NAT64-embedded IPv4 addresses are judged by the IPv4 they carry. A host is denied if <em>any</em> of
  * its addresses is denied. A denied and an unresolvable host are indistinguishable to callers.
@@ -148,8 +148,14 @@ public class EgressPolicy {
 
     private static boolean isReserved(InetAddress ip) {
         if (ip instanceof Inet4Address) {
-            int first = ip.getAddress()[0] & 0xff;
-            return first >= 240; // 240/4 reserved, includes 255.255.255.255
+            byte[] b = ip.getAddress();
+            int first = b[0] & 0xff;
+            int second = b[1] & 0xff;
+            int third = b[2] & 0xff;
+            return first == 0 // 0.0.0.0/8 "this network"
+                    || first >= 240 // 240/4 reserved, includes 255.255.255.255
+                    || (first == 192 && second == 0 && third == 0) // 192.0.0.0/24 IETF protocol assignments
+                    || (first == 198 && (second == 18 || second == 19)); // 198.18.0.0/15 benchmarking
         }
         return false;
     }
