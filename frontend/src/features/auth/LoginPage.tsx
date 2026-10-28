@@ -30,7 +30,8 @@ function readOidcError(): string | null {
     const code = new URLSearchParams(window.location.search).get('oidc_error')
     if (code === null) return null
     window.history.replaceState(null, '', window.location.pathname)
-    return OIDC_ERRORS[code] ?? OIDC_GENERIC_ERROR()
+    // Own keys only: a plain object lookup would resolve `constructor`, `toString`, `__proto__` etc. from Object.prototype.
+    return Object.hasOwn(OIDC_ERRORS, code) ? OIDC_ERRORS[code] : OIDC_GENERIC_ERROR()
   } catch {
     return null
   }

@@ -99,4 +99,12 @@ describe('LoginPage single sign-on', () => {
     renderLogin({ enabled: true, displayName: 'x', localLoginEnabled: true }, '?oidc_error=%3Cb%3Eevil')
     expect(await screen.findByText('Single sign-on failed. Please try again.')).toBeInTheDocument()
   })
+
+  it.each(['constructor', 'toString', '__proto__'])(
+    'shows the generic message for an inherited object key such as %s',
+    async (code) => {
+      renderLogin({ enabled: true, displayName: 'x', localLoginEnabled: true }, `?oidc_error=${code}`)
+      expect(await screen.findByText('Single sign-on failed. Please try again.')).toBeInTheDocument()
+    },
+  )
 })
