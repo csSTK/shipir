@@ -10,6 +10,14 @@
   font-weight: var(--weight-medium);
   color: var(--color-text);
 }
+.ui-field--bare .ui-field__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .ui-field__help,
 .ui-field__error {
   margin: 0;

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Badge, Button, Card, Switch } from '../../shared/ui/index.ts'
+import { Badge, Button, Card, Switch, TextField } from '../../shared/ui/index.ts'
 import { useSetImageAutoUpdate, type ImageAutoUpdateInfo } from './api.ts'
 import { describeDeploymentError } from './deploymentErrors.ts'
 import { useTranslation } from 'react-i18next'
@@ -75,28 +75,24 @@ export function ImageAutoUpdatePanel({
         <fieldset className="ia-window" disabled={!canWrite}>
           <legend>{t('ImageAutoUpdatePanel.updateWindowUtc')}</legend>
           <div className="ia-window__times">
-            <label className="ui-form-field">
-              <span>{t('ImageAutoUpdatePanel.windowStartUtc')}</span>
-              <input
-                type="time"
-                value={start}
-                onChange={(e) => {
-                  setStart(e.target.value)
-                  setSaved(false)
-                }}
-              />
-            </label>
-            <label className="ui-form-field">
-              <span>{t('ImageAutoUpdatePanel.windowEndUtc')}</span>
-              <input
-                type="time"
-                value={end}
-                onChange={(e) => {
-                  setEnd(e.target.value)
-                  setSaved(false)
-                }}
-              />
-            </label>
+            <TextField
+              label={t('ImageAutoUpdatePanel.windowStartUtc')}
+              type="time"
+              value={start}
+              onChange={(e) => {
+                setStart(e.target.value)
+                setSaved(false)
+              }}
+            />
+            <TextField
+              label={t('ImageAutoUpdatePanel.windowEndUtc')}
+              type="time"
+              value={end}
+              onChange={(e) => {
+                setEnd(e.target.value)
+                setSaved(false)
+              }}
+            />
           </div>
           {!start && !end ? (
             <p className="sd-muted">

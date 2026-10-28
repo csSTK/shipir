@@ -25,43 +25,13 @@
 .ccd__row--mount {
   grid-template-columns: auto 1fr 1fr auto auto;
 }
-.ccd__row input,
-.ccd__row select {
-  font: inherit;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-sunken);
-  color: inherit;
-  min-width: 0;
-}
-.ccd__row input:focus-visible,
-.ccd__row select:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 2px;
-}
 .ccd__row-error {
   grid-column: 1 / -1;
   margin: 0;
-}
-.ccd__check {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-body-size);
-  cursor: pointer;
 }
 @media (max-width: 600px) {
   .ccd__row,
   .ccd__row--mount {
     grid-template-columns: 1fr 1fr;
   }
-}
-.ccd__field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.ccd__field .ui-error {
-  margin: 0;
 }

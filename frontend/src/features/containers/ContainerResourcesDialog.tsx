@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Button, Dialog } from '../../shared/ui/index.ts'
+import { Button, Dialog, Select, TextField } from '../../shared/ui/index.ts'
 import { describeResourcesError, useUpdateContainerResources, type ResourcesSpec, type RestartPolicy } from './api.ts'
 import type { ContainerDetails } from './details/api.ts'
 import { useTranslation } from 'react-i18next'
@@ -58,46 +58,39 @@ export function ContainerResourcesDialog({ hostId, container, onClose }: { hostI
     <Dialog size="lg" open onOpenChange={(open) => !open && onClose()} title={t('ContainerResourcesDialog.resourceLimits')} description={t('ContainerResourcesDialog.appliedToNameWithoutRestarting', { name: container.name })}>
       <form className="ui-form" onSubmit={submit} noValidate>
         <div className="ui-form-row">
-          <label className="ui-form-field">
-            {t('ContainerResourcesDialog.memoryLimitMib')}
-            <input
-              value={memory}
-              onChange={(e) => setMemory(e.target.value)}
-              inputMode="decimal"
-              placeholder={t('ContainerResourcesDialog.unchanged')}
-              aria-invalid={touched && problems.memory ? true : undefined}
-              autoComplete="off"
-              autoFocus
-            />
-          </label>
-          <label className="ui-form-field">
-            {t('ContainerResourcesDialog.cpus')}
-            <input
-              value={cpus}
-              onChange={(e) => setCpus(e.target.value)}
-              inputMode="decimal"
-              placeholder={t('ContainerResourcesDialog.unchanged')}
-              aria-invalid={touched && problems.cpus ? true : undefined}
-              autoComplete="off"
-            />
-          </label>
+          <TextField
+            label={t('ContainerResourcesDialog.memoryLimitMib')}
+            value={memory}
+            onChange={(e) => setMemory(e.target.value)}
+            inputMode="decimal"
+            placeholder={t('ContainerResourcesDialog.unchanged')}
+            error={touched ? problems.memory : null}
+            autoComplete="off"
+            autoFocus
+          />
+          <TextField
+            label={t('ContainerResourcesDialog.cpus')}
+            value={cpus}
+            onChange={(e) => setCpus(e.target.value)}
+            inputMode="decimal"
+            placeholder={t('ContainerResourcesDialog.unchanged')}
+            error={touched ? problems.cpus : null}
+            autoComplete="off"
+          />
         </div>
         <p className="ui-hint">{t('ContainerResourcesDialog.leaveAFieldEmptyTo')}</p>
-        <label className="ui-form-field">
-          {t('ContainerResourcesDialog.restartPolicy')}
-          <select value={policy} onChange={(e) => setPolicy(e.target.value as RestartPolicy)}>
-            {POLICIES.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </label>
-        {touched && Object.values(problems).map((p) => (
-          <p key={p} role="alert" className="ui-error">
-            {p}
+        <Select label={t('ContainerResourcesDialog.restartPolicy')} value={policy} onChange={(e) => setPolicy(e.target.value as RestartPolicy)}>
+          {POLICIES.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </Select>
+        {touched && problems.form && (
+          <p role="alert" className="ui-error">
+            {problems.form}
           </p>
-        ))}
+        )}
         {error && (
           <p role="alert" className="ui-error">
             {error}

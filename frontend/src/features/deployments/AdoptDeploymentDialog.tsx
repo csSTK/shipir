@@ -73,8 +73,8 @@ export function AdoptDeploymentDialog({ hostId, project, onClose }: { hostId: st
         </p>
         {manual && (
           <div className="ui-form">
-            <div className="ui-form-field">
-              <span>{t('AdoptDeploymentDialog.composeFile')}</span>
+            <div className="ui-field">
+              <span className="ui-field__label">{t('AdoptDeploymentDialog.composeFile')}</span>
               <YamlEditor label={t('AdoptDeploymentDialog.composeFile2')} value={yaml} onChange={setYaml} height="260px" error={yamlError} />
             </div>
             <EnvEditor value={env} onChange={setEnv} />

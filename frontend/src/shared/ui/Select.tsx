@@ -1,6 +1,7 @@
 import { ChevronDown } from 'lucide-react'
 import { forwardRef, type ReactNode, type SelectHTMLAttributes } from 'react'
 import { FormField } from './FormField.tsx'
+import './FormField.css'
 import './Select.css'
 
 export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'id'> {
@@ -17,7 +18,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   ref,
 ) {
   return (
-    <div className={hideLabel ? 'ui-select--bare' : undefined}>
+    <div className={hideLabel ? 'ui-field--bare' : undefined}>
       <FormField label={label} help={help} error={error}>
         {(control) => (
           <span className="ui-select">

@@ -14,7 +14,7 @@ import {
 } from './containerForm.ts'
 import type { ContainerDetails } from './details/api.ts'
 import './CreateContainerDialog.css'
-import { Button, Dialog } from '../../shared/ui/index.ts'
+import { Button, Dialog, Select, Switch, TextField } from '../../shared/ui/index.ts'
 import { useTranslation } from 'react-i18next'
 import i18n from 'i18next'
 
@@ -94,42 +94,36 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
     <Dialog size="lg" open onOpenChange={(open) => !open && onClose()} title={TITLES[mode]}>
       <form className="ui-form ccd" onSubmit={submit} noValidate>
         <div className="ui-form-row">
-          <div className="ccd__field">
-            <label className="ui-form-field">
-            {t('CreateContainerDialog.image')}
-            <input
-              value={form.image}
-              onChange={(e) => set('image', e.target.value)}
-              placeholder="nginx:1.27"
-              aria-invalid={show('image') ? true : undefined}
-              autoComplete="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              autoFocus
-            />
-            </label>
-            {fieldError('image')}
-          </div>
-          <div className="ccd__field">
-            <label className="ui-form-field">
-            {mode === 'create' ? t('CreateContainerDialog.nameOptional') : t('CreateContainerDialog.name')}
-            <input
-              value={form.name}
-              disabled={mode === 'edit'}
-              onChange={(e) => set('name', e.target.value)}
-              aria-invalid={show('name') ? true : undefined}
-              autoComplete="off"
-              autoCapitalize="off"
-              spellCheck={false}
-            />
-            </label>
-            {fieldError('name')}
-          </div>
+          <TextField
+            label={t('CreateContainerDialog.image')}
+            value={form.image}
+            onChange={(e) => set('image', e.target.value)}
+            placeholder="nginx:1.27"
+            error={show('image')}
+            autoComplete="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            autoFocus
+          />
+          <TextField
+            label={mode === 'create' ? t('CreateContainerDialog.nameOptional') : t('CreateContainerDialog.name')}
+            value={form.name}
+            disabled={mode === 'edit'}
+            onChange={(e) => set('name', e.target.value)}
+            error={show('name')}
+            autoComplete="off"
+            autoCapitalize="off"
+            spellCheck={false}
+          />
         </div>
-        <label className="ui-form-field">
-          {t('CreateContainerDialog.commandOptional')}
-          <input value={form.command} onChange={(e) => set('command', e.target.value)} placeholder={t('CreateContainerDialog.sleep3600')} autoComplete="off" spellCheck={false} />
-        </label>
+        <TextField
+          label={t('CreateContainerDialog.commandOptional')}
+          value={form.command}
+          onChange={(e) => set('command', e.target.value)}
+          placeholder={t('CreateContainerDialog.sleep3600')}
+          autoComplete="off"
+          spellCheck={false}
+        />
         {mode !== 'create' && <p className="ui-hint">{t('CreateContainerDialog.theEntrypointOfTheImage')}</p>}
         {mode !== 'create' && (source?.networks.length ?? 0) > 1 && (
           <p role="note" className="ui-hint">
@@ -141,26 +135,33 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
           <legend>{t('CreateContainerDialog.ports')}</legend>
           {form.ports.map((p, i) => (
             <div className="ccd__row" key={i}>
-              <input
-                aria-label={t('CreateContainerDialog.portValueHostPort', { value: i + 1 })}
+              <TextField
+                label={t('CreateContainerDialog.portValueHostPort', { value: i + 1 })}
+                hideLabel
                 placeholder={t('CreateContainerDialog.hostRandom')}
                 inputMode="numeric"
                 value={p.hostPort}
                 onChange={(e) => setPort(i, { hostPort: e.target.value })}
                 aria-invalid={show(`port${i}host`) ? true : undefined}
               />
-              <input
-                aria-label={t('CreateContainerDialog.portValueContainerPort', { value: i + 1 })}
+              <TextField
+                label={t('CreateContainerDialog.portValueContainerPort', { value: i + 1 })}
+                hideLabel
                 placeholder={t('CreateContainerDialog.container')}
                 inputMode="numeric"
                 value={p.containerPort}
                 onChange={(e) => setPort(i, { containerPort: e.target.value })}
                 aria-invalid={show(`port${i}container`) ? true : undefined}
               />
-              <select aria-label={t('CreateContainerDialog.portValueProtocol', { value: i + 1 })} value={p.protocol} onChange={(e) => setPort(i, { protocol: e.target.value as 'tcp' | 'udp' })}>
+              <Select
+                label={t('CreateContainerDialog.portValueProtocol', { value: i + 1 })}
+                hideLabel
+                value={p.protocol}
+                onChange={(e) => setPort(i, { protocol: e.target.value as 'tcp' | 'udp' })}
+              >
                 <option value="tcp">{t('CreateContainerDialog.tcp')}</option>
                 <option value="udp">{t('CreateContainerDialog.udp')}</option>
-              </select>
+              </Select>
               <Button variant="ghost" aria-label={t('CreateContainerDialog.removePortValue', { value: i + 1 })} onClick={() => set('ports', form.ports.filter((_, j) => j !== i))}>
                 {t('CreateContainerDialog.remove')}
               </Button>
@@ -184,15 +185,21 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
           {form.mounts.map((m, i) => (
             <div className="ccd__row ccd__row--mount" key={i}>
               {isAdmin ? (
-                <select aria-label={t('CreateContainerDialog.mountValueType', { value: i + 1 })} value={m.type} onChange={(e) => setMount(i, { type: e.target.value as 'VOLUME' | 'BIND' })}>
+                <Select
+                  label={t('CreateContainerDialog.mountValueType', { value: i + 1 })}
+                  hideLabel
+                  value={m.type}
+                  onChange={(e) => setMount(i, { type: e.target.value as 'VOLUME' | 'BIND' })}
+                >
                   <option value="VOLUME">{t('CreateContainerDialog.volume')}</option>
                   <option value="BIND">{t('CreateContainerDialog.bindPath')}</option>
-                </select>
+                </Select>
               ) : (
                 <span className="ui-hint">{t('CreateContainerDialog.volume')}</span>
               )}
-              <input
-                aria-label={t('CreateContainerDialog.mountValueSource', { value: i + 1 })}
+              <TextField
+                label={t('CreateContainerDialog.mountValueSource', { value: i + 1 })}
+                hideLabel
                 placeholder={m.type === 'VOLUME' ? t('CreateContainerDialog.volumeName') : '/host/path'}
                 value={m.source}
                 onChange={(e) => setMount(i, { source: e.target.value })}
@@ -200,8 +207,9 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
                 autoComplete="off"
                 spellCheck={false}
               />
-              <input
-                aria-label={t('CreateContainerDialog.mountValueTarget', { value: i + 1 })}
+              <TextField
+                label={t('CreateContainerDialog.mountValueTarget', { value: i + 1 })}
+                hideLabel
                 placeholder="/container/path"
                 value={m.target}
                 onChange={(e) => setMount(i, { target: e.target.value })}
@@ -209,9 +217,12 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
                 autoComplete="off"
                 spellCheck={false}
               />
-              <label className="ccd__check">
-                <input type="checkbox" checked={m.readOnly} onChange={(e) => setMount(i, { readOnly: e.target.checked })} aria-label={t('CreateContainerDialog.mountValueReadOnly', { value: i + 1 })} /> {t('CreateContainerDialog.readOnly')}
-              </label>
+              <Switch
+                label={t('CreateContainerDialog.readOnly')}
+                aria-label={t('CreateContainerDialog.mountValueReadOnly', { value: i + 1 })}
+                checked={m.readOnly}
+                onChange={(e) => setMount(i, { readOnly: e.target.checked })}
+              />
               <Button variant="ghost" aria-label={t('CreateContainerDialog.removeMountValue', { value: i + 1 })} onClick={() => set('mounts', form.mounts.filter((_, j) => j !== i))}>
                 {t('CreateContainerDialog.remove')}
               </Button>
@@ -233,44 +244,28 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
         {fieldError('env')}
 
         <div className="ui-form-row">
-          <div className="ccd__field">
-            <label className="ui-form-field">
-            {t('CreateContainerDialog.networkOptional')}
-            <input
-              value={form.network}
-              onChange={(e) => set('network', e.target.value)}
-              placeholder={t('CreateContainerDialog.bridge')}
-              aria-invalid={show('network') ? true : undefined}
-              autoComplete="off"
-              spellCheck={false}
-            />
-            </label>
-            {fieldError('network')}
-          </div>
-          <label className="ui-form-field">
-            {t('CreateContainerDialog.restartPolicy')}
-            <select value={form.restartPolicy} onChange={(e) => set('restartPolicy', e.target.value as RestartPolicy)}>
-              <option value="no">{t('CreateContainerDialog.no')}</option>
-              <option value="always">{t('CreateContainerDialog.always')}</option>
-              <option value="unless-stopped">{t('CreateContainerDialog.unlessStopped')}</option>
-              <option value="on-failure">{t('CreateContainerDialog.onFailure')}</option>
-            </select>
-          </label>
+          <TextField
+            label={t('CreateContainerDialog.networkOptional')}
+            value={form.network}
+            onChange={(e) => set('network', e.target.value)}
+            placeholder={t('CreateContainerDialog.bridge')}
+            error={show('network')}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <Select label={t('CreateContainerDialog.restartPolicy')} value={form.restartPolicy} onChange={(e) => set('restartPolicy', e.target.value as RestartPolicy)}>
+            <option value="no">{t('CreateContainerDialog.no')}</option>
+            <option value="always">{t('CreateContainerDialog.always')}</option>
+            <option value="unless-stopped">{t('CreateContainerDialog.unlessStopped')}</option>
+            <option value="on-failure">{t('CreateContainerDialog.onFailure')}</option>
+          </Select>
         </div>
 
-        {mode !== 'edit' && (
-          <label className="ccd__check">
-            <input type="checkbox" checked={form.start} onChange={(e) => set('start', e.target.checked)} /> {t('CreateContainerDialog.startAfterCreating')}
-          </label>
-        )}
+        {mode !== 'edit' && <Switch label={t('CreateContainerDialog.startAfterCreating')} checked={form.start} onChange={(e) => set('start', e.target.checked)} />}
         {isAdmin && (
           <>
-            <label className="ccd__check">
-              <input type="checkbox" checked={form.hostNetwork} onChange={(e) => set('hostNetwork', e.target.checked)} /> {t('CreateContainerDialog.useTheHostNetwork')}
-            </label>
-            <label className="ccd__check">
-              <input type="checkbox" checked={form.privileged} onChange={(e) => set('privileged', e.target.checked)} /> {t('CreateContainerDialog.privilegedFullAccessToThe')}
-            </label>
+            <Switch label={t('CreateContainerDialog.useTheHostNetwork')} checked={form.hostNetwork} onChange={(e) => set('hostNetwork', e.target.checked)} />
+            <Switch label={t('CreateContainerDialog.privilegedFullAccessToThe')} checked={form.privileged} onChange={(e) => set('privileged', e.target.checked)} />
           </>
         )}
 

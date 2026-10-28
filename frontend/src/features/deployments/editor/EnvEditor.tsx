@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import type { EnvEntry } from '../api.ts'
 import { mergeEnv, parseEnv, validateEnv, type EnvIssue } from './envFile.ts'
 import './editor.css'
-import { Button } from '../../../shared/ui/index.ts'
+import { Button, TextField } from '../../../shared/ui/index.ts'
 import { useTranslation } from 'react-i18next'
 import i18n from 'i18next'
 
@@ -53,8 +53,9 @@ export function EnvEditor({ value, onChange }: { value: EnvEntry[]; onChange: (n
         return (
           <div className="ed-env__item" key={i}>
             <div className="ed-env__row">
-              <input
-                aria-label={t('EnvEditor.variableValueName', { value: i + 1 })}
+              <TextField
+                label={t('EnvEditor.variableValueName', { value: i + 1 })}
+                hideLabel
                 aria-invalid={issue ? true : undefined}
                 placeholder={t('EnvEditor.name')}
                 value={row.key}
@@ -62,8 +63,9 @@ export function EnvEditor({ value, onChange }: { value: EnvEntry[]; onChange: (n
                 autoComplete="off"
                 spellCheck={false}
               />
-              <input
-                aria-label={t('EnvEditor.variableValueValue', { value: i + 1 })}
+              <TextField
+                label={t('EnvEditor.variableValueValue', { value: i + 1 })}
+                hideLabel
                 placeholder={t('EnvEditor.value')}
                 type={revealed ? 'text' : 'password'}
                 value={row.value}

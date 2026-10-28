@@ -185,8 +185,8 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
           <ComposeWizard hostId={hostId} active={source === 'file' && mode === 'wizard'} key={seed.key} initial={seed.state} onContinue={continueInEditor} />
         </div>
         <div className="ui-form" hidden={source !== 'file' || mode !== 'yaml'}>
-          <div className="ui-form-field">
-            <span>{tr('AddDeploymentDialog.composeFile')}</span>
+          <div className="ui-field">
+            <span className="ui-field__label">{tr('AddDeploymentDialog.composeFile')}</span>
             <YamlEditor label={tr('AddDeploymentDialog.composeFile2')} value={yaml} onChange={setYaml} height="260px" error={yamlError} />
           </div>
           <EnvEditor value={env} onChange={setEnv} />

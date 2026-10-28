@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Dialog, Switch } from '../../shared/ui/index.ts'
+import { Button, Dialog, FormField, Switch } from '../../shared/ui/index.ts'
 import type { Volume } from './api.ts'
 import { MAX_RESTORE_BYTES, MAX_RESTORE_LABEL, describeBackupError, restoreVolume } from './backup.ts'
 import { ApiError } from '../../shared/api/client.ts'
@@ -65,10 +65,9 @@ export function RestoreVolumeDialog({ hostId, volume, onClose, onDone }: Props) 
         <p className="ui-dialog-text">
           {t('RestoreVolumeDialog.theArchiveIsOverlaidOnto', { MAX_RESTORE_LABEL })}
         </p>
-        <label className="ui-form-field">
-          {t('RestoreVolumeDialog.backupArchiveTar')}
-          <input type="file" accept=".tar,application/x-tar" onChange={(e) => pick(e.target.files?.[0] ?? null)} />
-        </label>
+        <FormField label={t('RestoreVolumeDialog.backupArchiveTar')}>
+          {(control) => <input {...control} className="ui-control" type="file" accept=".tar,application/x-tar" onChange={(e) => pick(e.target.files?.[0] ?? null)} />}
+        </FormField>
         {inUse && (
           <Switch
             label={t('RestoreVolumeDialog.volumeIsInUseRestore')}

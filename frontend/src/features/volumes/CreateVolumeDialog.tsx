@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { describeCreateError } from '../hosts/createResource.ts'
 import { useCreateVolume, validateVolumeName } from './api.ts'
-import { Button, Dialog } from '../../shared/ui/index.ts'
+import { Button, Dialog, TextField } from '../../shared/ui/index.ts'
 import { useTranslation } from 'react-i18next'
 
 /** Creates a local volume. Client checks mirror the server; server errors stay inline. */
@@ -24,23 +24,16 @@ export function CreateVolumeDialog({ hostId, onClose }: { hostId: string; onClos
   return (
     <Dialog size="lg" open onOpenChange={(open) => !open && onClose()} title={t('CreateVolumeDialog.createVolume')}>
       <form className="ui-form" onSubmit={submit} noValidate>
-        <label className="ui-form-field">
-          {t('CreateVolumeDialog.name')}
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            aria-invalid={touched && nameError ? true : undefined}
-            autoComplete="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            autoFocus
-          />
-        </label>
-        {touched && nameError && (
-          <span role="alert" className="ui-error">
-            {nameError}
-          </span>
-        )}
+        <TextField
+          label={t('CreateVolumeDialog.name')}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          error={touched ? nameError : null}
+          autoComplete="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          autoFocus
+        />
 
         <p className="ui-hint">{t('CreateVolumeDialog.driverLocal')}</p>
         {error && (

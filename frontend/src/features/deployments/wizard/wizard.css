@@ -81,45 +81,20 @@
 .wz-detect .wz-hint {
   flex-basis: 100%;
 }
+.wz-detect__fail {
+  color: var(--color-bad);
+  font-size: var(--text-small-size);
+}
 .wz-detect__ok {
   color: var(--color-ok);
   font-size: var(--text-small-size);
 }
-.wz-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  font-size: var(--text-small-size);
-  min-width: 0;
-}
-.wz-field input,
-.wz-field select {
-  font: inherit;
-  font-size: var(--text-body-size);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-sunken);
-  color: inherit;
-  min-width: 0;
-}
-.wz-field input:focus-visible,
-.wz-field select:focus-visible,
-.wz-chip input:focus-visible,
-.wz-check input:focus-visible {
+.wz-chip input:focus-visible {
   outline: none;
   box-shadow: var(--shadow-focus);
 }
-.wz-field__error {
-  color: var(--color-bad);
-  font-size: var(--text-small-size);
-}
-.wz-check {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  align-self: center;
-  font-size: var(--text-small-size);
+.wz-toggle {
+  /* Lines the switch up with the inputs of its row, which sit below a field label. */
   padding-top: var(--space-4);
 }
 .wz-chips {
@@ -201,7 +176,7 @@
   .wz-row--resource {
     grid-template-columns: 1fr;
   }
-  .wz-check {
+  .wz-toggle {
     padding-top: 0;
   }
 }

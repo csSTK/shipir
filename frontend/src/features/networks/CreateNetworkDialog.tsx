@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { describeCreateError } from '../hosts/createResource.ts'
 import { validateVolumeName as validateName } from '../volumes/api.ts'
 import { useCreateNetwork, validateSubnet, type NetworkDriver } from './api.ts'
-import { Button, Dialog } from '../../shared/ui/index.ts'
+import { Button, Dialog, Select, Switch, TextField } from '../../shared/ui/index.ts'
 import { useTranslation } from 'react-i18next'
 
 /** Creates a network. Drivers other than bridge are offered to ADMIN only (the server enforces it too). */
@@ -32,57 +32,38 @@ export function CreateNetworkDialog({ hostId, isAdmin, onClose }: { hostId: stri
   return (
     <Dialog size="lg" open onOpenChange={(open) => !open && onClose()} title={t('CreateNetworkDialog.createNetwork')}>
       <form className="ui-form" onSubmit={submit} noValidate>
-        <label className="ui-form-field">
-          {t('CreateNetworkDialog.name')}
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            aria-invalid={touched && nameError ? true : undefined}
-            autoComplete="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            autoFocus
-          />
-        </label>
-        {touched && nameError && (
-          <span role="alert" className="ui-error">
-            {nameError}
-          </span>
-        )}
+        <TextField
+          label={t('CreateNetworkDialog.name')}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          error={touched ? nameError : null}
+          autoComplete="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          autoFocus
+        />
 
         {isAdmin ? (
-          <label className="ui-form-field">
-            {t('CreateNetworkDialog.driver')}
-            <select value={driver} onChange={(e) => setDriver(e.target.value as NetworkDriver)}>
-              <option value="bridge">{t('CreateNetworkDialog.bridge')}</option>
-              <option value="overlay">{t('CreateNetworkDialog.overlay')}</option>
-              <option value="macvlan">{t('CreateNetworkDialog.macvlan')}</option>
-              <option value="ipvlan">{t('CreateNetworkDialog.ipvlan')}</option>
-            </select>
-          </label>
+          <Select label={t('CreateNetworkDialog.driver')} value={driver} onChange={(e) => setDriver(e.target.value as NetworkDriver)}>
+            <option value="bridge">{t('CreateNetworkDialog.bridge')}</option>
+            <option value="overlay">{t('CreateNetworkDialog.overlay')}</option>
+            <option value="macvlan">{t('CreateNetworkDialog.macvlan')}</option>
+            <option value="ipvlan">{t('CreateNetworkDialog.ipvlan')}</option>
+          </Select>
         ) : (
           <p className="ui-hint">{t('CreateNetworkDialog.driverBridge')}</p>
         )}
-        <label className="ui-form-field">
-          {t('CreateNetworkDialog.subnetOptional')}
-          <input
-            value={subnet}
-            onChange={(e) => setSubnet(e.target.value)}
-            placeholder="172.30.0.0/16"
-            aria-invalid={touched && subnetError ? true : undefined}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </label>
-        {touched && subnetError && (
-          <span role="alert" className="ui-error">
-            {subnetError}
-          </span>
-        )}
+        <TextField
+          label={t('CreateNetworkDialog.subnetOptional')}
+          value={subnet}
+          onChange={(e) => setSubnet(e.target.value)}
+          placeholder="172.30.0.0/16"
+          error={touched ? subnetError : null}
+          autoComplete="off"
+          spellCheck={false}
+        />
 
-        <label>
-          <input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} /> {t('CreateNetworkDialog.internalNoOutsideAccess')}
-        </label>
+        <Switch label={t('CreateNetworkDialog.internalNoOutsideAccess')} checked={internal} onChange={(e) => setInternal(e.target.checked)} />
         {error && (
           <p role="alert" className="ui-error">
             {error}

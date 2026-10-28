@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { DeployOutput } from '../deployments/deploy-output/DeployOutput.tsx'
 import { describePullError, usePullImage, useRefreshAfterPull } from './api.ts'
 import './ImagesPage.css'
-import { Button, Dialog } from '../../shared/ui/index.ts'
+import { Button, Dialog, TextField } from '../../shared/ui/index.ts'
 import { useTranslation } from 'react-i18next'
 
 interface Props {
@@ -45,18 +45,16 @@ export function PullImageDialog({ hostId, initialReference = '', onClose }: Prop
         </>
       ) : (
         <form className="ui-form" onSubmit={submit}>
-          <label className="ui-form-field">
-            {t('PullImageDialog.imageReference')}
-            <input
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-              placeholder="nginx:1.27"
-              autoComplete="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              autoFocus
-            />
-          </label>
+          <TextField
+            label={t('PullImageDialog.imageReference')}
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+            placeholder="nginx:1.27"
+            autoComplete="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            autoFocus
+          />
           {error && (
             <p role="alert" className="ui-error">
               {error}

@@ -23,7 +23,7 @@
   flex-wrap: wrap;
   gap: var(--space-3);
 }
-.ia-window__times .ui-form-field {
+.ia-window__times .ui-field {
   min-width: 9rem;
 }
 .ia-last {

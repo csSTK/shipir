@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type ReactNode } from 'react'
+import { useId, useRef, useState } from 'react'
 import { ApiError } from '../../../shared/api/client.ts'
 import { useDetectedProxy, useGenerateCompose, useTraefikTemplate, type DetectedProxy } from '../api.ts'
 import { YamlEditor } from '../editor/index.ts'
@@ -17,18 +17,8 @@ import {
   type WizardState,
 } from './model.ts'
 import './wizard.css'
-import { Button } from '../../../shared/ui/index.ts'
+import { Button, Select, Switch, TextField } from '../../../shared/ui/index.ts'
 import { useTranslation } from 'react-i18next'
-
-function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
-  return (
-    <label className="wz-field">
-      <span>{label}</span>
-      {children}
-      {error && <small className="wz-field__error">{error}</small>}
-    </label>
-  )
-}
 
 function remove<T>(list: T[], index: number): T[] {
   return list.filter((_, i) => i !== index)
@@ -81,16 +71,11 @@ function ResourceList({
       {rows.length === 0 && <p className="wz-hint">{t('ComposeWizard.noneDeclared')}</p>}
       {rows.map((r, i) => (
         <div className="wz-row wz-row--resource" key={i}>
-          <Field label={t('ComposeWizard.singularName', { singular })} error={fields.get(`${kind}.${i}.name`)}>
-            <input aria-label={t('ComposeWizard.singularValueName', { singular, value: i + 1 })} value={r.name} onChange={(e) => onChange(patchAt(rows, i, { name: e.target.value }))} autoComplete="off" spellCheck={false} />
-          </Field>
-          <Field label={t('ComposeWizard.driverOptional')} error={fields.get(`${kind}.${i}.driver`)}>
-            <input aria-label={t('ComposeWizard.singularValueDriver', { singular, value: i + 1 })} value={r.driver} onChange={(e) => onChange(patchAt(rows, i, { driver: e.target.value }))} autoComplete="off" spellCheck={false} />
-          </Field>
-          <label className="wz-check">
-            <input type="checkbox" checked={r.external} onChange={(e) => onChange(patchAt(rows, i, { external: e.target.checked }))} />
-            <span>{t('ComposeWizard.alreadyExists')}</span>
-          </label>
+          <TextField label={t('ComposeWizard.singularName', { singular })} error={fields.get(`${kind}.${i}.name`)} aria-label={t('ComposeWizard.singularValueName', { singular, value: i + 1 })} value={r.name} onChange={(e) => onChange(patchAt(rows, i, { name: e.target.value }))} autoComplete="off" spellCheck={false} />
+          <TextField label={t('ComposeWizard.driverOptional')} error={fields.get(`${kind}.${i}.driver`)} aria-label={t('ComposeWizard.singularValueDriver', { singular, value: i + 1 })} value={r.driver} onChange={(e) => onChange(patchAt(rows, i, { driver: e.target.value }))} autoComplete="off" spellCheck={false} />
+          <div className="wz-toggle">
+            <Switch label={t('ComposeWizard.alreadyExists')} checked={r.external} onChange={(e) => onChange(patchAt(rows, i, { external: e.target.checked }))} />
+          </div>
           <Button variant="ghost" aria-label={t('ComposeWizard.removeLowercaseValue', { lowerCase, value: i + 1 })} onClick={() => onChange(remove(rows, i))}>
             {t('ComposeWizard.remove')}
           </Button>
@@ -183,38 +168,26 @@ function DomainSection({
               {t('ComposeWizard.copyTraefikTemplate')}
             </Button>
             {copy === 'copied' && <small className="wz-detect__ok">{t('ComposeWizard.copied')}</small>}
-            {copy === 'failed' && <small className="wz-field__error">{t('ComposeWizard.couldNotCopyTheTemplate')}</small>}
+            {copy === 'failed' && <small className="wz-detect__fail">{t('ComposeWizard.couldNotCopyTheTemplate')}</small>}
           </div>
         )
       )}
       <div className="wz-row wz-row--domain">
-        <Field label={t('ComposeWizard.domainOptional')} error={err('host')}>
-          <input aria-label={t('ComposeWizard.serviceNDomainHost', { n })} value={d.host} placeholder="app.example.com" onChange={(e) => setHost(e.target.value)} autoComplete="off" spellCheck={false} />
-        </Field>
-        <Field label={t('ComposeWizard.containerPort')} error={err('port')}>
-          <input aria-label={t('ComposeWizard.serviceNDomainPort', { n })} inputMode="numeric" value={d.port} onChange={(e) => setOwn({ port: e.target.value })} />
-        </Field>
-        <Field label={t('ComposeWizard.proxy')}>
-          <select aria-label={t('ComposeWizard.serviceNDomainProxy', { n })} value={d.proxy} onChange={(e) => setOwn({ proxy: e.target.value as ProxyType })}>
-            {PROXY_TYPES.map((p) => (
-              <option key={p} value={p}>
-                {t(`ComposeWizard.proxyName${p}`)}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label={t('ComposeWizard.proxyNetworkOptional')} error={err('network')}>
-          <input aria-label={t('ComposeWizard.serviceNDomainNetwork', { n })} value={d.network} onChange={(e) => setOwn({ network: e.target.value })} autoComplete="off" spellCheck={false} />
-        </Field>
+        <TextField label={t('ComposeWizard.domainOptional')} error={err('host')} aria-label={t('ComposeWizard.serviceNDomainHost', { n })} value={d.host} placeholder="app.example.com" onChange={(e) => setHost(e.target.value)} autoComplete="off" spellCheck={false} />
+        <TextField label={t('ComposeWizard.containerPort')} error={err('port')} aria-label={t('ComposeWizard.serviceNDomainPort', { n })} inputMode="numeric" value={d.port} onChange={(e) => setOwn({ port: e.target.value })} />
+        <Select label={t('ComposeWizard.proxy')} aria-label={t('ComposeWizard.serviceNDomainProxy', { n })} value={d.proxy} onChange={(e) => setOwn({ proxy: e.target.value as ProxyType })}>
+          {PROXY_TYPES.map((p) => (
+            <option key={p} value={p}>
+              {t(`ComposeWizard.proxyName${p}`)}
+            </option>
+          ))}
+        </Select>
+        <TextField label={t('ComposeWizard.proxyNetworkOptional')} error={err('network')} aria-label={t('ComposeWizard.serviceNDomainNetwork', { n })} value={d.network} onChange={(e) => setOwn({ network: e.target.value })} autoComplete="off" spellCheck={false} />
       </div>
       {d.proxy === 'TRAEFIK' && (
         <div className="wz-row wz-row--two">
-          <Field label={t('ComposeWizard.httpsEntrypointOptional')} error={err('entrypoint')}>
-            <input aria-label={t('ComposeWizard.serviceNDomainEntrypoint', { n })} value={d.entrypoint} placeholder={DEFAULT_ENTRYPOINT} onChange={(e) => setOwn({ entrypoint: e.target.value })} autoComplete="off" spellCheck={false} />
-          </Field>
-          <Field label={t('ComposeWizard.certResolverOptional')} error={err('certResolver')}>
-            <input aria-label={t('ComposeWizard.serviceNDomainCertResolver', { n })} value={d.certResolver} placeholder={DEFAULT_CERT_RESOLVER} onChange={(e) => setOwn({ certResolver: e.target.value })} autoComplete="off" spellCheck={false} />
-          </Field>
+          <TextField label={t('ComposeWizard.httpsEntrypointOptional')} error={err('entrypoint')} aria-label={t('ComposeWizard.serviceNDomainEntrypoint', { n })} value={d.entrypoint} placeholder={DEFAULT_ENTRYPOINT} onChange={(e) => setOwn({ entrypoint: e.target.value })} autoComplete="off" spellCheck={false} />
+          <TextField label={t('ComposeWizard.certResolverOptional')} error={err('certResolver')} aria-label={t('ComposeWizard.serviceNDomainCertResolver', { n })} value={d.certResolver} placeholder={DEFAULT_CERT_RESOLVER} onChange={(e) => setOwn({ certResolver: e.target.value })} autoComplete="off" spellCheck={false} />
         </div>
       )}
       {d.proxy === 'TRAEFIK' && <small className="wz-hint">{t('ComposeWizard.traefikNamesHint')}</small>}
@@ -256,45 +229,31 @@ function ServiceCard({
         )}
       </div>
       <div className="wz-row wz-row--two">
-        <Field label={t('ComposeWizard.serviceName')} error={err('name')}>
-          <input aria-label={t('ComposeWizard.serviceNName', { n })} value={service.name} onChange={(e) => onChange({ name: e.target.value })} autoComplete="off" spellCheck={false} />
-        </Field>
-        <Field label={t('ComposeWizard.image')} error={err('image')}>
-          <input aria-label={t('ComposeWizard.serviceNImage', { n })} value={service.image} placeholder="nginx:1.27" onChange={(e) => onChange({ image: e.target.value })} autoComplete="off" spellCheck={false} />
-        </Field>
+        <TextField label={t('ComposeWizard.serviceName')} error={err('name')} aria-label={t('ComposeWizard.serviceNName', { n })} value={service.name} onChange={(e) => onChange({ name: e.target.value })} autoComplete="off" spellCheck={false} />
+        <TextField label={t('ComposeWizard.image')} error={err('image')} aria-label={t('ComposeWizard.serviceNImage', { n })} value={service.image} placeholder="nginx:1.27" onChange={(e) => onChange({ image: e.target.value })} autoComplete="off" spellCheck={false} />
       </div>
       <div className="wz-row wz-row--two">
-        <Field label={t('ComposeWizard.commandOptional')}>
-          <input aria-label={t('ComposeWizard.serviceNCommand', { n })} value={service.command} onChange={(e) => onChange({ command: e.target.value })} autoComplete="off" spellCheck={false} />
-        </Field>
-        <Field label={t('ComposeWizard.restart')}>
-          <select aria-label={t('ComposeWizard.serviceNRestart', { n })} value={service.restart} onChange={(e) => onChange({ restart: e.target.value })}>
-            <option value="">{t('ComposeWizard.default')}</option>
-            {RESTART_POLICIES.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <TextField label={t('ComposeWizard.commandOptional')} aria-label={t('ComposeWizard.serviceNCommand', { n })} value={service.command} onChange={(e) => onChange({ command: e.target.value })} autoComplete="off" spellCheck={false} />
+        <Select label={t('ComposeWizard.restart')} aria-label={t('ComposeWizard.serviceNRestart', { n })} value={service.restart} onChange={(e) => onChange({ restart: e.target.value })}>
+          <option value="">{t('ComposeWizard.default')}</option>
+          {RESTART_POLICIES.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </Select>
       </div>
 
       <fieldset className="wz-group">
         <legend>{t('ComposeWizard.ports')}</legend>
         {service.ports.map((r, j) => (
           <div className="wz-row wz-row--port" key={j}>
-            <Field label={t('ComposeWizard.host')} error={err(`ports.${j}.host`)}>
-              <input aria-label={t('ComposeWizard.serviceNPortValueHost', { n, value: j + 1 })} inputMode="numeric" placeholder={t('ComposeWizard.any')} value={r.host} onChange={(e) => onChange({ ports: patchAt(service.ports, j, { host: e.target.value }) })} />
-            </Field>
-            <Field label={t('ComposeWizard.container')} error={err(`ports.${j}.container`)}>
-              <input aria-label={t('ComposeWizard.serviceNPortValueContainer', { n, value: j + 1 })} inputMode="numeric" value={r.container} onChange={(e) => onChange({ ports: patchAt(service.ports, j, { container: e.target.value }) })} />
-            </Field>
-            <Field label={t('ComposeWizard.protocol')}>
-              <select aria-label={t('ComposeWizard.serviceNPortValueProtocol', { n, value: j + 1 })} value={r.protocol} onChange={(e) => onChange({ ports: patchAt(service.ports, j, { protocol: e.target.value as 'tcp' | 'udp' }) })}>
-                <option value="tcp">{t('ComposeWizard.tcp')}</option>
-                <option value="udp">{t('ComposeWizard.udp')}</option>
-              </select>
-            </Field>
+            <TextField label={t('ComposeWizard.host')} error={err(`ports.${j}.host`)} aria-label={t('ComposeWizard.serviceNPortValueHost', { n, value: j + 1 })} inputMode="numeric" placeholder={t('ComposeWizard.any')} value={r.host} onChange={(e) => onChange({ ports: patchAt(service.ports, j, { host: e.target.value }) })} />
+            <TextField label={t('ComposeWizard.container')} error={err(`ports.${j}.container`)} aria-label={t('ComposeWizard.serviceNPortValueContainer', { n, value: j + 1 })} inputMode="numeric" value={r.container} onChange={(e) => onChange({ ports: patchAt(service.ports, j, { container: e.target.value }) })} />
+            <Select label={t('ComposeWizard.protocol')} aria-label={t('ComposeWizard.serviceNPortValueProtocol', { n, value: j + 1 })} value={r.protocol} onChange={(e) => onChange({ ports: patchAt(service.ports, j, { protocol: e.target.value as 'tcp' | 'udp' }) })}>
+              <option value="tcp">{t('ComposeWizard.tcp')}</option>
+              <option value="udp">{t('ComposeWizard.udp')}</option>
+            </Select>
             <Button variant="ghost" aria-label={t('ComposeWizard.removeServiceNPortValue', { n, value: j + 1 })} onClick={() => onChange({ ports: remove(service.ports, j) })}>
               {t('ComposeWizard.remove')}
             </Button>
@@ -309,16 +268,11 @@ function ServiceCard({
         <legend>{t('ComposeWizard.environment')}</legend>
         {service.env.map((r, j) => (
           <div className="wz-row wz-row--env" key={j}>
-            <Field label={t('ComposeWizard.variableName')} error={err(`env.${j}.key`)}>
-              <input aria-label={t('ComposeWizard.serviceNEnvValueName', { n, value: j + 1 })} value={r.key} placeholder={t('ComposeWizard.name')} onChange={(e) => onChange({ env: patchAt(service.env, j, { key: e.target.value }) })} autoComplete="off" spellCheck={false} />
-            </Field>
-            <Field label={r.ref ? t('ComposeWizard.deploymentVariable') : t('ComposeWizard.value')} error={err(`env.${j}.value`)}>
-              <input aria-label={t('ComposeWizard.serviceNEnvValueValue2', { n, value: j + 1, value2: r.ref ? 'reference' : 'value' })} value={r.value} onChange={(e) => onChange({ env: patchAt(service.env, j, { value: e.target.value }) })} autoComplete="off" spellCheck={false} />
-            </Field>
-            <label className="wz-check">
-              <input type="checkbox" checked={r.ref} onChange={(e) => onChange({ env: patchAt(service.env, j, { ref: e.target.checked }) })} />
-              <span>{t('ComposeWizard.fromDeploymentVariable')}</span>
-            </label>
+            <TextField label={t('ComposeWizard.variableName')} error={err(`env.${j}.key`)} aria-label={t('ComposeWizard.serviceNEnvValueName', { n, value: j + 1 })} value={r.key} placeholder={t('ComposeWizard.name')} onChange={(e) => onChange({ env: patchAt(service.env, j, { key: e.target.value }) })} autoComplete="off" spellCheck={false} />
+            <TextField label={r.ref ? t('ComposeWizard.deploymentVariable') : t('ComposeWizard.value')} error={err(`env.${j}.value`)} aria-label={t('ComposeWizard.serviceNEnvValueValue2', { n, value: j + 1, value2: r.ref ? 'reference' : 'value' })} value={r.value} onChange={(e) => onChange({ env: patchAt(service.env, j, { value: e.target.value }) })} autoComplete="off" spellCheck={false} />
+            <div className="wz-toggle">
+              <Switch label={t('ComposeWizard.fromDeploymentVariable')} checked={r.ref} onChange={(e) => onChange({ env: patchAt(service.env, j, { ref: e.target.checked }) })} />
+            </div>
             <Button variant="ghost" aria-label={t('ComposeWizard.removeServiceNEnvValue', { n, value: j + 1 })} onClick={() => onChange({ env: remove(service.env, j) })}>
               {t('ComposeWizard.remove')}
             </Button>
@@ -333,16 +287,11 @@ function ServiceCard({
         <legend>{t('ComposeWizard.volumes')}</legend>
         {service.volumes.map((r, j) => (
           <div className="wz-row wz-row--env" key={j}>
-            <Field label={t('ComposeWizard.volumeOrPath')} error={err(`volumes.${j}.source`)}>
-              <input aria-label={t('ComposeWizard.serviceNMountValueSource', { n, value: j + 1 })} value={r.source} placeholder={t('ComposeWizard.dataOrData')} onChange={(e) => onChange({ volumes: patchAt(service.volumes, j, { source: e.target.value }) })} autoComplete="off" spellCheck={false} />
-            </Field>
-            <Field label={t('ComposeWizard.pathInContainer')} error={err(`volumes.${j}.target`)}>
-              <input aria-label={t('ComposeWizard.serviceNMountValueTarget', { n, value: j + 1 })} value={r.target} placeholder="/data" onChange={(e) => onChange({ volumes: patchAt(service.volumes, j, { target: e.target.value }) })} autoComplete="off" spellCheck={false} />
-            </Field>
-            <label className="wz-check">
-              <input type="checkbox" checked={r.readOnly} onChange={(e) => onChange({ volumes: patchAt(service.volumes, j, { readOnly: e.target.checked }) })} />
-              <span>{t('ComposeWizard.readOnly')}</span>
-            </label>
+            <TextField label={t('ComposeWizard.volumeOrPath')} error={err(`volumes.${j}.source`)} aria-label={t('ComposeWizard.serviceNMountValueSource', { n, value: j + 1 })} value={r.source} placeholder={t('ComposeWizard.dataOrData')} onChange={(e) => onChange({ volumes: patchAt(service.volumes, j, { source: e.target.value }) })} autoComplete="off" spellCheck={false} />
+            <TextField label={t('ComposeWizard.pathInContainer')} error={err(`volumes.${j}.target`)} aria-label={t('ComposeWizard.serviceNMountValueTarget', { n, value: j + 1 })} value={r.target} placeholder="/data" onChange={(e) => onChange({ volumes: patchAt(service.volumes, j, { target: e.target.value }) })} autoComplete="off" spellCheck={false} />
+            <div className="wz-toggle">
+              <Switch label={t('ComposeWizard.readOnly')} checked={r.readOnly} onChange={(e) => onChange({ volumes: patchAt(service.volumes, j, { readOnly: e.target.checked }) })} />
+            </div>
             <Button variant="ghost" aria-label={t('ComposeWizard.removeServiceNMountValue', { n, value: j + 1 })} onClick={() => onChange({ volumes: remove(service.volumes, j) })}>
               {t('ComposeWizard.remove')}
             </Button>
