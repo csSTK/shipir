@@ -75,7 +75,8 @@ shipir:
     poll-enabled: true
     poll-tick: 60s
   volume-backup:
-    # cap for one backup stream and one restore upload (spring.servlet.multipart.* below must allow it too)
+    # cap for one backup stream and one restore upload; its own limit, independent of the multipart one, but
+    # spring.servlet.multipart.max-file-size/max-request-size below must be at least as large (VolumeBackupPropertiesTest)
     max-bytes: 100MB
     # short-lived helper container with only the volume mounted (never started: the archive API does the work)
     helper-image: alpine:3
@@ -132,7 +133,7 @@ spring:
   servlet:
     multipart:
       # image build context (shipir.images.max-build-context = 200MB) and container file upload (100MB, checked again in
-      # the service) plus multipart framing; parsed lazily so the controller advice can answer a too-large upload with 413
+      # the service) and volume restore (shipir.volume-backup.max-bytes, 100MB) plus multipart framing; parsed lazily so the controller advice can answer a too-large upload with 413
       max-file-size: 201MB
       max-request-size: 201MB
       resolve-lazily: true

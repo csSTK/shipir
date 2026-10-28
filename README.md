@@ -24,7 +24,7 @@ This is a learning and portfolio project focused on Java backend development. Th
 ## Features (planned)
 
 - **Containers:** list, start, stop, inspect and view stats, across one or more Docker hosts. Edit (recreated, with rollback if it fails), duplicate and change resource limits.
-- **Volumes:** download a volume as a `.tar` backup, restore an archive into a volume (overlays existing files; in-use volumes need an explicit confirm; 100 MB limit, `shipir.volume-backup.max-bytes`) and schedule recurring backups with retention (stored under `shipir.volume-backup.dir`, `SHIPIR_VOLUME_BACKUP_DIR`; mount a volume there to keep them).
+- **Volumes:** download a volume as a `.tar` backup, restore an archive into a volume (overlays existing files; in-use volumes need an explicit confirm; 100 MB limit, its own property `shipir.volume-backup.max-bytes`; the multipart limits must stay at least as large) and schedule recurring backups with retention (stored under `shipir.volume-backup.dir`, `SHIPIR_VOLUME_BACKUP_DIR`; `docker-compose.yml` mounts the named volume `shipir-volume-backups` at `/data/volume-backups`).
 - **Image build, tag and push:** admins can build an image from an uploaded `.tar`/`.tar.gz` context or a Git repository (Dockerfile path, build args, no-cache, live output); build runs the Dockerfile on the Docker daemon, which is why it is admin only. Admins and operators can tag an image and push it to a registry (stored registry logins are used). Limits: `shipir.images.max-build-context` (default 200 MB, so the multipart upload limit is 201 MB) and `shipir.images.build-timeout` (30 min). Build args are visible in the image history: never put secrets in them.
 - **Disk usage:** the environment dashboard shows how much disk Docker uses (images, containers, volumes, build cache) and what could be reclaimed, with the ten largest items and a link to the cleanup dialog. Needs access to the whole environment.
 - **Hosts:** manage multiple Docker hosts (local Unix socket or remote TCP with TLS), with health checks.
@@ -198,7 +198,9 @@ Branches: `dev` is the default branch where all work lands. `prd` holds released
 
 Deployment files live in the named volume `shipir-stacks`, mounted at `/data/stacks` in the backend (`SHIPIR_STACKS_BASE_DIR`, set in the image). The backend image includes the `docker compose` CLI, which runs as the app user (uid `10001`) and uses the same mounted Docker socket.
 
-Stop the stack with `docker compose -f docker-compose.yml down`. This does not touch the external database or the `shipir-stacks` volume. Only `down -v` deletes the stack files.
+Scheduled volume backups are stored in the named volume `shipir-volume-backups`, mounted at `/data/volume-backups` (`SHIPIR_VOLUME_BACKUP_DIR`, set in the image, owned by uid `10001`). Backup and restore are capped at 100 MB (`shipir.volume-backup.max-bytes`, independent of the multipart limits).
+
+Stop the stack with `docker compose -f docker-compose.yml down`. This does not touch the external database or the `shipir-stacks` and `shipir-volume-backups` volumes. Only `down -v` deletes them (for `shipir-volume-backups` that removes all stored volume backups).
 
 ### Demo (public credentials, never for real use)
 

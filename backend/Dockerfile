@@ -26,8 +26,10 @@ RUN addgroup -S -g 10001 shipir \
 
 # Stack directory. Owned by the app user so a fresh named volume mounted here (docker-compose.yml)
 # inherits that ownership on first use.
-RUN mkdir -p /data/stacks && chown shipir:shipir /data/stacks
+# Same for the volume-backup archives (scheduled backups).
+RUN mkdir -p /data/stacks /data/volume-backups && chown shipir:shipir /data/stacks /data/volume-backups
 ENV SHIPIR_STACKS_BASE_DIR=/data/stacks
+ENV SHIPIR_VOLUME_BACKUP_DIR=/data/volume-backups
 
 WORKDIR /app
 COPY --from=build --chown=shipir:shipir /workspace/target/*.jar app.jar

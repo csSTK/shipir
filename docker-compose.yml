@@ -32,6 +32,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       # Compose stack files (SHIPIR_STACKS_BASE_DIR in the image). Named volume: survives `down`, removed only by `down -v`.
       - shipir-stacks:/data/stacks
+      # Archives of scheduled volume backups (SHIPIR_VOLUME_BACKUP_DIR in the image). Without a volume they would vanish
+      # when the container is recreated (e.g. on an image update).
+      - shipir-volume-backups:/data/volume-backups
     # No ports: the backend is reachable only from the frontend on the compose network.
     restart: unless-stopped
 
@@ -58,3 +61,4 @@ networks:
 
 volumes:
   shipir-stacks:
+  shipir-volume-backups:
