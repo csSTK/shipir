@@ -50,6 +50,8 @@ class ChatTopicSubscribeTest {
     @Autowired dev.bethge.shipir.host.DockerHostRepository hosts;
     @Autowired ChatSessionService sessions;
     @Autowired ChatEventPublisher publisher;
+    @Autowired org.springframework.context.ApplicationEventPublisher events;
+    @Autowired org.springframework.messaging.simp.broker.SimpleBrokerMessageHandler broker;
 
     private final HttpClient http = HttpClient.newHttpClient();
 
@@ -133,6 +135,37 @@ class ChatTopicSubscribeTest {
             return !q.isEmpty();
         });
         assertThat(q.poll()).contains("\"type\":\"TOKEN\"").contains("Hel");
+        s.disconnect();
+    }
+
+    @Test
+    void disabledOwnerStopsReceivingLiveEvents() throws Exception {
+        UUID id = sessionOf("viewer");
+        StompSession s = connect(login("viewer"));
+        BlockingQueue<String> q = subscribe(s, id.toString());
+        await().atMost(5, TimeUnit.SECONDS).until(() -> {
+            publisher.publish(id, ChatStreamEvent.token(UUID.randomUUID(), "Hel"));
+            return !q.isEmpty();
+        });
+        User viewer = users.findByUsername("viewer").orElseThrow();
+        viewer.disable(Instant.now());
+        users.save(viewer);
+        try {
+            events.publishEvent(new dev.bethge.shipir.common.security.UserAccessChangedEvent("viewer"));
+            // the revalidation removes the subscription from the broker: wait for that, then drain what was in flight
+            var probe = org.springframework.messaging.simp.SimpMessageHeaderAccessor.create(
+                    org.springframework.messaging.simp.SimpMessageType.MESSAGE);
+            probe.setDestination("/topic/chat/" + id);
+            var message = org.springframework.messaging.support.MessageBuilder.createMessage(new byte[0], probe.getMessageHeaders());
+            await().atMost(5, TimeUnit.SECONDS)
+                    .until(() -> broker.getSubscriptionRegistry().findSubscriptions(message).isEmpty());
+            q.clear();
+            publisher.publish(id, ChatStreamEvent.token(UUID.randomUUID(), "secret"));
+            assertThat(q.poll(500, TimeUnit.MILLISECONDS)).isNull();
+        } finally {
+            viewer.enable();
+            users.save(viewer);
+        }
         s.disconnect();
     }
 

@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.UUID;
 
-/** Only the owner of a session may follow its live stream (not even ADMIN: shared sessions are read via the API). */
+/** Only the enabled owner of a session may follow its live stream (not even ADMIN: shared sessions are read via the API). */
 @Component
 class ChatTopicAccessImpl implements ChatTopicAccess {
 
@@ -26,7 +26,7 @@ class ChatTopicAccessImpl implements ChatTopicAccess {
         } catch (IllegalArgumentException e) {
             return false;
         }
-        return users.findByUsername(username).map(u -> {
+        return users.findByUsername(username).filter(u -> !u.isDisabled()).map(u -> {
             try {
                 sessions.findOwned(u.getId(), id);
                 return true;

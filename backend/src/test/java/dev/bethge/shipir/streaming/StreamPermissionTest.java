@@ -191,6 +191,40 @@ class StreamPermissionTest {
         s.disconnect();
     }
 
+    @Test
+    void revokedDeploymentGrantStopsDeployOutputFrames() throws Exception {
+        jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) VALUES (?, ?, 'VIEW')", userId, deploymentId);
+        String runId = registerRun();
+        var sink = streams.start(runId);
+        StompSession s = connectRaw();
+        java.util.concurrent.BlockingQueue<String> frames = new java.util.concurrent.LinkedBlockingQueue<>();
+        s.subscribe("/topic/deployments/" + runId, new StompFrameHandler() {
+            @Override
+            public Type getPayloadType(StompHeaders headers) {
+                return byte[].class;
+            }
+
+            @Override
+            public void handleFrame(StompHeaders headers, Object payload) {
+                frames.add(new String((byte[]) payload, java.nio.charset.StandardCharsets.UTF_8));
+            }
+        });
+        await().atMost(5, TimeUnit.SECONDS).until(() -> streams.subscriberCount(runId) == 1);
+        sink.accept("before revoke");
+        assertThat(frames.poll(5, TimeUnit.SECONDS)).contains("before revoke");
+
+        Map<String, String> adminJar = loginAs("streamadmin", Role.ADMIN);
+        var r = callWith(adminJar, HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/users/" + userId + "/permissions"))
+                .header("Content-Type", "application/json").header("X-XSRF-TOKEN", adminJar.get("XSRF-TOKEN"))
+                .PUT(HttpRequest.BodyPublishers.ofString("{\"grants\":[]}")));
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
+
+        await().atMost(5, TimeUnit.SECONDS).until(() -> streams.subscriberCount(runId) == 0);
+        sink.accept("after revoke");
+        assertThat(frames.poll(500, TimeUnit.MILLISECONDS)).isNull();
+        s.disconnect();
+    }
+
     private Map<String, String> loginAs(String username, Role role) throws Exception {
         User u = users.findByUsername(username).orElseGet(() -> new User(username, "x", role));
         u.changePasswordHash(encoder.encode(PASSWORD), Instant.now());
@@ -267,12 +301,31 @@ class StreamPermissionTest {
     }
 
     private StompSession connect() throws Exception {
+        return connect(new org.springframework.messaging.converter.ByteArrayMessageConverter());
+    }
+
+    /** Accepts any content type so the test sees the raw JSON bytes the server sent. */
+    private StompSession connectRaw() throws Exception {
+        return connect(new org.springframework.messaging.converter.AbstractMessageConverter(org.springframework.util.MimeTypeUtils.ALL) {
+            @Override
+            protected boolean supports(Class<?> clazz) {
+                return clazz == byte[].class;
+            }
+
+            @Override
+            protected Object convertFromInternal(org.springframework.messaging.Message<?> message, Class<?> targetClass, Object hint) {
+                return message.getPayload();
+            }
+        });
+    }
+
+    private StompSession connect(org.springframework.messaging.converter.MessageConverter converter) throws Exception {
         WebSocketHttpHeaders h = new WebSocketHttpHeaders();
         h.add("Cookie", "JSESSIONID=" + jar.get("JSESSIONID") + "; XSRF-TOKEN=" + jar.get("XSRF-TOKEN"));
         StompHeaders connect = new StompHeaders();
         connect.add("X-XSRF-TOKEN", jar.get("XSRF-TOKEN"));
         WebSocketStompClient c = new WebSocketStompClient(new StandardWebSocketClient());
-        c.setMessageConverter(new org.springframework.messaging.converter.ByteArrayMessageConverter());
+        c.setMessageConverter(converter);
         return c.connectAsync("ws://localhost:" + port + "/ws", h, connect, new StompSessionHandlerAdapter() {
         }).get(5, TimeUnit.SECONDS);
     }

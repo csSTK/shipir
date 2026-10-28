@@ -43,6 +43,7 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
 
     private final ComposeOutputStreamService streams;
     private final ChatTopicAccess chatAccess;
+    private final ChatTopicSubscriptions chatSubscriptions;
     private final LogStreamHandler logStreams;
     private final DeploymentLogStreamService deploymentLogs;
     private final ExecSessionHandler execSessions;
@@ -52,6 +53,7 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
     private final SetupStatus setupStatus;
 
     StompSecurityInterceptor(ComposeOutputStreamService streams, ChatTopicAccess chatAccess,
+                             ChatTopicSubscriptions chatSubscriptions,
                              LogStreamHandler logStreams, DeploymentLogStreamService deploymentLogs,
                              ExecSessionHandler execSessions,
                              DockerEventStreamService eventStreams, ContainerStatsStreamService statsStreams,
@@ -63,6 +65,7 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
         this.execSessions = execSessions;
         this.streams = streams;
         this.chatAccess = chatAccess;
+        this.chatSubscriptions = chatSubscriptions;
         this.logStreams = logStreams;
         this.deploymentLogs = deploymentLogs;
     }
@@ -86,6 +89,8 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                     if (!chatAccess.maySubscribe(accessor.getUser().getName(), chat.group(1))) {
                         throw new MessageDeliveryException("Subscription destination not allowed");
                     }
+                    chatSubscriptions.add(accessor.getUser().getName(), chat.group(1), accessor.getSessionId(),
+                            accessor.getSubscriptionId());
                     break;
                 }
                 var execTopic = EXEC_TOPIC.matcher(destination);
@@ -155,10 +160,11 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                 if (!access.mayFollowRun(accessor.getUser().getName(), streams.targetOf(m.group(1)))) {
                     throw new MessageDeliveryException("Subscription destination not allowed");
                 }
-                streams.subscribe(m.group(1), accessor.getSessionId(), accessor.getSubscriptionId());
+                streams.subscribe(m.group(1), accessor.getUser().getName(), accessor.getSessionId(), accessor.getSubscriptionId());
             }
             case UNSUBSCRIBE -> {
                 streams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
+                chatSubscriptions.remove(accessor.getSessionId(), accessor.getSubscriptionId());
                 logStreams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
                 deploymentLogs.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
                 eventStreams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
@@ -216,6 +222,7 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
     @EventListener
     void onDisconnect(SessionDisconnectEvent event) {
         streams.unsubscribe(event.getSessionId(), null);
+        chatSubscriptions.remove(event.getSessionId(), null);
         logStreams.unsubscribe(event.getSessionId(), null);
         deploymentLogs.unsubscribe(event.getSessionId(), null);
         eventStreams.unsubscribe(event.getSessionId(), null);

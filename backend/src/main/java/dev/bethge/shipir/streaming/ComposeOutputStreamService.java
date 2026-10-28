@@ -20,7 +20,9 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * Fan-out of Compose output to STOMP subscribers of {@code /topic/deployments/{runId}}.
@@ -38,7 +40,7 @@ public class ComposeOutputStreamService {
 
     public static final String TOPIC_PREFIX = "/topic/deployments/";
 
-    private record Subscription(String sessionId, String subscriptionId) {
+    private record Subscription(String username, String sessionId, String subscriptionId) {
     }
 
     private static final class Stream {
@@ -62,8 +64,8 @@ public class ComposeOutputStreamService {
         runTargets.put(runId, new RunTarget(hostId, deploymentId));
     }
 
-    java.util.Optional<RunTarget> targetOf(String runId) {
-        return java.util.Optional.ofNullable(runTargets.get(runId));
+    Optional<RunTarget> targetOf(String runId) {
+        return Optional.ofNullable(runTargets.get(runId));
     }
     private final MessageChannel clientOutbound;
     private final JsonMapper mapper;
@@ -127,13 +129,13 @@ public class ComposeOutputStreamService {
     }
 
     /** Registers a subscription and replays the buffer to it (called on STOMP SUBSCRIBE, before the broker sees it). */
-    void subscribe(String runId, String sessionId, String subscriptionId) {
+    void subscribe(String runId, String username, String sessionId, String subscriptionId) {
         Stream stream;
         synchronized (streams) {
             stream = streams.computeIfAbsent(runId, id -> new Stream());
         }
         synchronized (stream) {
-            Subscription sub = new Subscription(sessionId, subscriptionId);
+            Subscription sub = new Subscription(username, sessionId, subscriptionId);
             stream.subscribers.add(sub);
             for (StreamMessage m : stream.buffer) {
                 send(runId, sub, m);
@@ -158,7 +160,26 @@ public class ComposeOutputStreamService {
         removeIf(s -> s.sessionId.equals(sessionId) && (subscriptionId == null || s.subscriptionId.equals(subscriptionId)));
     }
 
-    private void removeIf(java.util.function.Predicate<Subscription> match) {
+    /**
+     * Drops the user's subscriptions whose run they may no longer follow (role, grant or account changed after
+     * SUBSCRIBE). Nothing is sent to them any more; the STOMP connection itself stays.
+     */
+    void revalidate(String username, Predicate<Optional<RunTarget>> runStillAllowed) {
+        Map<String, Stream> all;
+        synchronized (streams) {
+            all = new HashMap<>(streams);
+        }
+        all.forEach((runId, stream) -> {
+            if (runStillAllowed.test(targetOf(runId))) {
+                return;
+            }
+            synchronized (stream) {
+                stream.subscribers.removeIf(s -> username.equals(s.username));
+            }
+        });
+    }
+
+    private void removeIf(Predicate<Subscription> match) {
         List<Stream> all;
         synchronized (streams) {
             all = new ArrayList<>(streams.values());
