@@ -77,6 +77,12 @@ describe('validateWizard', () => {
     expect(p.fields.get('networks.1.driver')).toMatch(/External/)
     expect(p.fields.get('networks.2.name')).toMatch(/unique/)
   })
+  it("rejects an external top-level network named 'default' but allows a local one", () => {
+    const external = validateWizard(state([service({})], { networks: [{ name: 'default', driver: '', external: true }] }))
+    expect(external.fields.get('networks.0.name')).toMatch(/Compose's own network/)
+    const local = validateWizard(state([service({})], { networks: [{ name: 'default', driver: 'bridge', external: false }] }))
+    expect(local.fields.has('networks.0.name')).toBe(false)
+  })
   it('requires a service', () => {
     expect(validateWizard(state([])).general).toEqual(['Add at least one service.'])
   })

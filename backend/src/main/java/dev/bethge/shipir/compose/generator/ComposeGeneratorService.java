@@ -79,6 +79,10 @@ public class ComposeGeneratorService {
         for (NetworkSpec n : orEmpty(spec.networks())) {
             if (n != null) {
                 checkDriver("networks." + n.name(), n.driver(), n.external(), errors);
+                if (n.external() && COMPOSE_DEFAULT_NETWORK.equals(n.name())) {
+                    // Without a name override, Compose resolves an external "default" to a network Docker does not have.
+                    errors.add("networks." + n.name() + ": 'default' is Compose's own network and cannot be external");
+                }
             }
         }
         for (VolumeSpec v : orEmpty(spec.volumes())) {

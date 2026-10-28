@@ -218,4 +218,23 @@ class ComposeGeneratorDomainTest {
         assertThat(violations(new DomainSpec("a.example.org", 80, ProxyType.CADDY, "default"), null))
                 .anyMatch(v -> v.contains("domain.network"));
     }
+
+    @Test
+    void externalTopLevelDefaultNetworkIsRejected() {
+        // Verified with `docker compose config`: an external "default" resolves to a network literally named
+        // "default", which Docker does not have, so the deployment cannot start.
+        ServiceSpec s = app(null, List.of("default"), null);
+        assertThat(catchThrowableOfType(InvalidComposeSpecException.class,
+                () -> generator.generate(spec(s, List.of(new NetworkSpec("default", null, true))))).violations())
+                .anyMatch(v -> v.startsWith("networks.default:") && v.contains("Compose's own network"));
+    }
+
+    @Test
+    void nonExternalTopLevelDefaultNetworkCustomisesTheProjectNetwork() {
+        // Verified with `docker compose config`: declaring "default" without external overrides the implicit
+        // project network (a documented Compose feature), so it stays allowed.
+        ServiceSpec s = app(null, List.of("default"), null);
+        assertThat(generator.generate(spec(s, List.of(new NetworkSpec("default", "bridge", false)))))
+                .contains("networks:\n  default:\n    driver: bridge\n");
+    }
 }

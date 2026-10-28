@@ -211,6 +211,7 @@ export function validateWizard(state: WizardState): WizardProblems {
       const name = r.name.trim()
       if (!NAME.test(name)) set(`${kind}.${i}.name`, nameMsg)
       else if (seen.has(name)) set(`${kind}.${i}.name`, i18n.t('deployments:model.namesMustBeUnique'))
+      else if (kind === 'networks' && name === 'default' && r.external) set(`${kind}.${i}.name`, i18n.t('deployments:model.externalDefaultNetworkIsReserved'))
       seen.add(name)
       const driver = r.driver.trim()
       if (driver !== '' && !DRIVER.test(driver)) set(`${kind}.${i}.driver`, i18n.t('deployments:model.enterADriverNameSuch'))
