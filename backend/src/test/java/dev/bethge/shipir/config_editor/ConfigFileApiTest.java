@@ -276,7 +276,8 @@ class ConfigFileApiTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"repo/.env", "db.env", "app/.env", ".env.production", "app/.ENV", "Config/DB.ENV", "secrets/db.conf",
-            "app/my-Secret.txt", "tls/server.pem", "tls/SERVER.KEY", "repo/deep/.env.local"})
+            "app/my-Secret.txt", "tls/server.pem", "tls/SERVER.KEY", "repo/deep/.env.local",
+            "tls/store.p12", "tls/STORE.PFX", ".ssh/id_rsa", "app/ID_RSA", "aws/credentials", "app/Credentials.json"})
     void viewerCannotReadEnvLikeFilesButOperatorAndAdminCan(String path) throws Exception {
         Path file = dir.resolve(path);
         Files.createDirectories(file.getParent());

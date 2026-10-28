@@ -4,7 +4,8 @@ import java.util.Locale;
 
 /**
  * Single place that decides which deployment files hold secrets: {@code .env*}, {@code *.env}, anything with
- * {@code secret} in a path segment, {@code *.pem} and {@code *.key}. Matching is case-insensitive and looks at every
+ * {@code secret} in a path segment, {@code *.pem}, {@code *.key}, {@code *.p12}, {@code *.pfx}, the exact name
+ * {@code id_rsa} and names starting with {@code credentials}. Matching is case-insensitive and looks at every
  * segment of the path relative to the deployment directory (so {@code repo/.env} and {@code secrets/db.conf} match).
  * Their content is only readable with OPERATE access, never by view-only users and never through the AI assistant.
  */
@@ -20,7 +21,8 @@ public final class EnvLikeFiles {
         }
         for (String segment : relativePath.replace('\\', '/').split("/")) {
             String s = segment.toLowerCase(Locale.ROOT);
-            if (s.startsWith(".env") || s.endsWith(".env") || s.contains("secret") || s.endsWith(".pem") || s.endsWith(".key")) {
+            if (s.startsWith(".env") || s.endsWith(".env") || s.contains("secret") || s.endsWith(".pem") || s.endsWith(".key")
+                    || s.endsWith(".p12") || s.endsWith(".pfx") || s.equals("id_rsa") || s.startsWith("credentials")) {
                 return true;
             }
         }

@@ -125,4 +125,26 @@ class DeploymentVersionContentApiTest extends DeploymentTestBase {
                 .andExpect(status().isNotFound());
         mvc.perform(get(url() + "/" + granted + "/versions/" + gv)).andExpect(status().isUnauthorized());
     }
+
+    @Test
+    void viewOnlyGrantAndViewerGetEnvKeysButNeverValues() throws Exception {
+        Login admin = login("admin");
+        String id = create(admin, "web");
+        UUID v = jdbc.queryForObject("SELECT id FROM deployment_versions WHERE deployment_id = ?::uuid",
+                UUID.class, id);
+        Login viewer = login("viewer");
+        for (boolean grantOnly : new boolean[]{false, true}) {
+            if (grantOnly) {
+                jdbc.update("DELETE FROM permissions");
+                grantDeployment("viewer", UUID.fromString(id), "VIEW");
+            }
+            String detail = body(viewer, url() + "/" + id + "/versions/" + v);
+            assertThat(JsonPath.<java.util.List<String>>read(detail, "$.env[*].key"))
+                    .containsExactlyInAnyOrder("A", "B", "C");
+            assertThat(detail).doesNotContain("topsecret1").doesNotContain("same").doesNotContain("gone")
+                    .doesNotContain("value");
+            String list = body(viewer, url() + "/" + id + "/versions");
+            assertThat(list).doesNotContain("topsecret1").doesNotContain("same").doesNotContain("gone");
+        }
+    }
 }
