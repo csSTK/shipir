@@ -119,6 +119,44 @@ class ComposeFilePolicyTest {
         assertThat(check(envFile("linkdir/.env"))).hasSize(1);
     }
 
+    /** {@code dir/link} points to {@code hostA/other/sub}: {@code link/../x} really resolves to {@code hostA/other/x}. */
+    private void linkToSiblingOutsideTheDirectory() throws IOException {
+        Files.createDirectories(root.resolve("hostA/other/sub"));
+        Files.writeString(root.resolve("hostA/other/x.env"), "X=1\n");
+        Files.writeString(root.resolve("hostA/other/compose.yaml"), "services: {}\n");
+        Files.createSymbolicLink(dir.resolve("link"), root.resolve("hostA/other/sub"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"link/../x.env", "./link/../x.env"})
+    void rejectsEnvFileSymlinkDotDotEscapeThatLexicallyStaysInside(String path) throws IOException {
+        linkToSiblingOutsideTheDirectory();
+        assertThat(check(envFile(path))).hasSize(1);
+        assertThat(check("services:\n  x:\n    image: a\n    env_file:\n      - path: " + path + "\n        required: false\n"))
+                .hasSize(1);
+    }
+
+    @Test
+    void rejectsIncludeSymlinkDotDotEscapeThatLexicallyStaysInside() throws IOException {
+        linkToSiblingOutsideTheDirectory();
+        assertThat(check("include:\n  - link/../compose.yaml\nservices: {}\n")).isNotEmpty();
+        assertThat(check("include:\n  - path: link/../compose.yaml\n    env_file: link/../x.env\nservices: {}\n")).hasSize(2);
+    }
+
+    @Test
+    void rejectsExtendsFileSymlinkDotDotEscapeThatLexicallyStaysInside() throws IOException {
+        linkToSiblingOutsideTheDirectory();
+        assertThat(check("services:\n  x:\n    extends:\n      file: link/../compose.yaml\n      service: y\n")).isNotEmpty();
+    }
+
+    @Test
+    void allowsSymlinkDotDotPathsThatResolveInsideTheDirectory() throws IOException {
+        Files.createDirectories(dir.resolve("inner"));
+        Files.writeString(dir.resolve("app.env"), "A=1\n");
+        Files.createSymbolicLink(dir.resolve("link"), dir.resolve("inner"));
+        assertThat(check(envFile("link/../app.env"))).isEmpty();
+    }
+
     @Test
     void rejectsIncludeAndExtendsFilesOutsideTheDirectory() throws IOException {
         assertThat(check("include:\n  - ../other/compose.yaml\nservices: {}\n")).isNotEmpty();
