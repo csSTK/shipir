@@ -154,8 +154,9 @@ public class GitRepositoryService {
     }
 
     /**
-     * Makes the checkout match {@code commitSha} (deploy and rollback run the files of a recorded version). If HEAD is
-     * already that commit the working tree is only reset locally, without network access; otherwise the commit is
+     * Makes the checkout match {@code commitSha} (deploy and rollback run the files of a recorded version). If the
+     * commit is already in the local object store (HEAD, or the commit a failed pull moved away from) the working tree is
+     * only reset locally, without network access; otherwise the commit is
      * fetched like a SHA ref by {@link #sync}.
      */
     public GitCheckout ensureCommit(Path repoDir, String repoUrl, String commitSha, String composePath,
@@ -163,10 +164,11 @@ public class GitRepositoryService {
         if (commitSha != null && SHA.matcher(commitSha).matches() && Files.exists(repoDir.resolve(".git"))) {
             composeFile(repoDir, composePath, false);
             try (Git git = Git.open(repoDir.toFile())) {
-                ObjectId head = git.getRepository().resolve("HEAD^{commit}");
-                if (head != null && head.name().equalsIgnoreCase(commitSha)) {
-                    git.reset().setMode(ResetCommand.ResetType.HARD).setRef(head.name()).call();
-                    return new GitCheckout(head.name(), read(composeFile(repoDir, composePath, true)));
+                // the commit is usually still in the object store (HEAD, or the commit a pull moved away from)
+                ObjectId local = git.getRepository().resolve(commitSha + "^{commit}");
+                if (local != null) {
+                    git.reset().setMode(ResetCommand.ResetType.HARD).setRef(local.name()).call();
+                    return new GitCheckout(local.name(), read(composeFile(repoDir, composePath, true)));
                 }
             } catch (GitAPIException | IOException e) {
                 log.warn("Local git check failed: {}", e.getClass().getSimpleName());

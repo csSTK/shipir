@@ -510,9 +510,13 @@ public class DeploymentRunService {
         DockerEndpoint endpoint = deploymentService.endpointOf(host);
         locks.acquire(deployment.getId());
         boolean started = false;
+        DeploymentVersion restoreSource = null;
+        String restoreEnv = null;
         try {
             DeploymentVersion source = rollbackTo == null ? deploymentService.currentVersion(deployment) : versionOf(deployment, rollbackTo);
             String envText = decryptEnv(source);
+            restoreSource = source;
+            restoreEnv = envText;
             GitCheckout checkout = pullGit ? pull(deployment, endpoint, envText, unrestricted(username, userId, deployment)) : null;
             if (!pullGit) {
                 alignCheckout(deployment, source);
@@ -549,10 +553,31 @@ public class DeploymentRunService {
                             username, resultAction, aiMarker));
             started = true;
             return new DeploymentRunResponse(runId, version.getId());
+        } catch (RuntimeException e) {
+            if (pullGit && restoreSource != null) {
+                restoreAfterFailedPull(deployment, restoreSource, restoreEnv);
+            }
+            throw e;
         } finally {
             if (!started) {
                 locks.release(deployment.getId());
             }
+        }
+    }
+
+    /**
+     * A git redeploy that failed after the pull (policy denial, invalid compose, anything else) must not leave the
+     * violating commit checked out: later runs and the config editor read the working tree. Puts the checkout and the
+     * compose file back to the deployment's current version. Best effort: a failure here is logged, the original
+     * exception still reaches the caller.
+     */
+    private void restoreAfterFailedPull(Deployment deployment, DeploymentVersion source, String envText) {
+        try {
+            alignCheckout(deployment, source);
+            files.write(deployment.getHostId(), deployment.getName(), source.getYamlContent(), envText);
+        } catch (RuntimeException e) {
+            log.error("Restoring the checkout of deployment {} after a failed git redeploy failed: {}",
+                    deployment.getId(), e.toString());
         }
     }
 

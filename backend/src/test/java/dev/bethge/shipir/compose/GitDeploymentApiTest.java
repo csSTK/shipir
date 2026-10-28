@@ -229,6 +229,34 @@ class GitDeploymentApiTest extends DeploymentTestBase {
     }
 
     @Test
+    void policyDeniedRedeployRestoresTheCheckoutToThePreviousCommit() throws Exception {
+        Login operator = login("operator");
+        String body = mvc.perform(operator.write(post(url())).contentType(APPLICATION_JSON)
+                        .content(gitJson("gitdeployment", base + "/public.git", "main", "compose.yaml", null)))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String id = JsonPath.read(body, "$.id");
+        String first = head();
+        String currentVersion = jdbc.queryForObject("SELECT current_version_id FROM deployments WHERE id = ?::uuid",
+                String.class, id);
+        commit("compose.yaml", "services:\n  web:\n    image: nginx\n    privileged: true\n");
+        commands.clear();
+
+        mvc.perform(operator.write(post(url() + "/" + id + "/git/redeploy")))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ADMIN_REQUIRED"));
+
+        Path repoDir = files.repoDir(hostId, "gitdeployment");
+        try (Git checkout = Git.open(repoDir.toFile())) {
+            assertThat(checkout.getRepository().resolve("HEAD^{commit}").name()).isEqualTo(first);
+        }
+        assertThat(Files.readString(repoDir.resolve("compose.yaml"))).isEqualTo(YAML_A);
+        assertThat(files.readCompose(hostId, "gitdeployment").orElseThrow()).contains(YAML_A).doesNotContain("privileged");
+        assertThat(jdbc.queryForObject("SELECT current_version_id FROM deployments WHERE id = ?::uuid", String.class, id))
+                .isEqualTo(currentVersion);
+        assertThat(versionShas(id)).containsExactly(first);
+        assertThat(commands).doesNotContain(ComposeCommand.UP);
+    }
+
+    @Test
     void redeployPicksUpNewCommitAndDeploys() throws Exception {
         String cred = credential(TOKEN);
         Login operator = login("operator");
@@ -455,12 +483,18 @@ class GitDeploymentApiTest extends DeploymentTestBase {
     }
 
     @Test
-    void plainDeployRealignsACheckoutLeftOnANewerCommitByAFailedPull() throws Exception {
+    void failedPullLeavesTheCheckoutOnTheDeployedCommitAndPlainDeployStillWorks() throws Exception {
         Login admin = login("admin");
         String id = createGit(admin, "gitdeployment", credential(TOKEN));
-        commit("compose.yaml", "services:\n  web:\n    image: INVALID\n");
+        String invalid = commit("compose.yaml", "services:\n  web:\n    image: INVALID\n");
         mvc.perform(admin.write(post(url() + "/" + id + "/git/redeploy"))).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_COMPOSE"));
+        // the failed pull no longer leaves the invalid commit checked out (shipr-y37c.2)
+        assertThat(Files.readString(repoCheckout("gitdeployment").resolve("compose.yaml"))).isEqualTo(YAML_A);
+        // alignCheckout of a plain deploy still covers a checkout found on a newer commit (simulated directly)
+        try (Git local = Git.open(repoCheckout("gitdeployment").toFile())) {
+            local.reset().setMode(org.eclipse.jgit.api.ResetCommand.ResetType.HARD).setRef(invalid).call();
+        }
         assertThat(Files.readString(repoCheckout("gitdeployment").resolve("compose.yaml"))).contains("INVALID");
 
         mvc.perform(admin.write(post(url() + "/" + id + "/deploy"))).andExpect(status().isAccepted());
