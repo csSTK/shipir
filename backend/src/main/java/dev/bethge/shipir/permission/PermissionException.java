@@ -1,8 +1,9 @@
 package dev.bethge.shipir.permission;
 
+import dev.bethge.shipir.common.exception.CodedException;
 import org.springframework.http.HttpStatus;
 
-public class PermissionException extends RuntimeException {
+public class PermissionException extends RuntimeException implements CodedException {
 
     private final HttpStatus status;
     private final String code;
@@ -17,6 +18,7 @@ public class PermissionException extends RuntimeException {
         return status;
     }
 
+    @Override
     public String code() {
         return code;
     }

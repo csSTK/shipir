@@ -1,12 +1,13 @@
 package dev.bethge.shipir.git;
 
+import dev.bethge.shipir.common.exception.CodedException;
 import org.springframework.http.HttpStatus;
 
 /**
  * A Git operation on behalf of a deployment failed. Carries the HTTP status and a stable code; the message is fixed text and
  * never contains the repository URL, token or any JGit message (they may echo credentials).
  */
-public class GitOperationException extends RuntimeException {
+public class GitOperationException extends RuntimeException implements CodedException {
 
     private final HttpStatus status;
     private final String code;
@@ -18,5 +19,6 @@ public class GitOperationException extends RuntimeException {
     }
 
     public HttpStatus status() { return status; }
+    @Override
     public String code() { return code; }
 }

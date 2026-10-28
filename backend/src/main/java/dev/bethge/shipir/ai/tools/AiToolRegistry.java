@@ -2,15 +2,10 @@ package dev.bethge.shipir.ai.tools;
 
 import dev.bethge.shipir.ai.llm.LlmToolDefinition;
 import dev.bethge.shipir.auth.Role;
+import dev.bethge.shipir.common.exception.CodedException;
 import dev.bethge.shipir.common.security.AiInvocationContext;
 import dev.bethge.shipir.compose.DeploymentException;
 import dev.bethge.shipir.compose.EnvFile;
-import dev.bethge.shipir.config_editor.ConfigFileException;
-import dev.bethge.shipir.permission.PermissionException;
-import dev.bethge.shipir.git.GitException;
-import dev.bethge.shipir.git.GitOperationException;
-import dev.bethge.shipir.host.HostException;
-import dev.bethge.shipir.notification.WebhookException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -237,22 +232,14 @@ public class AiToolRegistry {
             return truncate(tool.execute(args, ctx));
         } catch (ToolArgumentException e) {
             return ToolResult.error("INVALID_ARGUMENTS", e.getMessage());
-        } catch (HostException e) {
-            return ToolResult.error(e.code(), e.getMessage());
         } catch (DeploymentException e) {
             // details name the offending fields (e.g. "ref: must not be blank") so the model can correct the call
             return ToolResult.error(e.code(), deploymentErrorMessage(e, args));
-        } catch (ConfigFileException e) {
-            return ToolResult.error(e.code(), e.getMessage());
-        } catch (PermissionException e) {
-            return ToolResult.error(e.code(), e.getMessage());
-        } catch (WebhookException e) {
-            return ToolResult.error(e.code(), e.getMessage());
-        } catch (GitException e) {
-            return ToolResult.error(e.code(), e.getMessage());
-        } catch (GitOperationException e) {
-            return ToolResult.error(e.code(), e.getMessage());
         } catch (RuntimeException e) {
+            if (e instanceof CodedException coded) {
+                // every feature exception with a stable code (host, config file, permission, webhook, git)
+                return ToolResult.error(coded.code(), e.getMessage());
+            }
             // the exception text is not forwarded (could carry internals); the type is enough for the log
             log.warn("AI tool {} failed: {}", tool.name(), e.getClass().getSimpleName());
             return ToolResult.error("TOOL_FAILED", "The tool could not be executed.");

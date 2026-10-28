@@ -1,11 +1,12 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.common.exception.CodedException;
 import org.springframework.http.HttpStatus;
 
 import java.util.List;
 
 /** A host request that cannot be fulfilled; carries the HTTP status and stable error code. */
-public class HostException extends RuntimeException {
+public class HostException extends RuntimeException implements CodedException {
 
     private final HttpStatus status;
     private final String code;
@@ -26,6 +27,7 @@ public class HostException extends RuntimeException {
         return status;
     }
 
+    @Override
     public String code() {
         return code;
     }
