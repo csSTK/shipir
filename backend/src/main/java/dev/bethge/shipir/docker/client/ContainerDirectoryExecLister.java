@@ -6,7 +6,9 @@ import com.github.dockerjava.api.model.StreamType;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.DockerErrorCode;
+import dev.bethge.shipir.docker.DockerHostConnectionManager;
 import dev.bethge.shipir.docker.dto.ContainerFileEntry;
+import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -29,6 +31,7 @@ import java.util.concurrent.TimeUnit;
  * non-zero exit) throws {@link DockerErrorCode#DIRECTORY_TOO_LARGE}. This is the only exec use in file access;
  * download and upload stay on the archive API.
  */
+@Component
 class ContainerDirectoryExecLister {
 
     static final int MAX_ENTRIES = 10_000;
@@ -36,8 +39,8 @@ class ContainerDirectoryExecLister {
 
     private final DockerCallSupport calls;
 
-    ContainerDirectoryExecLister(DockerCallSupport calls) {
-        this.calls = calls;
+    ContainerDirectoryExecLister(DockerHostConnectionManager manager) {
+        this.calls = new DockerCallSupport(manager);
     }
 
     List<ContainerFileEntry> list(UUID hostId, DockerEndpoint endpoint, String containerId, String dir) {

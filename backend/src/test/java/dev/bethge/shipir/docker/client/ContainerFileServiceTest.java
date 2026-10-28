@@ -112,7 +112,7 @@ class ContainerFileServiceTest {
 
     private static ContainerDirectoryExecLister lister(java.util.function.Supplier<List<ContainerFileEntry>> result,
                                                       String[] seenDir) {
-        return new ContainerDirectoryExecLister(null) {
+        return new ContainerDirectoryExecLister((DockerHostConnectionManager) null) {
             @Override
             List<ContainerFileEntry> list(UUID h, DockerEndpoint e, String c, String dir) {
                 seenDir[0] = dir;

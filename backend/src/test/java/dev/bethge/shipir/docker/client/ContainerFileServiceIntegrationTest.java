@@ -58,7 +58,7 @@ class ContainerFileServiceIntegrationTest {
                 .exec().getId();
         docker.startContainerCmd(id).exec();
         Thread.sleep(800);
-        service = new ContainerFileServiceImpl(manager);
+        service = new ContainerFileServiceImpl(manager, new ContainerDirectoryExecLister(manager));
     }
 
     @AfterEach
