@@ -28,9 +28,17 @@ public class ContainerFileServiceImpl implements ContainerFileService {
     private static final Duration TRANSFER_EXTRA = Duration.ofMinutes(10);
 
     private final DockerCallSupport calls;
+    private final ContainerDirectoryExecLister execLister;
 
     public ContainerFileServiceImpl(DockerHostConnectionManager manager) {
         this.calls = new DockerCallSupport(manager);
+        this.execLister = new ContainerDirectoryExecLister(calls);
+    }
+
+    /** For tests: replaces the exec fallback. */
+    ContainerFileServiceImpl(DockerHostConnectionManager manager, ContainerDirectoryExecLister execLister) {
+        this.calls = new DockerCallSupport(manager);
+        this.execLister = execLister;
     }
 
     @Override
@@ -42,11 +50,12 @@ public class ContainerFileServiceImpl implements ContainerFileService {
             entries = readDirectory(hostId, endpoint, containerId, dir, maxScanBytes, true);
         } catch (DockerConnectionException e) {
             if (e.getCode() == DockerErrorCode.SIZE_LIMIT_EXCEEDED) {
-                // the archive API sends the whole subtree; this is a listing problem, not an oversize transfer
-                throw new DockerConnectionException(DockerErrorCode.DIRECTORY_TOO_LARGE,
-                        "The directory is too large to list.", e);
+                // the archive API sends the whole subtree: fall back once to a single-directory exec listing,
+                // which throws DIRECTORY_TOO_LARGE itself when exec is not possible
+                entries = new ArrayList<>(execLister.list(hostId, endpoint, containerId, dir));
+            } else {
+                throw e;
             }
-            throw e;
         }
         entries.sort(Comparator.comparing((ContainerFileEntry e) -> e.type() != ContainerFileEntry.Type.DIRECTORY)
                 .thenComparing(ContainerFileEntry::name));
@@ -100,7 +109,7 @@ public class ContainerFileServiceImpl implements ContainerFileService {
         return new LimitedInputStream(openArchive(hostId, endpoint, containerId, normalizePath(path)), maxBytes);
     }
 
-    private InputStream openArchive(UUID hostId, DockerEndpoint endpoint, String containerId, String path) {
+    InputStream openArchive(UUID hostId, DockerEndpoint endpoint, String containerId, String path) {
         return calls.call(hostId, endpoint, TRANSFER_EXTRA,
                 client -> client.copyArchiveFromContainerCmd(containerId, path).exec());
     }

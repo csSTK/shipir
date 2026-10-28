@@ -99,9 +99,64 @@ class ContainerFileServiceIntegrationTest {
     }
 
     @Test
-    void listScanLimitIsEnforced() {
+    void listOverScanLimitFallsBackToExec() {
+        List<ContainerFileEntry> entries = service.list(hostId, endpoint, id, "/data", 3000);
+        assertThat(entries).extracting(ContainerFileEntry::name).containsExactly("sub", "a.txt", "big.bin", "link");
+        assertThat(entries.get(0).type()).isEqualTo(ContainerFileEntry.Type.DIRECTORY);
+        assertThat(entries.get(3).type()).isEqualTo(ContainerFileEntry.Type.SYMLINK);
+        // a symlink to a directory is followed by the fallback as well
+        assertThat(service.list(hostId, endpoint, id, "/data/link", 100)).extracting(ContainerFileEntry::name)
+                .containsExactly("b.txt");
+    }
+
+    @Test
+    void listRootWithTinyLimitSucceeds() {
+        assertThat(service.list(hostId, endpoint, id, "/", 1000)).extracting(ContainerFileEntry::name)
+                .contains("etc", "data", "bin");
+    }
+
+    @Test
+    void execFallbackHandlesOddNamesAndTraversalInput() throws Exception {
+        exec("sh", "-c", "cd /data && touch -- '-rf' '--help' \"$(printf 'a\\nb')\"");
+        List<ContainerFileEntry> entries = service.list(hostId, endpoint, id, "/data/sub/../../data/", 100);
+        assertThat(entries).extracting(ContainerFileEntry::name).contains("-rf", "--help", "a\nb", "a.txt");
+        assertThat(service.list(hostId, endpoint, id, "/../../data", 100)).extracting(ContainerFileEntry::name)
+                .contains("-rf");
+    }
+
+    @Test
+    void execFailureOnImageWithoutFindStaysDirectoryTooLarge() throws Exception {
+        exec("rm", "/usr/bin/find");
         assertThatThrownBy(() -> service.list(hostId, endpoint, id, "/data", 3000))
                 .isInstanceOfSatisfying(DockerConnectionException.class, e -> assertThat(e.getCode()).isEqualTo(DockerErrorCode.DIRECTORY_TOO_LARGE));
+    }
+
+    @Test
+    void execFallbackWorksWithGnuFindOnDebian() throws Exception {
+        String debian = "debian:12-slim";
+        try {
+            docker.inspectImageCmd(debian).exec();
+        } catch (Exception notPresent) {
+            docker.pullImageCmd(debian).start().awaitCompletion();
+        }
+        String debianId = docker.createContainerCmd(debian).withCmd("sleep", "120").exec().getId();
+        try {
+            docker.startContainerCmd(debianId).exec();
+            List<ContainerFileEntry> entries = service.list(hostId, endpoint, debianId, "/", 1000);
+            assertThat(entries).extracting(ContainerFileEntry::name).contains("etc", "usr", "bin");
+            assertThat(entries).filteredOn(e -> e.name().equals("etc")).extracting(ContainerFileEntry::type)
+                    .containsExactly(ContainerFileEntry.Type.DIRECTORY);
+            // /bin is a symlink to usr/bin on debian 12; listing it follows the link
+            assertThat(service.list(hostId, endpoint, debianId, "/bin", 1000)).extracting(ContainerFileEntry::name)
+                    .contains("sh", "ls");
+        } finally {
+            docker.removeContainerCmd(debianId).withForce(true).exec();
+        }
+    }
+
+    private void exec(String... cmd) throws Exception {
+        String execId = docker.execCreateCmd(id).withCmd(cmd).exec().getId();
+        docker.execStartCmd(execId).start().awaitCompletion();
     }
 
     @Test
