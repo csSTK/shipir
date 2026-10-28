@@ -31,14 +31,14 @@ Two classes, four category epics. Pick exactly one category per finding.
 | Quality | Tests & CI stability | `tests` | flaky tests, missing malicious-case or edge tests, CI gaps |
 | Quality | Code quality, UI & docs | `quality` | duplication, dead code, naming, design-system gaps, stale docs |
 
-**Category epics are standing and never closed**, even when all children are done (no `bd close`, no `bd epic close-eligible` on them). One open epic per category: never create a second one.
+**Category epics are standing and never closed**, even when all children are done (no `bd close`, no `bd epic close-eligible` on them). One open epic per category.
 
 Class "Real" = a bug, security issue, data-loss risk or CLAUDE.md rule violation. Everything else is "Quality". Quality items are never priority 1 or 2.
 
 ## Steps
 
 1. **Deduplicate:** `bd search "<key words>"` and `bd list --label finding --status open`. If an open bead already covers it, add a note instead: `bd update <id> --notes "Seen again in <source-id>: <one line>"`.
-2. **Find or create the category epic.** `bd list --type epic --status open --label fcat:<slug>`. Use the one that is **not the epic currently being run** (a findings epic never receives children while it is being implemented). If there is none, create it:
+2. **Find or create the category epic.** `bd list --type epic --status open --label fcat:<slug>`. Always use that one, even while it is being run: never create a second epic for the same category. If there is none at all, create it:
 
    ```bash
    bd create --type=epic --priority=<2 for security/bugs, 3 for tests/quality> \
