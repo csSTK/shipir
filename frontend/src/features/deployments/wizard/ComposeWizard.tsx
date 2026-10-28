@@ -173,6 +173,8 @@ function DomainSection({
           })}
           {detected.network ? ` ${t('ComposeWizard.onNetwork', { network: detected.network })}` : ''}. {t('ComposeWizard.fillInADomain')}
         </p>
+      ) : detected && !detected.visible ? (
+        <p className="wz-hint" role="status">{t('ComposeWizard.proxyDetectionNotAvailable')}</p>
       ) : (
         detected && (
           <div className="wz-detect">

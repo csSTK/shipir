@@ -526,6 +526,7 @@
   "ComposeWizard.onNetwork": "im Netzwerk {{network}}",
   "ComposeWizard.fillInADomain": "Trage eine Domain ein, um diesen Service darüber zu routen.",
   "ComposeWizard.noReverseProxyDetected": "Auf diesem Host wurde kein Reverse-Proxy erkannt. Ohne einen wirkt die Domain nicht; die Traefik-Vorlage lässt sich im YAML-Modus verwenden.",
+  "ComposeWizard.proxyDetectionNotAvailable": "Die Proxy-Erkennung ist für diesen Host mit deinem Zugriff nicht verfügbar, daher ist unbekannt, ob dort ein Reverse-Proxy läuft.",
   "ComposeWizard.copyTraefikTemplate": "Traefik-Vorlage kopieren",
   "ComposeWizard.copied": "Kopiert",
   "ComposeWizard.couldNotCopyTheTemplate": "Die Vorlage konnte nicht kopiert werden.",

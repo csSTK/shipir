@@ -31,7 +31,7 @@ async function openWizard(page: import('@playwright/test').Page) {
 }
 
 test('detected proxy prefills the domain section and the domain is sent to generate', async ({ page, api }) => {
-  mockCommon(api, { proxy: 'TRAEFIK', container: 'traefik', network: 'proxy' })
+  mockCommon(api, { visible: true, proxy: 'TRAEFIK', container: 'traefik', network: 'proxy' })
   api.mock('POST', '/api/compose/generate', { body: { yaml: 'services: {}\n' } })
   await openWizard(page)
 
@@ -50,7 +50,7 @@ test('detected proxy prefills the domain section and the domain is sent to gener
 
 test('without a proxy the Traefik template is offered, invalid domains are caught locally', async ({ page, api, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
-  mockCommon(api, { proxy: null, container: null, network: null })
+  mockCommon(api, { visible: true, proxy: null, container: null, network: null })
   api.mock('GET', '/api/compose/proxy-templates/traefik', { body: { yaml: 'services:\n  traefik:\n    image: traefik:v3.1\n' } })
   await openWizard(page)
 
@@ -64,4 +64,12 @@ test('without a proxy the Traefik template is offered, invalid domains are caugh
   await page.getByLabel('Service 1 domain host').fill('Not_A_Domain')
   await page.getByRole('button', { name: 'Preview YAML' }).click()
   await expect(page.getByText('Enter a lowercase domain name such as app.example.com.')).toBeVisible()
+})
+
+test('a host that is not fully visible gets a neutral hint, not "no reverse proxy"', async ({ page, api }) => {
+  mockCommon(api, { visible: false, proxy: null, container: null, network: null })
+  await openWizard(page)
+
+  await expect(page.getByText('Proxy detection is not available', { exact: false })).toBeVisible()
+  await expect(page.getByText('No reverse proxy detected', { exact: false })).toHaveCount(0)
 })

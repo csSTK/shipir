@@ -15,6 +15,8 @@ import java.util.function.Function;
  * Finds a label based reverse proxy among the containers of a host: a running container whose image is
  * {@code traefik} or {@code caddy-docker-proxy} (registry prefix, tag and digest ignored; plain {@code caddy} is not
  * label driven). Traefik wins over Caddy when both run.
+ * Network rule: of the proxy's user-defined networks the alphabetically first name is reported (deterministic; built-in
+ * {@code bridge}/{@code host}/{@code none} are never reported).
  */
 final class ProxyDetector {
 
@@ -31,7 +33,7 @@ final class ProxyDetector {
                     .findFirst();
             if (found.isPresent()) {
                 ContainerDto c = found.get();
-                return new ProxyDetectionResponse(type, c.name(), networkOf(inspect.apply(c.id())));
+                return new ProxyDetectionResponse(true, type, c.name(), networkOf(inspect.apply(c.id())));
             }
         }
         return ProxyDetectionResponse.none();

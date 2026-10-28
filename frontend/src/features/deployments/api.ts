@@ -324,8 +324,9 @@ export function useAdoptDeployment(hostId: string) {
   })
 }
 
-/** `GET /api/hosts/{id}/proxy`: the reverse proxy running on the host; all null when none is detected. */
+/** `GET /api/hosts/{id}/proxy`: the reverse proxy running on the host; all null when none is detected; `visible` false when the caller does not see the whole host (not the same as no proxy). */
 export interface DetectedProxy {
+  visible: boolean
   proxy: ProxyType | null
   container: string | null
   network: string | null

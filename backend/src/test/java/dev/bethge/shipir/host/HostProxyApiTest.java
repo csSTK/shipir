@@ -57,6 +57,7 @@ class HostProxyApiTest extends HostApiTestBase {
         stubTraefik();
         mvc.perform(get("/api/hosts/{h}/proxy", host).session(login(user).session()))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.visible").value(true))
                 .andExpect(jsonPath("$.proxy").value("TRAEFIK"))
                 .andExpect(jsonPath("$.container").value("traefik"))
                 .andExpect(jsonPath("$.network").value("proxy"));
@@ -72,6 +73,7 @@ class HostProxyApiTest extends HostApiTestBase {
                 + "FROM users WHERE username = 'operator'", dep);
         mvc.perform(get("/api/hosts/{h}/proxy", host).session(login("operator").session()))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.visible").value(false))
                 .andExpect(jsonPath("$.proxy").value(org.hamcrest.Matchers.nullValue()))
                 .andExpect(jsonPath("$.network").value(org.hamcrest.Matchers.nullValue()));
         verify(containers, never()).listContainers(any(), any());
@@ -83,6 +85,7 @@ class HostProxyApiTest extends HostApiTestBase {
         when(containers.listContainers(any(), any())).thenReturn(List.of());
         mvc.perform(get("/api/hosts/{h}/proxy", host).session(login("admin").session()))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.visible").value(true))
                 .andExpect(jsonPath("$.proxy").value(org.hamcrest.Matchers.nullValue()))
                 .andExpect(jsonPath("$.network").value(org.hamcrest.Matchers.nullValue()));
     }

@@ -35,7 +35,7 @@ const group = () => screen.getByRole('group', { name: 'Service 1 domain' })
 
 describe('wizard domain section', () => {
   it('shows the detected proxy and prefills proxy and network once a host is typed', async () => {
-    serve({ proxy: 'CADDY', container: 'caddy', network: 'edge' })
+    serve({ visible: true, proxy: 'CADDY', container: 'caddy', network: 'edge' })
     open()
     expect(await within(group()).findByText(/Caddy detected \(caddy\) on network edge/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Add port to service 1' }))
@@ -47,7 +47,7 @@ describe('wizard domain section', () => {
   })
 
   it('sends the domain in the generate request', async () => {
-    serve({ proxy: 'TRAEFIK', container: 'traefik', network: 'proxy' })
+    serve({ visible: true, proxy: 'TRAEFIK', container: 'traefik', network: 'proxy' })
     open()
     await within(group()).findByText(/Traefik detected/)
     fireEvent.change(screen.getByLabelText('Service 1 name'), { target: { value: 'web' } })
@@ -61,7 +61,7 @@ describe('wizard domain section', () => {
   })
 
   it('exposes Traefik entrypoint and cert resolver, sends them and hides them for Caddy', async () => {
-    serve({ proxy: 'TRAEFIK', container: 'traefik', network: 'proxy' })
+    serve({ visible: true, proxy: 'TRAEFIK', container: 'traefik', network: 'proxy' })
     open()
     await within(group()).findByText(/Traefik detected/)
     fireEvent.change(screen.getByLabelText('Service 1 name'), { target: { value: 'web' } })
@@ -79,7 +79,7 @@ describe('wizard domain section', () => {
   })
 
   it('shows a field error for an invalid domain and does not call generate', async () => {
-    serve({ proxy: null, container: null, network: null })
+    serve({ visible: true, proxy: null, container: null, network: null })
     open()
     fireEvent.change(screen.getByLabelText('Service 1 name'), { target: { value: 'web' } })
     fireEvent.change(screen.getByLabelText('Service 1 image'), { target: { value: 'nginx' } })
@@ -92,12 +92,20 @@ describe('wizard domain section', () => {
   it('offers the Traefik template when no proxy is detected and copies it', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
-    serve({ proxy: null, container: null, network: null })
+    serve({ visible: true, proxy: null, container: null, network: null })
     open()
     expect(await within(group()).findByText(/No reverse proxy detected/)).toBeInTheDocument()
     fireEvent.click(within(group()).getByRole('button', { name: 'Copy Traefik template' }))
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('services:\n  traefik: {}\n'))
     expect(await within(group()).findByText('Copied')).toBeInTheDocument()
+  })
+
+  it('says detection is unavailable instead of "no proxy" when the host is not fully visible', async () => {
+    serve({ visible: false, proxy: null, container: null, network: null })
+    open()
+    expect(await within(group()).findByText(/Proxy detection is not available/)).toBeInTheDocument()
+    expect(within(group()).queryByText(/No reverse proxy detected/)).not.toBeInTheDocument()
+    expect(within(group()).queryByRole('button', { name: 'Copy Traefik template' })).not.toBeInTheDocument()
   })
 
   it('still works when detection fails', async () => {
@@ -110,14 +118,14 @@ describe('wizard domain section', () => {
 
   it('reports a failed copy when the clipboard is unavailable', async () => {
     Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true })
-    serve({ proxy: null, container: null, network: null })
+    serve({ visible: true, proxy: null, container: null, network: null })
     open()
     fireEvent.click(await within(group()).findByRole('button', { name: 'Copy Traefik template' }))
     expect(await within(group()).findByText('Could not copy the template.')).toBeInTheDocument()
   })
 
   it('keeps a proxy the user picked before typing the host', async () => {
-    serve({ proxy: 'CADDY', container: 'caddy', network: 'edge' })
+    serve({ visible: true, proxy: 'CADDY', container: 'caddy', network: 'edge' })
     open()
     await within(group()).findByText(/Caddy detected/)
     fireEvent.change(screen.getByLabelText('Service 1 domain proxy'), { target: { value: 'TRAEFIK' } })
@@ -127,7 +135,7 @@ describe('wizard domain section', () => {
   })
 
   it('does not restore a network the user cleared when the host is retyped', async () => {
-    serve({ proxy: 'CADDY', container: 'caddy', network: 'edge' })
+    serve({ visible: true, proxy: 'CADDY', container: 'caddy', network: 'edge' })
     open()
     await within(group()).findByText(/Caddy detected/)
     const host = screen.getByLabelText('Service 1 domain host')
@@ -139,7 +147,7 @@ describe('wizard domain section', () => {
   })
 
   it('does not request proxy detection while the wizard is inactive', () => {
-    serve({ proxy: null, container: null, network: null })
+    serve({ visible: true, proxy: null, container: null, network: null })
     render(
       <QueryClientProvider client={new QueryClient()}>
         <ComposeWizard hostId="h1" active={false} onContinue={() => {}} />

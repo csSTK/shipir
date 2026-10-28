@@ -209,11 +209,11 @@ public class HostResourcesService {
         return access.hostFullyVisible(hostId) ? call(hostId, networks::list) : List.of();
     }
 
-    /** Reverse proxy (Traefik or caddy-docker-proxy) running on a fully visible host; none otherwise. */
+    /** Reverse proxy (Traefik or caddy-docker-proxy) running on a fully visible host; "not visible" otherwise. */
     public ProxyDetectionResponse proxy(UUID hostId) {
         requireView(hostId);
         if (!access.hostFullyVisible(hostId)) {
-            return ProxyDetectionResponse.none();
+            return ProxyDetectionResponse.notVisible();
         }
         return call(hostId, (id, endpoint) -> ProxyDetector.detect(containers.listContainers(id, endpoint),
                 containerId -> containers.inspect(id, endpoint, containerId)));

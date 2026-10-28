@@ -33,7 +33,7 @@ class ProxyDetectorTest {
         ProxyDetectionResponse r = ProxyDetector.detect(
                 List.of(container("a", "nginx:1", "running"), container("t", "traefik:v3.1", "running")),
                 networks(Map.of("t", List.of("bridge", "proxy"))));
-        assertThat(r).isEqualTo(new ProxyDetectionResponse(ProxyType.TRAEFIK, "name-t", "proxy"));
+        assertThat(r).isEqualTo(new ProxyDetectionResponse(true, ProxyType.TRAEFIK, "name-t", "proxy"));
     }
 
     @Test
@@ -41,7 +41,7 @@ class ProxyDetectorTest {
         ProxyDetectionResponse r = ProxyDetector.detect(
                 List.of(container("c", "lucaslorentz/caddy-docker-proxy:2.9-alpine", "running")),
                 networks(Map.of("c", List.of("caddy"))));
-        assertThat(r).isEqualTo(new ProxyDetectionResponse(ProxyType.CADDY, "name-c", "caddy"));
+        assertThat(r).isEqualTo(new ProxyDetectionResponse(true, ProxyType.CADDY, "name-c", "caddy"));
     }
 
     @ParameterizedTest
@@ -84,7 +84,26 @@ class ProxyDetectorTest {
                 List.of(container("c", "lucaslorentz/caddy-docker-proxy:2", "running"),
                         container("t", "traefik:v3", "running")),
                 networks(Map.of("t", List.of("zeta", "alpha"), "c", List.of("caddy"))));
-        assertThat(r).isEqualTo(new ProxyDetectionResponse(ProxyType.TRAEFIK, "name-t", "alpha"));
+        assertThat(r).isEqualTo(new ProxyDetectionResponse(true, ProxyType.TRAEFIK, "name-t", "alpha"));
+    }
+
+    /** Documented rule: of several user-defined networks the alphabetically first wins, built-in ones never. */
+    @Test
+    void severalUserNetworksPickTheAlphabeticallyFirstRegardlessOfOrder() {
+        ProxyDetectionResponse r = ProxyDetector.detect(List.of(container("t", "traefik:v3", "running")),
+                networks(Map.of("t", List.of("bridge", "web", "monitoring", "edge", "host"))));
+        assertThat(r.network()).isEqualTo("edge");
+    }
+
+    @Test
+    void noProxyOnAFullyVisibleHostIsVisible() {
+        assertThat(ProxyDetector.detect(List.of(), networks(Map.of())).visible()).isTrue();
+    }
+
+    @Test
+    void notVisibleIsDistinctFromNoProxy() {
+        assertThat(ProxyDetectionResponse.notVisible().visible()).isFalse();
+        assertThat(ProxyDetectionResponse.notVisible()).isNotEqualTo(ProxyDetectionResponse.none());
     }
 
     @Test

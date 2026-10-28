@@ -18,7 +18,7 @@ const key = (method: string, path: string) => `${method.toUpperCase()} ${path}`
 const EMPTY_HISTORY = { range: '24h', from: '2026-10-24T10:00:00Z', to: '2026-10-25T10:00:00Z', bucketSeconds: 60, seriesTotal: 0, truncated: false, series: [] }
 
 /** No reverse proxy detected: the add-deployment wizard asks for it whenever the dialog is open; specs override. */
-const NO_PROXY = { proxy: null, container: null, network: null }
+const NO_PROXY = { visible: true, proxy: null, container: null, network: null }
 
 function defaultFor(method: string, path: string): MockResponse | undefined {
   if (method !== 'GET') return undefined
