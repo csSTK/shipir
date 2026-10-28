@@ -13,6 +13,7 @@ import dev.bethge.shipir.permission.dto.PermissionsResponse;
 import dev.bethge.shipir.permission.dto.SubjectGrantResponse;
 import dev.bethge.shipir.permission.dto.SubjectGrantsResponse;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,7 +30,7 @@ import java.util.stream.Collectors;
 
 /**
  * ADMIN management of the grants of a user or a team. PUT replaces the complete set. The read methods are public
- * for the AI tool {@code list_access_grants}; callers must be ADMIN (the tool is registered for ADMIN only).
+ * for the AI tool {@code list_access_grants}; they enforce ADMIN themselves ({@code @PreAuthorize}), whoever calls them.
  */
 @Service
 public class PermissionGrantService {
@@ -56,6 +57,7 @@ public class PermissionGrantService {
         this.events = events;
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @Transactional(readOnly = true)
     public PermissionsResponse get(UUID userId) {
         find(userId);
@@ -109,6 +111,7 @@ public class PermissionGrantService {
         return entities;
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @Transactional(readOnly = true)
     public PermissionsResponse getForTeam(UUID teamId) {
         findTeam(teamId);
@@ -116,6 +119,7 @@ public class PermissionGrantService {
     }
 
     /** Who may access the host: direct user grants and team grants, with names and levels only. */
+    @PreAuthorize("hasRole('ADMIN')")
     @Transactional(readOnly = true)
     public SubjectGrantsResponse forHost(UUID hostId) {
         if (!hosts.existsById(hostId)) {
@@ -124,6 +128,7 @@ public class PermissionGrantService {
         return subjectGrants(grants.findByHostId(hostId));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @Transactional(readOnly = true)
     public SubjectGrantsResponse forDeployment(UUID deploymentId) {
         if (deployments.hostIdOf(deploymentId).isEmpty()) {
