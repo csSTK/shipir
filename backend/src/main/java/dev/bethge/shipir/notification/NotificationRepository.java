@@ -44,6 +44,14 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
     @Query("update Notification n set n.readAt = :now where n.userId = :userId and n.readAt is null")
     int markAllRead(UUID userId, Instant now);
 
+    /** Marks only the unread notifications within the visible scope (same rules as {@link #VISIBLE}). */
+    @Modifying
+    @Query("update Notification n set n.readAt = :now where n.readAt is null and n.userId = :userId and "
+            + "(n.hostId in :fullHosts or (n.hostId in :partialHosts and "
+            + "(n.type in :hostTypes or n.deploymentId in :deploymentIds)))")
+    int markVisibleRead(UUID userId, Instant now, Collection<UUID> fullHosts, Collection<UUID> partialHosts,
+                        Collection<NotificationType> hostTypes, Collection<UUID> deploymentIds);
+
     /** Bulk delete for the retention purge; returns the number of deleted rows. */
     @Modifying
     @Query("delete from Notification n where n.createdAt < :cutoff")

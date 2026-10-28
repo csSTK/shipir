@@ -213,7 +213,12 @@ public class NotificationService {
 
     @Transactional
     public void markAllRead(UUID userId) {
-        notifications.markAllRead(userId, clock.instant());
+        Visibility v = visibility(userId);
+        if (v == null) {
+            notifications.markAllRead(userId, clock.instant());
+        } else if (!v.isEmpty()) {
+            notifications.markVisibleRead(userId, clock.instant(), v.full(), v.partial(), HOST_TYPES, v.deployments());
+        }
     }
 
     @Transactional(readOnly = true)

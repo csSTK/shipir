@@ -100,4 +100,27 @@ class NotificationPermissionTest extends NotificationTestBase {
         mvc.perform(get("/api/notifications").session(login("operator").session()))
                 .andExpect(jsonPath("$.totalElements").value(2));
     }
+
+    @Test
+    void markAllReadLeavesHiddenNotificationsUnread() throws Exception {
+        UUID host = insertHost("shared");
+        UUID mine = insertDeployment(host, "mine");
+        UUID other = insertDeployment(host, "other");
+        UUID hiddenHost = insertHost("hidden");
+        jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) VALUES (?, ?, 'VIEW')", userId("operator"), mine);
+        insertScoped("operator", "DEPLOYMENT_FAILED", host, mine, false);
+        insertScoped("operator", "DEPLOYMENT_FAILED", host, other, false);
+        insertScoped("operator", "CONTAINER_CRASHED", host, null, false);
+        insertScoped("operator", "HOST_DOWN", hiddenHost, null, false);
+        Login l = login("operator");
+        mvc.perform(l.write(post("/api/notifications/read-all"))).andExpect(status().isNoContent());
+        mvc.perform(get("/api/notifications/unread-count").session(l.session()))
+                .andExpect(jsonPath("$.count").value(0));
+        Integer unreadRows = jdbc.queryForObject("SELECT count(*) FROM notifications WHERE user_id = ? AND read_at IS NULL",
+                Integer.class, userId("operator"));
+        org.junit.jupiter.api.Assertions.assertEquals(3, unreadRows);
+        Integer readRows = jdbc.queryForObject("SELECT count(*) FROM notifications WHERE user_id = ? AND read_at IS NOT NULL",
+                Integer.class, userId("operator"));
+        org.junit.jupiter.api.Assertions.assertEquals(1, readRows);
+    }
 }
