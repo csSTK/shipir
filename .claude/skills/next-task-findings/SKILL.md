@@ -31,6 +31,8 @@ Two classes, four category epics. Pick exactly one category per finding.
 | Quality | Tests & CI stability | `tests` | flaky tests, missing malicious-case or edge tests, CI gaps |
 | Quality | Code quality, UI & docs | `quality` | duplication, dead code, naming, design-system gaps, stale docs |
 
+**Category epics are standing and never closed**, even when all children are done (no `bd close`, no `bd epic close-eligible` on them). One open epic per category: never create a second one.
+
 Class "Real" = a bug, security issue, data-loss risk or CLAUDE.md rule violation. Everything else is "Quality". Quality items are never priority 1 or 2.
 
 ## Steps
