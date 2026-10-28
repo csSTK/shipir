@@ -35,7 +35,6 @@ class ChatSessionController {
 
     private final ChatSessionService service;
     private final UserRepository users;
-
     private final ChatOrchestrator orchestrator;
 
     ChatSessionController(ChatSessionService service, UserRepository users, ChatOrchestrator orchestrator) {

@@ -152,10 +152,6 @@ public class ChatOrchestrator {
     }
 
     /** Stores the user message and starts a run. @return the run id */
-    public UUID send(ToolContext ctx, UUID sessionId, String content) {
-        return send(ctx, sessionId, content, null);
-    }
-
     public UUID send(ToolContext ctx, UUID sessionId, String content, ViewContext view) {
         sessions.findOwned(ctx.userId(), sessionId);
         requireConfigured();
