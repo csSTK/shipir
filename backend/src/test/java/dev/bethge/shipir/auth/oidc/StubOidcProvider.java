@@ -49,6 +49,7 @@ final class StubOidcProvider implements AutoCloseable {
     private volatile String tokenEndpointOverride;
     private volatile String jwksUriOverride;
     private final RSAKey foreignKey;
+    private volatile int oversizeMode; // 0 = off, 1 = declared Content-Length, 2 = chunked
 
     /** What the token endpoint hands out for one authorization code. */
     record Grant(String codeChallenge, String nonce, Map<String, Object> claims) {
@@ -119,7 +120,13 @@ final class StubOidcProvider implements AutoCloseable {
         audiencesOverride = audiences;
     }
 
+    /** discovery, JWKS and token responses become 2 MiB of valid-looking JSON ({@code chunked}: no Content-Length). */
+    void oversize(boolean chunked) {
+        oversizeMode = chunked ? 2 : 1;
+    }
+
     void reset() {
+        oversizeMode = 0;
         audiencesOverride = null;
         omitExp = false;
         omitIat = false;
@@ -224,7 +231,24 @@ final class StubOidcProvider implements AutoCloseable {
         return m;
     }
 
-    private static void respond(HttpExchange ex, int status, String body) throws IOException {
+    private void respond(HttpExchange ex, int status, String body) throws IOException {
+        if (oversizeMode != 0) {
+            byte[] chunk = ("\"" + "a".repeat(1023) + "\"").getBytes(StandardCharsets.UTF_8);
+            long total = 2L * 1024 * 1024;
+            ex.getResponseHeaders().add("Content-Type", "application/json");
+            ex.sendResponseHeaders(200, oversizeMode == 1 ? total : 0);
+            try (var out = ex.getResponseBody()) {
+                out.write("{\"padding\":[".getBytes(StandardCharsets.UTF_8));
+                for (long written = 0; written < total; written += chunk.length + 1) {
+                    out.write(chunk);
+                    out.write(',');
+                }
+                out.write("\"x\"]}".getBytes(StandardCharsets.UTF_8));
+            } catch (IOException clientHungUp) {
+                // the client refusing the oversized body is the expected outcome
+            }
+            return;
+        }
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
         ex.getResponseHeaders().add("Content-Type", "application/json");
         ex.sendResponseHeaders(status, bytes.length);

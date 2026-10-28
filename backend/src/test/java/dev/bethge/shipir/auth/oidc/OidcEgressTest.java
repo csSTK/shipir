@@ -131,4 +131,29 @@ class OidcEgressTest {
         assertThat(status).isEqualTo(302);
         assertThat(hits).containsExactly("/jwks");
     }
+
+    @Test
+    void discoveryDocumentOverTheCapIsUnreachable() {
+        provider.oversize(true);
+        assertUnreachable(() -> client(true).fetch(provider.issuer()));
+    }
+
+    @Test
+    void tokenAndJwksResponsesOverTheCapAreRefusedWhetherOrNotLengthIsDeclared() {
+        for (boolean chunked : new boolean[]{false, true}) {
+            provider.oversize(chunked);
+            for (String path : List.of("/jwks", "/token")) {
+                var rest = new org.springframework.web.client.RestTemplate(client(true).requestFactory());
+                assertThatThrownBy(() -> rest.getForObject(provider.issuer() + path, String.class))
+                        .as("%s chunked=%s", path, chunked)
+                        .isInstanceOf(org.springframework.web.client.RestClientException.class);
+            }
+        }
+    }
+
+    @Test
+    void tokenAndJwksResponsesUnderTheCapStillWork() {
+        var rest = new org.springframework.web.client.RestTemplate(client(true).requestFactory());
+        assertThat(rest.getForObject(provider.issuer() + "/jwks", String.class)).contains("\"keys\"");
+    }
 }
