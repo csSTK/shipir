@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -125,6 +126,45 @@ class VolumeBackupStore {
             return null; // right shape, impossible date: not one of ours
         } catch (IOException e) {
             throw new HostException(HttpStatus.INTERNAL_SERVER_ERROR, "BACKUP_STORE_FAILED", "The stored backups could not be read");
+        }
+    }
+
+    /**
+     * Deletes every stored archive of the volume (exact name pattern only) and then the volume directory if it is
+     * empty. Symlinks are never followed: a symlinked host/volume directory or a symlinked archive is left alone.
+     * Returns the number of deleted archives; 0 when nothing was stored.
+     */
+    int deleteAll(UUID hostId, String volume) {
+        try {
+            Path base = properties.dir().toAbsolutePath().normalize();
+            if (!Files.isDirectory(base)) {
+                return 0;
+            }
+            Path dir = PathValidationUtil.resolve(base, hostId + "/" + volume);
+            if (!Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)
+                    || !dir.toRealPath().equals(base.toRealPath().resolve(hostId.toString()).resolve(volume))) {
+                return 0; // missing, or a symlink somewhere on the way: not ours to touch
+            }
+            Pattern name = namePattern(volume);
+            int deleted = 0;
+            try (Stream<Path> files = Files.list(dir)) {
+                for (Path file : files.filter(p -> name.matcher(p.getFileName().toString()).matches())
+                        .filter(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS)).toList()) {
+                    if (Files.deleteIfExists(file)) {
+                        deleted++;
+                    }
+                }
+            }
+            try {
+                Files.delete(dir); // only succeeds when empty
+            } catch (DirectoryNotEmptyException e) {
+                // other files stay, so does the directory
+            }
+            return deleted;
+        } catch (PathValidationException e) {
+            return 0;
+        } catch (IOException e) {
+            throw new HostException(HttpStatus.INTERNAL_SERVER_ERROR, "BACKUP_STORE_FAILED", "The stored backups could not be deleted");
         }
     }
 

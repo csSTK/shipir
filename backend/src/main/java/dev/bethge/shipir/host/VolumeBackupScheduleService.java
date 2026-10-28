@@ -5,6 +5,8 @@ import dev.bethge.shipir.auth.UserRepository;
 import dev.bethge.shipir.host.dto.VolumeBackupScheduleRequest;
 import dev.bethge.shipir.host.dto.VolumeBackupScheduleResponse;
 import dev.bethge.shipir.permission.CurrentAccess;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -21,6 +23,8 @@ import java.util.UUID;
 @Service
 public class VolumeBackupScheduleService {
 
+    private static final Logger log = LoggerFactory.getLogger(VolumeBackupScheduleService.class);
+
     static final String SCHEDULE_EXISTS = "A schedule for this volume already exists";
 
     private final VolumeBackupScheduleRepository schedules;
@@ -28,14 +32,16 @@ public class VolumeBackupScheduleService {
     private final UserRepository users;
     private final CurrentAccess access;
     private final Clock clock;
+    private final VolumeBackupStore store;
 
     VolumeBackupScheduleService(VolumeBackupScheduleRepository schedules, DockerHostRepository hosts, UserRepository users,
-                                CurrentAccess access, Clock clock) {
+                                CurrentAccess access, Clock clock, VolumeBackupStore store) {
         this.schedules = schedules;
         this.hosts = hosts;
         this.users = users;
         this.access = access;
         this.clock = clock;
+        this.store = store;
     }
 
     @Transactional(readOnly = true)
@@ -70,6 +76,15 @@ public class VolumeBackupScheduleService {
         VolumeBackupSchedule schedule = schedules.findByIdAndHostId(scheduleId, hostId).orElseThrow(
                 () -> new HostException(HttpStatus.NOT_FOUND, "SCHEDULE_NOT_FOUND", "Backup schedule not found"));
         schedules.delete(schedule);
+        // Row first, files after and best-effort: a failing file delete must not keep a schedule the user removed
+        // (it would keep running). Leftover archives are logged. One schedule per (host, volume) is enforced by a
+        // unique constraint, so no other schedule shares these archives.
+        try {
+            store.deleteAll(hostId, schedule.getVolumeName());
+        } catch (RuntimeException e) {
+            log.warn("Schedule {} deleted, but its stored backups of volume {} on host {} could not be removed",
+                    scheduleId, schedule.getVolumeName(), hostId, e);
+        }
     }
 
     /** Stores the outcome of a run and plans the next one; a schedule deleted meanwhile is ignored. */
