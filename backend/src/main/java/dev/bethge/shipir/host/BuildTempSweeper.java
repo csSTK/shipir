@@ -22,8 +22,8 @@ import java.util.stream.Stream;
  * directory in a {@code finally}, which a JVM kill does not run.
  *
  * <p>Runs once at startup and then hourly. Only direct children that are real directories (symlinks are never followed
- * nor deleted) and whose last modification is older than {@link #STALE_AFTER} are removed. The threshold is well above
- * the build timeout, so a build that is still running is never touched.
+ * nor deleted) and whose last modification is older than {@link #staleAfter()}
+ * ({@code max(6h, 2 x shipir.images.build-timeout)}), so a build that is still running is never touched.
  *
  * <p>Which directories are swept depends on where the spool lives:
  * <ul>
@@ -38,7 +38,8 @@ class BuildTempSweeper {
 
     private static final Logger log = LoggerFactory.getLogger(BuildTempSweeper.class);
 
-    static final Duration STALE_AFTER = Duration.ofHours(6);
+    /** Lower bound of the staleness threshold; the effective one is {@code max(this, 2 x build-timeout)}. */
+    static final Duration MIN_STALE_AFTER = Duration.ofHours(6);
     /** Spool name used before {@link ImageBuildService#SPOOL_PREFIX}; only swept in an explicitly configured dir. */
     private static final String LEGACY_PREFIX = "build-";
 
@@ -48,6 +49,15 @@ class BuildTempSweeper {
     BuildTempSweeper(ImageBuildProperties properties, Clock clock) {
         this.properties = properties;
         this.clock = clock;
+    }
+
+    /**
+     * A spool directory's mtime reflects the build start only, so the threshold must exceed the build timeout, or a
+     * live build's spool could be deleted. Twice the timeout leaves headroom for the upload and cleanup phases.
+     */
+    Duration staleAfter() {
+        Duration doubled = properties.buildTimeout().multipliedBy(2);
+        return doubled.compareTo(MIN_STALE_AFTER) > 0 ? doubled : MIN_STALE_AFTER;
     }
 
     @Scheduled(fixedDelayString = "PT1H")
@@ -66,11 +76,11 @@ class BuildTempSweeper {
         sweepDirectory(root, List.of(ImageBuildService.SPOOL_PREFIX, LEGACY_PREFIX), now);
     }
 
-    private static void sweepDirectory(Path root, List<String> prefixes, Instant now) {
+    private void sweepDirectory(Path root, List<String> prefixes, Instant now) {
         if (!Files.isDirectory(root)) {
             return;
         }
-        Instant cutoff = now.minus(STALE_AFTER);
+        Instant cutoff = now.minus(staleAfter());
         int removed = 0;
         try (Stream<Path> children = Files.list(root)) {
             for (Path child : children.toList()) {

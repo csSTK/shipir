@@ -115,4 +115,66 @@ class BuildTempSweeperTest {
         assertThat(legacy).doesNotExist();
         assertThat(current).doesNotExist();
     }
+
+    private static BuildTempSweeper sweeperWithTimeout(Path root, Duration timeout) {
+        return new BuildTempSweeper(
+                new ImageBuildProperties(DataSize.ofMegabytes(200), timeout, root.toString()),
+                Clock.fixed(NOW, Clock.systemUTC().getZone()));
+    }
+
+    @Test
+    void thresholdIsTwiceTheBuildTimeoutWhenThatExceedsSixHours(@TempDir Path root) throws IOException {
+        Path running = dirWithAge(root, "shipir-build-running", Duration.ofHours(7));
+        Path abandoned = dirWithAge(root, "shipir-build-abandoned", Duration.ofHours(9));
+
+        sweeperWithTimeout(root, Duration.ofHours(4)).sweepDirectory(root, NOW);
+
+        assertThat(running).isDirectory();
+        assertThat(abandoned).doesNotExist();
+    }
+
+    @Test
+    void thresholdNeverDropsBelowSixHoursForShortTimeouts(@TempDir Path root) throws IOException {
+        Path young = dirWithAge(root, "shipir-build-young", Duration.ofHours(5));
+
+        sweeperWithTimeout(root, Duration.ofMinutes(1)).sweepDirectory(root, NOW);
+
+        assertThat(young).isDirectory();
+    }
+
+    @Test
+    void symlinkInsideStaleDirIsRemovedButItsTargetSurvives(@TempDir Path root, @TempDir Path outside) throws IOException {
+        Path target = Files.writeString(outside.resolve("precious.txt"), "keep");
+        Path stale = dirWithAge(root, "shipir-build-stale", Duration.ofDays(2));
+        Files.createSymbolicLink(stale.resolve("dir-link"), outside);
+        Files.createSymbolicLink(stale.resolve("file-link"), target);
+        Files.setLastModifiedTime(stale, FileTime.from(NOW.minus(Duration.ofDays(2))));
+
+        sweeper(root).sweepDirectory(root, NOW);
+
+        assertThat(stale).doesNotExist();
+        assertThat(target).hasContent("keep");
+        assertThat(outside).isDirectory();
+    }
+
+    @Test
+    void symlinkedShipirBuildNameInSystemTempIsNeitherFollowedNorDeleted(@TempDir Path systemTemp, @TempDir Path outside)
+            throws IOException {
+        Path target = Files.writeString(outside.resolve("precious.txt"), "keep");
+        Files.setLastModifiedTime(outside, FileTime.from(NOW.minus(Duration.ofDays(3))));
+        Path link = Files.createSymbolicLink(systemTemp.resolve("shipir-build-link"), outside);
+        BuildTempSweeper unconfigured = new BuildTempSweeper(
+                new ImageBuildProperties(DataSize.ofMegabytes(200), Duration.ofMinutes(30), ""),
+                Clock.fixed(NOW, Clock.systemUTC().getZone()));
+        String previous = System.getProperty("java.io.tmpdir");
+        System.setProperty("java.io.tmpdir", systemTemp.toString());
+        try {
+            unconfigured.sweep();
+        } finally {
+            System.setProperty("java.io.tmpdir", previous);
+        }
+
+        assertThat(target).hasContent("keep");
+        assertThat(Files.exists(link, LinkOption.NOFOLLOW_LINKS)).isTrue();
+    }
 }
