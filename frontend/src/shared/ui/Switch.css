@@ -28,7 +28,7 @@
   flex: none;
   width: 2.75rem;
   height: 1.625rem;
-  padding: 2px;
+  padding: var(--space-half);
   border-radius: var(--radius-pill);
   background: var(--color-border-strong);
   transition:

@@ -1,5 +1,5 @@
 .sparkline {
   display: block;
-  color: AccentColor;
+  color: var(--color-accent);
   overflow: visible;
 }

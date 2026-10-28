@@ -36,6 +36,7 @@
   --weight-bold: 700;
 
   /* Spacing (rem, 4px base, generous steps) */
+  --space-half: 0.125rem;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -44,6 +45,9 @@
   --space-6: 2rem;
   --space-7: 3rem;
   --space-8: 4rem;
+
+  /* Hairline width, for overlapping a neighbouring 1px border (calc(var(--border-width) * -1)) */
+  --border-width: 1px;
 
   /* Radii */
   --radius-sm: 0.5rem;
@@ -60,6 +64,8 @@
   /* Layout */
   --sidebar-width: 15rem;
   --content-max: 72rem;
+  --content-narrow: 60rem;
+  --panel-max-height: 20rem;
   --control-height: 2.5rem;
   --size-qr: 12rem;
 

@@ -33,17 +33,17 @@
 }
 .tschart__line {
   fill: none;
-  stroke: currentColor;
+  stroke: var(--series-color);
   stroke-width: 2;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
 .tschart__area {
-  fill: currentColor;
+  fill: var(--series-color);
   opacity: 0.1;
 }
 .tschart__dot {
-  fill: currentColor;
+  fill: var(--series-color);
   stroke: var(--color-surface);
   stroke-width: 2;
 }

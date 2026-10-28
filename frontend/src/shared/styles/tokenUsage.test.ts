@@ -3,7 +3,9 @@ import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-// Feature and shared/ui CSS may only use design tokens: no hex colors, no raw font sizes.
+// All CSS outside shared/styles (features, app, shared/ui, shared/charts) may only use design tokens:
+// no hex colors, no raw font sizes (incl. the font shorthand), no raw px spacing/radii/insets/max sizes,
+// no currentColor/AccentColor, and the wizard stylesheet has no decimal opacity, raw durations or bare easings.
 // Vitest blanks CSS (even ?raw via import.meta.glob), so every sheet is read from disk.
 const srcRoot = join(dirname(fileURLToPath(import.meta.url)), '../..')
 const MIN_SHEETS = 50
@@ -43,9 +45,9 @@ const allSheets: Sheet[] = cssFiles(srcRoot).map((f) => ({
 }))
 const checked = allSheets.filter((s) => !s.path.startsWith('/shared/styles/'))
 
-// Existing violations, recorded so the scans stay green until shipr-ycvc.32 migrates them.
-// shipr-ycvc.32 removes these entries; a stale entry (count no longer matches) fails the test,
-// so the list can only shrink. Key: `<rule> <file>` -> number of offending lines.
+// The hex-color and raw-font-size allowlist is empty. Add an entry only with a bead reference and a reason
+// in a comment; a stale entry (count no longer matches) fails the test, so the list can only shrink.
+// Key: `<rule> <file>` -> number of offending lines.
 const allowlist: Record<string, number> = {}
 
 const countsFor = (rule: Rule): Record<string, number> =>
@@ -96,21 +98,66 @@ describe('design token usage', () => {
     })
   }
 
-  // Deployments feature (shipr-pir): spacing and radii come from tokens, colors never derive from currentColor/AccentColor.
-  const deploymentSheets = allSheets.filter((s) => s.path.startsWith('/features/deployments/'))
+  // All CSS outside shared/styles (shipr-ycvc.32): spacing, radii and layout sizes come from tokens,
+  // colors never derive from currentColor/AccentColor. Media-query breakpoints are not declarations and stay raw.
+  const RAW_PX =
+    /(?:^|[;{\s])(?:gap|row-gap|column-gap|padding(?:-[a-z]+)?|margin(?:-[a-z]+)?|border-radius|inset(?:-[a-z]+)*|top|right|bottom|left|max-width|max-height)\s*:[^;{}]*?-?\b\d+(?:\.\d+)?px[^;{}]*/gim
+  const rawPx = (css: string): string[] => [...strip(css).matchAll(RAW_PX)].map((m) => m[0].replace(/^[;{\s]+/, '').trim())
+  const derivedColor = (css: string): string[] =>
+    strip(css).split('\n').filter((l) => /currentColor|AccentColor/.test(l)).map((l) => l.trim())
 
-  it('scans the deployments stylesheets', () => {
-    expect(deploymentSheets.length).toBeGreaterThan(10)
+  it('px and color scanners catch violations in inline CSS', () => {
+    expect(rawPx('.a { gap: 8px; }\n.b { margin: -1px; }\n.c { max-width: 960px; }\n.d { padding: 0 var(--space-2); }')).toEqual([
+      'gap: 8px',
+      'margin: -1px',
+      'max-width: 960px',
+    ])
+    expect(rawPx('.a { border-radius: 10px; }\n.b { padding: 0\n 4px; }')).toHaveLength(2)
+    expect(rawPx('@media (max-width: 720px) { .a { gap: var(--space-2); } }\n.b { width: 1px; }')).toEqual([])
+    expect(rawPx('.a { GAP: 8PX; }')).toEqual(['GAP: 8PX'])
+    expect(rawPx('.a { inset: 8px; }\n.b { inset-inline-start: 4px; }\n.c { padding:0 8px; }')).toEqual([
+      'inset: 8px',
+      'inset-inline-start: 4px',
+      'padding:0 8px',
+    ])
+    expect(rawPx('.a { max-width: calc(100% - 8px); }')).toHaveLength(1)
+    expect(rawPx('.a { color: red; gap: 8px; margin: 0; }')).toEqual(['gap: 8px'])
+    expect(rawPx('.a { padding: var(--space-2); inset: 0; margin-bottom: calc(var(--border-width) * -1); clip-path: inset(50%); }')).toEqual([])
+    expect(rawPx('@media (max-width: 600px) { .a { padding: var(--space-2); } }')).toEqual([])
+    expect(derivedColor('.a { color: AccentColor; }\n.b { border: 2px solid currentColor; }\n.c { color: red; }')).toHaveLength(2)
   })
 
-  it('has no raw px spacing or radii in deployments CSS', () => {
-    const raw = /(?:^|[;{\s])(?:gap|row-gap|column-gap|padding(?:-[a-z]+)?|margin(?:-[a-z]+)?|border-radius|top|right|bottom|left)\s*:[^;{}]*\b\d+(?:\.\d+)?px/m
-    const offenders = deploymentSheets.filter((s) => raw.test(strip(s.css))).map((s) => s.path)
-    expect(offenders).toEqual([])
+  it('has no raw px spacing, radii or layout sizes in any stylesheet outside shared/styles', () => {
+    const offenders = Object.fromEntries(checked.flatMap((s) => (rawPx(s.css).length > 0 ? [[s.path, rawPx(s.css)] as const] : [])))
+    expect(offenders).toEqual({})
   })
 
-  it('has no currentColor or AccentColor in deployments CSS', () => {
-    const offenders = deploymentSheets.filter((s) => /currentColor|AccentColor/.test(strip(s.css))).map((s) => s.path)
-    expect(offenders).toEqual([])
+  it('has no currentColor or AccentColor in any stylesheet outside shared/styles', () => {
+    const offenders = Object.fromEntries(checked.flatMap((s) => (derivedColor(s.css).length > 0 ? [[s.path, derivedColor(s.css)] as const] : [])))
+    expect(offenders).toEqual({})
+  })
+
+  // Wizard (former shipr-ycvc.17): no decimal opacity, no raw durations, no bare easing keywords.
+  const wizardViolations = (css: string): string[] => {
+    const c = strip(css).replace(/var\([^)]*\)/g, '')
+    return [
+      ...c.matchAll(/opacity\s*:\s*0?\.\d+/gi),
+      ...c.matchAll(/(?<![\w.-])\d*\.?\d+m?s\b/gi),
+      ...c.matchAll(/\b(?:ease-in-out|ease-in|ease-out|ease|linear)\b|cubic-bezier/gi),
+    ].map((m) => m[0])
+  }
+
+  it('wizard violation scanner catches decimal opacity, raw durations and bare easings', () => {
+    expect(wizardViolations('.a { opacity: 0.65; }')).toEqual(['opacity: 0.65'])
+    expect(wizardViolations('.a { transition: opacity 150ms ease-out; }')).toHaveLength(2)
+    expect(wizardViolations('.a { transition: x .2s linear; }')).toHaveLength(2)
+    expect(wizardViolations('.a { transition: x 1s cubic-bezier(0, 0, 1, 1); }')).toHaveLength(2)
+    expect(wizardViolations('.a { transition: x var(--duration-fast) var(--ease-out); opacity: 0; }')).toEqual([])
+  })
+
+  it('wizard stylesheet has no decimal opacity, raw durations or bare easing keywords', () => {
+    const wizard = allSheets.find((s) => s.path === '/features/deployments/wizard/wizard.css')
+    expect(wizard).toBeDefined()
+    expect(wizardViolations(wizard!.css)).toEqual([])
   })
 })

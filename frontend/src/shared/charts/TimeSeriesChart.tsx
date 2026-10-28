@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
 import { RANGE_WORDS, formatTick, nearestIndex, niceTicks, splitSegments, summarize, timeTicks, type Range, type TimePoint } from './series.ts'
 import { useTranslation } from 'react-i18next'
 import { dateTimeFormat } from '../i18n/format.ts'
@@ -139,7 +139,7 @@ export function TimeSeriesChart({ title, series, from, to, range, bucketSeconds,
           const lastSegment = segments[segments.length - 1]
           const end = lastSegment?.[lastSegment.length - 1]
           return (
-            <g key={s.key} style={{ color: color(i) }}>
+            <g key={s.key} style={{ '--series-color': color(i) } as CSSProperties}>
               {segments.map((seg, n) => {
                 const d = seg.map((p, k) => `${k === 0 ? 'M' : 'L'}${x(p.t).toFixed(1)},${yOf(p.v ?? 0).toFixed(1)}`).join('')
                 return (
@@ -162,7 +162,7 @@ export function TimeSeriesChart({ title, series, from, to, range, bucketSeconds,
             {series.map((s, i) => {
               const p = s.points.find((q) => q.t === cursorTime)
               return p && p.v !== null ? (
-                <circle key={s.key} className="tschart__dot" style={{ color: color(i) }} cx={x(cursorTime)} cy={yOf(p.v)} r={4} />
+                <circle key={s.key} className="tschart__dot" style={{ '--series-color': color(i) } as CSSProperties} cx={x(cursorTime)} cy={yOf(p.v)} r={4} />
               ) : null
             })}
           </g>

@@ -54,7 +54,7 @@
 .assistant-dock__spinner {
   width: var(--space-5);
   height: var(--space-5);
-  border: 2px solid currentColor;
+  border: 2px solid var(--color-on-accent);
   border-right-color: transparent;
   border-radius: var(--radius-pill);
   animation: assistant-dock-spin 700ms linear infinite;
@@ -103,7 +103,7 @@
   position: absolute;
   width: 1px;
   height: 1px;
-  margin: -1px;
+  margin: calc(var(--border-width) * -1);
   padding: 0;
   overflow: hidden;
   clip-path: inset(50%);
@@ -211,7 +211,7 @@
 @media (prefers-reduced-motion: reduce) {
   .assistant-dock__spinner {
     animation: none;
-    border-right-color: currentColor;
+    border-right-color: var(--color-on-accent);
     opacity: 0.6;
   }
 }

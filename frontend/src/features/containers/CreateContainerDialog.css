@@ -5,21 +5,21 @@
 .ccd__group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   border: 0;
 }
 .ccd__group legend {
   padding: 0;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
   font-size: var(--text-small-size);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 .ccd__row {
   display: grid;
   grid-template-columns: 1fr 1fr auto auto;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
 }
 .ccd__row--mount {
@@ -28,16 +28,16 @@
 .ccd__row input,
 .ccd__row select {
   font: inherit;
-  padding: 8px 12px;
-  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
-  border-radius: 10px;
-  background: color-mix(in srgb, currentColor 5%, transparent);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
   color: inherit;
   min-width: 0;
 }
 .ccd__row input:focus-visible,
 .ccd__row select:focus-visible {
-  outline: 2px solid AccentColor;
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 .ccd__row-error {
@@ -47,7 +47,7 @@
 .ccd__check {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   font-size: var(--text-body-size);
   cursor: pointer;
 }
@@ -60,7 +60,7 @@
 .ccd__field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-2);
 }
 .ccd__field .ui-error {
   margin: 0;

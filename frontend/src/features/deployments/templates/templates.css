@@ -16,7 +16,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
   gap: var(--space-3);
-  max-height: 320px;
+  max-height: var(--panel-max-height);
   overflow-y: auto;
 }
 .tp__card {
