@@ -126,7 +126,7 @@ public class ImageServiceImpl implements ImageService {
     }
 
     /** Turns pull items into one line per (layer, status) change; the daemon's error text is never forwarded. */
-    private static final class Progress extends ResultCallback.Adapter<PullResponseItem> {
+    static final class Progress extends ResultCallback.Adapter<PullResponseItem> {
         private final Consumer<String> onProgress;
         private final java.util.Map<String, String> lastStatus = new java.util.HashMap<>();
         volatile DockerErrorCode failure;
@@ -151,7 +151,7 @@ public class ImageServiceImpl implements ImageService {
             if (status.equals(lastStatus.put(id, status))) {
                 return;
             }
-            onProgress.accept(id.isEmpty() ? status : id + ": " + status);
+            onProgress.accept(OutputSanitizer.neutralize(id.isEmpty() ? status : id + ": " + status));
         }
     }
 

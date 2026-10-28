@@ -2,6 +2,7 @@ package dev.bethge.shipir.docker.client;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.dockerjava.api.model.BuildResponseItem;
+import com.github.dockerjava.api.model.PullResponseItem;
 import com.github.dockerjava.api.model.PushResponseItem;
 import org.junit.jupiter.api.Test;
 
@@ -45,8 +46,22 @@ class BuildAndPushOutputTest {
         assertThat(lines).containsExactly("abc: Pushed  ");
     }
 
+    @Test
+    void pullProgressLineStripsC1ControlsAndBidiAndZeroWidthCharacters() throws Exception {
+        List<String> lines = new ArrayList<>();
+        ImageServiceImpl.Progress progress = new ImageServiceImpl.Progress(lines::add);
+
+        progress.onNext(pullItem("{\"id\":\"lay\\u202Er\",\"status\":\"Downloading\\u0085\\u200B\\u061C\\u200F\"}"));
+
+        assertThat(lines).containsExactly("lay r: Downloading    ");
+    }
+
     private static BuildResponseItem item(String json) throws Exception {
         return JSON.readValue(json, BuildResponseItem.class);
+    }
+
+    private static PullResponseItem pullItem(String json) throws Exception {
+        return JSON.readValue(json, PullResponseItem.class);
     }
 
     private static PushResponseItem pushItem(String json) throws Exception {

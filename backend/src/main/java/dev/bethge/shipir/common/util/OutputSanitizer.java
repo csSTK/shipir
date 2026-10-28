@@ -3,14 +3,16 @@ package dev.bethge.shipir.common.util;
 import java.util.regex.Pattern;
 
 /**
- * Makes daemon output safe to show as plain text: control characters, C1 controls (U+0080-009F) and bidi
- * embedding, override and isolate characters (U+202A-202E, U+2066-2069) become spaces, so a log line cannot
- * hide or reorder text in the UI. Tabs are kept.
+ * Makes daemon output safe to show as plain text: control characters, C1 controls (U+0080-009F), bidi embedding,
+ * override and isolate characters (U+202A-202E, U+2066-2069), the Arabic letter mark (U+061C), the zero-width
+ * space (U+200B) and the left-to-right and right-to-left marks (U+200E-200F) become spaces, so a log line cannot
+ * hide or reorder text in the UI. Tabs are kept. The zero-width non-joiner (U+200C) and joiner (U+200D) are kept:
+ * scripts such as Persian and emoji sequences need them to render correctly.
  */
 public final class OutputSanitizer {
 
     private static final Pattern UNSAFE = Pattern.compile(
-            "[\\p{Cntrl}\\x{0080}-\\x{009F}\\x{202A}-\\x{202E}\\x{2066}-\\x{2069}&&[^\\t]]");
+            "[\\p{Cntrl}\\x{0080}-\\x{009F}\\x{061C}\\x{200B}\\x{200E}\\x{200F}\\x{202A}-\\x{202E}\\x{2066}-\\x{2069}&&[^\\t]]");
 
     private OutputSanitizer() {
     }

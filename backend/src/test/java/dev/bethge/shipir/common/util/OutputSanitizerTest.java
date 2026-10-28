@@ -42,4 +42,16 @@ class OutputSanitizerTest {
     void neutralizesAsciiControlCharacters() {
         assertThat(OutputSanitizer.neutralize("a\u0007b\u001Bc\u007Fd")).isEqualTo("a b c d");
     }
+
+    @Test
+    void neutralizesZeroWidthSpaceLeftToRightAndRightToLeftMarksAndArabicLetterMark() {
+        assertThat(OutputSanitizer.neutralize("a\u200Bb\u200Ec\u200Fd\u061Ce")).isEqualTo("a b c d e");
+    }
+
+    @Test
+    void keepsZeroWidthNonJoinerAndJoinerUsedByScriptsAndEmojiSequences() {
+        String persianOrEmoji = "می\u200Cخواهم 👨\u200D👩";
+
+        assertThat(OutputSanitizer.neutralize(persianOrEmoji)).isEqualTo(persianOrEmoji);
+    }
 }
