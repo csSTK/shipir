@@ -125,6 +125,11 @@ class UserAdminService {
             throw new UserAdminException(HttpStatus.BAD_REQUEST, "SELF_RESET_PASSWORD",
                     "Use the account page to change your own password");
         }
+        if (user.getExternalIssuer() != null) {
+            // SSO users sign in through the identity provider; a local password must not be created for them
+            throw new UserAdminException(HttpStatus.CONFLICT, "EXTERNAL_IDENTITY",
+                    "This user signs in through single sign-on and has no local password");
+        }
         String password = generatePassword();
         user.resetPasswordHash(encoder.encode(password));
         sessions.expireSessionsOf(user.getUsername());

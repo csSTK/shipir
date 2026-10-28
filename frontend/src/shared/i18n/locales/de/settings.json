@@ -325,6 +325,7 @@
   "UsersSettingsPage.youCannotChangeYourOwn": "Du kannst deine eigene Rolle nicht ändern.",
   "UsersSettingsPage.youCannotDeleteYourOwn": "Du kannst dein eigenes Konto nicht löschen.",
   "UsersSettingsPage.manageYourOwnTwoFactor": "Verwalte deine eigene Zwei-Faktor-Authentifizierung stattdessen unter Konto.",
+  "UsersSettingsPage.thisUserSignsInViaSso": "Dieser Benutzer meldet sich per Single Sign-on an und hat kein lokales Passwort.",
   "UsersSettingsPage.changeYourOwnPasswordUnder": "Ändere dein eigenes Passwort stattdessen unter Konto.",
   "UsersSettingsPage.checkTheEnteredValues": "Prüfe die eingegebenen Werte.",
   "UsersSettingsPage.theUsernameMustBe3": "Der Benutzername muss 3 bis 50 Zeichen lang sein: Buchstaben, Ziffern, „.“, „_“ oder „-“.",

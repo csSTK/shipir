@@ -285,6 +285,24 @@ class UserAdminApiTest {
         assertThat(tokenCount("tokenbystander")).isEqualTo(1);
     }
 
+    @Test
+    void resetPasswordRefusesSsoUsersAndSetsNoPassword() throws Exception {
+        Session admin = admin();
+        activeUser(admin, "ssovictim", "OPERATOR");
+        jdbc.update("UPDATE users SET external_issuer = 'https://idp.example', external_subject = 'sub-1' "
+                + "WHERE username = 'ssovictim'");
+        String hashBefore = jdbc.queryForObject("SELECT password_hash FROM users WHERE username = 'ssovictim'",
+                String.class);
+
+        call(admin, "POST", "/api/users/" + idOf("ssovictim") + "/reset-password", null)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("EXTERNAL_IDENTITY"));
+
+        assertThat(jdbc.queryForObject("SELECT password_hash FROM users WHERE username = 'ssovictim'", String.class))
+                .isEqualTo(hashBefore);
+        assertThat(auditCount("USER_PASSWORD_RESET", "SUCCESS")).isZero();
+    }
+
     private void insertToken(String username) {
         String plain = dev.bethge.shipir.auth.token.TokenCodec.newToken("shp_");
         jdbc.update("INSERT INTO api_tokens (user_id, name, token_hash, prefix, created_at, expires_at) "

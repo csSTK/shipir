@@ -49,6 +49,8 @@ function errorMessage(error: unknown, fallback: string): string {
         return i18n.t('settings:UsersSettingsPage.manageYourOwnTwoFactor')
       case 'SELF_RESET_PASSWORD':
         return i18n.t('settings:UsersSettingsPage.changeYourOwnPasswordUnder')
+      case 'EXTERNAL_IDENTITY':
+        return i18n.t('settings:UsersSettingsPage.thisUserSignsInViaSso')
     }
     if (error.status === 400 && error.details?.length) return error.details.join(' ')
     if (error.status === 400) return i18n.t('settings:UsersSettingsPage.checkTheEnteredValues')
