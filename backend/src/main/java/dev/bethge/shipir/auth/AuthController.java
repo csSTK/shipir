@@ -1,8 +1,5 @@
 package dev.bethge.shipir.auth;
 
-import dev.bethge.shipir.audit.AuditLogEntry;
-import dev.bethge.shipir.audit.AuditRecord;
-import dev.bethge.shipir.audit.AuditService;
 import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.auth.dto.CurrentUserResponse;
 import dev.bethge.shipir.auth.dto.LocaleRequest;
@@ -40,13 +37,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
 class AuthController {
-
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AuthController.class);
 
     /** One body for every failed login so the response never reveals whether the user exists. */
     private static final ErrorResponse INVALID_CREDENTIALS =
@@ -62,7 +56,7 @@ class AuthController {
     private final PasswordResetService passwordResetService;
     private final LoginThrottle throttle;
     private final ClientAddressResolver clientAddress;
-    private final AuditService auditService;
+    private final ThrottleLockoutAuditor lockoutAuditor;
     private final TotpService totp;
     private final LocalLoginPolicy localLoginPolicy;
     private final SessionInvalidator sessionInvalidator;
@@ -77,7 +71,7 @@ class AuthController {
                    PasswordResetService passwordResetService,
                    LoginThrottle throttle,
                    ClientAddressResolver clientAddress,
-                   AuditService auditService,
+                   ThrottleLockoutAuditor lockoutAuditor,
                    TotpService totp,
                    LocalLoginPolicy localLoginPolicy,
                    SessionInvalidator sessionInvalidator) {
@@ -91,7 +85,7 @@ class AuthController {
         this.passwordResetService = passwordResetService;
         this.throttle = throttle;
         this.clientAddress = clientAddress;
-        this.auditService = auditService;
+        this.lockoutAuditor = lockoutAuditor;
         this.totp = totp;
         this.localLoginPolicy = localLoginPolicy;
         this.sessionInvalidator = sessionInvalidator;
@@ -234,13 +228,7 @@ class AuthController {
 
     private void auditLockout(LoginThrottle.Admission admission, LoginThrottle.Scope scope, String username, String address) {
         if (admission.lockoutStarted()) {
-            try {
-                auditService.record(new AuditRecord(null, username, "LOGIN_THROTTLED", AuditLogEntry.Outcome.FAILURE,
-                        "USER", username, Map.of("scope", scope.name(), "clientAddress", address)));
-            } catch (RuntimeException e) {
-                // Same rule as AuditAspect: a failing audit write must not change the response.
-                log.warn("Could not write audit entry for LOGIN_THROTTLED: {}", e.toString());
-            }
+            lockoutAuditor.lockoutStarted(scope, username, address);
         }
     }
 
