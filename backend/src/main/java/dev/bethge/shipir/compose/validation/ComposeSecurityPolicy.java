@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
@@ -29,7 +30,7 @@ import java.util.UUID;
  * (including the Docker socket), {@code use_api_socket}, {@code uts}/{@code cgroup} host, {@code cgroup_parent},
  * {@code device_cgroup_rules}, {@code gpus}, device reservations, {@code container:} namespaces, {@code volumes_from}, build
  * {@code privileged}/{@code network: host}/{@code entitlements} and build {@code context}/{@code dockerfile}/{@code additional_contexts}
- * outside the directory ({@code sysctls} and {@code group_add} are allowed by decision), and named volumes that are bind mounts in disguise ({@code driver_opts}), plus {@code secrets}/{@code configs} files outside the
+ * outside the directory ({@code sysctls} and {@code group_add} are allowed by decision), and named volumes that are bind mounts or network filesystems (nfs, nfs4, cifs, smbfs) in disguise ({@code driver_opts}), plus {@code secrets}/{@code configs} files outside the
  * deployment directory and (see {@link ComposeFilePolicy}) {@code env_file}/{@code include}/{@code extends} paths outside it. Named volumes
  * and paths inside the deployment directory stay allowed. Callers decide who is ADMIN; this class only evaluates.
  */
@@ -178,10 +179,15 @@ public class ComposeSecurityPolicy {
             String options = opts.path("o").asString("");
             if ("none".equals(type) || "bind".equals(type) || options.contains("bind")) {
                 violations.add("volume " + entry.getKey() + ": bind mount via driver_opts");
+            } else if (NETWORK_FILESYSTEM_TYPES.contains(type.strip().toLowerCase(Locale.ROOT))) {
+                violations.add("volume " + entry.getKey() + ": network filesystem via driver_opts");
             }
         });
         return violations;
     }
+
+    /** Filesystem types of the local volume driver that mount remote shares from the Shipir host (denied by decision, shipr-kqbc.4). */
+    private static final Set<String> NETWORK_FILESYSTEM_TYPES = Set.of("nfs", "nfs4", "cifs", "smbfs");
 
     /** Namespace modes that may also join another container ({@code container:<id>}, possibly one outside Shipir's control). */
     private static final Set<String> CONTAINER_NAMESPACE_KEYS = Set.of("pid", "ipc", "network_mode");

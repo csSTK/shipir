@@ -15,6 +15,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import dev.bethge.shipir.compose.execution.ComposeExecutionException;
 
 class ComposeSecurityPolicyTest {
@@ -145,6 +146,20 @@ class ComposeSecurityPolicyTest {
     void deniesNamedVolumeThatIsABindMountInDisguise() {
         String json = "{\"volumes\":{\"v\":{\"driver\":\"local\",\"driver_opts\":{\"type\":\"none\",\"o\":\"bind\",\"device\":\"/\"}}}}";
         assertThat(check(json)).containsExactly("volume v: bind mount via driver_opts");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"nfs", "nfs4", "cifs", "smbfs", "NFS", " cifs "})
+    void deniesNamedVolumeOnANetworkFilesystem(String type) {
+        String json = "{\"volumes\":{\"v\":{\"driver\":\"local\",\"driver_opts\":{\"type\":\"" + type
+                + "\",\"o\":\"addr=10.0.0.5,rw\",\"device\":\":/export\"}}}}";
+        assertThat(check(json)).containsExactly("volume v: network filesystem via driver_opts");
+    }
+
+    @Test
+    void allowsNamedVolumesWithHarmlessDriverOptsAndWithout() {
+        String json = "{\"volumes\":{\"a\":{\"driver\":\"local\"},\"b\":{\"driver\":\"local\",\"driver_opts\":{\"type\":\"tmpfs\",\"device\":\"tmpfs\",\"o\":\"size=100m\"}}}}";
+        assertThat(check(json)).isEmpty();
     }
 
     @Test
