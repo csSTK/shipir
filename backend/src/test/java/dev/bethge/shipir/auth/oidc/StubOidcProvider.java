@@ -35,6 +35,8 @@ final class StubOidcProvider implements AutoCloseable {
     private final RSAKey key;
     private final Map<String, Grant> grants = new ConcurrentHashMap<>();
     private final java.util.concurrent.atomic.AtomicInteger discoveryHits = new java.util.concurrent.atomic.AtomicInteger();
+    private volatile String expectedClientId = CLIENT_ID;
+    private volatile String expectedClientSecret = CLIENT_SECRET;
     private volatile boolean discoveryBroken;
     private volatile String issuerOverride;
     private volatile String audienceOverride;
@@ -64,6 +66,12 @@ final class StubOidcProvider implements AutoCloseable {
 
     String issuer() {
         return "http://127.0.0.1:" + server.getAddress().getPort();
+    }
+
+    /** The token endpoint accepts only these client credentials (and ID tokens get this audience) until {@link #reset()}. */
+    void expectClient(String clientId, String clientSecret) {
+        expectedClientId = clientId;
+        expectedClientSecret = clientSecret;
     }
 
     void breakDiscovery() {
@@ -124,6 +132,8 @@ final class StubOidcProvider implements AutoCloseable {
         discoveryBroken = false;
         issuerOverride = null;
         audienceOverride = null;
+        expectedClientId = CLIENT_ID;
+        expectedClientSecret = CLIENT_SECRET;
     }
 
     /** Registers a code the browser "got" for the given authorization request; claims become the ID token body. */
@@ -152,7 +162,7 @@ final class StubOidcProvider implements AutoCloseable {
     private void token(HttpExchange ex) throws IOException {
         Map<String, String> form = form(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
         String expectedBasic = "Basic " + Base64.getEncoder().encodeToString(
-                (CLIENT_ID + ":" + CLIENT_SECRET).getBytes(StandardCharsets.UTF_8));
+                (expectedClientId + ":" + expectedClientSecret).getBytes(StandardCharsets.UTF_8));
         if (!expectedBasic.equals(ex.getRequestHeaders().getFirst("Authorization"))) {
             respond(ex, 401, "{\"error\":\"invalid_client\"}");
             return;
@@ -176,7 +186,7 @@ final class StubOidcProvider implements AutoCloseable {
         JWTClaimsSet.Builder b = new JWTClaimsSet.Builder()
                 .issuer(issuerOverride != null ? issuerOverride : issuer())
                 .audience(audiencesOverride != null ? audiencesOverride
-                        : List.of(audienceOverride != null ? audienceOverride : CLIENT_ID));
+                        : List.of(audienceOverride != null ? audienceOverride : expectedClientId));
         if (!omitIat) {
             b.issueTime(new Date());
         }
