@@ -158,6 +158,30 @@ class GitCredentialApiTest extends GitTestBase {
     }
 
     @Test
+    void updateAuditRecordsOldAndNewHostButNoSecrets() throws Exception {
+        Login l = login("admin");
+        String id = create(l, "GitHub");
+        String oldHost = jdbc.queryForObject("SELECT host FROM git_credentials", String.class);
+        mvc.perform(l.write(put("/api/git/credentials/" + id)).contentType(APPLICATION_JSON)
+                .content(json("GitHub", "evil.example.com", "u", "another-secret-token-QQQQ1111")))
+                .andExpect(status().isOk());
+        // an update that keeps the host records it too: old equals new
+        mvc.perform(l.write(put("/api/git/credentials/" + id)).contentType(APPLICATION_JSON)
+                .content(json("GitHub 2", "evil.example.com", "u", null))).andExpect(status().isOk());
+
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT details::text AS d, details->>'oldHost' AS old_host, details->>'newHost' AS new_host "
+                        + "FROM audit_log WHERE action = 'GIT_CREDENTIAL_UPDATE' ORDER BY occurred_at");
+        assertThat(rows).hasSize(2);
+        assertThat(rows.get(0).get("old_host")).isEqualTo(oldHost);
+        assertThat(rows.get(0).get("new_host")).isEqualTo("evil.example.com");
+        assertThat(rows.get(1).get("old_host")).isEqualTo("evil.example.com");
+        assertThat(rows.get(1).get("new_host")).isEqualTo("evil.example.com");
+        assertThat(rows.toString()).doesNotContain("SECRETTOKEN").doesNotContain("QQQQ1111").doesNotContain("••••")
+                .doesNotContain("tokenHint");
+    }
+
+    @Test
     void requestToStringHidesToken() {
         assertThat(new dev.bethge.shipir.git.dto.GitCredentialRequest("n", "github.com", "u", TOKEN).toString())
                 .doesNotContain("SECRETTOKEN");

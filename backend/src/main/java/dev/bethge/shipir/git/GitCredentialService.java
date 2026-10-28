@@ -64,7 +64,8 @@ public class GitCredentialService {
         }
     }
 
-    @Auditable(action = "GIT_CREDENTIAL_UPDATE", targetType = "GIT_CREDENTIAL", targetId = "#id")
+    @Auditable(action = "GIT_CREDENTIAL_UPDATE", targetType = "GIT_CREDENTIAL", targetId = "#id",
+            before = "hostOf(#id)", details = "{'oldHost': #before, 'newHost': #result?.host()}")
     @Transactional
     GitCredentialResponse update(UUID id, GitCredentialRequest request) {
         GitCredential c = find(id);
@@ -83,6 +84,14 @@ public class GitCredentialService {
             throw nameTaken();
         }
         return toResponse(c);
+    }
+
+    /**
+     * Audit helper: the host a credential is bound to right now (null if unknown). Hosts are not secrets. Update
+     * always records old and new host, also when unchanged, so a repointed token is visible in the audit log.
+     */
+    public String hostOf(UUID id) {
+        return credentials.findById(id).map(GitCredential::getHost).orElse(null);
     }
 
     @Auditable(action = "GIT_CREDENTIAL_DELETE", targetType = "GIT_CREDENTIAL", targetId = "#id")
