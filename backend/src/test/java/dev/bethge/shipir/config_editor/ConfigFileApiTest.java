@@ -103,6 +103,8 @@ class ConfigFileApiTest {
         grantHost("viewer", "VIEW");
         doReturn(new ComposeProcessResult(0, false, List.of())).when(execution).execute(any(), any(), any(), any(), any());
         doReturn(new ComposeProcessResult(0, false, List.of())).when(execution).execute(any(), any(), any(), any(), any(), any());
+        doReturn(new ComposeProcessResult(0, false, List.of())).when(execution)
+                .execute(any(), any(), any(), any(), any(), any(), any(), any());
         Login admin = login("admin");
         String body = mvc.perform(admin.write(post("/api/hosts/" + hostId + "/managed-deployments"))
                         .contentType(APPLICATION_JSON)
