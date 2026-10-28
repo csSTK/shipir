@@ -197,10 +197,51 @@ describe('BackupSchedulesDialog', () => {
     expect(within(row).getByText('Backup OK')).toBeInTheDocument()
   })
 
-  it('deletes a schedule', async () => {
+  const deleteCalls = () => apiFetch.mock.calls.filter(([, init]) => init?.method === 'DELETE')
+
+  it('asks before deleting a schedule and says its stored backups go too', async () => {
     setup()
     fireEvent.click(await screen.findByRole('button', { name: 'Delete schedule for pgdata' }))
+    const confirm = await screen.findByRole('dialog', { name: 'Delete schedule for pgdata?' })
+    expect(confirm).toHaveTextContent(/schedule and all its stored backups/)
+    expect(deleteCalls()).toHaveLength(0)
+  })
+
+  it('keeps everything when the deletion is cancelled and returns focus to the trigger', async () => {
+    setup()
+    const trigger = await screen.findByRole('button', { name: 'Delete schedule for pgdata' })
+    trigger.focus()
+    fireEvent.click(trigger)
+    const confirm = await screen.findByRole('dialog', { name: 'Delete schedule for pgdata?' })
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Delete schedule for pgdata?' })).toBeNull())
+    expect(deleteCalls()).toHaveLength(0)
+    await waitFor(() => expect(trigger).toHaveFocus())
+  })
+
+  it('deletes the schedule once after confirming', async () => {
+    setup()
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete schedule for pgdata' }))
+    const confirm = await screen.findByRole('dialog', { name: 'Delete schedule for pgdata?' })
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Delete' }))
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/volume-backup-schedules/s1', { method: 'DELETE' }))
+    expect(deleteCalls()).toHaveLength(1)
+  })
+
+  it('refreshes the stored backups of the host after a schedule was deleted', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const spy = vi.spyOn(client, 'invalidateQueries')
+    mockApi([schedule()])
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <BackupSchedulesDialog hostId="h1" volumes={volumes} initialVolume="cache" onClose={() => {}} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete schedule for pgdata' }))
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Delete schedule for pgdata?' })).getByRole('button', { name: 'Delete' }))
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ['hosts', 'h1', 'volumes'] }))
   })
 
   it('creates a schedule for the preselected volume', async () => {

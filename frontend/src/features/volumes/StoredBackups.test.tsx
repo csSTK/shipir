@@ -92,6 +92,19 @@ describe('StoredBackupsDialog', () => {
     await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled())
   })
 
+  it('reloads the list when a download finds the archive gone', async () => {
+    let calls = 0
+    apiFetch.mockImplementation((path: string) => {
+      if (path === '/hosts/h1/volumes/cache/stored-backups') return Promise.resolve(++calls === 1 ? stored : [stored[1]])
+      return Promise.resolve(undefined)
+    })
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: 'STORED_BACKUP_NOT_FOUND' }), { status: 404 }))
+    render(wrap(<StoredBackupsDialog hostId="h1" volume="cache" onClose={() => {}} />))
+    fireEvent.click(await screen.findByRole('button', { name: 'Download cache-20260102T030405Z.tar' }))
+    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(1))
+    expect(screen.queryByText('cache-20260102T030405Z.tar')).toBeNull()
+  })
+
   it('shows a failed download as an alert', async () => {
     mockApi()
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: 'STORED_BACKUP_NOT_FOUND' }), { status: 404 }))
@@ -183,6 +196,20 @@ describe('StoredBackupsDialog restore', () => {
     fireEvent.click(within(group).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.getByRole('button', { name: `Restore ${first}` })).toHaveFocus())
     expect(screen.queryByRole('group')).toBeNull()
+  })
+
+  it('reloads the list when a restore finds the archive gone', async () => {
+    let calls = 0
+    apiFetch.mockImplementation((path: string) => {
+      if (path === '/hosts/h1/volumes/cache/stored-backups') return Promise.resolve(++calls === 1 ? stored : [stored[1]])
+      if (String(path).includes('/restore')) return Promise.reject(new ApiError(404, '{}', 'STORED_BACKUP_NOT_FOUND'))
+      return Promise.resolve(undefined)
+    })
+    setup()
+    await choose()
+    fireEvent.click(await screen.findByRole('button', { name: 'Restore' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: `Restore ${first}` })).toBeNull())
+    expect(await screen.findByRole('alert')).toHaveTextContent('no longer exists')
   })
 
   it('can cancel the restore step', async () => {

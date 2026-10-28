@@ -72,5 +72,8 @@
   "StoredBackupsDialog.restoreName": "Restore {{name}}",
   "StoredBackupsDialog.restoreNameIntoVolume": "Restore {{name}} into {{volume}}?",
   "StoredBackupsDialog.theArchiveIsOverlaidOnto": "The archive is overlaid onto the existing volume: files with the same path are overwritten, files that are not in the archive stay.",
-  "StoredBackupsDialog.restoredNameIntoVolume": "Restored {{name}} into {{volume}}."
+  "StoredBackupsDialog.restoredNameIntoVolume": "Restored {{name}} into {{volume}}.",
+  "BackupSchedulesDialog.deleteScheduleForVolumenameQuestion": "Delete schedule for {{volumeName}}?",
+  "BackupSchedulesDialog.theScheduleAndAllItsStoredBackups": "The schedule and all its stored backups are deleted. This cannot be undone.",
+  "BackupSchedulesDialog.delete": "Delete"
 }

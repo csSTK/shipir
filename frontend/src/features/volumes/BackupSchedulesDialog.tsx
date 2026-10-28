@@ -1,8 +1,8 @@
 import { Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { Button, Dialog, IconButton, Select, TextField } from '../../shared/ui/index.ts'
+import { Button, ConfirmDialog, Dialog, IconButton, Select, TextField } from '../../shared/ui/index.ts'
 import type { Volume } from './api.ts'
-import { describeBackupError, useBackupSchedules, useCreateSchedule, useDeleteSchedule } from './backup.ts'
+import { describeBackupError, type BackupSchedule, useBackupSchedules, useCreateSchedule, useDeleteSchedule } from './backup.ts'
 import { LastBackupBadge } from './LastBackupBadge.tsx'
 import { useTranslation } from 'react-i18next'
 import { Trans } from '../../shared/i18n/Trans.tsx'
@@ -32,6 +32,7 @@ export function BackupSchedulesDialog({ hostId, volumes, initialVolume, onClose 
   const [keep, setKeep] = useState('7')
   const [touched, setTouched] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<BackupSchedule | null>(null)
 
   const intervalError = rangeError(interval, 8760)
   const keepError = Number.isInteger(Number(keep)) && Number(keep) >= 1 && Number(keep) <= 100 ? null : t('BackupSchedulesDialog.enter1To100Backups')
@@ -71,7 +72,7 @@ export function BackupSchedulesDialog({ hostId, volumes, initialVolume, onClose 
                   icon={Trash2}
                   variant="danger"
                   aria-label={t('BackupSchedulesDialog.deleteScheduleForVolumename', { volumeName: s.volumeName })}
-                  onClick={() => remove.mutate(s.id, { onError: (err) => setError(describeBackupError(err)) })}
+                  onClick={() => setDeleting(s)}
                 />
               </li>
             ))}
@@ -106,6 +107,27 @@ export function BackupSchedulesDialog({ hostId, volumes, initialVolume, onClose 
           </div>
         </form>
       </div>
+      {deleting && (
+        <ConfirmDialog
+          open
+          danger
+          onOpenChange={(open) => !open && setDeleting(null)}
+          title={t('BackupSchedulesDialog.deleteScheduleForVolumenameQuestion', { volumeName: deleting.volumeName })}
+          confirmLabel={t('BackupSchedulesDialog.delete')}
+          loading={remove.isPending}
+          onConfirm={() =>
+            remove.mutate(deleting.id, {
+              onSuccess: () => setDeleting(null),
+              onError: (err) => {
+                setDeleting(null)
+                setError(describeBackupError(err))
+              },
+            })
+          }
+        >
+          {t('BackupSchedulesDialog.theScheduleAndAllItsStoredBackups')}
+        </ConfirmDialog>
+      )}
     </Dialog>
   )
 }

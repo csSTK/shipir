@@ -1,4 +1,5 @@
 import { Download, RotateCcw } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { dateTimeFormat } from '../../shared/i18n/format.ts'
@@ -23,6 +24,7 @@ interface Props {
 export function StoredBackupsDialog({ hostId, volume, inUse: volumeInUse = false, onClose, onDone }: Props) {
   const { t } = useTranslation('volumes')
   const stored = useStoredBackups(hostId, volume)
+  const queryClient = useQueryClient()
   const [error, setError] = useState<string | null>(null)
   const [chosen, setChosen] = useState<string | null>(null)
   const [inUse, setInUse] = useState(volumeInUse)
@@ -44,6 +46,13 @@ export function StoredBackupsDialog({ hostId, volume, inUse: volumeInUse = false
     setError(null)
   }
 
+  /** The archive was deleted or pruned meanwhile: drop its row. */
+  function reloadIfGone(e: unknown) {
+    if (!(e instanceof ApiError) || e.code !== 'STORED_BACKUP_NOT_FOUND') return false
+    void queryClient.invalidateQueries({ queryKey: ['hosts', hostId, 'volumes', volume, 'stored-backups'] })
+    return true
+  }
+
   async function restore() {
     if (!chosen) return
     setPending(true)
@@ -54,6 +63,7 @@ export function StoredBackupsDialog({ hostId, volume, inUse: volumeInUse = false
       onClose()
     } catch (e) {
       if (e instanceof ApiError && e.code === 'VOLUME_IN_USE') setInUse(true)
+      if (reloadIfGone(e)) setChosen(null)
       setError(describeBackupError(e))
       setPending(false)
     }
@@ -64,6 +74,7 @@ export function StoredBackupsDialog({ hostId, volume, inUse: volumeInUse = false
     try {
       await downloadStoredBackup(hostId, volume, name)
     } catch (e) {
+      reloadIfGone(e)
       setError(describeBackupError(e))
     }
   }

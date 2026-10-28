@@ -60,6 +60,9 @@ test('operator sees the last result, restores into a volume in use and manages s
   await expect(schedules.getByRole('listitem')).toContainText('every 24 h')
   const del = page.waitForRequest((r) => r.method() === 'DELETE' && r.url().endsWith('/volume-backup-schedules/s1'))
   await schedules.getByRole('button', { name: 'Delete schedule for cache' }).click()
+  const confirm = page.getByRole('dialog', { name: 'Delete schedule for cache?' })
+  await expect(confirm).toContainText('all its stored backups')
+  await confirm.getByRole('button', { name: 'Delete' }).click()
   await del
 })
 

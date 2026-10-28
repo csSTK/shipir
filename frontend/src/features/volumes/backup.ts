@@ -141,6 +141,11 @@ export function useDeleteSchedule(hostId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => apiFetch<void>(`${schedulesPath(hostId)}/${id}`, { method: 'DELETE' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['hosts', hostId, 'volume-backup-schedules'] }),
+    // deleting a schedule also deletes its stored archives, so every volume's stored list of this host is stale
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['hosts', hostId, 'volume-backup-schedules'] }),
+        queryClient.invalidateQueries({ queryKey: ['hosts', hostId, 'volumes'] }),
+      ]),
   })
 }
