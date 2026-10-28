@@ -18,9 +18,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.Duration;
-import java.util.Optional;
-
 /**
  * Public redeploy webhook: unauthenticated and CSRF-exempt (see {@code SecurityConfig}); the secret in the path is the
  * only credential. Unknown, disabled and rotated-away tokens give the same 404. Each unknown token counts as a failure
@@ -48,22 +45,29 @@ class WebhookTriggerController {
     ResponseEntity<?> trigger(@PathVariable String token, HttpServletRequest request) {
         String address = clientAddress.resolve(request);
         // The address doubles as the "user" key: the webhook has no user, and per-address is the limit that counts.
-        Optional<Duration> locked = throttle.lockedFor(LoginThrottle.Scope.WEBHOOK, address, address);
-        if (locked.isPresent()) {
-            long seconds = Math.max(1, (locked.get().toMillis() + 999) / 1000);
+        // admit counts the attempt as a failure at once, atomically with the lock check, so parallel guesses cannot
+        // all pass the check; an attempt that turns out not to be an unknown token is taken back with release.
+        LoginThrottle.Admission admission = throttle.admit(LoginThrottle.Scope.WEBHOOK, address, address);
+        if (!admission.admitted()) {
+            long seconds = Math.max(1, (admission.lockedFor().get().toMillis() + 999) / 1000);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).header(HttpHeaders.RETRY_AFTER, Long.toString(seconds))
                     .body(new ErrorResponse("TOO_MANY_ATTEMPTS", "Too many attempts, try again later"));
         }
+        boolean unknownToken = false;
         try {
             DeploymentRunResponse run = webhooks.trigger(token);
             return ResponseEntity.accepted().body(run);
         } catch (DeploymentException e) {
-            if ("WEBHOOK_NOT_FOUND".equals(e.code())) {
-                if (throttle.recordFailure(LoginThrottle.Scope.WEBHOOK, address, address)) {
+            unknownToken = "WEBHOOK_NOT_FOUND".equals(e.code());
+            throw e;
+        } finally {
+            if (unknownToken) {
+                if (admission.lockoutStarted()) {
                     lockoutAuditor.lockoutStarted(LoginThrottle.Scope.WEBHOOK, address, address);
                 }
+            } else {
+                throttle.release(LoginThrottle.Scope.WEBHOOK, address, address);
             }
-            throw e;
         }
     }
 

@@ -11,10 +11,14 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -326,6 +330,39 @@ class DeploymentWebhookApiTest extends DeploymentTestBase {
         assertThat(commands).isEmpty();
         assertThat(trigger(token, freshAddress()).getResponse().getStatus()).isEqualTo(202);
         awaitResults(2);
+    }
+
+    @Test
+    void parallelUnknownTokensFromOneAddressEvaluateAtMostMaxAttemptsOfThem() throws Exception {
+        String attacker = freshAddress();
+        int requests = 40;
+        ExecutorService pool = Executors.newFixedThreadPool(requests);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            List<Future<Integer>> results = new ArrayList<>();
+            for (int i = 0; i < requests; i++) {
+                String guess = "shw_" + UUID.randomUUID();
+                results.add(pool.submit(() -> {
+                    start.await();
+                    return trigger(guess, attacker).getResponse().getStatus();
+                }));
+            }
+            start.countDown();
+            int evaluated = 0;
+            int locked = 0;
+            for (Future<Integer> f : results) {
+                int status = f.get(30, TimeUnit.SECONDS);
+                if (status == 404) {
+                    evaluated++;
+                } else if (status == 429) {
+                    locked++;
+                }
+            }
+            assertThat(evaluated).isEqualTo(5);
+            assertThat(locked).isEqualTo(requests - 5);
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     @Test
