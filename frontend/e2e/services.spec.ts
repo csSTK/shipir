@@ -59,7 +59,11 @@ test('restarts a service, handles busy, and saves profiles', async ({ page, api 
 
   await expect(card.getByRole('checkbox', { name: 'debug' })).toBeChecked()
   await card.getByRole('checkbox', { name: 'tools' }).check()
-  api.mock('PUT', `${BASE}/s1/profiles`, { body: { ...deployment, profiles: ['debug', 'tools'] } })
+  // The save invalidates the deployment query; the refetch must return the saved profiles, or the picker resets to the stale ones and
+  // "Save profiles" only looks disabled while the request is still pending (the old flake).
+  const saved = { ...deployment, profiles: ['debug', 'tools'] }
+  api.mock('PUT', `${BASE}/s1/profiles`, { body: saved })
+  api.mock('GET', `${BASE}/s1`, { body: saved })
   const put = page.waitForRequest((r) => r.method() === 'PUT' && r.url().endsWith(`${BASE}/s1/profiles`))
   await card.getByRole('button', { name: 'Save profiles' }).click()
   expect((await put).postDataJSON()).toEqual({ profiles: ['debug', 'tools'] })
