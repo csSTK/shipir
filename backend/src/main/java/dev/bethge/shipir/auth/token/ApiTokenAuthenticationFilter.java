@@ -1,5 +1,6 @@
 package dev.bethge.shipir.auth.token;
 
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -66,6 +67,12 @@ public final class ApiTokenAuthenticationFilter extends OncePerRequestFilter {
         Optional<Authentication> authentication = authenticator.authenticate(presented);
         if (authentication.isEmpty()) {
             SecurityContextHolder.clearContext();
+            if (request.getDispatcherType() == DispatcherType.ASYNC && response.isCommitted()) {
+                // The token was revoked or expired while a stream was running. The response is already on the wire, so
+                // there is nothing left to answer: do not write a 401 into it and do not count a failed attempt. The chain
+                // is not continued and the context stays cleared, so the dispatch is never processed as authenticated.
+                return;
+            }
             // A valid token is never refused. A rejected credential from a locked address gets 429 and is not counted again.
             Optional<Duration> locked = guard.lockedFor(request);
             if (locked.isPresent()) {
