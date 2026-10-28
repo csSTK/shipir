@@ -1,7 +1,7 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { ApiError } from '../../shared/api/client.ts'
 import { Check } from 'lucide-react'
-import { Button } from '../../shared/ui/index.ts'
+import { Button, TextField } from '../../shared/ui/index.ts'
 import {
   useCreateHost,
   useTestConnection,
@@ -152,25 +152,23 @@ export function EnvironmentForm({ onCreated, submitLabel = i18n.t('hosts:Environ
         ))}
       </div>
 
-      <label className="env-form__field">
-        <span>{t('EnvironmentForm.name')}</span>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value)
-            edited()
-          }}
-          autoComplete="off"
-        />
-      </label>
+      <TextField
+        label={t('EnvironmentForm.name')}
+        type="text"
+        value={name}
+        onChange={(e) => {
+          setName(e.target.value)
+          edited()
+        }}
+        autoComplete="off"
+      />
 
       {type === 'TCP' && (
         <>
           <div className="env-form__row">
-            <label className="env-form__field env-form__field--grow">
-              <span>{t('EnvironmentForm.host')}</span>
-              <input
+            <div className="env-form__col--grow">
+              <TextField
+                label={t('EnvironmentForm.host')}
                 type="text"
                 value={host}
                 onChange={(e) => {
@@ -182,10 +180,10 @@ export function EnvironmentForm({ onCreated, submitLabel = i18n.t('hosts:Environ
                 autoCapitalize="none"
                 spellCheck={false}
               />
-            </label>
-            <label className="env-form__field env-form__field--port">
-              <span>{t('EnvironmentForm.port')}</span>
-              <input
+            </div>
+            <div className="env-form__col--port">
+              <TextField
+                label={t('EnvironmentForm.port')}
                 type="text"
                 inputMode="numeric"
                 value={port}
@@ -193,9 +191,9 @@ export function EnvironmentForm({ onCreated, submitLabel = i18n.t('hosts:Environ
                   setPort(e.target.value)
                   edited()
                 }}
-                aria-invalid={port.length > 0 && !portValid}
+                error={port.length > 0 && !portValid ? t('EnvironmentForm.portRange') : null}
               />
-            </label>
+            </div>
           </div>
           {PEM_FIELDS.map(({ key, label }) => (
             <label key={key} className="env-form__file">

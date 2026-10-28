@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 const SRC = join(__dirname, '..', '..')
 /** Class names of the old hand-rolled field markup; fields go through FormField/TextField/Select/Switch. */
-const HAND_ROLLED = /ui-form-field|wz-field|wz-check/
+const HAND_ROLLED = /ui-form-field|wz-field|wz-check|env-form-field|env-form__field/
 /** Files allowed to mention the old classes, with the reason. Keep empty unless a usage truly cannot migrate. */
 const ALLOWLIST: Record<string, string> = {}
 

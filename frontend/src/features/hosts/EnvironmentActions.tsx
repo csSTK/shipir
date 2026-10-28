@@ -1,12 +1,11 @@
 import { useId, useState, type FormEvent } from 'react'
 import { MoreHorizontal, Pencil, Tag, Trash2 } from 'lucide-react'
 import { ApiError } from '../../shared/api/client.ts'
-import { Button, ConfirmDialog, Dialog, IconButton, Menu } from '../../shared/ui/index.ts'
+import { Button, ConfirmDialog, Dialog, IconButton, Menu, TextField } from '../../shared/ui/index.ts'
 import { useDeleteHost, useRenameHost, type HostOverview } from './api.ts'
 import { EditTagsDialog } from './EditTagsDialog.tsx'
 import { useTranslation } from 'react-i18next'
 import i18n from 'i18next'
-import './EnvironmentActions.css'
 
 const NAME_MAX = 100
 
@@ -53,16 +52,8 @@ function RenameDialog({ env, open, onClose }: { env: HostOverview; open: boolean
         </>
       }
     >
-      <form id={formId} onSubmit={submit} className="env-form-field">
-        <label className="env-form-field__label">
-          <span>{t('EnvironmentActions.name')}</span>
-          <input className="env-form-field__input" value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
-        </label>
-        {problem && (
-          <p role="alert" className="env-form-field__error">
-            {problem}
-          </p>
-        )}
+      <form id={formId} onSubmit={submit} className="ui-form">
+        <TextField label={t('EnvironmentActions.name')} value={name} onChange={(e) => setName(e.target.value)} error={problem} autoFocus autoComplete="off" />
       </form>
     </Dialog>
   )
@@ -101,7 +92,7 @@ function DeleteDialog({ env, open, onClose, onDeleted }: { env: HostOverview; op
       onConfirm={confirm}
     >
       {problem && (
-        <p role="alert" className="env-form-field__error">
+        <p role="alert" className="ui-error">
           {problem}
         </p>
       )}

@@ -1,4 +1,4 @@
-/* Shared form and dialog layout: stacked forms, plain fields, env rows, inline errors, dialog text and actions. */
+/* Shared form and dialog layout: stacked forms, inline errors, dialog text and actions. */
 .ui-dialog-text {
   margin: 0 0 var(--space-4);
   line-height: var(--text-body-leading);
@@ -21,8 +21,7 @@
 .ui-form .ui-error {
   margin: 0;
 }
-.ui-yaml-input,
-.ui-env__row input {
+.ui-yaml-input {
   font: inherit;
   font-size: var(--text-body-size);
   padding: var(--space-2) var(--space-3);
@@ -38,31 +37,10 @@
   line-height: 1.5;
   resize: vertical;
 }
-.ui-yaml-input:focus-visible,
-.ui-env__row input:focus-visible {
+.ui-yaml-input:focus-visible {
   outline: none;
   border-color: var(--color-focus);
   box-shadow: var(--shadow-focus);
-}
-.ui-env {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
-  border: 0;
-  margin: 0;
-  padding: 0;
-  font-size: var(--text-small-size);
-}
-.ui-env legend {
-  padding: 0;
-  margin-bottom: var(--space-2);
-}
-.ui-env__row {
-  display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  gap: var(--space-2);
-  width: 100%;
 }
 .ui-hint {
   margin: 0;
@@ -75,7 +53,6 @@
   gap: var(--space-3);
 }
 @media (max-width: 600px) {
-  .ui-env__row,
   .ui-form-row {
     grid-template-columns: 1fr;
   }

@@ -70,4 +70,11 @@ describe('Switch', () => {
     fireEvent.click(sw)
     expect(onChange).toHaveBeenCalledTimes(1)
   })
+
+  it('keeps the help link when the caller passes its own aria-describedby', () => {
+    render(<Switch label="Enabled" help="Explains it" aria-describedby="extra" />)
+    const description = screen.getByRole('switch', { name: 'Enabled' }).getAttribute('aria-describedby') ?? ''
+    expect(description).toContain('extra')
+    expect(screen.getByRole('switch')).toHaveAccessibleDescription(/Explains it/)
+  })
 })

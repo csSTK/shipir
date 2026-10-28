@@ -86,6 +86,18 @@ describe('ConfigFilesPanel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('This path is not valid')
   })
 
+  it('links the create error to the path input, outside its label', async () => {
+    serve()
+    renderPanel(true)
+    fireEvent.click(await screen.findByRole('button', { name: 'New file' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    const alert = await screen.findByRole('alert')
+    const input = screen.getByLabelText('File path')
+    expect(alert.closest('label')).toBeNull()
+    expect(input).toHaveAttribute('aria-invalid', 'true')
+    expect(input.getAttribute('aria-describedby')).toContain(alert.id)
+  })
+
   it('is read-only for viewers', async () => {
     serve()
     renderPanel(false)

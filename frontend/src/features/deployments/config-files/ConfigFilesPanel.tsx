@@ -43,6 +43,7 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
   const [newPath, setNewPath] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
   const pathId = useId()
+  const errorId = useId()
 
   function choose(path: string) {
     if (path === selected) return
@@ -95,7 +96,16 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
           }}
         >
           <label htmlFor={pathId}>{t('ConfigFilesPanel.filePath')}</label>
-          <input id={pathId} value={newPath} placeholder="config/app.conf" onChange={(e) => setNewPath(e.target.value)} autoFocus spellCheck={false} />
+          <input
+            id={pathId}
+            value={newPath}
+            placeholder="config/app.conf"
+            onChange={(e) => setNewPath(e.target.value)}
+            aria-invalid={createError ? true : undefined}
+            aria-describedby={createError ? errorId : undefined}
+            autoFocus
+            spellCheck={false}
+          />
           <Button variant="primary" type="submit" disabled={save.isPending}>
             {t('ConfigFilesPanel.create')}
           </Button>
@@ -109,7 +119,7 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
             {t('ConfigFilesPanel.cancel')}
           </Button>
           {createError && (
-            <p role="alert" className="ui-error cf-new__error">
+            <p id={errorId} role="alert" className="ui-error cf-new__error">
               {createError}
             </p>
           )}

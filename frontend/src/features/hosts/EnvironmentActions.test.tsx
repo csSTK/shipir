@@ -96,6 +96,18 @@ describe('environment row actions', () => {
     expect(mutationCalls()).toEqual([])
   })
 
+  it('rename error sits outside the label and is linked to the input', async () => {
+    renderOverview('ADMIN')
+    await choose('Rename')
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: '   ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const alert = await screen.findByRole('alert')
+    const input = screen.getByLabelText('Name')
+    expect(alert.closest('label')).toBeNull()
+    expect(input).toHaveAttribute('aria-invalid', 'true')
+    expect(input.getAttribute('aria-describedby')).toContain(alert.id)
+  })
+
   it('shows HOST_NAME_TAKEN inline and keeps the dialog open', async () => {
     renderOverview('ADMIN', () => Promise.reject(new ApiError(409, '', 'HOST_NAME_TAKEN')))
     await choose('Rename')

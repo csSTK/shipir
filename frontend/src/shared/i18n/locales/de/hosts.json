@@ -51,6 +51,7 @@
   "EnvironmentForm.name": "Name",
   "EnvironmentForm.host": "Host",
   "EnvironmentForm.port": "Port",
+  "EnvironmentForm.portRange": "Gib einen Port zwischen 1 und 65535 ein.",
   "EnvironmentForm.chooseFile": "Datei wählen…",
   "EnvironmentForm.testing": "Wird getestet…",
   "EnvironmentForm.connectedDockerDockerversion": "Verbunden. Docker {{dockerVersion}}",

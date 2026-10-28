@@ -19,20 +19,6 @@
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
-.sd-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-.sd-title {
-  margin: 0;
-  font-size: var(--text-heading-size);
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  font-weight: 700;
-}
 .sd-meta {
   display: flex;
   flex-wrap: wrap;
@@ -75,15 +61,6 @@
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
   background: var(--color-surface-sunken);
-}
-.sd-deploy {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
-  background: var(--color-accent-soft);
-  animation: sd-in var(--duration-base) ease-out;
 }
 .sd-versions {
   list-style: none;
@@ -139,9 +116,6 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .sd-skeleton {
-    animation: none;
-  }
-  .sd-deploy {
     animation: none;
   }
 }

@@ -53,6 +53,17 @@ async function fillTcp() {
 }
 
 describe('EnvironmentForm', () => {
+  it('an invalid port shows its message outside the label, linked to the input', () => {
+    renderForm()
+    fireEvent.click(screen.getByRole('radio', { name: /remote/i }))
+    type('Port', 'abc')
+    const alert = screen.getAllByRole('alert').find((a) => /port/i.test(a.textContent ?? ''))!
+    const input = screen.getByLabelText('Port')
+    expect(alert.closest('label')).toBeNull()
+    expect(input).toHaveAttribute('aria-invalid', 'true')
+    expect(input.getAttribute('aria-describedby')).toContain(alert.id)
+  })
+
   it('local mode submits only name and connectionType', async () => {
     apiFetchMock.mockResolvedValue(HOST)
     const onCreated = vi.fn()
