@@ -10,6 +10,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -31,6 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * failures, UP after one success, notify only on state change), failure isolation and the results purge.
  */
 @TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+@RecordApplicationEvents
 class UptimeSchedulerTest extends DeploymentTestBase {
 
     static final class MutableClock extends Clock {
@@ -52,6 +57,9 @@ class UptimeSchedulerTest extends DeploymentTestBase {
     private UptimeScheduler scheduler;
     private HttpServer stub;
     private volatile int status = 200;
+    @Autowired
+    ApplicationEvents events;
+
     private final AtomicInteger hits = new AtomicInteger();
     private String base;
     private UUID deploymentId;
@@ -213,6 +221,27 @@ class UptimeSchedulerTest extends DeploymentTestBase {
         assertThat(message).contains("CONNECTION_FAILED").doesNotContain("EGRESS_DENIED");
         assertThat(jdbc.queryForObject("SELECT error_code FROM uptime_results WHERE ok = false LIMIT 1", String.class))
                 .isEqualTo("EGRESS_DENIED"); // the stored result keeps the detail for OPERATORs in the UI
+    }
+
+    @ParameterizedTest
+    @CsvSource({"DNS_FAILED,CONNECTION_FAILED", "CONNECTION_REFUSED,CONNECTION_FAILED", "TLS_ERROR,CONNECTION_FAILED",
+            "IO_ERROR,CONNECTION_FAILED", "ERROR,CONNECTION_FAILED", "TIMEOUT,TIMEOUT",
+            "UNEXPECTED_STATUS,UNEXPECTED_STATUS"})
+    void connectLevelCodesNeverReachNotificationMessageOrWebhookEvent(String detailed, String expectedPublic) {
+        UptimeCheck c = addCheck("internal", base + "/", true);
+        Instant at = clock.instant();
+        UptimeProbe.ProbeResult failure = new UptimeProbe.ProbeResult(false, null, null, detailed);
+        service.record(c.getId(), failure, at);
+        service.record(c.getId(), failure, at.plusSeconds(31)); // 2nd failure: DOWN
+        String message = jdbc.queryForObject("SELECT message FROM notifications WHERE type = 'UPTIME_DOWN' LIMIT 1", String.class);
+        assertThat(message).contains(expectedPublic);
+        List<String> published = events.stream(UptimeStateChangedEvent.class).map(UptimeStateChangedEvent::errorCode).toList();
+        assertThat(published).containsExactly(expectedPublic); // webhook payload errorCode is built from this event
+        if (!detailed.equals(expectedPublic)) {
+            assertThat(message).doesNotContain(detailed);
+        }
+        assertThat(jdbc.queryForObject("SELECT error_code FROM uptime_results WHERE ok = false LIMIT 1", String.class))
+                .isEqualTo(detailed); // the stored result keeps the detail for OPERATORs in the UI
     }
 
     @Test

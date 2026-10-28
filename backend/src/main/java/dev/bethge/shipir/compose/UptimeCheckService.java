@@ -114,11 +114,13 @@ public class UptimeCheckService {
     }
 
     /**
-     * Notifications and webhooks reach more people than the check's OPERATORs, so a policy refusal is reported as a plain
-     * connect failure: it must not tell a recipient that an internal target was blocked. The stored result keeps the code.
+     * Notifications and webhooks reach more people than the check's OPERATORs, so only generic codes leave this service:
+     * TIMEOUT and UNEXPECTED_STATUS stay, every connect-level failure (DNS, refused, TLS, egress policy, other I/O) becomes
+     * CONNECTION_FAILED. Otherwise a recipient could probe which internal hosts resolve or which ports are open. The stored
+     * result keeps the detailed code for OPERATORs.
      */
     private static String publicErrorCode(String code) {
-        return "EGRESS_DENIED".equals(code) ? "CONNECTION_FAILED" : code;
+        return "TIMEOUT".equals(code) || "UNEXPECTED_STATUS".equals(code) ? code : "CONNECTION_FAILED";
     }
 
     @Transactional
