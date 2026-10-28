@@ -4,6 +4,7 @@ import dev.bethge.shipir.ai.llm.LlmToolDefinition;
 import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.common.security.AiInvocationContext;
 import dev.bethge.shipir.compose.DeploymentException;
+import dev.bethge.shipir.compose.EnvFile;
 import dev.bethge.shipir.config_editor.ConfigFileException;
 import dev.bethge.shipir.permission.PermissionException;
 import dev.bethge.shipir.git.GitException;
@@ -30,6 +31,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +67,7 @@ public class AiToolRegistry {
     private final ObjectMapper mapper;
     private final int maxResultChars;
     private final Clock clock;
+    private final DeploymentEnvValues envValues;
     private final SecureRandom random = new SecureRandom();
     private final Map<String, Pending> pending = new ConcurrentHashMap<>();
 
@@ -75,6 +79,11 @@ public class AiToolRegistry {
     }
 
     @Autowired
+    AiToolRegistry(List<AiTool> tools, ObjectMapper mapper, AiToolProperties properties, Clock clock,
+                   DeploymentEnvValues envValues) {
+        this(tools, mapper, properties.maxResultChars(), clock, envValues);
+    }
+
     AiToolRegistry(List<AiTool> tools, ObjectMapper mapper, AiToolProperties properties, Clock clock) {
         this(tools, mapper, properties.maxResultChars(), clock);
     }
@@ -88,6 +97,11 @@ public class AiToolRegistry {
     }
 
     AiToolRegistry(List<AiTool> tools, ObjectMapper mapper, int maxResultChars, Clock clock) {
+        this(tools, mapper, maxResultChars, clock, args -> List.of());
+    }
+
+    AiToolRegistry(List<AiTool> tools, ObjectMapper mapper, int maxResultChars, Clock clock,
+                   DeploymentEnvValues envValues) {
         this.tools = tools.stream().sorted(Comparator.comparing(AiTool::name))
                 .collect(Collectors.toMap(AiTool::name, Function.identity(), (a, b) -> {
                     throw new IllegalStateException("Duplicate AI tool name: " + a.name());
@@ -95,6 +109,7 @@ public class AiToolRegistry {
         this.mapper = mapper;
         this.maxResultChars = maxResultChars;
         this.clock = clock;
+        this.envValues = envValues;
     }
 
     public List<AiTool> toolsFor(Role role) {
@@ -226,8 +241,7 @@ public class AiToolRegistry {
             return ToolResult.error(e.code(), e.getMessage());
         } catch (DeploymentException e) {
             // details name the offending fields (e.g. "ref: must not be blank") so the model can correct the call
-            String message = e.details().isEmpty() ? e.getMessage() : e.getMessage() + ": " + String.join("; ", e.details());
-            return ToolResult.error(e.code(), message);
+            return ToolResult.error(e.code(), deploymentErrorMessage(e, args));
         } catch (ConfigFileException e) {
             return ToolResult.error(e.code(), e.getMessage());
         } catch (PermissionException e) {
@@ -243,6 +257,45 @@ public class AiToolRegistry {
             log.warn("AI tool {} failed: {}", tool.name(), e.getClass().getSimpleName());
             return ToolResult.error("TOOL_FAILED", "The tool could not be executed.");
         }
+    }
+
+    /** Values shorter than this are not redacted: they would blank out ordinary words ("1", "on", "db"). */
+    static final int MIN_REDACTED_VALUE_LENGTH = 4;
+
+    /**
+     * {@code docker compose config} echoes interpolated values in its errors (e.g. {@code parsing "hunter2": invalid
+     * syntax} for {@code mem_limit: ${SECRET}}). The details stay so the model can fix the file, but every env value of
+     * the deployment, from the stored env and from an {@code env} argument of the same call, is replaced with
+     * {@code ***}. Only the AI path redacts; the REST API still shows the user their own error.
+     */
+    private String deploymentErrorMessage(DeploymentException e, Map<String, Object> args) {
+        if (e.details().isEmpty()) {
+            return e.getMessage();
+        }
+        try {
+            return redactEnvValues(e.getMessage() + ": " + String.join("; ", e.details()), args);
+        } catch (RuntimeException failure) {
+            // fail closed: if the env values cannot be determined, the details (which may echo them) are dropped
+            log.warn("AI tool error details dropped, env redaction failed: {}", failure.getClass().getSimpleName());
+            return e.getMessage();
+        }
+    }
+
+    private String redactEnvValues(String message, Map<String, Object> args) {
+        Set<String> values = new HashSet<>();
+        for (String value : envValues.valuesFor(args)) {
+            values.add(value == null ? null : value.replace("\r", ""));
+        }
+        if (args.get("env") instanceof String text) {
+            EnvFile.parse(text).forEach(entry -> values.add(entry.value() == null ? null : entry.value().replace("\r", "")));
+        }
+        String redacted = message;
+        // longest first, so a value that contains another one is replaced whole
+        for (String value : values.stream().filter(v -> v != null && v.length() >= MIN_REDACTED_VALUE_LENGTH)
+                .sorted(Comparator.comparingInt(String::length).reversed()).toList()) {
+            redacted = redacted.replace(value, "***");
+        }
+        return redacted;
     }
 
     private Map<String, Object> parseArguments(String json) {

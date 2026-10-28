@@ -147,6 +147,112 @@ class AiToolRegistryTest {
         assertThat(result.content()).contains("UNKNOWN_TOOL");
     }
 
+    private static AiToolRegistry registryWithStoredEnv(List<String> storedValues, AiTool tool) {
+        return new AiToolRegistry(List.of(tool), MAPPER, AiToolRegistry.DEFAULT_MAX_RESULT_CHARS, Clock.systemUTC(),
+                args -> storedValues);
+    }
+
+    private static AiTool invalidCompose(String... details) {
+        return tool("t", Role.VIEWER, false, (a, c) -> {
+            throw new DeploymentException(HttpStatus.BAD_REQUEST, "INVALID_COMPOSE", "The compose file is invalid",
+                    List.of(details));
+        });
+    }
+
+    private static String args() {
+        return "{\"hostId\":\"" + UUID.randomUUID() + "\"}";
+    }
+
+    @Test
+    void invalidComposeDetailsKeepTheMessageButRedactStoredEnvValues() {
+        AiToolRegistry registry = registryWithStoredEnv(List.of("hunter2", "notaport"), invalidCompose(
+                "services.web.mem_limit: parsing hunter2: invalid syntax",
+                "invalid hostPort: notaport"));
+
+        ToolResult result = registry.execute("t", args(), ctx(Role.VIEWER));
+
+        assertThat(result.error()).isTrue();
+        assertThat(result.content()).contains("INVALID_COMPOSE", "The compose file is invalid",
+                "services.web.mem_limit: parsing ***: invalid syntax", "invalid hostPort: ***")
+                .doesNotContain("hunter2").doesNotContain("notaport");
+    }
+
+    @Test
+    void invalidComposeDetailsRedactEnvPassedInlineInTheSameCall() {
+        Map<String, Object> withEnv = Map.of("type", "object", "required", List.of("hostId"), "properties",
+                Map.of("hostId", Map.of("type", "string", "format", "uuid"), "env", Map.of("type", "string")));
+        AiToolRegistry registry = registry(new FunctionTool("t", "d", withEnv, Role.VIEWER, false, (a, c) -> {
+            throw new DeploymentException(HttpStatus.BAD_REQUEST, "INVALID_COMPOSE", "The compose file is invalid",
+                    List.of("parsing s3cr3t-value: invalid syntax"));
+        }, v -> MAPPER.writeValueAsString(v)));
+        String json = "{\"hostId\":\"" + UUID.randomUUID() + "\",\"env\":\"MEM=s3cr3t-value\\nDEBUG=1\"}";
+
+        ToolResult result = registry.execute("t", json, ctx(Role.VIEWER));
+
+        assertThat(result.content()).contains("parsing ***: invalid syntax").doesNotContain("s3cr3t-value");
+    }
+
+    @Test
+    void failsClosedWhenTheStoredEnvCannotBeRead() {
+        AiToolRegistry registry = new AiToolRegistry(List.of(invalidCompose("parsing hunter2: invalid syntax")), MAPPER,
+                AiToolRegistry.DEFAULT_MAX_RESULT_CHARS, Clock.systemUTC(), a -> {
+                    throw new DeploymentEnvValues.Unavailable(new IllegalStateException("DECRYPTION_FAILED"));
+                });
+
+        ToolResult result = registry.execute("t", args(), ctx(Role.VIEWER));
+
+        assertThat(result.error()).isTrue();
+        assertThat(result.content()).contains("INVALID_COMPOSE", "The compose file is invalid")
+                .doesNotContain("hunter2").doesNotContain("parsing");
+    }
+
+    @Test
+    void failsClosedWhenRedactionFailsForAnyOtherReason() {
+        java.util.AbstractCollection<String> broken = new java.util.AbstractCollection<>() {
+            @Override public java.util.Iterator<String> iterator() { throw new IllegalStateException("boom"); }
+            @Override public int size() { return 1; }
+        };
+        AiToolRegistry registry = new AiToolRegistry(List.of(invalidCompose("parsing hunter2: invalid syntax")), MAPPER,
+                AiToolRegistry.DEFAULT_MAX_RESULT_CHARS, Clock.systemUTC(), a -> broken);
+
+        ToolResult result = registry.execute("t", args(), ctx(Role.VIEWER));
+
+        assertThat(result.content()).contains("INVALID_COMPOSE", "The compose file is invalid")
+                .doesNotContain("hunter2").doesNotContain("parsing");
+    }
+
+    @Test
+    void callNamingNoDeploymentAndNoInlineEnvKeepsTheDetails() {
+        // the real lookup returns nothing without hostId/deploymentId: there is no env to protect
+        AiToolRegistry registry = registry(invalidCompose("services.web.image: must be a string"));
+
+        ToolResult result = registry.execute("t", args(), ctx(Role.VIEWER));
+
+        assertThat(result.content()).contains("services.web.image: must be a string");
+    }
+
+    @Test
+    void nonSecretDetailsAreUnchanged() {
+        AiToolRegistry registry = registryWithStoredEnv(List.of("hunter2"),
+                invalidCompose("services.web.image: must be a string", "line 4: unknown key"));
+
+        ToolResult result = registry.execute("t", args(), ctx(Role.VIEWER));
+
+        assertThat(result.content()).contains("services.web.image: must be a string", "line 4: unknown key")
+                .doesNotContain("***");
+    }
+
+    @Test
+    void envValuesUnderFourCharactersAreNotRedacted() {
+        AiToolRegistry registry = registryWithStoredEnv(List.of("abc", "1", "", "hunter2"),
+                invalidCompose("abc is invalid in service 1", "parsing hunter2"));
+
+        ToolResult result = registry.execute("t", args(), ctx(Role.VIEWER));
+
+        assertThat(result.content()).contains("abc is invalid in service 1", "parsing ***")
+                .doesNotContain("hunter2");
+    }
+
     @Test
     void mapsDomainExceptionsToTheirCodeAndHidesUnexpectedOnes() {
         String args = "{\"hostId\":\"" + UUID.randomUUID() + "\"}";
