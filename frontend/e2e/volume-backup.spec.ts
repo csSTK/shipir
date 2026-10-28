@@ -77,6 +77,36 @@ test('operator downloads a backup of a volume in use', async ({ page, api }) => 
   await expect(page.getByRole('status')).toContainText('may be inconsistent')
 })
 
+test('operator lists and downloads a stored scheduled backup, and sees a failing download', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', as('OPERATOR'))
+  api.mock('GET', '/api/hosts/a/volume-backup-schedules', { body: [] })
+  api.mock('GET', '/api/hosts/a/volumes/cache/stored-backups', {
+    body: [
+      { name: 'cache-20260102T030405Z.tar', sizeBytes: 2048, createdAt: '2026-01-02T03:04:05Z' },
+      { name: 'cache-20260101T000000Z.tar', sizeBytes: 12, createdAt: '2026-01-01T00:00:00Z' },
+    ],
+  })
+  await page.route('**/api/hosts/a/volumes/cache/stored-backups/cache-20260102T030405Z.tar', (route) =>
+    route.fulfill({ status: 200, body: 'tar', headers: { 'Content-Type': 'application/x-tar', 'Content-Disposition': 'attachment; filename="cache-20260102T030405Z.tar"' } }),
+  )
+  await page.route('**/api/hosts/a/volumes/cache/stored-backups/cache-20260101T000000Z.tar', (route) =>
+    route.fulfill({ status: 404, json: { code: 'STORED_BACKUP_NOT_FOUND' } }),
+  )
+  await page.goto('/environments/a/volumes')
+  await page.getByRole('button', { name: 'More actions for cache' }).click()
+  await page.getByRole('menuitem', { name: 'Stored backups…' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Stored backups of cache' })
+  await expect(dialog.getByRole('listitem')).toHaveCount(2)
+  await expect(dialog.getByRole('listitem').first()).toContainText('2 KiB')
+
+  const download = page.waitForEvent('download')
+  await dialog.getByRole('button', { name: 'Download cache-20260102T030405Z.tar' }).click()
+  expect((await download).suggestedFilename()).toBe('cache-20260102T030405Z.tar')
+
+  await dialog.getByRole('button', { name: 'Download cache-20260101T000000Z.tar' }).click()
+  await expect(dialog.getByRole('alert')).toContainText('This stored backup no longer exists.')
+})
+
 test('viewer gets no backup actions', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', as('VIEWER'))
   await page.goto('/environments/a/volumes')

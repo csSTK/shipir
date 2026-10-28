@@ -1,5 +1,6 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.host.dto.StoredVolumeBackup;
 import dev.bethge.shipir.host.dto.VolumeBackupDownload;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ContentDisposition;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.UUID;
 
 /** Volume backup download and restore upload. ADMIN/OPERATOR (matchers in SecurityConfig) plus host-level OPERATE in the service. */
@@ -34,13 +36,27 @@ class VolumeBackupController {
 
     @GetMapping("/backup")
     ResponseEntity<InputStreamResource> backup(@PathVariable UUID hostId, @PathVariable String volume) {
-        VolumeBackupDownload download = service.backup(hostId, volume);
+        return tar(service.backup(hostId, volume));
+    }
+
+    private static ResponseEntity<InputStreamResource> tar(VolumeBackupDownload download) {
         return ResponseEntity.ok()
                 .contentType(TAR)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         ContentDisposition.attachment().filename(download.fileName(), StandardCharsets.UTF_8).build().toString())
                 .header("X-Content-Type-Options", "nosniff")
                 .body(new InputStreamResource(download.content()));
+    }
+
+    @GetMapping("/stored-backups")
+    List<StoredVolumeBackup> storedBackups(@PathVariable UUID hostId, @PathVariable String volume) {
+        return service.listStored(hostId, volume);
+    }
+
+    @GetMapping("/stored-backups/{fileName}")
+    ResponseEntity<InputStreamResource> downloadStored(@PathVariable UUID hostId, @PathVariable String volume,
+                                                       @PathVariable String fileName) {
+        return tar(service.downloadStored(hostId, volume, fileName));
     }
 
     /** Multipart part {@code file} (a tar) is extracted into the existing volume; {@code confirm=true} allows a volume in use. */

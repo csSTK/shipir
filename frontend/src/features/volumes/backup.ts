@@ -19,6 +19,13 @@ export interface BackupSchedule {
   lastStatus: BackupStatus | null
 }
 
+/** One archive of `GET /api/hosts/{id}/volumes/{v}/stored-backups` (written by a scheduled backup). */
+export interface StoredBackup {
+  name: string
+  sizeBytes: number
+  createdAt: string
+}
+
 export interface ScheduleRequest {
   volumeName: string
   intervalHours: number
@@ -54,6 +61,16 @@ export async function downloadVolumeBackup(hostId: string, volume: string): Prom
   saveBlob({ blob: await response.blob(), filename: filenameOf(response.headers.get('Content-Disposition'), `${volume}.tar`) })
 }
 
+/** GET one stored archive by its exact name and hand it to the browser. */
+export async function downloadStoredBackup(hostId: string, volume: string, fileName: string): Promise<void> {
+  const response = await fetch(`${volumePath(hostId, volume)}/stored-backups/${encodeURIComponent(fileName)}`, {
+    credentials: 'same-origin',
+    headers: { Accept: 'application/x-tar, application/json' },
+  })
+  if (!response.ok) throw await toApiError(response)
+  saveBlob({ blob: await response.blob(), filename: filenameOf(response.headers.get('Content-Disposition'), fileName) })
+}
+
 /** POST multipart `file` + `confirm`; the browser sets the multipart boundary itself. */
 export async function restoreVolume(hostId: string, volume: string, file: File, confirm: boolean): Promise<void> {
   const form = new FormData()
@@ -75,6 +92,7 @@ const ERRORS: Record<string, string> = {
   get VOLUME_IN_USE() { return i18n.t('volumes:backup.thisVolumeIsInUse') },
   get INVALID_ARCHIVE() { return i18n.t('volumes:backup.theFileIsNotA') },
   get SIZE_LIMIT_EXCEEDED() { return i18n.t('volumes:backup.theArchiveIsLargerThan', { MAX_RESTORE_LABEL }) },
+  get STORED_BACKUP_NOT_FOUND() { return i18n.t('volumes:backup.thisStoredBackupNoLongerExists') },
   get SCHEDULE_EXISTS() { return i18n.t('volumes:backup.thisVolumeAlreadyHasA') },
   get INVALID_SCHEDULE() { return i18n.t('volumes:backup.theScheduleIsNotValid') },
   get SCHEDULE_NOT_FOUND() { return i18n.t('volumes:backup.thisScheduleNoLongerExists') },
@@ -93,6 +111,13 @@ export function useBackupSchedules(hostId: string, enabled = true) {
     queryKey: ['hosts', hostId, 'volume-backup-schedules'],
     queryFn: () => apiFetch<BackupSchedule[]>(schedulesPath(hostId)),
     enabled,
+  })
+}
+
+export function useStoredBackups(hostId: string, volume: string) {
+  return useQuery({
+    queryKey: ['hosts', hostId, 'volumes', volume, 'stored-backups'],
+    queryFn: () => apiFetch<StoredBackup[]>(`/hosts/${hostId}/volumes/${encodeURIComponent(volume)}/stored-backups`),
   })
 }
 

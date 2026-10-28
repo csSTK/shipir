@@ -4,11 +4,12 @@ import { deleteMenu } from '../hosts/deleteRowActions.tsx'
 import { DeleteResourceDialog } from '../hosts/DeleteResourceDialog.tsx'
 import { useParams } from 'react-router-dom'
 import { describeResourceError } from '../hosts/format.ts'
-import { Download, Upload, CalendarClock } from 'lucide-react'
+import { Archive, Download, Upload, CalendarClock } from 'lucide-react'
 import { Badge, Button, PageHeader, ResourceTable, type ResourceColumn } from '../../shared/ui/index.ts'
 import { useDeleteVolume, useVolumes, type Volume } from './api.ts'
 import { CreateVolumeDialog } from './CreateVolumeDialog.tsx'
 import { BackupSchedulesDialog } from './BackupSchedulesDialog.tsx'
+import { StoredBackupsDialog } from './StoredBackupsDialog.tsx'
 import { RestoreVolumeDialog } from './RestoreVolumeDialog.tsx'
 import { LastBackupBadge } from './LastBackupBadge.tsx'
 import { describeBackupError, downloadVolumeBackup, useBackupSchedules } from './backup.ts'
@@ -49,6 +50,7 @@ export function VolumesPage() {
   const [target, setTarget] = useState<Volume | null>(null)
   const [creating, setCreating] = useState(false)
   const [restoring, setRestoring] = useState<Volume | null>(null)
+  const [storedFor, setStoredFor] = useState<string | null>(null)
   const [scheduling, setScheduling] = useState<{ volume?: string } | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [backupError, setBackupError] = useState<string | null>(null)
@@ -131,6 +133,7 @@ export function VolumesPage() {
                   { label: t('VolumesPage.backup'), icon: <Download size={16} strokeWidth={1.75} />, onSelect: () => void backup(v) },
                   { label: t('VolumesPage.restore'), icon: <Upload size={16} strokeWidth={1.75} />, onSelect: () => setRestoring(v) },
                   { label: t('VolumesPage.scheduleBackups'), icon: <CalendarClock size={16} strokeWidth={1.75} />, onSelect: () => setScheduling({ volume: v.name }) },
+                  { label: t('VolumesPage.storedBackups'), icon: <Archive size={16} strokeWidth={1.75} />, onSelect: () => setStoredFor(v.name) },
                   { type: 'separator' },
                   ...deleteMenu(() => setTarget(v)),
                 ],
@@ -140,6 +143,7 @@ export function VolumesPage() {
       />
       {restoring && <RestoreVolumeDialog hostId={id} volume={restoring} onClose={() => setRestoring(null)} onDone={setNotice} />}
       {scheduling && <BackupSchedulesDialog hostId={id} volumes={data ?? []} initialVolume={scheduling.volume} onClose={() => setScheduling(null)} />}
+      {storedFor && <StoredBackupsDialog hostId={id} volume={storedFor} onClose={() => setStoredFor(null)} />}
       {creating && <CreateVolumeDialog hostId={id} onClose={() => setCreating(false)} />}
       {target && (
         <DeleteResourceDialog kind="volume" name={target.name} onDelete={() => del.mutateAsync(target.name)} onClose={() => setTarget(null)} />

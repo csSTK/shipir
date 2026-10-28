@@ -6,6 +6,7 @@ import dev.bethge.shipir.common.security.SecretDecryptionException;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.client.VolumeArchiveService;
+import dev.bethge.shipir.host.dto.StoredVolumeBackup;
 import dev.bethge.shipir.host.dto.VolumeBackupDownload;
 import dev.bethge.shipir.permission.CurrentAccess;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -15,9 +16,13 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.regex.Pattern;
@@ -100,6 +105,28 @@ public class VolumeBackupService {
             store.write(hostId, volume, content, clock.instant(), keep);
         } catch (IOException e) {
             throw new HostException(HttpStatus.INTERNAL_SERVER_ERROR, "BACKUP_STORE_FAILED", "The backup could not be stored");
+        }
+    }
+
+    /** Archives written by scheduled backups for this volume, newest first. */
+    public List<StoredVolumeBackup> listStored(UUID hostId, String volume) {
+        requireOperate(hostId);
+        validateVolumeName(volume);
+        return store.list(hostId, volume);
+    }
+
+    /** Opens one stored archive for download; the caller must close the stream. */
+    @Auditable(action = "VOLUME_BACKUP_DOWNLOAD", targetType = "VOLUME", targetId = "#volume", details = "{'file': #fileName}")
+    public VolumeBackupDownload downloadStored(UUID hostId, String volume, String fileName) {
+        requireOperate(hostId);
+        validateVolumeName(volume);
+        Path file = store.resolve(hostId, volume, fileName).orElseThrow(
+                () -> new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found"));
+        try {
+            // NOFOLLOW: a symlink swapped in after resolve() must not be followed
+            return new VolumeBackupDownload(Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS), fileName);
+        } catch (IOException e) {
+            throw new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found");
         }
     }
 

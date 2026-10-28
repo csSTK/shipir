@@ -44,3 +44,6 @@
   font-size: var(--text-small-size);
   background: var(--color-warn-soft);
 }
+.vbackup__file {
+  overflow-wrap: anywhere;
+}

@@ -60,5 +60,13 @@
   "backup.youAreNotAllowedTo": "You are not allowed to do this.",
   "backup.couldNotReachTheDocker": "Could not reach the Docker host.",
   "backup.theConnectionToTheDocker": "The connection to the Docker host timed out.",
-  "backup.theRequestFailedTryAgain": "The request failed. Try again."
+  "backup.theRequestFailedTryAgain": "The request failed. Try again.",
+  "StoredBackupsDialog.storedBackupsOfVolume": "Stored backups of {{volume}}",
+  "StoredBackupsDialog.scheduledBackupsAreKeptOn": "Archives written by scheduled backups, newest first.",
+  "StoredBackupsDialog.loading": "Loading…",
+  "StoredBackupsDialog.noStoredBackupsYet": "No stored backups yet.",
+  "StoredBackupsDialog.downloadName": "Download {{name}}",
+  "StoredBackupsDialog.close": "Close",
+  "VolumesPage.storedBackups": "Stored backups…",
+  "backup.thisStoredBackupNoLongerExists": "This stored backup no longer exists."
 }

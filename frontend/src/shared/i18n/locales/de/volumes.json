@@ -60,5 +60,13 @@
   "backup.youAreNotAllowedTo": "Das darfst du nicht.",
   "backup.couldNotReachTheDocker": "Der Docker-Host ist nicht erreichbar.",
   "backup.theConnectionToTheDocker": "Bei der Verbindung zum Docker-Host ist eine Zeitüberschreitung aufgetreten.",
-  "backup.theRequestFailedTryAgain": "Die Anfrage ist fehlgeschlagen. Versuche es erneut."
+  "backup.theRequestFailedTryAgain": "Die Anfrage ist fehlgeschlagen. Versuche es erneut.",
+  "StoredBackupsDialog.storedBackupsOfVolume": "Gespeicherte Backups von {{volume}}",
+  "StoredBackupsDialog.scheduledBackupsAreKeptOn": "Archive aus geplanten Backups, das neueste zuerst.",
+  "StoredBackupsDialog.loading": "Lädt…",
+  "StoredBackupsDialog.noStoredBackupsYet": "Noch keine gespeicherten Backups.",
+  "StoredBackupsDialog.downloadName": "{{name}} herunterladen",
+  "StoredBackupsDialog.close": "Schließen",
+  "VolumesPage.storedBackups": "Gespeicherte Backups…",
+  "backup.thisStoredBackupNoLongerExists": "Dieses gespeicherte Backup existiert nicht mehr."
 }
