@@ -103,6 +103,8 @@ export function describeConfigError(error: unknown, fallback: string): string {
         return i18n.t('deployments:api.thisFileNoLongerExists')
       case 'DEPLOYMENT_NOT_FOUND':
         return i18n.t('deployments:api.thisDeploymentNoLongerExists')
+      case 'DEPLOYMENT_IN_PROGRESS':
+        return i18n.t('deployments:deploymentErrors.aRunIsAlreadyIn')
       case 'FILE_TOO_LARGE':
         return i18n.t('deployments:api.thisFileIsTooLarge')
     }

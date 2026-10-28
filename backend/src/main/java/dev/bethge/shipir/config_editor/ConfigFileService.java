@@ -151,9 +151,11 @@ public class ConfigFileService {
         if (Files.isDirectory(t.file(), LinkOption.NOFOLLOW_LINKS)) {
             throw new ConfigFileException(HttpStatus.BAD_REQUEST, "NOT_A_FILE", "Path is a directory");
         }
-        backupIfExists(t);
-        writeAtomically(t.file(), content);
-        return response(t);
+        return deployments.whileNoRunInProgress(id, () -> {
+            backupIfExists(t);
+            writeAtomically(t.file(), content);
+            return response(t);
+        });
     }
 
     @Auditable(action = "CONFIG_FILE_DELETE", targetType = "CONFIG_FILE",
@@ -161,12 +163,15 @@ public class ConfigFileService {
     public void delete(UUID hostId, UUID id, String path) {
         Target t = target(hostId, id, path, true);
         requireFile(t.file());
-        backupIfExists(t);
-        try {
-            Files.delete(t.file());
-        } catch (IOException e) {
-            throw new UncheckedIOException("Could not delete file", e);
-        }
+        deployments.whileNoRunInProgress(id, () -> {
+            backupIfExists(t);
+            try {
+                Files.delete(t.file());
+            } catch (IOException e) {
+                throw new UncheckedIOException("Could not delete file", e);
+            }
+            return null;
+        });
     }
 
     public List<ConfigFileBackup> backups(UUID hostId, UUID id, String path) {
@@ -200,9 +205,11 @@ public class ConfigFileService {
             throw new ConfigFileException(HttpStatus.BAD_REQUEST, "NOT_A_FILE", "Path is a directory");
         }
         String content = decode(backup);
-        backupIfExists(t);
-        writeAtomically(t.file(), content);
-        return response(t);
+        return deployments.whileNoRunInProgress(id, () -> {
+            backupIfExists(t);
+            writeAtomically(t.file(), content);
+            return response(t);
+        });
     }
 
     // ---- path handling ----

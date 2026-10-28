@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../shared/api/client.ts'
-import { languageFor } from './api.ts'
+import { describeConfigError, languageFor } from './api.ts'
 import { ConfigFilesPanel } from './ConfigFilesPanel.tsx'
 
 const apiFetch = vi.fn()
@@ -121,5 +121,12 @@ describe('languageFor', () => {
     expect(languageFor('nginx.conf')).toBe('ini')
     expect(languageFor('a.yaml')).toBe('plaintext')
     expect(languageFor('Makefile')).toBe('plaintext')
+  })
+})
+
+describe('describeConfigError', () => {
+  it('explains a refused change while a run is in progress', () => {
+    const message = describeConfigError(new ApiError(409, 'busy', 'DEPLOYMENT_IN_PROGRESS'), 'fallback')
+    expect(message).toMatch(/run is already in progress/i)
   })
 })

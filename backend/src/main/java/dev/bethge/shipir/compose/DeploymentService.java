@@ -47,6 +47,7 @@ import java.time.Clock;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * CRUD of managed deployments. The compose file and .env are written to disk (where {@code docker compose} reads them) and
@@ -361,6 +362,22 @@ public class DeploymentService {
         }
         return execution.execute(deployment.getHostId(), deployment.getName(), command, endpoint, onLine,
                 composeFile, overrideFile, options);
+    }
+
+    /**
+     * Runs {@code action} while holding the deployment lock, so it cannot overlap a deploy, rollback, stop or update. The
+     * config editor wraps its file changes in this: a run checks the compose policy and starts {@code up} later on a worker
+     * thread, and an include/extends/env_file target changed in between would run unchecked.
+     *
+     * @throws DeploymentException 409 DEPLOYMENT_IN_PROGRESS if a run holds the lock
+     */
+    public <T> T whileNoRunInProgress(UUID deploymentId, Supplier<T> action) {
+        locks.acquire(deploymentId);
+        try {
+            return action.get();
+        } finally {
+            locks.release(deploymentId);
+        }
     }
 
     @Auditable(action = "DEPLOYMENT_UPDATE", targetType = "DEPLOYMENT", targetId = "#id")
