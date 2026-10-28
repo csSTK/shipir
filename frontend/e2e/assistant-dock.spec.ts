@@ -12,6 +12,7 @@ const stompFrame = (command: string, headers: Record<string, string>, body = '')
 /** Minimal STOMP broker; `emit` pushes a frame to the chat topic the page subscribed to. */
 async function mockBroker(page: Page) {
   let push: ((body: object) => void) | null = null
+  const byTopic = new Map<string, (body: object) => void>()
   await page.routeWebSocket('**/ws', (ws) => {
     ws.onMessage((raw) => {
       const text = String(raw)
@@ -22,6 +23,7 @@ async function mockBroker(page: Page) {
         const destination = /destination:(.*)/.exec(text)?.[1] ?? ''
         push = (body) =>
           ws.send(stompFrame('MESSAGE', { subscription: id, destination, 'message-id': String(Math.random()) }, JSON.stringify(body)))
+        byTopic.set(destination, push)
       }
     })
   })
@@ -30,13 +32,19 @@ async function mockBroker(page: Page) {
       await expect.poll(() => push !== null).toBe(true)
       push?.(body)
     },
+    /** Pushes to one topic, e.g. a chat that is no longer the active one. */
+    emitTo: async (destination: string, body: object) => {
+      await expect.poll(() => byTopic.has(destination)).toBe(true)
+      byTopic.get(destination)?.(body)
+    },
   }
 }
 
 function setup(api: ApiMock) {
   api.mock('GET', '/api/hosts/overview', { body: [] })
   api.mock('GET', '/api/auth/me', { body: { username: 'u', role: 'OPERATOR', setupRequired: false } })
-  api.mock('GET', '/api/ai/sessions', { body: list(session('s1', 'Deploy help')) })
+  api.mock('GET', '/api/ai/sessions', { body: list(session('s1', 'Deploy help'), session('s2', 'Old chat')) })
+  api.mock('GET', '/api/ai/sessions/s2', { body: { session: session('s2', 'Old chat'), messages: [] } })
   api.mock('GET', '/api/ai/sessions/s1', { body: { session: session('s1', 'Deploy help'), messages: [] } })
   api.mock('POST', '/api/ai/sessions/s1/messages', { status: 202, body: { runId: RUN } })
 }
@@ -139,6 +147,7 @@ test('navigate away mid-answer: the icon spins, then shows an answer-ready dot u
 
 test('a pending action shows a count badge on the icon; clicking it only opens the panel', async ({ page, api }) => {
   setup(api)
+  api.mock('GET', '/api/ai/sessions/pending-count', { body: { count: 1 } })
   api.mock('GET', '/api/ai/sessions/s1', {
     body: {
       session: session('s1', 'Deploy help'),
@@ -165,6 +174,38 @@ test('a pending action shows a count badge on the icon; clicking it only opens t
 
   await icon.click()
   await expect(page.getByRole('dialog', { name: 'Assistant' })).toBeVisible()
+})
+
+test('after a reload the badge counts a pending action in a stored chat without opening any chat', async ({ page, api }) => {
+  setup(api)
+  api.mock('GET', '/api/ai/sessions/pending-count', { body: { count: 1 } })
+  await mockBroker(page)
+  await page.goto('/')
+  const icon = page.getByRole('button', { name: 'Open assistant' })
+  await expect(icon).toHaveAttribute('data-status', 'pending')
+  await expect(icon.getByText('1', { exact: true })).toBeVisible()
+  await expect(page.getByTestId('assistant-dock-status')).toHaveText('1 action is waiting for your confirmation')
+})
+
+test('a run finishing in a chat the dock switched away from still shows the answer-ready dot', async ({ page, api }) => {
+  setup(api)
+  const broker = await mockBroker(page)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Open assistant' }).click()
+  const panel = page.getByRole('dialog', { name: 'Assistant' })
+  await panel.getByRole('combobox', { name: 'Chat' }).selectOption('s1')
+  await panel.getByLabel('Message').fill('slow question')
+  await panel.getByRole('button', { name: 'Send' }).click()
+  await broker.emit({ runId: RUN, type: 'TOKEN', text: 'Working' })
+  await expect(panel.getByText('Working')).toBeVisible()
+
+  await panel.getByRole('combobox', { name: 'Chat' }).selectOption('s2')
+  await page.keyboard.press('Escape')
+  const icon = page.getByRole('button', { name: 'Open assistant' })
+  await expect(icon).toHaveAttribute('data-status', 'running')
+
+  await broker.emitTo('/topic/chat/s1', { runId: RUN, type: 'DONE', outcome: 'COMPLETE' })
+  await expect(icon).toHaveAttribute('data-status', 'ready')
 })
 
 test('reduced motion: the running icon does not spin', async ({ page, api }) => {

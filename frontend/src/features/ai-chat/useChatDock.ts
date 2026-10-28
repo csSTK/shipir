@@ -27,11 +27,13 @@ export interface ChatDock {
   sessionId: string | null
   /** Live state of the active session's run. */
   stream: ChatStream
-  /** The active session's run finished while nobody was viewing it. Cleared by `view`. */
+  /** Some chat's run finished while nobody was viewing it. Cleared per chat by `view`/`open`. */
   unread: boolean
-  /** Number of write actions in the active session still waiting for Confirm/Reject. */
+  /** A run in a chat other than the active one is still going (it keeps being followed in the background). */
+  runningElsewhere: boolean
+  /** Number of write actions in all of the user's chats still waiting for Confirm/Reject. */
   pendingCount: number
-  /** Makes a session the active one (switching unsubscribes the previous one). */
+  /** Makes a session the active one. A run still going in the previous one keeps being followed in the background. */
   open: (sessionId: string) => void
   /** Registers a visible view (page or dock) of a session and clears its unread flag. Returns the unregister function. */
   view: (sessionId: string) => () => void

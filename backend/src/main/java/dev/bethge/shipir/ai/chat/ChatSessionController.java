@@ -4,6 +4,7 @@ import dev.bethge.shipir.ai.chat.dto.ChatSessionDetailResponse;
 import dev.bethge.shipir.ai.chat.dto.ChatSessionPageResponse;
 import dev.bethge.shipir.ai.chat.dto.ChatSessionResponse;
 import dev.bethge.shipir.ai.chat.dto.CreateChatSessionRequest;
+import dev.bethge.shipir.ai.chat.dto.PendingActionCountResponse;
 import dev.bethge.shipir.ai.chat.dto.UpdateChatSessionRequest;
 import dev.bethge.shipir.auth.UserRepository;
 import dev.bethge.shipir.common.exception.ErrorResponse;
@@ -47,6 +48,11 @@ class ChatSessionController {
     ChatSessionPageResponse list(Authentication auth, @RequestParam(defaultValue = "0") int page,
                                  @RequestParam(defaultValue = "20") int size) {
         return service.list(userId(auth), page, size);
+    }
+
+    @GetMapping("/sessions/pending-count")
+    PendingActionCountResponse pendingCount(Authentication auth) {
+        return service.pendingCount(userId(auth));
     }
 
     @PostMapping("/sessions")

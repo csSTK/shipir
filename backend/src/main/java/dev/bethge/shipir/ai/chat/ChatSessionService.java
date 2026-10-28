@@ -4,6 +4,7 @@ import dev.bethge.shipir.ai.chat.dto.ChatMessageResponse;
 import dev.bethge.shipir.ai.chat.dto.ChatSessionDetailResponse;
 import dev.bethge.shipir.ai.chat.dto.ChatSessionPageResponse;
 import dev.bethge.shipir.ai.chat.dto.ChatSessionResponse;
+import dev.bethge.shipir.ai.chat.dto.PendingActionCountResponse;
 import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
@@ -60,6 +61,11 @@ public class ChatSessionService {
     @Transactional(readOnly = true)
     public ChatSessionPageResponse list(UUID userId, int page, int size) {
         return toPage(sessions.findByUserId(userId, pageRequest(page, size)), false);
+    }
+
+    @Transactional(readOnly = true)
+    public PendingActionCountResponse pendingCount(UUID userId) {
+        return new PendingActionCountResponse(messages.countPendingByUserId(userId));
     }
 
     @Transactional(readOnly = true)

@@ -120,7 +120,7 @@ export function AssistantDock({ isAdmin, narrow }: { isAdmin: boolean; narrow: b
   }
 
   // While the panel is open the user sees the chat itself, so the icon only reports status when it is closed.
-  const status: DockStatus = open ? 'idle' : dock.stream.running ? 'running' : dock.pendingCount > 0 ? 'pending' : dock.unread ? 'ready' : 'idle'
+  const status: DockStatus = open ? 'idle' : dock.stream.running || dock.runningElsewhere ? 'running' : dock.pendingCount > 0 ? 'pending' : dock.unread ? 'ready' : 'idle'
   const statusText =
     status === 'running'
       ? t('AssistantDock.statusRunning')

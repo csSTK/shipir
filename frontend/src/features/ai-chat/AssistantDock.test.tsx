@@ -35,6 +35,9 @@ function renderAt(path: string) {
     const method = options?.method ?? 'GET'
     if (method === 'GET' && p.startsWith('/ai/sessions?')) return Promise.resolve({ items: sessions })
     if (method === 'POST' && p === '/ai/sessions') return Promise.resolve(session('n1', 'New chat'))
+    if (method === 'GET' && p === '/ai/sessions/pending-count') {
+      return Promise.resolve({ count: messages.filter((m) => (m as { status: string | null }).status === 'PENDING').length })
+    }
     if (method === 'GET' && p.startsWith('/ai/sessions/')) {
       const id = p.split('/')[3]
       return Promise.resolve({ session: sessions.find((s) => s.id === id) ?? session(id, 'New chat'), messages })

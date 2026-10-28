@@ -12,4 +12,8 @@ interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> {
 
     @Query("select coalesce(max(m.seq), 0) from ChatMessage m where m.sessionId = :sessionId")
     int maxSeq(UUID sessionId);
+
+    @Query("select count(m) from ChatMessage m where m.status = dev.bethge.shipir.ai.chat.ChatMessageStatus.PENDING "
+            + "and m.sessionId in (select s.id from ChatSession s where s.userId = :userId)")
+    long countPendingByUserId(UUID userId);
 }

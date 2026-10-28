@@ -23,9 +23,12 @@ const pendingTool = {
 }
 
 let handlers: TopicHandlers
+let byTopic: Record<string, { handlers: TopicHandlers; unsubscribe: ReturnType<typeof vi.fn> }>
 let unsubscribe: ReturnType<typeof vi.fn>
 let messages: object[]
+let pendingTotal: number
 const frame = (body: object) => act(() => handlers.onMessage(JSON.stringify(body)))
+const frameOn = (topic: string, body: object) => act(() => byTopic[topic].handlers.onMessage(JSON.stringify(body)))
 
 function Status() {
   const dock = useChatDock()
@@ -34,6 +37,8 @@ function Status() {
       <p data-testid="unread">{String(dock.unread)}</p>
       <p data-testid="pending">{dock.pendingCount}</p>
       <p data-testid="other-text">{dock.stream.text}</p>
+      <p data-testid="elsewhere">{String(dock.runningElsewhere)}</p>
+      <button type="button" onClick={() => dock.open('s2')}>switch</button>
       <Link to="/assistant/s1">back</Link>
     </div>
   )
@@ -43,6 +48,8 @@ function renderApp() {
   vi.mocked(apiFetch).mockImplementation((p: string, options?: { method?: string }) => {
     const method = options?.method ?? 'GET'
     if (method === 'GET' && p.startsWith('/ai/sessions?')) return Promise.resolve({ items: [session] })
+    if (method === 'GET' && p === '/ai/sessions/pending-count') return Promise.resolve({ count: pendingTotal })
+    if (method === 'GET' && p === '/ai/sessions/s2') return Promise.resolve({ session: { ...session, id: 's2' }, messages: [] })
     if (method === 'GET' && p === '/ai/sessions/s1') return Promise.resolve({ session, messages })
     if (method === 'POST' && p === '/ai/sessions/s1/messages') return Promise.resolve({ runId: 'r' })
     if (method === 'DELETE' && p === '/ai/sessions/s1') return Promise.resolve(null)
@@ -76,12 +83,16 @@ async function startRunAndLeave() {
 
 beforeEach(() => {
   messages = []
+  pendingTotal = 0
+  byTopic = {}
   unsubscribe = vi.fn()
   subscribe.mockReset()
-  subscribe.mockImplementation((_d: string, h: TopicHandlers) => {
+  subscribe.mockImplementation((destination: string, h: TopicHandlers) => {
     handlers = h
     h.onState('connected')
-    return unsubscribe
+    const off = destination === '/topic/chat/s1' ? unsubscribe : vi.fn()
+    byTopic[destination] = { handlers: h, unsubscribe: off }
+    return off
   })
 })
 afterEach(cleanup)
@@ -120,10 +131,36 @@ describe('ChatDockProvider', () => {
 
   it('exposes the number of pending actions', async () => {
     messages = [pendingTool]
+    pendingTotal = 1
     renderApp()
     await screen.findByText(/Deploy "shop"/)
     fireEvent.click(screen.getByText('leave'))
     expect(await screen.findByTestId('pending')).toHaveTextContent('1')
+  })
+
+  it('counts pending actions of stored sessions right after a reload, before any chat is opened', async () => {
+    pendingTotal = 2
+    renderApp()
+    await screen.findByLabelText('Message')
+    fireEvent.click(screen.getByText('leave'))
+    expect(await screen.findByTestId('pending')).toHaveTextContent('2')
+  })
+
+  it('keeps following a run after switching to another chat and flags it unread when it finishes there', async () => {
+    await startRunAndLeave()
+    fireEvent.click(screen.getByText('switch'))
+    await waitFor(() => expect(subscribe).toHaveBeenCalledWith('/topic/chat/s2', expect.anything()))
+    // The active subscription ends with the switch; a background one on the same chat takes over.
+    expect(subscribe.mock.calls.filter(([d]) => d === '/topic/chat/s1')).toHaveLength(2)
+    expect(screen.getByTestId('elsewhere')).toHaveTextContent('true')
+    expect(screen.getByTestId('unread')).toHaveTextContent('false')
+
+    pendingTotal = 1
+    frameOn('/topic/chat/s1', { type: 'DONE', outcome: 'COMPLETE' })
+    await waitFor(() => expect(screen.getByTestId('unread')).toHaveTextContent('true'))
+    await waitFor(() => expect(screen.getByTestId('pending')).toHaveTextContent('1'))
+    expect(screen.getByTestId('elsewhere')).toHaveTextContent('false')
+    await waitFor(() => expect(unsubscribe).toHaveBeenCalledTimes(2))
   })
 
   it('unsubscribes when the session is deleted', async () => {

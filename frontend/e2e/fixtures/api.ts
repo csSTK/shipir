@@ -37,6 +37,8 @@ export const test = base.extend<{ api: ApiMock }>({
       // The shell polls the unread badge on every page; default to none, specs override.
       const mocks = new Map<string, MockResponse>([
         [key('GET', '/api/notifications/unread-count'), { body: { count: 0 } }],
+        // The assistant dock in the shell asks for pending chat actions on every page; default to none, specs override.
+        [key('GET', '/api/ai/sessions/pending-count'), { body: { count: 0 } }],
         // The login page asks for it; default to single sign-on off, specs override.
         [key('GET', '/api/auth/oidc/config'), { body: { enabled: false, displayName: null, localLoginEnabled: true } }],
         // OPERATOR logins ask whether operator exec is enabled; default to off, specs override.

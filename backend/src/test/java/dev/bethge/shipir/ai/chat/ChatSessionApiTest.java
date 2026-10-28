@@ -263,6 +263,24 @@ class ChatSessionApiTest {
     }
 
     @Test
+    void pendingCountCoversAllOwnSessionsAndNeverOthers() throws Exception {
+        Login operator = login("operator");
+        UUID first = UUID.fromString(create(operator, "{}"));
+        UUID second = UUID.fromString(create(operator, "{}"));
+        String call = "[{\"id\":\"c1\",\"name\":\"list_hosts\",\"arguments\":{}}]";
+        service.appendMessage(first, ChatRole.ASSISTANT, null, call, null, ChatMessageStatus.PENDING);
+        service.appendMessage(second, ChatRole.ASSISTANT, null, call, null, ChatMessageStatus.PENDING);
+        service.appendMessage(second, ChatRole.ASSISTANT, null, call, null, ChatMessageStatus.CONFIRMED);
+
+        mvc.perform(get("/api/ai/sessions/pending-count").session(operator.session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(2));
+        mvc.perform(get("/api/ai/sessions/pending-count").session(login("viewer").session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(0));
+    }
+
+    @Test
     void serviceAppendAssignsNextSeqAndHistoryIsOrdered() {
         UUID owner = userId("viewer");
         UUID id = service.create(owner, "T").id();

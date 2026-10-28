@@ -68,6 +68,16 @@ export function useChatSessions() {
   })
 }
 
+/** Write actions waiting for Confirm/Reject across all of the user's chats; refreshed with the session list. */
+export function usePendingActionCount(enabled = true) {
+  return useQuery({
+    queryKey: [...SESSIONS_KEY, 'pending-count'],
+    queryFn: () => apiFetch<{ count: number }>('/ai/sessions/pending-count'),
+    select: (d) => d.count,
+    enabled,
+  })
+}
+
 export function useChatSession(id: string, enabled = true) {
   return useQuery({
     queryKey: sessionKey(id),
