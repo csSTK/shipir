@@ -89,17 +89,23 @@ export interface TwoFactorSetup {
   otpauthUri: string
 }
 
-/** Starts enrolment; the secret lives only in the caller's state until confirmed. */
+/**
+ * Starts enrolment; the secret lives only in the caller's state until confirmed. `gcTime: 0` evicts the settled
+ * mutation from the cache as soon as nothing observes it, so the secret is not kept in memory.
+ */
 export function useTwoFactorSetup() {
   return useMutation({
     mutationFn: () => apiFetch<TwoFactorSetup>('/auth/2fa/setup', { method: 'POST' }),
+    gcTime: 0,
   })
 }
 
+/** `gcTime: 0` for the same reason as `useTwoFactorSetup`: the recovery codes are not kept in the cache. */
 export function useConfirmTwoFactor() {
   return useMutation({
     mutationFn: (code: string) =>
       apiFetch<{ recoveryCodes: string[] }>('/auth/2fa/confirm', { method: 'POST', body: { code } }),
+    gcTime: 0,
   })
 }
 

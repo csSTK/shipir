@@ -61,6 +61,7 @@
   --sidebar-width: 15rem;
   --content-max: 72rem;
   --control-height: 2.5rem;
+  --size-qr: 12rem;
 
   /* Motion. Spring presets live in the apple-design skill (Shipir visual language);
      CSS durations/easings are for hover, color and press feedback only. */

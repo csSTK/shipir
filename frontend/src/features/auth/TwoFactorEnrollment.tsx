@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Button, TextField } from '../../shared/ui/index.ts'
 import { twoFactorErrorMessage } from './twoFactorErrors.ts'
 import { useConfirmTwoFactor, useTwoFactorSetup, type TwoFactorSetup } from './api.ts'
@@ -79,13 +79,18 @@ export function TwoFactorEnrollment({
   const [setup, setSetup] = useState<TwoFactorSetup | null>(null)
   const [codes, setCodes] = useState<string[] | null>(null)
   const [code, setCode] = useState('')
-  const { mutate: requestSetup } = setupMutation
+  const { mutate: requestSetup, reset: resetSetup } = setupMutation
+  const { reset: resetConfirm } = confirmMutation
+  // StrictMode runs effects twice in development; a second setup would replace the secret on the server.
+  const autoStarted = useRef(false)
 
   function start() {
     requestSetup(undefined, { onSuccess: setSetup })
   }
   useEffect(() => {
-    if (autoStart) requestSetup(undefined, { onSuccess: setSetup })
+    if (!autoStart || autoStarted.current) return
+    autoStarted.current = true
+    requestSetup(undefined, { onSuccess: setSetup })
   }, [autoStart, requestSetup])
 
   function confirm(event: FormEvent) {
@@ -93,6 +98,9 @@ export function TwoFactorEnrollment({
     if (confirmMutation.isPending || code.trim() === '') return
     confirmMutation.mutate(code.trim(), {
       onSuccess: (result) => {
+        // The mutations still hold the secret/URI and the recovery codes as their data; drop them with the setup state.
+        resetSetup()
+        resetConfirm()
         setSetup(null)
         setCode('')
         setCodes(result.recoveryCodes)
