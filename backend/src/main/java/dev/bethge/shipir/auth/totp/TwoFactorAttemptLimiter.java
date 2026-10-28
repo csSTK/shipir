@@ -9,6 +9,10 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * In-memory throttle for second-factor codes, keyed by username (not session, so a fresh password login does not
  * reset it): after {@code maxAttempts} wrong codes the user is locked for {@code lockout}, even for a right code.
+ * {@link #isLocked} and {@link #recordFailure} are separate calls and are not atomic on their own: every caller in
+ * {@link TotpService} runs them inside a transaction that holds the user's row lock
+ * ({@code findByUsernameForUpdate}) from before the check until after the failure is recorded, so parallel
+ * guesses for one user are serialized (see the parallel tests in {@code TwoFactorApiTest}). Keep it that way.
  */
 @Component
 class TwoFactorAttemptLimiter {

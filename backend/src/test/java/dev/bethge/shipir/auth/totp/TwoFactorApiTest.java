@@ -25,6 +25,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -556,5 +561,87 @@ class TwoFactorApiTest {
         for (String c : recovery) {
             assertThat(all).doesNotContain(c);
         }
+    }
+
+    /** Runs every call at the same moment (after all threads are ready) and returns the HTTP statuses. */
+    private List<Integer> concurrently(List<Callable<Integer>> calls) throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(calls.size());
+        CountDownLatch ready = new CountDownLatch(calls.size());
+        CountDownLatch go = new CountDownLatch(1);
+        try {
+            List<Future<Integer>> futures = new ArrayList<>();
+            for (Callable<Integer> call : calls) {
+                futures.add(pool.submit(() -> {
+                    ready.countDown();
+                    go.await();
+                    return call.call();
+                }));
+            }
+            ready.await();
+            go.countDown();
+            List<Integer> statuses = new ArrayList<>();
+            for (Future<Integer> f : futures) {
+                statuses.add(f.get());
+            }
+            return statuses;
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void parallelWrongVerifyCodesAreEvaluatedAtMostMaxAttemptsTimes() throws Exception {
+        Enrolment e = enrol(login("admin", ADMIN_PASSWORD));
+        List<Session> halves = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            halves.add(login("admin", ADMIN_PASSWORD));
+        }
+        List<Callable<Integer>> calls = new ArrayList<>();
+        for (Session half : halves) {
+            calls.add(() -> status(half, "POST", "/api/auth/2fa/verify", codeJson("000000")));
+        }
+        List<Integer> statuses = concurrently(calls);
+        // 401 = the wrong code was actually evaluated, 429 = refused without evaluation
+        assertThat(statuses.stream().filter(c -> c == 401).count()).isEqualTo(5);
+        assertThat(statuses.stream().filter(c -> c == 429).count()).isEqualTo(15);
+        assertThat(status(halves.get(0), "POST", "/api/auth/2fa/verify", codeJson(Totp.code(e.secret, now() + 1))))
+                .isEqualTo(429);
+    }
+
+    @Test
+    void parallelWrongDisableCodesAreEvaluatedAtMostMaxAttemptsTimes() throws Exception {
+        Session full = login("admin", ADMIN_PASSWORD);
+        enrol(full);
+        List<Callable<Integer>> calls = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            calls.add(() -> status(full, "POST", "/api/auth/2fa/disable",
+                    "{\"password\":\"%s\",\"code\":\"000000\"}".formatted(ADMIN_PASSWORD)));
+        }
+        List<Integer> statuses = concurrently(calls);
+        assertThat(statuses.stream().filter(c -> c == 400).count()).isEqualTo(5);
+        assertThat(statuses.stream().filter(c -> c == 429).count()).isEqualTo(15);
+    }
+
+    @Test
+    void parallelUseOfOneRecoveryCodeSucceedsOnlyOnce() throws Exception {
+        Enrolment e = enrol(login("admin", ADMIN_PASSWORD));
+        List<Callable<Integer>> calls = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            Session half = login("admin", ADMIN_PASSWORD);
+            calls.add(() -> status(half, "POST", "/api/auth/2fa/verify", codeJson(e.recoveryCodes.get(0))));
+        }
+        assertThat(concurrently(calls).stream().filter(c -> c == 200).count()).isEqualTo(1);
+    }
+
+    @Test
+    void parallelReplayOfOneTotpCodeSucceedsOnlyOnce() throws Exception {
+        Enrolment e = enrol(login("admin", ADMIN_PASSWORD));
+        String next = Totp.code(e.secret, now() + 1);
+        List<Callable<Integer>> calls = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            Session half = login("admin", ADMIN_PASSWORD);
+            calls.add(() -> status(half, "POST", "/api/auth/2fa/verify", codeJson(next)));
+        }
+        assertThat(concurrently(calls).stream().filter(c -> c == 200).count()).isEqualTo(1);
     }
 }
