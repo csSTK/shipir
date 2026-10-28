@@ -525,7 +525,7 @@ class HostImageBuildTest extends HostApiTestBase {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"--upload-pack=touch /tmp/x", "-x", " main", "main branch", "a..b", "main;id", "$(id)", "a//b",
+    @ValueSource(strings = {"--upload-pack=touch /tmp/x", "-x", "main branch", "a..b", "main;id", "$(id)", "a//b",
             "main.lock", "ref/", "-"})
     void gitRefInjectionIs400AndNeverReachesGit(String ref) throws Exception {
         mvc.perform(login("admin").write(build(null, "tag", "a:1", "gitUrl", REPO, "gitRef", ref)))
@@ -533,6 +533,13 @@ class HostImageBuildTest extends HostApiTestBase {
                 .andExpect(jsonPath("$.code").value("INVALID_GIT_REF"));
         verify(git, never()).sync(any(), any(), any(), any(), any());
         verifyNoBuild();
+    }
+
+    @Test
+    void paddedGitRefIsTrimmedLikeTheSharedValidatorAndReachesGitTrimmed() throws Exception {
+        mvc.perform(login("admin").write(build(null, "tag", "a:1", "gitUrl", REPO, "gitRef", " main ")))
+                .andExpect(status().isAccepted());
+        verify(git, timeout(5000)).sync(any(), any(), eq("main"), any(), any());
     }
 
     @Test

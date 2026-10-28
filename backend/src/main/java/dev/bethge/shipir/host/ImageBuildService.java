@@ -70,7 +70,6 @@ class ImageBuildService {
     private static final Pattern RESOURCE_ID = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}");
     private static final Pattern DOCKERFILE_PATH = Pattern.compile("[A-Za-z0-9._][A-Za-z0-9._/-]{0,254}");
     private static final Pattern BUILD_ARG_KEY = Pattern.compile("[A-Za-z_][A-Za-z0-9_]{0,127}");
-    private static final Pattern GIT_REF = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._/-]{0,199}");
     private static final int MAX_BUILD_ARGS = 50;
     private static final int MAX_BUILD_ARG_VALUE = 4096;
     /** Shown lines per run and characters per line; a build can print megabytes. */
@@ -344,14 +343,14 @@ class ImageBuildService {
         return args;
     }
 
-    /** Branch, tag or commit name as the Git service looks it up: no leading dash, no spaces, no {@code ..}. */
+    /** Delegates to the shared rule in {@link GitRepositoryService#validateRef}; same 400 INVALID_GIT_REF. */
     static String validateGitRef(String ref) {
-        String r = ref == null ? "" : ref;
-        if (!GIT_REF.matcher(r).matches() || r.contains("..") || r.contains("//") || r.endsWith("/") || r.endsWith(".lock")
-                || r.contains("/.")) {
-            throw new HostException(HttpStatus.BAD_REQUEST, "INVALID_GIT_REF", "Invalid Git branch, tag or commit");
+        try {
+            GitRepositoryService.validateRef(ref);
+        } catch (GitOperationException e) {
+            throw new HostException(e.status(), e.code(), e.getMessage());
         }
-        return r;
+        return ref.trim();
     }
 
     private void checkGit(String url, UUID credentialId) {
