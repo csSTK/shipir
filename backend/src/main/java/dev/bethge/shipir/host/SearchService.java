@@ -1,5 +1,6 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.common.security.SystemScope;
 import dev.bethge.shipir.compose.DeploymentService;
 import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.host.dto.HostDeploymentResponse;
@@ -69,8 +70,9 @@ public class SearchService {
                 .toList();
 
         SecurityContext context = SecurityContextHolder.getContext();
+        boolean system = SystemScope.active();
         List<Future<Live>> futures = visibleHosts.stream()
-                .map(h -> executor.submit(() -> live(h, context)))
+                .map(h -> executor.submit(() -> system ? SystemScope.call(() -> live(h, context)) : live(h, context)))
                 .toList();
 
         List<SearchResult> hostHits = new ArrayList<>();
@@ -111,7 +113,8 @@ public class SearchService {
         return value != null && value.toLowerCase(Locale.ROOT).contains(needle);
     }
 
-    /** Runs on a virtual thread: carries the caller's security context so visibility filtering applies. */
+    /** Runs on a virtual thread: carries the caller's security context and, for a system caller,
+     * the {@link SystemScope} (a ScopedValue is not inherited by plain executor threads) so visibility filtering applies. */
     private Live live(DockerHost host, SecurityContext context) {
         SecurityContextHolder.setContext(context);
         try {

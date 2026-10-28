@@ -29,6 +29,9 @@ class SearchApiTest extends HostApiTestBase {
     @Autowired
     SecretCipher cipher;
 
+    @Autowired
+    SearchService searchService;
+
     @MockitoBean
     ContainerService containers;
 
@@ -89,6 +92,20 @@ class SearchApiTest extends HostApiTestBase {
         mvc.perform(get("/api/search").param("q", "postgres").session(admin.session()))
                 .andExpect(jsonPath("$.results.length()").value(1))
                 .andExpect(jsonPath("$.results[0].name").value("db"));
+    }
+
+    @Test
+    void systemScopeCallerSeesLiveResultsFromWorkerThreads() {
+        // No authentication, only SystemScope: the live() workers must still see everything.
+        var response = dev.bethge.shipir.common.security.SystemScope.call(() -> searchService.search("shop"));
+        org.assertj.core.api.Assertions.assertThat(response.results())
+                .extracting(r -> r.name())
+                .containsExactlyInAnyOrder("shop-stack", "shop-beta", "shopwild", "shop-web-1", "shop-beta-1");
+    }
+
+    @Test
+    void callerWithoutAuthenticationAndWithoutSystemScopeFindsNothing() {
+        org.assertj.core.api.Assertions.assertThat(searchService.search("shop").results()).isEmpty();
     }
 
     @Test
