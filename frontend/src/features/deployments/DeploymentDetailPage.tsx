@@ -66,6 +66,8 @@ export function DeploymentDetailPage() {
   const remove = useDeleteDeployment(hostId)
 
   const [dialog, setDialog] = useState<Dialog>(null)
+  /** The content panel is in edit mode: Deploy would use the saved draft, not the edits. */
+  const [contentEditing, setContentEditing] = useState(false)
   const [started, setStarted] = useState<StartedRun | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [dialogError, setDialogError] = useState<string | null>(null)
@@ -198,7 +200,10 @@ export function DeploymentDetailPage() {
         actions={
           canWrite ? (
             <div className="sd-actions">
-              <Button variant="primary" onClick={onDeployClick} disabled={busy || versions.isPending}>
+              <Button variant="primary" onClick={onDeployClick}
+                disabled={busy || versions.isPending || contentEditing}
+                title={contentEditing ? t('DeploymentDetailPage.saveOrCancelEditsFirst') : undefined}
+              >
                 {t('DeploymentDetailPage.deploy')}
               </Button>
               {data.source === 'GIT' && (
@@ -252,7 +257,7 @@ export function DeploymentDetailPage() {
         />
       )}
 
-      <DeploymentContentPanel deployment={data} hostId={hostId} canWrite={canWrite} />
+      <DeploymentContentPanel deployment={data} hostId={hostId} canWrite={canWrite} onEditingChange={setContentEditing} />
 
       <ServicesCard
         hostId={hostId}

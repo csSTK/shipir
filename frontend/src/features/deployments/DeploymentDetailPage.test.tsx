@@ -324,6 +324,16 @@ describe('DeploymentDetailPage', () => {
       expect(apiFetch).toHaveBeenCalledWith(BASE, { method: 'PUT', body: { yaml: 'services: {}', env: null } })
     })
 
+    it('blocks Deploy while the content panel has unsaved edits and re-enables it after cancel', async () => {
+      serve('OPERATOR')
+      await startEdit()
+      const deployBtn = screen.getByRole('button', { name: 'Deploy' })
+      await waitFor(() => expect(deployBtn).toBeDisabled())
+      expect(deployBtn).toHaveAttribute('title', 'Save or cancel your edits first, Deploy would use the saved draft.')
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      await waitFor(() => expect(deployBtn).toBeEnabled())
+    })
+
     it('loads values on request, masks them and sends the edited list', async () => {
       const put = vi.fn(() => deployment)
       serve('ADMIN', { [putKey]: put, [envKey]: () => ({ entries: [{ key: 'DB_PASSWORD', value: 's3cret' }] }) })

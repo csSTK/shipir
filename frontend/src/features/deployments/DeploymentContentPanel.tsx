@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ApiError } from '../../shared/api/client.ts'
 import { useLoadDeploymentEnv, useUpdateDeployment, type EnvEntry, type ManagedDeploymentDetail } from './api.ts'
 import { EnvEditor, toPayload, validateEnv, YamlEditor } from './editor/index.ts'
@@ -10,7 +10,18 @@ import { useTranslation } from 'react-i18next'
  * Compose file and environment variables of a deployment. Read-only until "Edit"; saving creates a draft
  * version, it does not deploy. Variable values stay on the server unless the user opens them.
  */
-export function DeploymentContentPanel({ deployment, hostId, canWrite }: { deployment: ManagedDeploymentDetail; hostId: string; canWrite: boolean }) {
+export function DeploymentContentPanel({
+  deployment,
+  hostId,
+  canWrite,
+  onEditingChange,
+}: {
+  deployment: ManagedDeploymentDetail
+  hostId: string
+  canWrite: boolean
+  /** Called whenever edit mode starts or ends, so the page can block Deploy while edits are unsaved. */
+  onEditingChange?: (editing: boolean) => void
+}) {
   const { t } = useTranslation('deployments')
   const update = useUpdateDeployment(hostId)
   const loadEnv = useLoadDeploymentEnv(hostId)
@@ -21,6 +32,11 @@ export function DeploymentContentPanel({ deployment, hostId, canWrite }: { deplo
   const [error, setError] = useState<{ message: string; details?: string[] } | null>(null)
   const [saved, setSaved] = useState(false)
   const gitManaged = deployment.source === 'GIT'
+
+  useEffect(() => {
+    onEditingChange?.(editing)
+    return () => onEditingChange?.(false)
+  }, [editing, onEditingChange])
 
   function startEdit() {
     setYaml(deployment.yaml)
