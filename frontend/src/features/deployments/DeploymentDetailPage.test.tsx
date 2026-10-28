@@ -334,6 +334,32 @@ describe('DeploymentDetailPage', () => {
       await waitFor(() => expect(deployBtn).toBeEnabled())
     })
 
+    it('shows a visible hint while editing and removes it after cancel', async () => {
+      serve('OPERATOR')
+      await startEdit()
+      expect(await screen.findByText(/Deploy and pull actions are paused/)).toBeVisible()
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      await waitFor(() => expect(screen.queryByText(/Deploy and pull actions are paused/)).not.toBeInTheDocument())
+    })
+
+    it('blocks Pull & update while editing', async () => {
+      serve('OPERATOR')
+      await startEdit()
+      const btn = screen.getByRole('button', { name: 'Pull & update' })
+      await waitFor(() => expect(btn).toBeDisabled())
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      await waitFor(() => expect(btn).toBeEnabled())
+    })
+
+    it('blocks Pull & redeploy while editing a Git deployment', async () => {
+      serve('OPERATOR', { [`GET ${BASE}`]: () => ({ ...deployment, source: 'GIT' }) })
+      await startEdit()
+      const btn = screen.getByRole('button', { name: 'Pull & redeploy' })
+      await waitFor(() => expect(btn).toBeDisabled())
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      await waitFor(() => expect(btn).toBeEnabled())
+    })
+
     it('loads values on request, masks them and sends the edited list', async () => {
       const put = vi.fn(() => deployment)
       serve('ADMIN', { [putKey]: put, [envKey]: () => ({ entries: [{ key: 'DB_PASSWORD', value: 's3cret' }] }) })

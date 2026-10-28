@@ -50,6 +50,7 @@
   "DeploymentContentPanel.environmentVariableNames": "Environment variable names",
   "DeploymentContentPanel.storedValuesStayUnchangedUnless": "Stored values stay unchanged unless you edit the variables.",
   "DeploymentContentPanel.editVariables": "Edit variables",
+  "DeploymentContentPanel.actionsPausedWhileEditing": "Deploy and pull actions are paused while you edit, because they use the saved state. Save or cancel to continue.",
   "DeploymentContentPanel.cancel": "Cancel",
   "DeploymentContentPanel.save": "Save",
   "DeploymentContentPanel.fixTheHighlightedVariablesFirst": "Fix the highlighted variables first.",

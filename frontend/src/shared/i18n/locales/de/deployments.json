@@ -50,6 +50,7 @@
   "DeploymentContentPanel.environmentVariableNames": "Namen der Umgebungsvariablen",
   "DeploymentContentPanel.storedValuesStayUnchangedUnless": "Gespeicherte Werte bleiben unverändert, solange du die Variablen nicht bearbeitest.",
   "DeploymentContentPanel.editVariables": "Variablen bearbeiten",
+  "DeploymentContentPanel.actionsPausedWhileEditing": "Deploy- und Pull-Aktionen sind pausiert, solange du bearbeitest, weil sie den gespeicherten Stand verwenden. Speichere oder brich ab, um fortzufahren.",
   "DeploymentContentPanel.cancel": "Abbrechen",
   "DeploymentContentPanel.save": "Speichern",
   "DeploymentContentPanel.fixTheHighlightedVariablesFirst": "Korrigiere zuerst die markierten Variablen.",

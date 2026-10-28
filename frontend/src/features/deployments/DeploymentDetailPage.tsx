@@ -207,7 +207,12 @@ export function DeploymentDetailPage() {
                 {t('DeploymentDetailPage.deploy')}
               </Button>
               {data.source === 'GIT' && (
-                <Button variant="secondary" onClick={startRedeploy} disabled={busy}>
+                <Button
+                  variant="secondary"
+                  onClick={startRedeploy}
+                  disabled={busy || contentEditing}
+                  title={contentEditing ? t('DeploymentDetailPage.saveOrCancelEditsFirst') : undefined}
+                >
                   {t('DeploymentDetailPage.pullRedeploy')}
                 </Button>
               )}
@@ -215,8 +220,8 @@ export function DeploymentDetailPage() {
                 <Button
                   variant="secondary"
                   onClick={startPullUpdate}
-                  disabled={busy || !hasDeployed}
-                  title={hasDeployed ? t('DeploymentDetailPage.pullNewerImagesAndRecreate') : t('DeploymentDetailPage.deployOnceFirst')}
+                  disabled={busy || !hasDeployed || contentEditing}
+                  title={contentEditing ? t('DeploymentDetailPage.saveOrCancelEditsFirst') : hasDeployed ? t('DeploymentDetailPage.pullNewerImagesAndRecreate') : t('DeploymentDetailPage.deployOnceFirst')}
                 >
                   {pullUpdate.isPending ? t('DeploymentDetailPage.updating') : t('DeploymentDetailPage.pullUpdate')}
                 </Button>

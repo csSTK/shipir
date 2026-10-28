@@ -167,3 +167,15 @@ test('old /stacks URLs redirect to /deployments', async ({ page, api }) => {
   await page.goto('/environments/a/stacks')
   await expect(page).toHaveURL(/\/environments\/a\/deployments$/)
 })
+
+test('editing the content shows a hint and pauses Deploy and Pull & update', async ({ page, api }) => {
+  mockCommon(api, 'OPERATOR')
+  await page.goto('/environments/a/deployments/s1')
+  await page.getByRole('button', { name: 'Edit', exact: true }).click()
+  await expect(page.getByText(/Deploy and pull actions are paused/)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Deploy', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Pull & update' })).toBeDisabled()
+  await page.getByRole('button', { name: 'Cancel' }).click()
+  await expect(page.getByText(/Deploy and pull actions are paused/)).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Pull & update' })).toBeEnabled()
+})

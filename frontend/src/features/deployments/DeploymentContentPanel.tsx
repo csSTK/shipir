@@ -96,6 +96,11 @@ export function DeploymentContentPanel({
           {t('DeploymentContentPanel.savedAsADraftDeploy')}
         </p>
       )}
+      {editing && (
+        <p className="sd-muted">
+          {t('DeploymentContentPanel.actionsPausedWhileEditing')}
+        </p>
+      )}
       {gitManaged && editing && <p className="sd-muted">{t('DeploymentContentPanel.theComposeFileComesFrom')}</p>}
       <YamlEditor
         label={t('DeploymentContentPanel.composeFile')}
