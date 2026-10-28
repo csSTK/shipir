@@ -1,5 +1,6 @@
 package dev.bethge.shipir.streaming;
 
+import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.common.security.SetupStatus;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.Message;
@@ -9,7 +10,6 @@ import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
-import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
@@ -22,7 +22,7 @@ import java.util.regex.Pattern;
  * {@code X-XSRF-TOKEN} equal to the {@code XSRF-TOKEN} cookie of the handshake, see {@link CsrfHandshakeInterceptor}),
  * SUBSCRIBE only to {@code /topic/deployments/{id}} (needs view access to the run's deployment; registers the subscription for replay) and
  * {@code /topic/chat/{sessionId}} (owner only, via {@link ChatTopicAccess}) and container logs
- * {@code /topic/hosts/{hostId}/containers/{id}/logs} (hosts the user fully sees, see {@link LogStreamHandler}), project logs {@code /topic/hosts/{hostId}/deployments/{project}/logs} (view of the managed deployment or the whole host, see {@link DeploymentLogStreamService}), Docker events {@code /topic/hosts/{hostId}/events} (hosts the user fully sees, see {@link DockerEventStreamService}), container stats {@code /topic/hosts/{hostId}/stats} (visible hosts, frames filtered per user, see {@link ContainerStatsStreamService}), interactive console {@code /topic/exec/{id}} (ADMIN owner, see {@link ExecSessionHandler}); clients may only SEND
+ * {@code /topic/hosts/{hostId}/containers/{id}/logs} (hosts the user fully sees, see {@link LogStreamHandler}), project logs {@code /topic/hosts/{hostId}/deployments/{project}/logs} (view of the managed deployment or the whole host, see {@link DeploymentLogStreamService}), Docker events {@code /topic/hosts/{hostId}/events} (hosts the user fully sees, see {@link DockerEventStreamService}), container stats {@code /topic/hosts/{hostId}/stats} (visible hosts, frames filtered per user, see {@link ContainerStatsStreamService}), interactive console {@code /topic/exec/{id}} (ADMIN or OPERATOR owner, see {@link ExecSessionHandler}); clients may only SEND
  * input/resize frames of their own console to {@code /app/exec/{id}/{input|resize}}.
  * CONNECT and SUBSCRIBE are refused with SETUP_REQUIRED while the user has a pending {@link SetupStatus} step.
  */
@@ -96,7 +96,8 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                 var execTopic = EXEC_TOPIC.matcher(destination);
                 if (execTopic.matches()) {
                     // console output: ADMIN or OPERATOR who owns the session, one subscription
-                    if (!mayUseConsole(accessor) || !execSessions.attach(accessor.getUser().getName(), execTopic.group(1),
+                    String user = accessor.getUser().getName();
+                    if (!mayUseConsole(user) || !execSessions.attach(user, execTopic.group(1),
                             accessor.getSessionId(), accessor.getSubscriptionId())) {
                         throw new MessageDeliveryException("Subscription destination not allowed");
                     }
@@ -174,7 +175,7 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
             case SEND -> {
                 requireUser(accessor);
                 var send = EXEC_SEND.matcher(String.valueOf(accessor.getDestination()));
-                if (!send.matches() || !mayUseConsole(accessor)) {
+                if (!send.matches() || !mayUseConsole(accessor.getUser().getName())) {
                     throw new MessageDeliveryException("Sending is not allowed");
                 }
                 String user = accessor.getUser().getName();
@@ -230,9 +231,11 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
         execSessions.detach(event.getSessionId(), null);
     }
 
-    /** ADMIN or OPERATOR; whether the user really owns a console (and may still hold it) is checked per session. */
-    private static boolean mayUseConsole(StompHeaderAccessor accessor) {
-        return accessor.getUser() instanceof Authentication auth && auth.getAuthorities().stream()
-                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()) || "ROLE_OPERATOR".equals(a.getAuthority()));
+    /**
+     * ADMIN or OPERATOR by the current database role (not the authorities captured at the handshake, which go stale
+     * on demotion); whether the user really owns a console (and may still hold it) is checked per session.
+     */
+    private boolean mayUseConsole(String username) {
+        return access.roleOf(username).filter(r -> r == Role.ADMIN || r == Role.OPERATOR).isPresent();
     }
 }
