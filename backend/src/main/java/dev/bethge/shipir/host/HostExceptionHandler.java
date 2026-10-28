@@ -8,9 +8,8 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.multipart.MultipartException;
 
-@RestControllerAdvice(assignableTypes = {HostController.class, HostResourcesController.class, SearchController.class,
-        ContainerFilesController.class, ContainerLogDownloadController.class, ImageBuildController.class,
-        VolumeBackupController.class, VolumeBackupScheduleController.class, StatsHistoryController.class, HostPortsController.class})
+/** Scoped by package, so every controller in {@code host} is covered without a registration list. */
+@RestControllerAdvice(basePackageClasses = HostException.class)
 class HostExceptionHandler {
 
     @ExceptionHandler(HostException.class)
