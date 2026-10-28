@@ -139,6 +139,19 @@ class DockerDiskUsageReaderTest {
     }
 
     @Test
+    void largestNamesHaveC1BidiAndFormatCharactersNeutralized() {
+        DiskUsageDto usage = DockerDiskUsageReader.parse(200, body("""
+                {"Volumes": [
+                   {"Name": "a\u202Eevil\u202Cb", "UsageData": {"Size": 50, "RefCount": 0}},
+                   {"Name": "c\u0085d\u200Be\u2066f", "UsageData": {"Size": 40, "RefCount": 0}},
+                   {"Name": "caf\u00e9-\u202E", "UsageData": {"Size": 30, "RefCount": 0}}]}
+                """));
+
+        assertThat(usage.largest()).extracting(LargestItem::name)
+                .containsExactly("a evil b", "c d e f", "café-");
+    }
+
+    @Test
     void largestNamesAreTruncated() {
         String longName = "v".repeat(500);
         DiskUsageDto usage = DockerDiskUsageReader.parse(200, body(

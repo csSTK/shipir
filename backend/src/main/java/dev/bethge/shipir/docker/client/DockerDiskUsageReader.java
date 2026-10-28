@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.core.DockerClientImpl;
 import com.github.dockerjava.transport.DockerHttpClient;
+import dev.bethge.shipir.common.util.OutputSanitizer;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.dto.DiskUsageDto;
@@ -202,12 +203,15 @@ final class DockerDiskUsageReader {
         return display(bare.length() > SHORT_ID ? bare.substring(0, SHORT_ID) : bare);
     }
 
-    /** Control characters are dropped and the length capped, so a name is safe to show as plain text. */
+    /**
+     * ASCII control characters are dropped; C1, bidi and format characters become spaces via the shared
+     * {@link OutputSanitizer}; the length is capped, so a name is safe to show as plain text.
+     */
     private static String display(String text) {
         if (text == null) {
             return "";
         }
-        String clean = text.replaceAll("\\p{Cntrl}", "").strip();
+        String clean = OutputSanitizer.neutralize(text.replaceAll("\\p{Cntrl}", "")).strip();
         return clean.length() > MAX_NAME ? clean.substring(0, MAX_NAME) : clean;
     }
 
