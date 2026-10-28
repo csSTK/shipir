@@ -67,6 +67,26 @@ class ComposeValidationServiceTest {
         assertThat(String.join("\n", result.errors())).contains("imagee");
     }
 
+    /**
+     * Profiled services are only checked with {@code --profile *}: a broken profiled service passes a plain
+     * {@code config --quiet} (verified against Compose v5.1.3) but must fail validation.
+     */
+    @Test
+    void invalidProfiledServiceFailsValidation() {
+        files.write(hostId, "web", """
+                services:
+                  app:
+                    image: busybox
+                  debug-tools:
+                    image: busybox
+                    profiles: [debug]
+                    depends_on: [missing]
+                """, null);
+        ValidationResult result = validate();
+        assertThat(result.valid()).isFalse();
+        assertThat(String.join("\n", result.errors())).contains("missing");
+    }
+
     @Test
     void timeoutResultIsInvalid() {
         files.write(hostId, "web", "services: {}\n", null);

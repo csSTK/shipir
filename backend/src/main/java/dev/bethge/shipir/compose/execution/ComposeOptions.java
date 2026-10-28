@@ -10,8 +10,12 @@ import java.util.regex.Pattern;
  */
 public record ComposeOptions(List<String> profiles, List<String> services) {
 
-    /** Compose profile and service names: start alphanumeric, then letters, digits, {@code _ . -}. */
-    public static final Pattern NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.-]{0,62}");
+    /**
+     * Compose profile and service names: start with a letter, digit or {@code _} (Compose allows {@code _} first), then
+     * letters, digits, {@code _ . -}. A leading {@code -} stays rejected: these names go into the argument list, where
+     * they would read as a flag.
+     */
+    public static final Pattern NAME = Pattern.compile("[A-Za-z0-9_][A-Za-z0-9_.-]{0,62}");
     public static final String ALL_PROFILES = "*";
     public static final ComposeOptions NONE = new ComposeOptions(List.of(), List.of());
 

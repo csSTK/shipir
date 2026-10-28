@@ -2,6 +2,7 @@ package dev.bethge.shipir.compose.validation;
 
 import dev.bethge.shipir.compose.execution.ComposeCommand;
 import dev.bethge.shipir.compose.execution.ComposeExecutionService;
+import dev.bethge.shipir.compose.execution.ComposeOptions;
 import dev.bethge.shipir.compose.execution.ComposeProcessResult;
 import dev.bethge.shipir.docker.DockerEndpoint;
 import org.springframework.stereotype.Service;
@@ -25,8 +26,9 @@ public class ComposeValidationService {
 
     /** Validates the compose file at {@code composeFile} inside the deployment directory (Git checkout); null = default. */
     public ValidationResult validate(UUID hostId, String deploymentName, DockerEndpoint endpoint, java.nio.file.Path composeFile) {
+        // --profile '*' so services behind a profile are validated too (a plain config skips them).
         ComposeProcessResult result = execution.execute(hostId, deploymentName, ComposeCommand.CONFIG, endpoint, line -> { },
-                composeFile);
+                composeFile, null, ComposeOptions.ofProfiles(List.of(ComposeOptions.ALL_PROFILES)));
         if (result.success()) {
             return new ValidationResult(true, List.of());
         }
