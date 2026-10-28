@@ -30,6 +30,7 @@ for path in / /assets/missing.js /some/spa/route; do
   h=$(curl -si "http://127.0.0.1:$PORT$path" | tr -d '\r')
   check "$path CSP default-src" "$h" "^content-security-policy: default-src 'self'"
   check "$path CSP frame-ancestors" "$h" "frame-ancestors 'none'"
+  check "$path CSP connect-src same-origin only" "$h" "connect-src 'self';"
   check "$path nosniff" "$h" "^x-content-type-options: nosniff"
   check "$path X-Frame-Options" "$h" "^x-frame-options: DENY"
   check "$path Referrer-Policy" "$h" "^referrer-policy: no-referrer"

@@ -72,7 +72,7 @@ class SecurityConfig {
      */
     static final String CONTENT_SECURITY_POLICY = "default-src 'self'; script-src 'self'; "
             + "style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; "
-            + "connect-src 'self' ws: wss:; worker-src 'self' blob:; object-src 'none'; "
+            + "connect-src 'self'; worker-src 'self' blob:; object-src 'none'; "
             + "base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 
     static final String PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(), payment=(), usb=()";

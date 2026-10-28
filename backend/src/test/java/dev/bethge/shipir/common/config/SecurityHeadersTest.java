@@ -36,7 +36,9 @@ class SecurityHeadersTest {
 
         String csp = result.getResponse().getHeader("Content-Security-Policy");
         assertThat(csp).contains("default-src 'self'", "frame-ancestors 'none'", "object-src 'none'",
-                "connect-src 'self' ws: wss:", "worker-src 'self' blob:");
+                "worker-src 'self' blob:");
+        // WebSocket (/ws) is same-origin only: a ws:/wss: wildcard would let injected script reach any host.
+        assertThat(csp).contains("connect-src 'self';").doesNotContain("ws:", "wss:");
         assertThat(csp).doesNotContain("unsafe-eval").doesNotContain("script-src 'self' 'unsafe-inline'");
         assertThat(result.getResponse().getHeader("Permissions-Policy")).contains("camera=()");
     }

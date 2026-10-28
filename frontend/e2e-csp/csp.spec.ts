@@ -7,6 +7,12 @@ const template = readFileSync(fileURLToPath(new URL('../nginx/security-headers.i
 const csp = /add_header Content-Security-Policy "([^"]+)"/.exec(template)?.[1]
 if (!csp) throw new Error('Content-Security-Policy not found in nginx/security-headers.inc.template')
 
+test('connect-src is same-origin only (the STOMP /ws connection is same-origin)', () => {
+  const connectSrc = /(?:^|;)\s*connect-src\s+([^;]+)/.exec(csp)?.[1]?.trim()
+  // No ws:/wss: scheme sources: 'self' already covers same-origin WebSocket in current browsers.
+  expect(connectSrc).toBe("'self'")
+})
+
 const host = {
   id: 'a',
   name: 'Local',
@@ -62,6 +68,9 @@ test('pages, Monaco editors and workers run under the nginx CSP without violatio
   api.mock('GET', `${base}/s1`, { body: deployment })
   api.mock('GET', `${base}/s1/versions`, { body: [] })
   api.mock('GET', `${base}/s1/files`, { body: [] })
+  api.mock('GET', `${base}/s1/webhook`, { body: { enabled: false, createdAt: null, rotatedAt: null } })
+  api.mock('GET', `${base}/s1/uptime-checks`, { body: [] })
+  api.mock('GET', `${base}/s1/services`, { body: { services: ['web'], profiles: [] } })
   api.mock('GET', '/api/templates', { body: [] })
 
   await page.goto('/')
@@ -84,4 +93,47 @@ test('pages, Monaco editors and workers run under the nginx CSP without violatio
 
   const reported = await page.evaluate(() => (window as unknown as { __csp?: string[] }).__csp ?? [])
   expect([...violations, ...reported], 'CSP violations').toEqual([])
+})
+
+test('same-origin WebSocket (STOMP /ws) is allowed by connect-src self', async ({ page, context, api }) => {
+  await context.route(
+    (url) => !url.pathname.startsWith('/api/'),
+    async (route) => {
+      const response = await route.fetch()
+      await route.fulfill({ response, headers: { ...response.headers(), 'content-security-policy': csp } })
+    },
+  )
+  await page.addInitScript(() => {
+    document.addEventListener('securitypolicyviolation', (e) => {
+      ;(window as unknown as { __csp: string[] }).__csp ??= []
+      ;(window as unknown as { __csp: string[] }).__csp.push(`${e.violatedDirective} ${e.blockedURI}`)
+    })
+  })
+  api.mock('GET', '/api/auth/me', { body: { username: 'u', role: 'OPERATOR', setupRequired: false } })
+  api.mock('GET', '/api/hosts/overview', { body: [host] })
+
+  await page.goto('/')
+  await expect(page.getByRole('link', { name: 'Shipir' })).toBeVisible()
+
+  // Same URL the app builds in shared/realtime/stomp.ts. The socket is not answered (no backend here);
+  // what matters is that the browser does not refuse it under the policy.
+  const outcome = await page.evaluate(
+    () =>
+      new Promise<string>((resolve) => {
+        try {
+          const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`)
+          ws.onopen = () => {
+            ws.close()
+            resolve('open')
+          }
+          ws.onerror = () => resolve('error')
+          ws.onclose = () => resolve('closed')
+        } catch (e) {
+          resolve(`threw ${(e as Error).name}`)
+        }
+      }),
+  )
+  const reported = await page.evaluate(() => (window as unknown as { __csp?: string[] }).__csp ?? [])
+  expect(outcome, 'WebSocket construction').not.toMatch(/^threw/)
+  expect(reported.filter((v) => v.startsWith('connect-src')), 'connect-src violations').toEqual([])
 })
