@@ -11,6 +11,7 @@ import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.client.ImageService;
 import dev.bethge.shipir.docker.dto.BuildSpec;
 import dev.bethge.shipir.docker.dto.RegistryLogin;
+import dev.bethge.shipir.git.GitCheckout;
 import dev.bethge.shipir.git.GitOperationException;
 import dev.bethge.shipir.git.GitRepositoryService;
 import dev.bethge.shipir.host.dto.ImageBuildRequest;
@@ -146,6 +147,9 @@ class ImageBuildService {
             if (upload) {
                 spool(request.context(), work.resolve("context.tar"), maxBytes);
                 validateArchive(work.resolve("context.tar"), maxBytes);
+                // base images are pulled by the daemon with stored logins: same registry rule as pull and push
+                DockerfileReferenceScanner.requireAllowedReferences(egress,
+                        DockerfileReferenceScanner.readFromArchive(work.resolve("context.tar"), dockerfile), buildArgs);
             }
             BuildSpec spec = new BuildSpec(dockerfile, tag, buildArgs, request.noCache(), maxBytes,
                     properties.buildTimeout());
@@ -182,7 +186,11 @@ class ImageBuildService {
             if (gitUrl != null) {
                 Path repo = work.resolve("repo");
                 sink.accept("Cloning repository");
-                git.sync(repo, gitUrl, gitRef, spec.dockerfile(), credential);
+                GitCheckout checkout = git.sync(repo, gitUrl, gitRef, spec.dockerfile(), credential);
+                // the Git source is only known now, so a refused base image ends the run instead of answering 400
+                DockerfileReferenceScanner.requireAllowedReferences(egress,
+                        checkout == null || checkout.composeYaml() == null ? "FROM $UNREADABLE" : checkout.composeYaml(),
+                        spec.buildArgs());
                 BuildContextArchiver.archive(repo, context, spec.maxContextBytes());
                 deleteRecursively(repo);
             }
@@ -191,6 +199,8 @@ class ImageBuildService {
             status = RunStatus.DONE;
         } catch (DockerConnectionException e) {
             sink.accept("Build failed (" + e.getCode() + ")");
+        } catch (HostException e) {
+            sink.accept("Build failed (" + e.code() + ")");
         } catch (GitOperationException e) {
             sink.accept("Build failed (" + gitCodeForBuild(e.code()) + ")");
         } catch (IOException | RuntimeException e) {
@@ -310,6 +320,7 @@ class ImageBuildService {
     }
 
     /** {@code KEY=VALUE} strings; key identifier-like, value bounded and free of NUL. Errors never echo a value. */
+    // BUILDKIT_* build args configure BuildKit itself (BUILDKIT_SYNTAX replaces the frontend image), so they are refused
     static Map<String, String> parseBuildArgs(List<String> raw) {
         Map<String, String> args = new LinkedHashMap<>();
         if (raw == null) {
@@ -325,7 +336,7 @@ class ImageBuildService {
             }
             String key = entry.substring(0, eq);
             String value = entry.substring(eq + 1);
-            if (!BUILD_ARG_KEY.matcher(key).matches() || value.length() > MAX_BUILD_ARG_VALUE || value.indexOf('\0') >= 0
+            if (!BUILD_ARG_KEY.matcher(key).matches() || key.regionMatches(true, 0, "BUILDKIT_", 0, 9) || value.length() > MAX_BUILD_ARG_VALUE || value.indexOf('\0') >= 0
                     || args.put(key, value) != null) {
                 throw invalidBuildArg();
             }

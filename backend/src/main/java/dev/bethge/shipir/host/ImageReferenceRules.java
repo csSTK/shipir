@@ -81,7 +81,9 @@ final class ImageReferenceRules {
         int slash = reference.indexOf('/');
         if (slash > 0) {
             String first = reference.substring(0, slash);
-            if (first.contains(".") || first.contains(":") || first.equals("localhost")) {
+            // like the daemon: a first part with a dot or colon, "localhost", or any uppercase letter names a registry
+            if (first.contains(".") || first.contains(":") || first.equalsIgnoreCase("localhost")
+                    || !first.equals(first.toLowerCase(Locale.ROOT))) {
                 return canonicalRegistry(first);
             }
         }

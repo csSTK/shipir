@@ -55,12 +55,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** POST /images/build against a stubbed ImageService: validation, limits, roles, audit, streaming, cleanup, Git source. */
-@TestPropertySource(properties = {"shipir.images.max-build-context=2KB",
+@TestPropertySource(properties = {"shipir.images.max-build-context=8KB", "shipir.egress.allow-private-ranges=false",
         "shipir.images.build-temp-dir=target/image-build-test-tmp"})
 class HostImageBuildTest extends HostApiTestBase {
 
     private static final Path TMP = Path.of("target/image-build-test-tmp");
-    private static final byte[] CONTEXT = "tar-bytes-stand-in".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] CONTEXT = tarOf("Dockerfile", "FROM busybox\n");
     private static final String REPO = "https://example.com/org/repo.git";
 
     @MockitoBean
@@ -95,6 +95,27 @@ class HostImageBuildTest extends HostApiTestBase {
             b.param(params[i], params[i + 1]);
         }
         return b;
+    }
+
+    /** A real tar: the build reads the Dockerfile out of the upload before the daemon is called. */
+    private static byte[] tarOf(String... nameAndContent) {
+        try {
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            try (org.apache.commons.compress.archivers.tar.TarArchiveOutputStream tar =
+                         new org.apache.commons.compress.archivers.tar.TarArchiveOutputStream(out, 512)) {
+                for (int i = 0; i < nameAndContent.length; i += 2) {
+                    byte[] bytes = nameAndContent[i + 1].getBytes(StandardCharsets.UTF_8);
+                    TarArchiveEntry e = new TarArchiveEntry(nameAndContent[i]);
+                    e.setSize(bytes.length);
+                    tar.putArchiveEntry(e);
+                    tar.write(bytes);
+                    tar.closeArchiveEntry();
+                }
+            }
+            return out.toByteArray();
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
     }
 
     private static long tmpEntries() throws Exception {
@@ -141,7 +162,7 @@ class HostImageBuildTest extends HostApiTestBase {
         assertThat(spec.getValue().tag()).isEqualTo("myapp:1");
         assertThat(spec.getValue().buildArgs()).containsEntry("VERSION", "1,2").containsEntry("MODE", "prod");
         assertThat(spec.getValue().noCache()).isFalse();
-        assertThat(spec.getValue().maxContextBytes()).isEqualTo(2048);
+        assertThat(spec.getValue().maxContextBytes()).isEqualTo(8192);
         assertThat(spec.getValue().toString()).doesNotContain("1,2").doesNotContain("prod");
         assertThat(sent.get()).isEqualTo(CONTEXT);
         assertThat(lines).contains("Step 1/2 : FROM busybox");
@@ -154,7 +175,7 @@ class HostImageBuildTest extends HostApiTestBase {
 
     @Test
     void customDockerfileAndNoCacheArePassedOn() throws Exception {
-        mvc.perform(login("admin").write(build(CONTEXT, "tag", "myapp:2", "dockerfile", "docker/App.Dockerfile", "noCache", "true")))
+        mvc.perform(login("admin").write(build(tarOf("docker/App.Dockerfile", "FROM busybox\n"), "tag", "myapp:2", "dockerfile", "docker/App.Dockerfile", "noCache", "true")))
                 .andExpect(status().isAccepted());
         ArgumentCaptor<BuildSpec> spec = ArgumentCaptor.forClass(BuildSpec.class);
         verify(images, timeout(5000)).build(any(), any(), any(), spec.capture(), any(), any());
@@ -271,7 +292,8 @@ class HostImageBuildTest extends HostApiTestBase {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"NOEQUALS", "=value", "1BAD=x", "A B=x", "A;rm -rf /=x", "A$(id)=x", "A-B=x", "K=va\u0000lue"})
+    @ValueSource(strings = {"NOEQUALS", "=value", "1BAD=x", "A B=x", "A;rm -rf /=x", "A$(id)=x", "A-B=x", "K=va\u0000lue",
+            "BUILDKIT_SYNTAX=10.0.0.5:5000/evil", "buildkit_syntax=x", "BUILDKIT_CONTEXT_KEEP_GIT_DIR=1"})
     void badBuildArgIs400(String arg) throws Exception {
         mvc.perform(login("admin").write(build(CONTEXT, "tag", "myapp:1", "buildArg", arg)))
                 .andExpect(status().isBadRequest())
@@ -317,7 +339,7 @@ class HostImageBuildTest extends HostApiTestBase {
 
     @Test
     void oversizeContextIs413AndNothingIsLeftOnDisk() throws Exception {
-        mvc.perform(login("admin").write(build(new byte[3000], "tag", "a:1")))
+        mvc.perform(login("admin").write(build(new byte[9000], "tag", "a:1")))
                 .andExpect(status().isPayloadTooLarge())
                 .andExpect(jsonPath("$.code").value("SIZE_LIMIT_EXCEEDED"));
         verifyNoBuild();
@@ -357,6 +379,94 @@ class HostImageBuildTest extends HostApiTestBase {
         mvc.perform(login("admin").write(multipart("/api/hosts/{h}/images/build", UUID.randomUUID())
                         .file(new MockMultipartFile("context", "c.tar", "application/x-tar", CONTEXT)).param("tag", "a:1")))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("HOST_NOT_FOUND"));
+    }
+
+    // ---- Dockerfile base images go through the egress policy ----
+
+    private void assertRegistryRefused(byte[] context, String... params) throws Exception {
+        String[] all = new String[params.length + 2];
+        all[0] = "tag";
+        all[1] = "a:1";
+        System.arraycopy(params, 0, all, 2, params.length);
+        mvc.perform(login("admin").write(build(context, all)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REGISTRY_NOT_ALLOWED"));
+        verifyNoBuild();
+        verify(streams, never()).registerRun(any(), any(), any());
+        assertThat(tmpEntries()).isZero();
+        assertThat(audit("IMAGE_BUILD")).allSatisfy(r -> assertThat(r).startsWith("FAILURE"));
+    }
+
+    @Test
+    void fromInternalRegistryIsRefusedBeforeTheDaemonIsCalled() throws Exception {
+        assertRegistryRefused(tarOf("Dockerfile", "FROM 10.0.0.5:5000/x\n"));
+    }
+
+    @Test
+    void oneBadStageOfAMultiStageBuildIsRefused() throws Exception {
+        assertRegistryRefused(tarOf("Dockerfile", "FROM golang AS build\nFROM alpine\nCOPY --from=build /a /a\n"
+                + "FROM 10.0.0.5:5000/base\n"));
+    }
+
+    @Test
+    void copyFromInternalImageIsRefused() throws Exception {
+        assertRegistryRefused(tarOf("Dockerfile", "FROM alpine\nCOPY --from=localhost:5000/x /a /a\n"));
+    }
+
+    @Test
+    void buildArgCannotSmuggleAnInternalRegistry() throws Exception {
+        assertRegistryRefused(tarOf("Dockerfile", "ARG REG=ghcr.io\nFROM $REG/x\n"), "buildArg", "REG=10.0.0.5:5000");
+        assertRegistryRefused(tarOf("Dockerfile", "FROM $UNDECLARED/x\n"));
+    }
+
+    @Test
+    void obfuscatedFromInTheCustomDockerfileIsRefused() throws Exception {
+        assertRegistryRefused(tarOf("ci/Dockerfile", "# FROM alpine\nfRoM \\\n  --platform=linux/amd64 \\\n# note\n  10.0.0.5/x\n"),
+                "dockerfile", "ci/Dockerfile");
+    }
+
+    @Test
+    void publicStageNamesScratchAndHubFromsAreBuilt() throws Exception {
+        byte[] ctx = tarOf("Dockerfile", "ARG V=3\nFROM --platform=linux/amd64 alpine:${V} AS base\nFROM base AS mid\n"
+                + "FROM scratch\nCOPY --from=mid /a /a\nCOPY --from=nginx:1 /b /b\n");
+        mvc.perform(login("admin").write(build(ctx, "tag", "multi:1"))).andExpect(status().isAccepted());
+        verify(images, timeout(5000)).build(any(), any(), any(), any(), any(), any());
+        verify(streams, timeout(5000)).complete(any(), eq(RunStatus.DONE));
+    }
+
+    @Test
+    void unicodeSpaceAfterTheEscapeCannotHideAFromInAnUpload() throws Exception {
+        assertRegistryRefused(tarOf("Dockerfile", "FROM alpine\nRUN true \\\u2003\nFROM 10.0.0.5:5000/evil\n"));
+    }
+
+    @Test
+    void syntaxFrontendOnAnInternalRegistryIsRefusedInAnUpload() throws Exception {
+        assertRegistryRefused(tarOf("Dockerfile", "# syntax=10.0.0.5:5000/evil\nFROM alpine\n"));
+    }
+
+    @Test
+    void uploadWithoutTheDockerfileIs400() throws Exception {
+        mvc.perform(login("admin").write(build(tarOf("other.txt", "x"), "tag", "a:1")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("DOCKERFILE_NOT_FOUND"));
+        verifyNoBuild();
+        assertThat(tmpEntries()).isZero();
+    }
+
+    @Test
+    void gitDockerfileWithInternalFromEndsRunFailedBeforeTheDaemonIsCalled() throws Exception {
+        doAnswer(inv -> {
+            Path dir = inv.getArgument(0);
+            Files.createDirectories(dir);
+            Files.writeString(dir.resolve("Dockerfile"), "FROM alpine\nFROM 10.0.0.5:5000/x\n");
+            return new GitCheckout("c".repeat(40), "FROM alpine\nFROM 10.0.0.5:5000/x\n");
+        }).when(git).sync(any(), any(), any(), any(), any());
+        mvc.perform(login("admin").write(build(null, "tag", "a:1", "gitUrl", REPO, "gitRef", "main")))
+                .andExpect(status().isAccepted());
+        verify(streams, timeout(5000)).complete(any(), eq(RunStatus.FAILED));
+        assertThat(lines).contains("Build failed (REGISTRY_NOT_ALLOWED)");
+        verifyNoBuild();
+        awaitCleanTmp();
     }
 
     // ---- Git source ----
@@ -403,7 +513,7 @@ class HostImageBuildTest extends HostApiTestBase {
             Path dir = inv.getArgument(0);
             Files.createDirectories(dir);
             Files.writeString(dir.resolve("Dockerfile"), "FROM busybox\n");
-            Files.write(dir.resolve("big.bin"), new byte[3000]);
+            Files.write(dir.resolve("big.bin"), new byte[9000]);
             return new GitCheckout("c".repeat(40), "FROM busybox\n");
         }).when(git).sync(any(), any(), any(), any(), any());
         mvc.perform(login("admin").write(build(null, "tag", "a:1", "gitUrl", REPO, "gitRef", "main")))
