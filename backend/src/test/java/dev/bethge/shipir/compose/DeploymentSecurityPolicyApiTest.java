@@ -8,11 +8,13 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -153,7 +155,76 @@ class DeploymentSecurityPolicyApiTest extends DeploymentTestBase {
         UUID id = create(login("admin"), "sysdeny", PRIVILEGED);
         jdbc.update("UPDATE deployment_versions SET deployed_at = now(), created_by = (SELECT id FROM users WHERE username = 'operator') "
                 + "WHERE deployment_id = ?", id);
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> runs.webhookTrigger(id))
+        assertThatThrownBy(() -> runs.webhookTrigger(id))
+                .isInstanceOfSatisfying(DeploymentException.class, e -> assertThat(e.code()).isEqualTo("ADMIN_REQUIRED"));
+        assertThat(commands).doesNotContain(ComposeCommand.PULL, ComposeCommand.UP);
+    }
+
+    private UUID deployedAdminPrivileged(String name) throws Exception {
+        UUID id = create(login("admin"), name, PRIVILEGED);
+        jdbc.update("UPDATE deployment_versions SET deployed_at = now() WHERE deployment_id = ?", id);
+        return id;
+    }
+
+    /** An OPERATOR can add a file next to compose.yaml (config editor); the system run cannot vouch for it any more. */
+    private void addAuxFile(String name) throws Exception {
+        Files.writeString(files.deploymentDir(hostId, name).resolve("extra.yaml"), "services: {}\n");
+    }
+
+    @Test
+    void systemRunIsRefusedWhenAnAuxFileAppearedNextToTheAdminAuthoredCompose() throws Exception {
+        UUID id = deployedAdminPrivileged("sysaux");
+        addAuxFile("sysaux");
+        assertThatThrownBy(() -> runs.webhookTrigger(id))
+                .isInstanceOfSatisfying(DeploymentException.class, e -> assertThat(e.code()).isEqualTo("ADMIN_REQUIRED"));
+        assertThat(commands).doesNotContain(ComposeCommand.PULL, ComposeCommand.UP);
+    }
+
+    @Test
+    void systemRunWithAuxFileStillRunsWhenTheComposeNeedsNoAdminPower() throws Exception {
+        UUID id = create(login("admin"), "sysauxok", YAML);
+        jdbc.update("UPDATE deployment_versions SET deployed_at = now() WHERE deployment_id = ?", id);
+        addAuxFile("sysauxok");
+        assertThat(runs.webhookTrigger(id).runId()).isNotBlank();
+    }
+
+    @Test
+    void rollbackImagesIsRefusedForAViolatingCompose() throws Exception {
+        UUID id = deployedAdminPrivileged("rbaux");
+        addAuxFile("rbaux");
+        commands.clear();
+        assertThat(runs.rollbackImages(id, Map.of("x", "alpine@sha256:" + "a".repeat(64)))).isFalse();
+        assertThat(commands).doesNotContain(ComposeCommand.UP);
+    }
+
+    @Test
+    void rollbackImagesIsRefusedForOperatorAuthoredViolatingCompose() throws Exception {
+        UUID id = create(login("admin"), "rbop", PRIVILEGED);
+        jdbc.update("UPDATE deployment_versions SET deployed_at = now(), created_by = (SELECT id FROM users WHERE username = 'operator') "
+                + "WHERE deployment_id = ?", id);
+        commands.clear();
+        assertThat(runs.rollbackImages(id, Map.of("x", "alpine@sha256:" + "a".repeat(64)))).isFalse();
+        assertThat(commands).doesNotContain(ComposeCommand.UP);
+    }
+
+    @Test
+    void rollbackImagesStillWorksForAnUnchangedAdminAuthoredCompose() throws Exception {
+        UUID id = deployedAdminPrivileged("rbok");
+        commands.clear();
+        assertThat(runs.rollbackImages(id, Map.of("x", "alpine@sha256:" + "a".repeat(64)))).isTrue();
+        assertThat(commands).containsExactly(ComposeCommand.UP);
+    }
+
+    @Test
+    void systemRunOfGitDeploymentAuthoredByAdminUsesTheRestrictedProfile() throws Exception {
+        UUID id = deployedAdminPrivileged("sysgit");
+        jdbc.update("UPDATE deployments SET source_type = 'GIT', git_repo_url = 'https://example.com/r.git', "
+                + "git_ref = 'main', git_compose_path = 'compose.yaml' WHERE id = ?", id);
+        Files.createDirectories(files.repoDir(hostId, "sysgit"));
+        Files.writeString(files.repoDir(hostId, "sysgit").resolve("compose.yaml"), PRIVILEGED);
+        commands.clear();
+        // the checkout is not covered by the ADMIN's approval, so even a directory without extra files is restricted
+        assertThatThrownBy(() -> runs.autoPullUpdate(id))
                 .isInstanceOfSatisfying(DeploymentException.class, e -> assertThat(e.code()).isEqualTo("ADMIN_REQUIRED"));
         assertThat(commands).doesNotContain(ComposeCommand.PULL, ComposeCommand.UP);
     }

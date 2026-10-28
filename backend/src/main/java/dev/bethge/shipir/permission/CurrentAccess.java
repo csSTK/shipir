@@ -48,9 +48,13 @@ public class CurrentAccess {
                 .map(u -> PermissionSubject.of(u, auth)).orElse(NOBODY));
     }
 
-    /** True for ADMIN and for the system caller. */
+    /**
+     * True only for a signed-in ADMIN. The system caller is deliberately not an admin: host-level privilege decisions
+     * (compose policy, privileged containers) must not follow from "no user", since the content a system run executes
+     * may have been changed by a lesser role. Use the permission checks for access, never this for system trust.
+     */
     public boolean isAdmin() {
-        return subject().map(s -> s.role() == Role.ADMIN).orElse(true);
+        return subject().map(s -> s.role() == Role.ADMIN).orElse(false);
     }
 
     public boolean canView(UUID hostId) {

@@ -37,10 +37,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.nio.file.Path;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -231,7 +235,7 @@ public class DeploymentRunService {
             alignCheckout(deployment, version);
             files.write(hostId, deployment.getName(), version.getYamlContent(), envText);
             deploymentService.enforcePolicy(hostId, deployment.getName(), endpoint, deploymentService.composeFileOf(deployment),
-                    unrestricted(username, userId != null ? userId : version.getCreatedBy()));
+                    unrestricted(username, userId != null ? userId : version.getCreatedBy(), deployment));
             List<String> services = null;
             if (service != null) {
                 deploymentService.requireService(deployment, endpoint, service);
@@ -393,6 +397,13 @@ public class DeploymentRunService {
             }
             try {
                 DockerEndpoint endpoint = deploymentService.endpointOf(deploymentService.requireHost(deployment.getHostId()));
+                // same gate as every other system run: the compose file on disk must pass the policy for the author's trust
+                List<DeploymentVersion> history = versions.findByDeploymentIdOrderByCreatedAtDesc(deployment.getId());
+                DeploymentVersion current = history.stream().filter(DeploymentVersion::isDeployed).findFirst()
+                        .or(() -> history.stream().findFirst()).orElse(null);
+                deploymentService.enforcePolicy(deployment.getHostId(), deployment.getName(), endpoint,
+                        deploymentService.composeFileOf(deployment),
+                        unrestricted(SYSTEM_USER, current != null ? current.getCreatedBy() : null, deployment));
                 Path override = files.writeRollbackOverride(deployment.getHostId(), deployment.getName(), yaml);
                 ComposeProcessResult result = deploymentService.runCompose(deployment, ComposeCommand.UP, endpoint,
                         line -> { }, override, null);
@@ -401,6 +412,9 @@ public class DeploymentRunService {
                     deployments.save(s);
                 }));
                 return result.success();
+            } catch (DeploymentException e) {
+                log.warn("Image rollback of deployment {} refused: {}", deploymentId, e.code());
+                return false;
             } catch (RuntimeException e) {
                 log.warn("Image rollback of deployment {} failed: {}", deploymentId, e.toString());
                 return false;
@@ -450,8 +464,13 @@ public class DeploymentRunService {
      * Whether the run may use host-level compose features (ADMIN only). A signed-in caller counts by their own role. A system
      * run (webhook, Git/image auto-update; no user) counts by the role of the user who authored the content being run: the
      * deployed version's author, or the deployment's creator for freshly pulled Git content. Unknown or disabled user: no.
+     *
+     * <p>A system run additionally needs the whole compose graph to be what that ADMIN approved. Shipir stores only
+     * {@code compose.yaml} and {@code .env} of a version; any other file in the deployment directory (an
+     * {@code include}/{@code extends}/{@code env_file} target an OPERATOR can edit with the config editor, or a Git
+     * checkout) is not covered by the ADMIN's approval, so the run is evaluated with the restricted profile.
      */
-    private boolean unrestricted(String username, UUID authorId) {
+    private boolean unrestricted(String username, UUID authorId, Deployment deployment) {
         if (!SYSTEM_USER.equals(username)) {
             var caller = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
             // an API token never carries ADMIN power, whatever role its user has
@@ -460,7 +479,24 @@ public class DeploymentRunService {
                     .orElse(false);
         }
         return authorId != null && users.findById(authorId).filter(u -> !u.isDisabled()).map(u -> u.getRole() == Role.ADMIN)
-                .orElse(false);
+                .orElse(false) && graphIsOnlyApprovedFiles(deployment);
+    }
+
+    /** True when the deployment directory holds nothing but the files written from a stored version (FILE deployments only). */
+    private boolean graphIsOnlyApprovedFiles(Deployment deployment) {
+        if (deployment.getSourceType() != DeploymentSource.FILE) {
+            return false;
+        }
+        Path dir = files.deploymentDir(deployment.getHostId(), deployment.getName());
+        if (!Files.exists(dir, LinkOption.NOFOLLOW_LINKS)) {
+            return true;
+        }
+        try (var entries = Files.list(dir)) {
+            return entries.allMatch(p -> Set.of(ComposeFileRepository.COMPOSE_FILE, ComposeFileRepository.ENV_FILE,
+                    ComposeFileRepository.ROLLBACK_OVERRIDE_FILE).contains(p.getFileName().toString()));
+        } catch (IOException | RuntimeException e) {
+            return false; // cannot tell: fail closed
+        }
     }
 
     private UUID userIdOf(String username) {
@@ -477,7 +513,7 @@ public class DeploymentRunService {
         try {
             DeploymentVersion source = rollbackTo == null ? deploymentService.currentVersion(deployment) : versionOf(deployment, rollbackTo);
             String envText = decryptEnv(source);
-            GitCheckout checkout = pullGit ? pull(deployment, endpoint, envText, unrestricted(username, userId)) : null;
+            GitCheckout checkout = pullGit ? pull(deployment, endpoint, envText, unrestricted(username, userId, deployment)) : null;
             if (!pullGit) {
                 alignCheckout(deployment, source);
             }
@@ -487,7 +523,7 @@ public class DeploymentRunService {
             String commitSha = checkout == null ? source.getCommitSha() : checkout.commitSha();
             files.write(hostId, deployment.getName(), yaml, envText);
             deploymentService.enforcePolicy(hostId, deployment.getName(), endpoint, deploymentService.composeFileOf(deployment),
-                    unrestricted(username, userId));
+                    unrestricted(username, userId, deployment));
             DeploymentVersion version = tx.execute(status -> {
                 DeploymentVersion v = new DeploymentVersion(deployment.getId(), yaml, source.getEnvCiphertext(), versionSource,
                         userId, clock.instant());

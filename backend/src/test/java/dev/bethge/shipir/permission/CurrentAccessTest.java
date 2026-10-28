@@ -74,4 +74,22 @@ class CurrentAccessTest {
 
         SystemScope.run(() -> assertThat(access.canView(host)).isFalse());
     }
+
+    @Test
+    void nobodyIsAdminNeitherWithoutScopeNorInsideTheSystemScope() {
+        assertThat(access.isAdmin()).isFalse();
+        SystemScope.run(() -> assertThat(access.isAdmin()).isFalse());
+    }
+
+    @Test
+    void signedInAdminIsAdmin() {
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(UUID.randomUUID());
+        when(user.getRole()).thenReturn(Role.ADMIN);
+        when(users.findByUsername("root")).thenReturn(Optional.of(user));
+        SecurityContextHolder.getContext().setAuthentication(
+                UsernamePasswordAuthenticationToken.authenticated("root", "x", List.of()));
+
+        assertThat(access.isAdmin()).isTrue();
+    }
 }
