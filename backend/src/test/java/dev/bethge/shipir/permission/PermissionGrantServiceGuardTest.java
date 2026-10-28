@@ -20,7 +20,7 @@ import java.util.function.Consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** The public read methods of {@link PermissionGrantService} guard themselves: ADMIN only, whoever calls them. */
+/** The public read methods and the mutators of {@link PermissionGrantService} guard themselves: ADMIN only, whoever calls them. */
 @SpringBootTest
 @Import(PostgresTestConfiguration.class)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
@@ -45,11 +45,19 @@ class PermissionGrantServiceGuardTest {
             s -> s.forHost(UUID.randomUUID()),
             s -> s.forDeployment(UUID.randomUUID()));
 
+    private static final List<Consumer<PermissionGrantService>> WRITES = List.of(
+            s -> s.replace(UUID.randomUUID(), List.of()),
+            s -> s.replaceForTeam(UUID.randomUUID(), List.of()));
+
+    private static List<Consumer<PermissionGrantService>> all() {
+        return java.util.stream.Stream.concat(READS.stream(), WRITES.stream()).toList();
+    }
+
     @Test
-    void nonAdminCallersAreDeniedOnEveryReadMethod() {
+    void nonAdminCallersAreDeniedOnEveryReadAndWriteMethod() {
         for (String role : List.of("OPERATOR", "VIEWER")) {
             signInAs(role);
-            for (Consumer<PermissionGrantService> read : READS) {
+            for (Consumer<PermissionGrantService> read : all()) {
                 assertThatThrownBy(() -> read.accept(grants)).isInstanceOf(AccessDeniedException.class);
             }
         }
@@ -57,7 +65,7 @@ class PermissionGrantServiceGuardTest {
 
     @Test
     void unauthenticatedCallersAreDenied() {
-        for (Consumer<PermissionGrantService> read : READS) {
+        for (Consumer<PermissionGrantService> read : all()) {
             assertThatThrownBy(() -> read.accept(grants))
                     .isInstanceOfAny(AccessDeniedException.class, AuthenticationCredentialsNotFoundException.class);
         }
@@ -66,7 +74,7 @@ class PermissionGrantServiceGuardTest {
     @Test
     void adminPassesTheGuardAndReachesTheService() {
         signInAs("ADMIN");
-        for (Consumer<PermissionGrantService> read : READS) {
+        for (Consumer<PermissionGrantService> read : all()) {
             assertThatThrownBy(() -> read.accept(grants)).isInstanceOf(PermissionException.class);
         }
         assertThat(true).isTrue();

@@ -10,6 +10,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
@@ -58,6 +61,7 @@ class TeamAccessEventsTest {
 
     @AfterEach
     void clean() {
+        SecurityContextHolder.clearContext();
         jdbc.update("DELETE FROM audit_log");
         jdbc.update("DELETE FROM permissions");
         jdbc.update("DELETE FROM teams");
@@ -76,6 +80,8 @@ class TeamAccessEventsTest {
 
     @Test
     void teamGrantReplacementNotifiesEveryMember() {
+        SecurityContextHolder.getContext().setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
+                "admin", null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
         grants.replaceForTeam(team, List.of(new GrantRequest(host, null, PermissionLevel.VIEW)));
         assertThat(changed()).containsExactly("alice", "bob");
     }

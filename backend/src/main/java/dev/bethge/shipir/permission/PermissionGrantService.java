@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 
 /**
  * ADMIN management of the grants of a user or a team. PUT replaces the complete set. The read methods are public
- * for the AI tool {@code list_access_grants}; they enforce ADMIN themselves ({@code @PreAuthorize}), whoever calls them.
+ * for the AI tool {@code list_access_grants}; they and the mutators enforce ADMIN themselves ({@code @PreAuthorize}), whoever calls them.
  */
 @Service
 public class PermissionGrantService {
@@ -64,6 +64,7 @@ public class PermissionGrantService {
         return response(userId);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @Auditable(action = "PERMISSION_UPDATE", targetType = "USER", targetId = "#userId")
     @Transactional
     PermissionsResponse replace(UUID userId, List<GrantRequest> requested) {
@@ -153,6 +154,7 @@ public class PermissionGrantService {
         return new SubjectGrantsResponse(list);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @Auditable(action = "TEAM_PERMISSIONS_UPDATE", targetType = "TEAM", targetId = "#teamId")
     @Transactional
     PermissionsResponse replaceForTeam(UUID teamId, List<GrantRequest> requested) {
