@@ -207,6 +207,9 @@ public class ComposeSecurityPolicy {
         if (nonEmpty(build.path("entitlements"))) {
             violations.add(service + ": build entitlements");
         }
+        if (nonEmpty(build.path("ssh"))) {
+            violations.add(service + ": build ssh");
+        }
         String context = build.path("context").asString("");
         if (!context.isEmpty() && !insideOf(allowed, context)) {
             violations.add(service + ": build context " + context);

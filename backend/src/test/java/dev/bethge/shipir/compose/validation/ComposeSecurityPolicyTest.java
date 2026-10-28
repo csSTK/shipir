@@ -63,7 +63,10 @@ class ComposeSecurityPolicyTest {
     @CsvSource(delimiter = '|', value = {
             "privileged|true|build privileged",
             "network|\"host\"|build network host",
-            "entitlements|[\"network.host\"]|build entitlements"})
+            "entitlements|[\"network.host\"]|build entitlements",
+            "ssh|[\"default\"]|build ssh",
+            "ssh|{\"default\":null}|build ssh",
+            "ssh|{\"k\":\"/home/u/.ssh/id\"}|build ssh"})
     void deniesBuildSetting(String key, String value, String expected) {
         assertThat(check("{\"services\":{\"x\":{\"build\":{\"context\":\"%s\",\"%s\":%s}}}}".formatted(dir, key, value)))
                 .containsExactly("x: " + expected);
