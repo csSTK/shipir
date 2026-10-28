@@ -29,6 +29,8 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -134,9 +136,16 @@ class ReadToolsTest {
         when(execution.execute(any(), any(), any(), any(), any())).thenReturn(ok);
         when(execution.execute(any(), any(), any(), any(), any(), any())).thenReturn(ok);
         when(execution.execute(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(ok);
-        DeploymentDetailResponse created = dev.bethge.shipir.common.security.SystemScope.call(() -> deployments.create(hostId, new DeploymentCreateRequest("web",
-                "services:\n  web:\n    image: nginx\n", List.of(new EnvEntry("API_TOKEN", ENV_SECRET))), "admin"));
-        deploymentId = created.id();
+        // the fixture is created by a signed-in ADMIN: without a subject the compose policy runs (system trust is not admin)
+        SecurityContextHolder.getContext().setAuthentication(
+                UsernamePasswordAuthenticationToken.authenticated("admin", "x", List.of()));
+        try {
+            DeploymentDetailResponse created = deployments.create(hostId, new DeploymentCreateRequest("web",
+                    "services:\n  web:\n    image: nginx\n", List.of(new EnvEntry("API_TOKEN", ENV_SECRET))), "admin");
+            deploymentId = created.id();
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
     }
 
     private void grant(String username, UUID host, String level) {
