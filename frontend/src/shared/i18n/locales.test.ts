@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { formalAddressSentences } from './formalAddress'
+
 type Bundle = Record<string, string>
 
 const toBundles = (modules: Record<string, Bundle>): Record<string, Bundle> =>
@@ -7,6 +9,21 @@ const toBundles = (modules: Record<string, Bundle>): Record<string, Bundle> =>
 
 const en = toBundles(import.meta.glob<Bundle>('./locales/en/*.json', { eager: true, import: 'default' }))
 const de = toBundles(import.meta.glob<Bundle>('./locales/de/*.json', { eager: true, import: 'default' }))
+
+/**
+ * Sentences in de/*.json that start with a capitalised 'Sie' but mean the plural 'they' (tokens, recovery codes),
+ * not formal address. Keep each entry exact: a changed sentence fails the test again and must be re-checked.
+ */
+const ALLOWED_PLURAL_SIE: { key: string; sentence: string }[] = [
+  {
+    key: 'account:TokensSection.tokensLetScriptsCallThe',
+    sentence: 'Sie funktionieren im Authorization-Header, nicht für die Anmeldung oder die Verwaltung von Tokens.',
+  },
+  {
+    key: 'auth:TwoFactorEnrollment.twoFactorAuthenticationIsOn',
+    sentence: 'Sie werden nur jetzt angezeigt.',
+  },
+]
 
 /** `{{name}}` placeholders and `<tag>` markers; both must survive translation. */
 const placeholders = (text: string) => [...text.matchAll(/\{\{\s*([^}\s,]+)[^}]*\}\}/g)].map((m) => m[1]).sort()
@@ -40,12 +57,47 @@ describe('German locale', () => {
     expect(empty).toEqual([])
   })
 
-  it('addresses the user informally (du), never with the formal Sie/Ihr in mid-sentence', () => {
+  it('addresses the user informally (du), never with the formal Sie/Ihr', () => {
     const formal = Object.entries(de).flatMap(([ns, bundle]) =>
-      Object.entries(bundle)
-        .filter(([, text]) => /(?<=[a-zäöüß,;] )(Sie|Ihr|Ihre|Ihrem|Ihren|Ihrer|Ihres|Ihnen)\b/.test(text))
-        .map(([key]) => `${ns}:${key}`),
+      Object.entries(bundle).flatMap(([key, text]) =>
+        formalAddressSentences(text)
+          .filter((sentence) => !ALLOWED_PLURAL_SIE.some((allowed) => allowed.key === `${ns}:${key}` && allowed.sentence === sentence))
+          .map((sentence) => `${ns}:${key}: ${sentence}`),
+      ),
     )
     expect(formal).toEqual([])
+  })
+})
+
+describe('formal address check', () => {
+  it.each([
+    'Sie können Container starten.',
+    'Fertig. Sie können weitermachen.',
+    'Bitte bestätigen Sie die Eingabe.',
+    'Ihre Sitzung ist abgelaufen.',
+    'Wenn Ihnen das nicht passt, melde dich.',
+    'Fertig. Ihr Konto ist gesperrt.',
+    '{{name}} Sie können das nicht ändern.',
+    'Achtung: <strong>Sie</strong> können das nicht ändern.',
+    'Hinweis – Sie können das nicht ändern.',
+    'Option (Sie können das nicht ändern).',
+    'Option [Sie] wählen.',
+    "Bitte 'Sie' wählen.",
+    'Pfad/Sie/können',
+    ' Sie können das nicht ändern.',
+    'Speichern Sie.',
+  ])('flags formal address in "%s"', (text) => {
+    expect(formalAddressSentences(text)).toHaveLength(1)
+  })
+
+  it.each([
+    'Speichere sie sicher.',
+    'Tokens können Skripte aufrufen; sie funktionieren im Header.',
+    'Du kannst deine Tokens bearbeiten.',
+    'Die Container laufen.',
+    'Siebzehn Container laufen.',
+    'Ihrerseits ist alles gut.',
+  ])('allows informal or non-pronoun text "%s"', (text) => {
+    expect(formalAddressSentences(text)).toEqual([])
   })
 })
