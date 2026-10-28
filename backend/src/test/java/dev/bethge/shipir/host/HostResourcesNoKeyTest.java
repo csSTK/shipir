@@ -16,7 +16,7 @@ class HostResourcesNoKeyTest extends HostApiTestBase {
         UUID owner = jdbc.queryForObject("SELECT id FROM users WHERE username = 'admin'", UUID.class);
         jdbc.update("""
                 INSERT INTO docker_hosts (name, connection_type, host, port, tls_ca_encrypted, tls_cert_encrypted,
-                    tls_key_encrypted, owner_user_id) VALUES ('t', 'TCP', 'x.example', 2376, ?, ?, ?, ?)""",
+                    tls_key_encrypted, owner_user_id) VALUES ('t', 'TCP', '203.0.113.6', 2376, ?, ?, ?, ?)""",
                 new byte[]{1}, new byte[]{1}, new byte[]{1}, owner);
         String id = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 't'", UUID.class).toString();
         mvc.perform(get("/api/hosts/{id}/images", id).session(login("viewer").session()))

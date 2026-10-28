@@ -45,7 +45,7 @@ class HostResourcesResilienceTest extends HostApiTestBase {
         UUID owner = jdbc.queryForObject("SELECT id FROM users WHERE username = 'admin'", UUID.class);
         jdbc.update("""
                 INSERT INTO docker_hosts (name, connection_type, host, port, tls_ca_encrypted, tls_cert_encrypted,
-                    tls_key_encrypted, owner_user_id) VALUES (?, 'TCP', 'secret-host.example', 2376, ?, ?, ?, ?)""",
+                    tls_key_encrypted, owner_user_id) VALUES (?, 'TCP', '203.0.113.7', 2376, ?, ?, ?, ?)""",
                 name, ca, cert, key, owner);
         return jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = ?", UUID.class, name).toString();
     }
@@ -58,7 +58,7 @@ class HostResourcesResilienceTest extends HostApiTestBase {
     @EnumSource(value = DockerErrorCode.class, names = {"UNREACHABLE", "TIMEOUT", "TLS_ERROR", "PERMISSION_DENIED"})
     void dockerFailureIs502WithErrorCodeAndNoDetails(DockerErrorCode code) throws Exception {
         String id = insertTcp("h");
-        var boom = new DockerConnectionException(code, "connect to secret-host.example:2376 failed", null);
+        var boom = new DockerConnectionException(code, "connect to 203.0.113.7:2376 failed", null);
         when(containers.listContainers(any(), any())).thenThrow(boom);
         when(containers.listDeployments(any(), any())).thenThrow(boom);
         when(images.list(any(), any())).thenThrow(boom);
@@ -71,7 +71,7 @@ class HostResourcesResilienceTest extends HostApiTestBase {
                     .andExpect(status().isBadGateway())
                     .andExpect(jsonPath("$.code").value(code.name()))
                     .andExpect(content().string(org.hamcrest.Matchers.not(
-                            org.hamcrest.Matchers.containsString("secret-host"))));
+                            org.hamcrest.Matchers.containsString("203.0.113.7"))));
         }
     }
 

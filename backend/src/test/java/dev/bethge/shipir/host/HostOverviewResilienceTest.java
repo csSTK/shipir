@@ -45,15 +45,15 @@ class HostOverviewResilienceTest extends HostApiTestBase {
 
     @Test
     void failingAndHangingHostsAreDownWhileOthersStayUpWithinTimeout() throws Exception {
-        insertTcp("a-ok", "ok.example");
-        insertTcp("b-boom", "boom.example");
-        insertTcp("c-hang", "hang.example");
-        insertTcp("d-ok", "ok2.example");
+        insertTcp("a-ok", "203.0.113.1");
+        insertTcp("b-boom", "203.0.113.2");
+        insertTcp("c-hang", "203.0.113.3");
+        insertTcp("d-ok", "203.0.113.4");
         when(docker.info(any(), any())).thenAnswer(inv -> {
             DockerEndpoint.Tcp endpoint = (DockerEndpoint.Tcp) inv.getArgument(1);
             return switch (endpoint.host()) {
-                case "boom.example" -> throw new DockerConnectionException(DockerErrorCode.UNREACHABLE, "refused", null);
-                case "hang.example" -> {
+                case "203.0.113.2" -> throw new DockerConnectionException(DockerErrorCode.UNREACHABLE, "refused", null);
+                case "203.0.113.3" -> {
                     Thread.sleep(60_000);
                     yield null;
                 }
@@ -68,7 +68,7 @@ class HostOverviewResilienceTest extends HostApiTestBase {
                 .andExpect(jsonPath("$.length()").value(4))
                 .andExpect(jsonPath("$[0].name").value("a-ok"))
                 .andExpect(jsonPath("$[0].status").value("UP"))
-                .andExpect(jsonPath("$[0].endpoint").value("tcp://ok.example:2376"))
+                .andExpect(jsonPath("$[0].endpoint").value("tcp://203.0.113.1:2376"))
                 .andExpect(jsonPath("$[0].dockerVersion").value("27.0.1"))
                 .andExpect(jsonPath("$[0].cpus").value(4))
                 .andExpect(jsonPath("$[0].memoryBytes").value(8_000_000_000L))
@@ -93,8 +93,8 @@ class HostOverviewResilienceTest extends HostApiTestBase {
 
     @Test
     void undecryptableTlsMaterialYieldsDownInsteadOfServerError() throws Exception {
-        insertTcp("broken", "broken.example", new byte[]{1, 2, 3}, new byte[]{1, 2, 3}, new byte[]{1, 2, 3});
-        insertTcp("fine", "ok.example");
+        insertTcp("broken", "203.0.113.5", new byte[]{1, 2, 3}, new byte[]{1, 2, 3}, new byte[]{1, 2, 3});
+        insertTcp("fine", "203.0.113.1");
         when(docker.info(any(), any())).thenReturn(new DockerSystemInfoDto("27.0.1", 1, 1L, 0, 0, 0, 0, 0, 0));
         Login viewer = login("viewer");
 

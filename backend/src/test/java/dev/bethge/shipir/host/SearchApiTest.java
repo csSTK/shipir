@@ -45,7 +45,7 @@ class SearchApiTest extends HostApiTestBase {
         jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
                 + "SELECT 'alpha-host', 'LOCAL', id FROM users WHERE username = 'admin'");
         jdbc.update("INSERT INTO docker_hosts (name, connection_type, host, port, tls_ca_encrypted, "
-                + "tls_cert_encrypted, tls_key_encrypted, owner_user_id) SELECT 'beta-host', 'TCP', 'beta.local', 2376, "
+                + "tls_cert_encrypted, tls_key_encrypted, owner_user_id) SELECT 'beta-host', 'TCP', '203.0.113.8', 2376, "
                 + "?, ?, ?, id FROM users WHERE username = 'admin'",
                 cipher.encrypt("ca"), cipher.encrypt("cert"), cipher.encrypt("key"));
         alpha = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'alpha-host'", UUID.class);
