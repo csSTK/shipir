@@ -7,6 +7,7 @@ import dev.bethge.shipir.docker.DockerHostConnectionManager;
 import dev.bethge.shipir.docker.dto.ContainerFileEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.FilterInputStream;
@@ -30,6 +31,7 @@ public class ContainerFileServiceImpl implements ContainerFileService {
     private final DockerCallSupport calls;
     private final ContainerDirectoryExecLister execLister;
 
+    @Autowired
     public ContainerFileServiceImpl(DockerHostConnectionManager manager) {
         this.calls = new DockerCallSupport(manager);
         this.execLister = new ContainerDirectoryExecLister(calls);
