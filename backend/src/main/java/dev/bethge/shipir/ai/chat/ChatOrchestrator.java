@@ -1,5 +1,8 @@
 package dev.bethge.shipir.ai.chat;
 
+import dev.bethge.shipir.common.security.ChatSessionsPurgedEvent;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import dev.bethge.shipir.ai.llm.LlmClients;
 import dev.bethge.shipir.ai.llm.LlmException;
 import dev.bethge.shipir.ai.llm.LlmMessage;
@@ -187,6 +190,12 @@ public class ChatOrchestrator {
     /** Drops the view context of a session (it was deleted). */
     void forget(UUID sessionId) {
         viewBlocks.remove(sessionId);
+    }
+
+    /** Drops the view contexts of sessions deleted by the retention purge. */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    void onSessionsPurged(ChatSessionsPurgedEvent event) {
+        event.sessionIds().forEach(this::forget);
     }
 
     public ActionOutcome confirm(ToolContext ctx, UUID sessionId, UUID messageId) {

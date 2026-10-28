@@ -153,6 +153,8 @@ class ChatOrchestratorTest {
     @Autowired @org.springframework.beans.factory.annotation.Qualifier("stubLlm") StubLlm llm;
     @Autowired @org.springframework.beans.factory.annotation.Qualifier("geminiStubLlm") StubLlm geminiLlm;
     @Autowired ChatOrchestrator orchestrator;
+    @Autowired org.springframework.transaction.PlatformTransactionManager txManager;
+    @Autowired org.springframework.context.ApplicationEventPublisher publisher;
     @Autowired AiToolRegistry registry;
     @MockitoBean AiSettingsService settings;
     @MockitoSpyBean ChatEventPublisher events;
@@ -1075,6 +1077,23 @@ class ChatOrchestratorTest {
 
         mvc.perform(l.write(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                 .delete("/api/ai/sessions/" + id))).andExpect(status().isNoContent());
+
+        assertThat(blocks).doesNotContainKey(UUID.fromString(id));
+    }
+
+    @Test
+    void purgingTheSessionDropsThePausedRunsContext() throws Exception {
+        Login l = login("admin");
+        String id = newSession(l);
+        llm.call("c1", "rename_host", renameArgs());
+        sayWithContext(l, id, "{\"page\":\"HOST\",\"hostId\":\"%s\"}".formatted(hostId), 202);
+        @SuppressWarnings("unchecked")
+        Map<UUID, String> blocks = (Map<UUID, String>) ReflectionTestUtils.getField(orchestrator, "viewBlocks");
+        assertThat(blocks).containsKey(UUID.fromString(id));
+
+        new org.springframework.transaction.support.TransactionTemplate(txManager).executeWithoutResult(t ->
+                publisher.publishEvent(new dev.bethge.shipir.common.security.ChatSessionsPurgedEvent(
+                        java.util.List.of(UUID.fromString(id)))));
 
         assertThat(blocks).doesNotContainKey(UUID.fromString(id));
     }

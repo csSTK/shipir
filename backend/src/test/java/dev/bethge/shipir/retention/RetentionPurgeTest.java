@@ -9,7 +9,11 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@org.springframework.test.context.event.RecordApplicationEvents
 class RetentionPurgeTest extends RetentionTestBase {
+
+    @Autowired
+    org.springframework.test.context.event.ApplicationEvents applicationEvents;
 
     @Autowired
     RetentionPurgeService purge;
@@ -90,6 +94,23 @@ class RetentionPurgeTest extends RetentionTestBase {
         purge.purge();
         assertThat(count("SELECT count(*) FROM chat_sessions WHERE id = ?", old)).isZero();
         assertThat(count("SELECT count(*) FROM chat_sessions WHERE id = ?", recent)).isEqualTo(1);
+    }
+
+    @Test
+    void publishesTheIdsOfThePurgedChatSessionsOnly() {
+        UUID old = insertChatSession(NOW.minus(Duration.ofDays(91)));
+        UUID recent = insertChatSession(NOW.minus(Duration.ofDays(89)));
+        purge.purge();
+        var events = applicationEvents.stream(dev.bethge.shipir.common.security.ChatSessionsPurgedEvent.class).toList();
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0).sessionIds()).containsExactly(old).doesNotContain(recent);
+    }
+
+    @Test
+    void publishesNoChatEventWhenNothingWasPurged() {
+        insertChatSession(NOW.minus(Duration.ofDays(89)));
+        purge.purge();
+        assertThat(applicationEvents.stream(dev.bethge.shipir.common.security.ChatSessionsPurgedEvent.class)).isEmpty();
     }
 
     @Test
