@@ -171,7 +171,8 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/hosts/*/volumes/*/backup").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.GET, "/api/hosts/*/volumes/*/stored-backups",
                                 "/api/hosts/*/volumes/*/stored-backups/*").hasAnyRole("ADMIN", "OPERATOR")
-                        .requestMatchers(HttpMethod.POST, "/api/hosts/*/volumes/*/restore").hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.POST, "/api/hosts/*/volumes/*/restore",
+                                "/api/hosts/*/volumes/*/stored-backups/*/restore").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers("/api/hosts/*/volume-backup-schedules", "/api/hosts/*/volume-backup-schedules/*")
                         .hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.GET, "/api/hosts/*/prune/preview").hasAnyRole("ADMIN", "OPERATOR")

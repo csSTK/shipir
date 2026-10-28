@@ -59,6 +59,14 @@ class VolumeBackupController {
         return tar(service.downloadStored(hostId, volume, fileName));
     }
 
+    /** Restores a stored scheduled archive into the existing volume; {@code confirm=true} allows a volume in use. */
+    @PostMapping("/stored-backups/{fileName}/restore")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void restoreStored(@PathVariable UUID hostId, @PathVariable String volume, @PathVariable String fileName,
+                       @RequestParam(defaultValue = "false") boolean confirm) {
+        service.restoreStored(hostId, volume, fileName, confirm);
+    }
+
     /** Multipart part {@code file} (a tar) is extracted into the existing volume; {@code confirm=true} allows a volume in use. */
     @PostMapping(value = "/restore", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.NO_CONTENT)

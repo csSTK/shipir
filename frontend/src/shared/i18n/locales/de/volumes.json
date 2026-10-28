@@ -68,5 +68,9 @@
   "StoredBackupsDialog.downloadName": "{{name}} herunterladen",
   "StoredBackupsDialog.close": "Schließen",
   "VolumesPage.storedBackups": "Gespeicherte Backups…",
-  "backup.thisStoredBackupNoLongerExists": "Dieses gespeicherte Backup existiert nicht mehr."
+  "backup.thisStoredBackupNoLongerExists": "Dieses gespeicherte Backup existiert nicht mehr.",
+  "StoredBackupsDialog.restoreName": "{{name}} wiederherstellen",
+  "StoredBackupsDialog.restoreNameIntoVolume": "{{name}} in {{volume}} wiederherstellen?",
+  "StoredBackupsDialog.theArchiveIsOverlaidOnto": "Das Archiv wird über das bestehende Volume gelegt: Dateien mit gleichem Pfad werden überschrieben, Dateien, die nicht im Archiv sind, bleiben erhalten.",
+  "StoredBackupsDialog.restoredNameIntoVolume": "{{name}} in {{volume}} wiederhergestellt."
 }

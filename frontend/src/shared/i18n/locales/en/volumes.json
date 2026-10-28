@@ -68,5 +68,9 @@
   "StoredBackupsDialog.downloadName": "Download {{name}}",
   "StoredBackupsDialog.close": "Close",
   "VolumesPage.storedBackups": "Stored backups…",
-  "backup.thisStoredBackupNoLongerExists": "This stored backup no longer exists."
+  "backup.thisStoredBackupNoLongerExists": "This stored backup no longer exists.",
+  "StoredBackupsDialog.restoreName": "Restore {{name}}",
+  "StoredBackupsDialog.restoreNameIntoVolume": "Restore {{name}} into {{volume}}?",
+  "StoredBackupsDialog.theArchiveIsOverlaidOnto": "The archive is overlaid onto the existing volume: files with the same path are overwritten, files that are not in the archive stay.",
+  "StoredBackupsDialog.restoredNameIntoVolume": "Restored {{name}} into {{volume}}."
 }

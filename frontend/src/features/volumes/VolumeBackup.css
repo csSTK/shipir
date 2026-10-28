@@ -47,3 +47,14 @@
 .vbackup__file {
   overflow-wrap: anywhere;
 }
+.vbackup__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+.vbackup__confirm-title:focus-visible {
+  outline: none;
+}

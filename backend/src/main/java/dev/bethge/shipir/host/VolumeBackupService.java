@@ -18,12 +18,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.regex.Pattern;
 
@@ -127,6 +129,50 @@ public class VolumeBackupService {
             return new VolumeBackupDownload(Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS), fileName);
         } catch (IOException e) {
             throw new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found");
+        }
+    }
+
+    /**
+     * Restores a stored scheduled archive through the same pipeline as an upload (tar validation, size cap, the
+     * unused-or-confirm rule, helper container always removed). Permission is checked before the name is resolved.
+     */
+    @Auditable(action = "VOLUME_RESTORE", targetType = "VOLUME", targetId = "#volume",
+            details = "{'confirm': #confirm, 'file': #fileName, 'source': 'stored'}")
+    public void restoreStored(UUID hostId, String volume, String fileName, boolean confirm) {
+        requireOperate(hostId);
+        validateVolumeName(volume);
+        Path file = store.resolve(hostId, volume, fileName).orElseThrow(
+                () -> new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found"));
+        long max = properties.maxBytes().toBytes();
+        try {
+            if (Files.size(file) > max) {
+                throw sizeLimit();
+            }
+        } catch (IOException e) {
+            throw new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found");
+        }
+        AtomicBoolean vanished = new AtomicBoolean();
+        try {
+            call(hostId, (id, endpoint) -> {
+                // NOFOLLOW on every open: a symlink swapped in after resolve() must not be followed
+                archives.restore(id, endpoint, volume, properties.helperImage(), () -> {
+                    try {
+                        return Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS);
+                    } catch (NoSuchFileException e) {
+                        vanished.set(true); // deleted or pruned since resolve(); the pipeline wraps this as 400/502
+                        throw e;
+                    }
+                }, max, confirm);
+                return null;
+            });
+        } catch (HostException e) {
+            if (vanished.get()) {
+                throw new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found");
+            }
+            if ("INVALID_ARCHIVE".equals(e.code())) {
+                throw new HostException(HttpStatus.BAD_REQUEST, "INVALID_ARCHIVE", "The stored archive is not a valid, safe volume archive");
+            }
+            throw e;
         }
     }
 

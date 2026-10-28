@@ -71,6 +71,14 @@ export async function downloadStoredBackup(hostId: string, volume: string, fileN
   saveBlob({ blob: await response.blob(), filename: filenameOf(response.headers.get('Content-Disposition'), fileName) })
 }
 
+/** POST: restore one stored archive through the same pipeline as an upload; a volume in use needs `confirm`. */
+export function restoreStoredBackup(hostId: string, volume: string, fileName: string, confirm: boolean): Promise<void> {
+  return apiFetch<void>(
+    `/hosts/${hostId}/volumes/${encodeURIComponent(volume)}/stored-backups/${encodeURIComponent(fileName)}/restore?confirm=${confirm}`,
+    { method: 'POST' },
+  )
+}
+
 /** POST multipart `file` + `confirm`; the browser sets the multipart boundary itself. */
 export async function restoreVolume(hostId: string, volume: string, file: File, confirm: boolean): Promise<void> {
   const form = new FormData()

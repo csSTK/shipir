@@ -101,6 +101,100 @@ describe('StoredBackupsDialog', () => {
   })
 })
 
+describe('StoredBackupsDialog restore', () => {
+  const first = 'cache-20260102T030405Z.tar'
+  const restorePath = `/hosts/h1/volumes/cache/stored-backups/${first}/restore?confirm=`
+
+  function setup(props: { inUse?: boolean } = {}) {
+    const onDone = vi.fn()
+    render(wrap(<StoredBackupsDialog hostId="h1" volume="cache" onClose={() => {}} onDone={onDone} {...props} />))
+    return onDone
+  }
+  async function choose(name = first) {
+    fireEvent.click(await screen.findByRole('button', { name: `Restore ${name}` }))
+  }
+  const restoreCalls = () => apiFetch.mock.calls.filter(([path]) => String(path).includes('/restore'))
+
+  it('asks before restoring and states the overlay semantics', async () => {
+    mockApi()
+    setup()
+    await choose()
+    expect(await screen.findByText(/overlaid onto the existing volume/)).toBeInTheDocument()
+    expect(restoreCalls()).toHaveLength(0)
+  })
+
+  it('restores the chosen archive of an unused volume without confirm and reports it', async () => {
+    mockApi()
+    const onDone = setup()
+    await choose()
+    fireEvent.click(await screen.findByRole('button', { name: 'Restore' }))
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith(`Restored ${first} into cache.`))
+    expect(restoreCalls()).toEqual([[`${restorePath}false`, { method: 'POST' }]])
+  })
+
+  it('needs the confirm switch for a volume in use and sends confirm=true', async () => {
+    mockApi()
+    const onDone = setup({ inUse: true })
+    await choose()
+    const restore = await screen.findByRole('button', { name: 'Restore' })
+    expect(restore).toBeDisabled()
+    fireEvent.click(screen.getByRole('switch'))
+    fireEvent.click(restore)
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(restoreCalls()).toEqual([[`${restorePath}true`, { method: 'POST' }]])
+  })
+
+  it('shows the confirm switch after a 409 and retries only with it', async () => {
+    mockApi()
+    const base = apiFetch.getMockImplementation()!
+    apiFetch.mockImplementation((path: string, ...rest: unknown[]) =>
+      path === `${restorePath}false` ? Promise.reject(new ApiError(409, '{}', 'VOLUME_IN_USE')) : base(path, ...rest),
+    )
+    const onDone = setup()
+    await choose()
+    fireEvent.click(await screen.findByRole('button', { name: 'Restore' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('This volume is in use')
+    expect(screen.getByRole('button', { name: 'Restore' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('switch'))
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }))
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(restoreCalls().map(([p]) => p)).toEqual([`${restorePath}false`, `${restorePath}true`])
+  })
+
+  it('shows a rejected archive as an alert and does not report success', async () => {
+    mockApi()
+    const base = apiFetch.getMockImplementation()!
+    apiFetch.mockImplementation((path: string, ...rest: unknown[]) =>
+      String(path).includes('/restore') ? Promise.reject(new ApiError(400, '{}', 'INVALID_ARCHIVE')) : base(path, ...rest),
+    )
+    const onDone = setup()
+    await choose()
+    fireEvent.click(await screen.findByRole('button', { name: 'Restore' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('not a valid backup archive')
+    expect(onDone).not.toHaveBeenCalled()
+  })
+
+  it('moves focus into the restore step as a labelled group and back to the row button on cancel', async () => {
+    mockApi()
+    setup()
+    await choose()
+    const group = await screen.findByRole('group', { name: `Restore ${first} into cache?` })
+    await waitFor(() => expect(group.contains(document.activeElement)).toBe(true))
+    fireEvent.click(within(group).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: `Restore ${first}` })).toHaveFocus())
+    expect(screen.queryByRole('group')).toBeNull()
+  })
+
+  it('can cancel the restore step', async () => {
+    mockApi()
+    setup()
+    await choose()
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByText(/overlaid onto the existing volume/)).toBeNull()
+    expect(restoreCalls()).toHaveLength(0)
+  })
+})
+
 describe('VolumesPage stored backups', () => {
   it('opens the stored backups of a volume from the row menu', async () => {
     mockApi()

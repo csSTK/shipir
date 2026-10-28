@@ -143,7 +143,15 @@ export function VolumesPage() {
       />
       {restoring && <RestoreVolumeDialog hostId={id} volume={restoring} onClose={() => setRestoring(null)} onDone={setNotice} />}
       {scheduling && <BackupSchedulesDialog hostId={id} volumes={data ?? []} initialVolume={scheduling.volume} onClose={() => setScheduling(null)} />}
-      {storedFor && <StoredBackupsDialog hostId={id} volume={storedFor} onClose={() => setStoredFor(null)} />}
+      {storedFor && (
+        <StoredBackupsDialog
+          hostId={id}
+          volume={storedFor}
+          inUse={data?.find((v) => v.name === storedFor)?.inUse}
+          onDone={setNotice}
+          onClose={() => setStoredFor(null)}
+        />
+      )}
       {creating && <CreateVolumeDialog hostId={id} onClose={() => setCreating(false)} />}
       {target && (
         <DeleteResourceDialog kind="volume" name={target.name} onDelete={() => del.mutateAsync(target.name)} onClose={() => setTarget(null)} />

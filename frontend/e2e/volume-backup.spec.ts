@@ -107,6 +107,43 @@ test('operator lists and downloads a stored scheduled backup, and sees a failing
   await expect(dialog.getByRole('alert')).toContainText('This stored backup no longer exists.')
 })
 
+test('operator restores a stored scheduled backup into a volume in use only after confirming, and sees a rejected archive', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', as('OPERATOR'))
+  api.mock('GET', '/api/hosts/a/volume-backup-schedules', { body: [] })
+  api.mock('GET', '/api/hosts/a/volumes/pgdata/stored-backups', {
+    body: [
+      { name: 'pgdata-20260102T030405Z.tar', sizeBytes: 2048, createdAt: '2026-01-02T03:04:05Z' },
+      { name: 'pgdata-20260101T000000Z.tar', sizeBytes: 12, createdAt: '2026-01-01T00:00:00Z' },
+    ],
+  })
+  const calls: string[] = []
+  await page.route('**/api/hosts/a/volumes/pgdata/stored-backups/*/restore?*', (route) => {
+    const url = route.request().url()
+    calls.push(url)
+    if (url.includes('20260101T000000Z')) return route.fulfill({ status: 400, json: { code: 'INVALID_ARCHIVE' } })
+    return route.fulfill({ status: 204 })
+  })
+  await page.goto('/environments/a/volumes')
+  await page.getByRole('button', { name: 'More actions for pgdata' }).click()
+  await page.getByRole('menuitem', { name: 'Stored backups…' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Stored backups of pgdata' })
+
+  await dialog.getByRole('button', { name: 'Restore pgdata-20260101T000000Z.tar' }).click()
+  await expect(dialog).toContainText('overlaid onto the existing volume')
+  await expect(dialog.getByRole('button', { name: 'Restore', exact: true })).toBeDisabled()
+  await dialog.getByRole('switch').check()
+  await dialog.getByRole('button', { name: 'Restore', exact: true }).click()
+  await expect(dialog.getByRole('alert')).toContainText('not a valid backup archive')
+
+  await dialog.getByRole('button', { name: 'Restore pgdata-20260102T030405Z.tar' }).click()
+  const restore = dialog.getByRole('button', { name: 'Restore', exact: true })
+  await expect(restore).toBeDisabled()
+  await dialog.getByRole('switch').check()
+  await restore.click()
+  await expect(page.getByRole('status')).toContainText('Restored pgdata-20260102T030405Z.tar into pgdata.')
+  expect(calls.at(-1)).toContain('confirm=true')
+})
+
 test('viewer gets no backup actions', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', as('VIEWER'))
   await page.goto('/environments/a/volumes')
