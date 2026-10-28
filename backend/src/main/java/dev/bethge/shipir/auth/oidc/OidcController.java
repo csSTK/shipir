@@ -1,5 +1,8 @@
 package dev.bethge.shipir.auth.oidc;
 
+import dev.bethge.shipir.auth.ClientAddressResolver;
+import dev.bethge.shipir.auth.LoginThrottle;
+import dev.bethge.shipir.auth.ThrottleLockoutAuditor;
 import dev.bethge.shipir.auth.oidc.dto.OidcPublicConfigResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -28,9 +31,17 @@ class OidcController {
     private final OidcLoginService login;
     private final OidcSettingsService settings;
 
-    OidcController(OidcLoginService login, OidcSettingsService settings) {
+    private final LoginThrottle throttle;
+    private final ClientAddressResolver clientAddress;
+    private final ThrottleLockoutAuditor lockoutAuditor;
+
+    OidcController(OidcLoginService login, OidcSettingsService settings, LoginThrottle throttle,
+                   ClientAddressResolver clientAddress, ThrottleLockoutAuditor lockoutAuditor) {
         this.login = login;
         this.settings = settings;
+        this.throttle = throttle;
+        this.clientAddress = clientAddress;
+        this.lockoutAuditor = lockoutAuditor;
     }
 
     @GetMapping("/config")
@@ -40,6 +51,15 @@ class OidcController {
 
     @GetMapping("/authorize")
     ResponseEntity<Void> authorize(HttpServletRequest request) {
+        // Public and creates a session per call: limited per client address like the other unauthenticated endpoints.
+        String address = clientAddress.resolve(request);
+        LoginThrottle.Admission admission = throttle.admitAddress(LoginThrottle.Scope.OIDC_AUTHORIZE, address);
+        if (admission.lockoutStarted()) {
+            lockoutAuditor.lockoutStarted(LoginThrottle.Scope.OIDC_AUTHORIZE, address, address);
+        }
+        if (!admission.admitted()) {
+            return redirect(errorLocation("TOO_MANY_ATTEMPTS"));
+        }
         try {
             return redirect(login.begin(request));
         } catch (OidcException e) {

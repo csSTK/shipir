@@ -64,7 +64,7 @@ class OidcEgressTest {
                 host.equals("internal.test") ? new InetAddress[]{InetAddress.getByName("169.254.169.254")}
                         : InetAddress.getAllByName(host));
         return new OidcDiscoveryClient(
-                new OidcProperties(true, true, "", Duration.ofSeconds(2)), JsonMapper.builder().build(),
+                new OidcProperties(true, true, "", Duration.ofSeconds(2), Duration.ofMinutes(10)), JsonMapper.builder().build(),
                 policy, new EgressHttpClient(policy, Duration.ofSeconds(2)));
     }
 

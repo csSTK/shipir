@@ -73,32 +73,53 @@ class OidcLoginService {
     private static final String PENDING_ATTRIBUTE = OidcLoginService.class.getName() + ".PENDING";
     private static final String DEFAULT_GROUPS_CLAIM = "groups";
 
+    private record RegistrationKey(OidcConfig config, OidcDiscoveryClient.Metadata metadata, String redirectUri) {
+    }
+
+    private record CachedRegistration(RegistrationKey key, ClientRegistration registration) {
+    }
+
+    private record DecoderKey(String jwksUri, String issuer, String clientId) {
+    }
+
+    private record CachedDecoder(DecoderKey key, JwtDecoder decoder) {
+    }
+
     private final OidcSettingsService settings;
     private final OidcDiscoveryClient discovery;
+    private final OidcDiscoveryCache discoveryCache;
     private final OidcUserResolver resolver;
     private final UserDetailsService userDetailsService;
     private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
     private final SecurityContextRepository securityContextRepository;
     private final OidcProperties properties;
+    /** Stateless and thread-safe, so built once instead of per callback. */
+    private final RestClientAuthorizationCodeTokenResponseClient tokenClient;
+    /** The last registration and ID token decoder, reused while config, discovery and redirect URI stay equal. */
+    private volatile CachedRegistration cachedRegistration;
+    private volatile CachedDecoder cachedDecoder;
     private final StringKeyGenerator randomToken = new Base64StringKeyGenerator(
             Base64.getUrlEncoder().withoutPadding(), 32);
 
-    OidcLoginService(OidcSettingsService settings, OidcDiscoveryClient discovery, OidcUserResolver resolver,
+    OidcLoginService(OidcSettingsService settings, OidcDiscoveryClient discovery, OidcDiscoveryCache discoveryCache,
+                     OidcUserResolver resolver,
                      UserDetailsService userDetailsService, SessionAuthenticationStrategy sessionAuthenticationStrategy,
                      SecurityContextRepository securityContextRepository, OidcProperties properties) {
         this.settings = settings;
         this.discovery = discovery;
+        this.discoveryCache = discoveryCache;
         this.resolver = resolver;
         this.userDetailsService = userDetailsService;
         this.sessionAuthenticationStrategy = sessionAuthenticationStrategy;
         this.securityContextRepository = securityContextRepository;
         this.properties = properties;
+        this.tokenClient = tokenClient(discovery);
     }
 
     /** The provider URL to send the browser to; remembers state, nonce and PKCE verifier in the session. */
     String begin(HttpServletRequest request) {
         OidcConfig config = activeConfig();
-        OidcDiscoveryClient.Metadata metadata = discovery.fetch(config.issuer());
+        OidcDiscoveryClient.Metadata metadata = discoveryCache.get(config.issuer());
         String redirectUri = redirectUri(request);
         String verifier = randomToken.generateKey();
         String nonce = randomToken.generateKey();
@@ -137,15 +158,8 @@ class OidcLoginService {
             throw failure("OIDC_PROVIDER_ERROR", "No authorization code returned");
         }
         OidcConfig config = activeConfig();
-        OidcDiscoveryClient.Metadata metadata = discovery.fetch(config.issuer());
-        ClientRegistration registration = ClientRegistration.withRegistrationId("oidc")
-                .clientId(config.clientId()).clientSecret(config.clientSecret())
-                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
-                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                .redirectUri(pending.getRedirectUri())
-                .scope(config.scopes().split("\\s+"))
-                .authorizationUri(metadata.authorizationEndpoint()).tokenUri(metadata.tokenEndpoint())
-                .jwkSetUri(metadata.jwksUri()).issuerUri(config.issuer()).userNameAttributeName("sub").build();
+        OidcDiscoveryClient.Metadata metadata = discoveryCache.get(config.issuer());
+        ClientRegistration registration = registration(config, metadata, pending.getRedirectUri());
 
         Jwt idToken = exchangeAndVerify(registration, pending, code, state, config);
         String nonce = pending.getAttribute(OidcParameterNames.NONCE);
@@ -167,13 +181,9 @@ class OidcLoginService {
                                   String state, OidcConfig config) {
         OAuth2AuthorizationResponse authorizationResponse = OAuth2AuthorizationResponse.success(code)
                 .redirectUri(pending.getRedirectUri()).state(state).build();
-        RestClientAuthorizationCodeTokenResponseClient client = new RestClientAuthorizationCodeTokenResponseClient();
-        client.setRestClient(RestClient.builder().requestFactory(discovery.requestFactory())
-                .configureMessageConverters(c -> c.addCustomConverter(new OAuth2AccessTokenResponseHttpMessageConverter()))
-                .defaultStatusHandler(new OAuth2ErrorResponseErrorHandler()).build());
         OAuth2AccessTokenResponse tokens;
         try {
-            tokens = client.getTokenResponse(new OAuth2AuthorizationCodeGrantRequest(registration,
+            tokens = tokenClient.getTokenResponse(new OAuth2AuthorizationCodeGrantRequest(registration,
                     new OAuth2AuthorizationExchange(pending, authorizationResponse)));
         } catch (OAuth2AuthorizationException | RestClientException | IllegalArgumentException e) {
             throw failure("TOKEN_EXCHANGE_FAILED", "The authorization code could not be exchanged", e);
@@ -188,6 +198,33 @@ class OidcLoginService {
         } catch (JwtException e) {
             throw failure("ID_TOKEN_INVALID", "The ID token could not be verified", e);
         }
+    }
+
+    private static RestClientAuthorizationCodeTokenResponseClient tokenClient(OidcDiscoveryClient discovery) {
+        RestClientAuthorizationCodeTokenResponseClient client = new RestClientAuthorizationCodeTokenResponseClient();
+        client.setRestClient(RestClient.builder().requestFactory(discovery.requestFactory())
+                .configureMessageConverters(c -> c.addCustomConverter(new OAuth2AccessTokenResponseHttpMessageConverter()))
+                .defaultStatusHandler(new OAuth2ErrorResponseErrorHandler()).build());
+        return client;
+    }
+
+    private ClientRegistration registration(OidcConfig config, OidcDiscoveryClient.Metadata metadata,
+                                            String redirectUri) {
+        RegistrationKey key = new RegistrationKey(config, metadata, redirectUri);
+        CachedRegistration cached = cachedRegistration;
+        if (cached != null && cached.key().equals(key)) {
+            return cached.registration();
+        }
+        ClientRegistration registration = ClientRegistration.withRegistrationId("oidc")
+                .clientId(config.clientId()).clientSecret(config.clientSecret())
+                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .redirectUri(redirectUri)
+                .scope(config.scopes().split("\\s+"))
+                .authorizationUri(metadata.authorizationEndpoint()).tokenUri(metadata.tokenEndpoint())
+                .jwkSetUri(metadata.jwksUri()).issuerUri(config.issuer()).userNameAttributeName("sub").build();
+        cachedRegistration = new CachedRegistration(key, registration);
+        return registration;
     }
 
     /**
@@ -206,6 +243,18 @@ class OidcLoginService {
     }
 
     private JwtDecoder decoder(ClientRegistration registration, OidcConfig config) {
+        DecoderKey key = new DecoderKey(registration.getProviderDetails().getJwkSetUri(), config.issuer(),
+                config.clientId());
+        CachedDecoder cached = cachedDecoder;
+        if (cached != null && cached.key().equals(key)) {
+            return cached.decoder();
+        }
+        JwtDecoder built = buildDecoder(registration, config);
+        cachedDecoder = new CachedDecoder(key, built);
+        return built;
+    }
+
+    private JwtDecoder buildDecoder(ClientRegistration registration, OidcConfig config) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder
                 .withJwkSetUri(registration.getProviderDetails().getJwkSetUri())
                 .jwsAlgorithms(algs -> {

@@ -34,6 +34,7 @@ final class StubOidcProvider implements AutoCloseable {
     private final HttpServer server;
     private final RSAKey key;
     private final Map<String, Grant> grants = new ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicInteger discoveryHits = new java.util.concurrent.atomic.AtomicInteger();
     private volatile boolean discoveryBroken;
     private volatile String issuerOverride;
     private volatile String audienceOverride;
@@ -130,7 +131,12 @@ final class StubOidcProvider implements AutoCloseable {
         grants.put(code, new Grant(codeChallenge, nonceInToken, claims));
     }
 
+    int discoveryHits() {
+        return discoveryHits.get();
+    }
+
     private void discovery(HttpExchange ex) throws IOException {
+        discoveryHits.incrementAndGet();
         if (discoveryBroken) {
             respond(ex, 500, "{}");
             return;

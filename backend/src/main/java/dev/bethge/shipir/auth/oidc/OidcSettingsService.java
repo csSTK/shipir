@@ -41,16 +41,18 @@ class OidcSettingsService implements LocalLoginPolicy {
     private final UserRepository users;
     private final SecretCipher cipher;
     private final OidcDiscoveryClient discovery;
+    private final OidcDiscoveryCache discoveryCache;
     private final OidcProperties properties;
     private final JsonMapper mapper;
     private final Clock clock;
 
     OidcSettingsService(OidcSettingsRepository settings, UserRepository users, SecretCipher cipher,
-                        OidcDiscoveryClient discovery, OidcProperties properties, JsonMapper mapper, Clock clock) {
+                        OidcDiscoveryClient discovery, OidcDiscoveryCache discoveryCache, OidcProperties properties, JsonMapper mapper, Clock clock) {
         this.settings = settings;
         this.users = users;
         this.cipher = cipher;
         this.discovery = discovery;
+        this.discoveryCache = discoveryCache;
         this.properties = properties;
         this.mapper = mapper;
         this.clock = clock;
@@ -95,6 +97,7 @@ class OidcSettingsService implements LocalLoginPolicy {
                     "Password login can only be switched off while single sign-on is fully configured");
         }
         settings.saveAndFlush(s);
+        discoveryCache.invalidate();
         return toResponse(s, http);
     }
 

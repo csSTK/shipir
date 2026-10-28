@@ -92,4 +92,21 @@ class LoginThrottleTest {
 
         assertThat(throttle.admit(LoginThrottle.Scope.PASSWORD, "alice", "10.0.0.1").lockoutStarted()).isFalse();
     }
+
+    @Test
+    void addressOnlyAdmissionCountsTheAddressAndLeavesTheUsernameKeysAlone() {
+        LoginThrottle.Scope scope = LoginThrottle.Scope.OIDC_AUTHORIZE;
+        // 20 per address (4 x 5), not 5: one address may start several sign-ins.
+        for (int i = 0; i < 19; i++) {
+            assertThat(throttle.admitAddress(scope, "10.0.0.1").admitted()).isTrue();
+        }
+        LoginThrottle.Admission last = throttle.admitAddress(scope, "10.0.0.1");
+        assertThat(last.admitted()).isTrue();
+        assertThat(last.lockoutStarted()).isTrue();
+
+        assertThat(throttle.admitAddress(scope, "10.0.0.1").admitted()).isFalse();
+        assertThat(throttle.admitAddress(scope, "10.0.0.1").lockedFor()).isPresent();
+        assertThat(throttle.admitAddress(scope, "10.0.0.2").admitted()).isTrue();
+        assertThat(throttle.admit(LoginThrottle.Scope.LOGIN, "alice", "10.0.0.1").admitted()).isTrue();
+    }
 }

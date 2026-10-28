@@ -25,8 +25,8 @@ import java.util.Optional;
 @Component
 public class LoginThrottle {
 
-    /** PASSWORD: password change of a signed-in user (guards the current-password check). WEBHOOK: public redeploy webhook, counted per client address on unknown tokens (see {@code DeploymentWebhookService}). BEARER: failed {@code Authorization: Bearer} credentials, counted per client address (see {@code BearerAttemptGuard}). */
-    public enum Scope { LOGIN, RESET, WEBHOOK, PASSWORD, BEARER }
+    /** PASSWORD: password change of a signed-in user (guards the current-password check). WEBHOOK: public redeploy webhook, counted per client address on unknown tokens (see {@code DeploymentWebhookService}). BEARER: failed {@code Authorization: Bearer} credentials, counted per client address (see {@code BearerAttemptGuard}). OIDC_AUTHORIZE: every start of the public single sign-on flow, counted per client address only via {@link #admitAddress}. */
+    public enum Scope { LOGIN, RESET, WEBHOOK, PASSWORD, BEARER, OIDC_AUTHORIZE }
 
     /**
      * Result of {@link #admit}: {@code lockedFor} is set if the attempt was refused; {@code lockoutStarted} if
@@ -85,6 +85,24 @@ public class LoginThrottle {
             return new Admission(locked, false);
         }
         return new Admission(Optional.empty(), recordFailure(scope, username, address));
+    }
+
+    /**
+     * Like {@link #admit} for requests that have no username (public endpoints): only the address key is checked and
+     * counted, with the address limit ({@value #ADDRESS_FACTOR} times the username limit). Every admitted request
+     * counts; nothing is taken back.
+     */
+    public synchronized Admission admitAddress(Scope scope, String address) {
+        String key = addressKey(scope, address);
+        Instant now = clock.instant();
+        Entry entry = entries.get(key);
+        if (entry != null && entry.lockedUntil != null && entry.lockedUntil.isAfter(now)) {
+            return new Admission(Optional.of(Duration.between(now, entry.lockedUntil)), false);
+        }
+        if (entries.size() > PURGE_THRESHOLD) {
+            purge(now);
+        }
+        return new Admission(Optional.empty(), fail(key, settings.maxAttempts() * ADDRESS_FACTOR, now));
     }
 
     /** Takes back the provisional failure of an admitted attempt that was neither a success nor a failure. */

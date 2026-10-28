@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OidcRedirectTest {
 
     private static OidcProperties props(String publicBaseUrl) {
-        return new OidcProperties(false, true, publicBaseUrl, Duration.ofSeconds(5));
+        return new OidcProperties(false, true, publicBaseUrl, Duration.ofSeconds(5), Duration.ofMinutes(10));
     }
 
     @Test

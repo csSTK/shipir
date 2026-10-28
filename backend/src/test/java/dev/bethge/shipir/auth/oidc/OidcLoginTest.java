@@ -34,7 +34,7 @@ class OidcLoginTest extends OidcTestBase {
 
     @Test
     void authorizeIsRefusedWhenNotConfigured() throws Exception {
-        MvcResult r = mvc.perform(get("/api/auth/oidc/authorize")).andReturn();
+        MvcResult r = authorize().andReturn();
         assertThat(r.getResponse().getStatus()).isEqualTo(302);
         assertThat(r.getResponse().getHeader("Location")).isEqualTo("/?oidc_error=OIDC_NOT_CONFIGURED");
     }
@@ -42,7 +42,7 @@ class OidcLoginTest extends OidcTestBase {
     @Test
     void authorizeRedirectsToProviderWithPkceStateAndNonce() throws Exception {
         configure(true, true);
-        MvcResult r = mvc.perform(get("/api/auth/oidc/authorize")).andReturn();
+        MvcResult r = authorize().andReturn();
         assertThat(r.getResponse().getStatus()).isEqualTo(302);
         String location = r.getResponse().getHeader("Location");
         assertThat(location).startsWith(provider.issuer() + "/authorize?");
@@ -79,7 +79,7 @@ class OidcLoginTest extends OidcTestBase {
     @Test
     void sessionIdIsRotatedAtLogin() throws Exception {
         configure(true, true);
-        MvcResult authorize = mvc.perform(get("/api/auth/oidc/authorize")).andReturn();
+        MvcResult authorize = authorize().andReturn();
         String before = authorize.getRequest().getSession(false).getId();
         Map<String, String> q = query(authorize.getResponse().getHeader("Location"));
         provider.grant("c-rot", q.get("code_challenge"), q.get("nonce"), claims("sub-rot", "rot", "ops"));
@@ -228,7 +228,7 @@ class OidcLoginTest extends OidcTestBase {
     @Test
     void wrongStateIsRejectedAndSessionNotAuthenticated() throws Exception {
         configure(true, true);
-        MvcResult authorize = mvc.perform(get("/api/auth/oidc/authorize")).andReturn();
+        MvcResult authorize = authorize().andReturn();
         Map<String, String> q = query(authorize.getResponse().getHeader("Location"));
         provider.grant("c-bad-state", q.get("code_challenge"), q.get("nonce"), claims("sub-11", "jo", "ops"));
         MockHttpSession session = (MockHttpSession) authorize.getRequest().getSession(false);
@@ -260,7 +260,7 @@ class OidcLoginTest extends OidcTestBase {
     @Test
     void wrongNonceInIdTokenIsRejected() throws Exception {
         configure(true, true);
-        MvcResult authorize = mvc.perform(get("/api/auth/oidc/authorize")).andReturn();
+        MvcResult authorize = authorize().andReturn();
         Map<String, String> q = query(authorize.getResponse().getHeader("Location"));
         provider.grant("c-nonce", q.get("code_challenge"), "some-other-nonce", claims("sub-13", "lee", "ops"));
         MvcResult cb = mvc.perform(get("/api/auth/oidc/callback").param("code", "c-nonce").param("state", q.get("state"))
@@ -283,7 +283,7 @@ class OidcLoginTest extends OidcTestBase {
     @Test
     void wrongPkceVerifierFailsTokenExchange() throws Exception {
         configure(true, true);
-        MvcResult authorize = mvc.perform(get("/api/auth/oidc/authorize")).andReturn();
+        MvcResult authorize = authorize().andReturn();
         Map<String, String> q = query(authorize.getResponse().getHeader("Location"));
         provider.grant("c-pkce", "challenge-for-another-verifier", q.get("nonce"), claims("sub-15", "ned", "ops"));
         MvcResult cb = mvc.perform(get("/api/auth/oidc/callback").param("code", "c-pkce").param("state", q.get("state"))
@@ -294,7 +294,7 @@ class OidcLoginTest extends OidcTestBase {
     @Test
     void providerErrorIsReportedWithoutLeakingItsText() throws Exception {
         configure(true, true);
-        MvcResult authorize = mvc.perform(get("/api/auth/oidc/authorize")).andReturn();
+        MvcResult authorize = authorize().andReturn();
         Map<String, String> q = query(authorize.getResponse().getHeader("Location"));
         MvcResult cb = mvc.perform(get("/api/auth/oidc/callback").param("error", "access_denied")
                 .param("state", q.get("state"))
@@ -307,7 +307,7 @@ class OidcLoginTest extends OidcTestBase {
     void unreachableProviderIsReported() throws Exception {
         configure(true, true);
         provider.breakDiscovery();
-        MvcResult r = mvc.perform(get("/api/auth/oidc/authorize")).andReturn();
+        MvcResult r = authorize().andReturn();
         assertThat(r.getResponse().getHeader("Location")).isEqualTo("/?oidc_error=PROVIDER_UNREACHABLE");
     }
 
@@ -359,7 +359,7 @@ class OidcLoginTest extends OidcTestBase {
     void discoveryDocumentWithOtherIssuerIsRejected() throws Exception {
         configure(true, true);
         provider.advertiseIssuer("http://evil.example.com");
-        MvcResult r = mvc.perform(get("/api/auth/oidc/authorize")).andReturn();
+        MvcResult r = authorize().andReturn();
         assertThat(r.getResponse().getHeader("Location")).isEqualTo("/?oidc_error=PROVIDER_INVALID");
     }
 

@@ -12,10 +12,12 @@ import java.time.Duration;
  * their password, so a broken provider can never lock everybody out.
  * {@code publicBaseUrl}: externally visible origin (e.g. {@code https://shipir.example.com}) used for the redirect
  * URI; empty = the origin of the request as the backend sees it (set it behind a reverse proxy).
+ * {@code discoveryCacheTtl}: how long a fetched discovery document is reused by sign-in (cleared when the settings are saved).
  */
 @ConfigurationProperties("shipir.oidc")
 record OidcProperties(@DefaultValue("false") boolean allowInsecureHttp,
                       @DefaultValue("true") boolean breakGlassLocalAdmin,
                       @DefaultValue("") String publicBaseUrl,
-                      @DefaultValue("5s") Duration timeout) {
+                      @DefaultValue("5s") Duration timeout,
+                      @DefaultValue("10m") Duration discoveryCacheTtl) {
 }

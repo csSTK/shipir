@@ -56,6 +56,8 @@ abstract class OidcTestBase {
     UserRepository users;
     @Autowired
     PasswordEncoder encoder;
+    @Autowired
+    OidcDiscoveryCache discoveryCacheForReset;
 
     @BeforeAll
     static void startProvider() throws Exception {
@@ -70,6 +72,7 @@ abstract class OidcTestBase {
     @BeforeEach
     void resetState() {
         provider.reset();
+        discoveryCacheForReset.invalidate();
         jdbc.update("DELETE FROM audit_log");
         jdbc.update("DELETE FROM users WHERE external_issuer IS NOT NULL");
         jdbc.update("UPDATE oidc_settings SET issuer_url = NULL, client_id = NULL, client_secret_ciphertext = NULL, "
@@ -129,6 +132,18 @@ abstract class OidcTestBase {
         assertThat(result.getResponse().getStatus()).as(result.getResponse().getContentAsString()).isEqualTo(200);
     }
 
+    private static final java.util.concurrent.atomic.AtomicInteger NEXT_ADDRESS =
+            new java.util.concurrent.atomic.AtomicInteger();
+
+    /** GET authorize from a fresh client address, so the per-address rate limit does not couple unrelated tests. */
+    org.springframework.test.web.servlet.ResultActions authorize() throws Exception {
+        int n = NEXT_ADDRESS.incrementAndGet();
+        return mvc.perform(get("/api/auth/oidc/authorize").with(req -> {
+            req.setRemoteAddr("10.9." + (n / 250) + "." + (n % 250 + 1));
+            return req;
+        }));
+    }
+
     static Map<String, String> query(String location) {
         Map<String, String> q = new HashMap<>();
         UriComponentsBuilder.fromUri(URI.create(location)).build().getQueryParams()
@@ -155,7 +170,7 @@ abstract class OidcTestBase {
 
     /** Authorize, let the stub issue a code for {@code claims}, call back with the right state. */
     Flow signIn(Map<String, Object> claims) throws Exception {
-        MvcResult authorize = mvc.perform(get("/api/auth/oidc/authorize")).andReturn();
+        MvcResult authorize = authorize().andReturn();
         assertThat(authorize.getResponse().getStatus()).isEqualTo(302);
         Map<String, String> q = query(authorize.getResponse().getHeader("Location"));
         String code = "code-" + UUID.randomUUID();
