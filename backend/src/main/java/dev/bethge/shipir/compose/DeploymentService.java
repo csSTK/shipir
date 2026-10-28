@@ -596,6 +596,14 @@ public class DeploymentService {
         }
     }
 
+    /**
+     * Host id of the deployment, empty when it does not exist or the signed-in user may not see it (non-visible
+     * behaves as not found). For callers that only need a visibility-checked id, e.g. the assistant's view context.
+     */
+    public java.util.Optional<UUID> visibleHostId(UUID id) {
+        return deployments.findById(id).filter(d -> access.canView(d.getHostId(), d.getId())).map(Deployment::getHostId);
+    }
+
     /** 404 HOST_NOT_FOUND unless the signed-in user may see the host (system callers always may). */
     public void requireHostView(UUID hostId) {
         if (!access.canView(hostId)) {

@@ -16,9 +16,8 @@ import dev.bethge.shipir.ai.tools.ProposalResult;
 import dev.bethge.shipir.ai.tools.ToolContext;
 import dev.bethge.shipir.ai.tools.ToolResult;
 import dev.bethge.shipir.common.security.SecretCipher;
-import dev.bethge.shipir.compose.Deployment;
-import dev.bethge.shipir.compose.DeploymentRepository;
-import dev.bethge.shipir.host.DockerHostRepository;
+import dev.bethge.shipir.compose.DeploymentService;
+import dev.bethge.shipir.host.HostService;
 import dev.bethge.shipir.permission.CurrentAccess;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -103,8 +102,8 @@ public class ChatOrchestrator {
     private final Map<UUID, UUID> running = new ConcurrentHashMap<>();
     private final ChatRateLimiter rateLimiter;
     private final CurrentAccess access;
-    private final DockerHostRepository hosts;
-    private final DeploymentRepository deployments;
+    private final HostService hosts;
+    private final DeploymentService deployments;
     /** Prompt block per session with an active or paused run; resolved in the request thread, replaced on every send. */
     private final Map<UUID, String> viewBlocks = new ConcurrentHashMap<>();
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
@@ -114,7 +113,7 @@ public class ChatOrchestrator {
     ChatOrchestrator(ChatSessionService sessions, AiSettingsService settings, AiToolRegistry tools, LlmClients llm,
                      ChatEventPublisher events, ObjectMapper mapper, ChatProperties properties,
                      SecretCipher cipher, ChatRateLimiter rateLimiter, CurrentAccess access,
-                     DockerHostRepository hosts, DeploymentRepository deployments) {
+                     HostService hosts, DeploymentService deployments) {
         this.access = access;
         this.hosts = hosts;
         this.deployments = deployments;
@@ -576,20 +575,15 @@ public class ChatOrchestrator {
         }
         UUID hostId = parseUuid(view.hostId());
         UUID deploymentId = parseUuid(view.deploymentId());
-        Deployment deployment = deploymentId == null ? null : deployments.findById(deploymentId).orElse(null);
-        if (deployment != null && hostId != null && !deployment.getHostId().equals(hostId)) {
-            deployment = null;
-        }
-        if (deployment != null && !access.canView(deployment.getHostId(), deployment.getId())) {
-            deployment = null;
-        }
-        boolean hostVisible = hostId != null && hosts.existsById(hostId) && access.canView(hostId);
+        UUID visibleDeployment = deploymentId == null ? null : deployments.visibleHostId(deploymentId)
+                .filter(owner -> hostId == null || owner.equals(hostId)).map(owner -> deploymentId).orElse(null);
+        boolean hostVisible = hostId != null && hosts.isVisible(hostId);
         StringBuilder sb = new StringBuilder(VIEW_OPEN).append(" page=").append(view.page().name());
         if (hostVisible) {
             sb.append(" hostId=").append(hostId);
         }
-        if (deployment != null) {
-            sb.append(" deploymentId=").append(deployment.getId());
+        if (visibleDeployment != null) {
+            sb.append(" deploymentId=").append(visibleDeployment);
         }
         if (hostVisible && view.containerId() != null && access.hostFullyVisible(hostId)) {
             sb.append(" containerId=").append(view.containerId().toLowerCase(java.util.Locale.ROOT));

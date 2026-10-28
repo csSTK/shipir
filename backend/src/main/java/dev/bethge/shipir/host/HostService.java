@@ -65,6 +65,12 @@ public class HostService {
         this.tx = new TransactionTemplate(transactions);
     }
 
+    /** True when the host exists and the signed-in user may see it (non-visible behaves as not found). */
+    @Transactional(readOnly = true)
+    public boolean isVisible(UUID id) {
+        return hosts.existsById(id) && access.canView(id);
+    }
+
     /** Hosts the signed-in user may see (all for ADMIN and system callers). */
     @Transactional(readOnly = true)
     public List<HostResponse> list() {
