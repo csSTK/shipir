@@ -153,7 +153,7 @@ class ReadToolsConfig {
         for (String key : List.of("hostId", "deploymentId", "userId", "teamId")) {
             props.put(key, UUID_PROP);
         }
-        return read("list_access_grants", "Access grants. Pass exactly one of hostId, deploymentId, userId, teamId.",
+        return read("list_access_grants", "Access grants; pass exactly one id.",
                 schema(props), Role.ADMIN, (a, c) -> {
                     if (props.keySet().stream().filter(a::containsKey).count() != 1) {
                         throw new ToolArgumentException("pass exactly one of hostId, deploymentId, userId, teamId");
