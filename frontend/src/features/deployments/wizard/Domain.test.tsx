@@ -97,7 +97,15 @@ describe('wizard domain section', () => {
     expect(await within(group()).findByText(/No reverse proxy detected/)).toBeInTheDocument()
     fireEvent.click(within(group()).getByRole('button', { name: 'Copy Traefik template' }))
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('services:\n  traefik: {}\n'))
-    expect(await within(group()).findByText('Copied')).toBeInTheDocument()
+    const copied = await within(group()).findByText('Copied')
+    expect(copied.closest('[role="status"]')).not.toBeNull()
+  })
+
+  it('explains that the Traefik template needs ACME_EMAIL and that only an ADMIN may deploy it', async () => {
+    serve({ visible: true, proxy: null, container: null, network: null })
+    open()
+    const hint = await within(group()).findByText(/ACME_EMAIL/)
+    expect(hint).toHaveTextContent(/ADMIN/)
   })
 
   it('says detection is unavailable instead of "no proxy" when the host is not fully visible', async () => {
@@ -122,6 +130,7 @@ describe('wizard domain section', () => {
     open()
     fireEvent.click(await within(group()).findByRole('button', { name: 'Copy Traefik template' }))
     expect(await within(group()).findByText('Could not copy the template.')).toBeInTheDocument()
+    expect(within(group()).getByText('Could not copy the template.').closest('[role="status"]')).not.toBeNull()
   })
 
   it('keeps a proxy the user picked before typing the host', async () => {

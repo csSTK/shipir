@@ -145,6 +145,11 @@ export interface WizardProblems {
   general: string[]
 }
 
+/** Traefik router and service name derived from a domain: dots become hyphens. Mirrors the backend's `routerId`. */
+export function routerName(host: string): string {
+  return host.replace(/\./g, '-')
+}
+
 export function validateWizard(state: WizardState): WizardProblems {
   const fields = new Map<string, string>()
   const general: string[] = []
@@ -155,6 +160,8 @@ export function validateWizard(state: WizardState): WizardProblems {
   const declaredVolumes = new Set(state.volumes.map((v) => v.name.trim()))
   const names = new Set<string>()
   const hosts = new Set<string>()
+  // Traefik names its router after the host; the backend (ComposeGeneratorService.routerId) does the same.
+  const traefikRouters = new Map<string, string>()
 
   if (state.services.length === 0) general.push(i18n.t('deployments:model.addAtLeastOneService'))
 
@@ -170,7 +177,9 @@ export function validateWizard(state: WizardState): WizardProblems {
     if (host !== '') {
       if (!DOMAIN_HOST.test(host)) set(`${p}.domain.host`, i18n.t('deployments:model.enterALowercaseDomainName'))
       else if (hosts.has(host)) set(`${p}.domain.host`, i18n.t('deployments:model.thisDomainIsAlreadyUsed'))
+      else if (d.proxy === 'TRAEFIK' && traefikRouters.has(routerName(host))) set(`${p}.domain.host`, i18n.t('deployments:model.traefikRouterNameTaken'))
       hosts.add(host)
+      if (d.proxy === 'TRAEFIK' && DOMAIN_HOST.test(host) && !traefikRouters.has(routerName(host))) traefikRouters.set(routerName(host), host)
       const port = validatePort(d.port, true)
       if (port) set(`${p}.domain.port`, port)
       const network = d.network.trim()

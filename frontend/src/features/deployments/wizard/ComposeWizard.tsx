@@ -164,11 +164,15 @@ function DomainSection({
         detected && (
           <div className="wz-detect">
             <p className="wz-hint" role="status">{t('ComposeWizard.noReverseProxyDetected')}</p>
+            <p className="wz-hint">{t('ComposeWizard.traefikTemplateHint')}</p>
             <Button variant="secondary" onClick={copyTemplate} disabled={template.isPending}>
               {t('ComposeWizard.copyTraefikTemplate')}
             </Button>
-            {copy === 'copied' && <small className="wz-detect__ok">{t('ComposeWizard.copied')}</small>}
-            {copy === 'failed' && <small className="wz-detect__fail">{t('ComposeWizard.couldNotCopyTheTemplate')}</small>}
+            {/* The live region is in the DOM before the message, so screen readers announce the change. */}
+            <span role="status">
+              {copy === 'copied' && <small className="wz-detect__ok">{t('ComposeWizard.copied')}</small>}
+              {copy === 'failed' && <small className="wz-detect__fail">{t('ComposeWizard.couldNotCopyTheTemplate')}</small>}
+            </span>
           </div>
         )
       )}

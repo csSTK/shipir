@@ -66,6 +66,23 @@ test('without a proxy the Traefik template is offered, invalid domains are caugh
   await expect(page.getByText('Enter a lowercase domain name such as app.example.com.')).toBeVisible()
 })
 
+test('two Traefik domains that Traefik would name the same router are flagged before preview', async ({ page, api }) => {
+  mockCommon(api, { visible: true, proxy: 'TRAEFIK', container: 'traefik', network: 'proxy' })
+  await openWizard(page)
+
+  await page.getByLabel('Service 1 name').fill('web')
+  await page.getByLabel('Service 1 image').fill('nginx:1.27')
+  await page.getByLabel('Service 1 domain host').fill('a.b-c.com')
+  await page.getByLabel('Service 1 domain port').fill('80')
+  await page.getByRole('button', { name: 'Add service' }).click()
+  await page.getByLabel('Service 2 name').fill('api')
+  await page.getByLabel('Service 2 image').fill('nginx:1.27')
+  await page.getByLabel('Service 2 domain host').fill('a-b.c.com')
+  await page.getByLabel('Service 2 domain port').fill('80')
+  await page.getByRole('button', { name: 'Preview YAML' }).click()
+  await expect(page.getByText('Traefik gives this domain the same router name as another service', { exact: false })).toBeVisible()
+})
+
 test('a host that is not fully visible gets a neutral hint, not "no reverse proxy"', async ({ page, api }) => {
   mockCommon(api, { visible: false, proxy: null, container: null, network: null })
   await openWizard(page)

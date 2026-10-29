@@ -200,6 +200,20 @@ describe('service domain', () => {
     expect(p.fields.get('services.1.domain.host')).toMatch(/another service/)
     expect(p.fields.has('services.0.domain.host')).toBe(false)
   })
+  it('flags two Traefik domains that get the same router name (dots become hyphens, as in the backend)', () => {
+    // a.b-c.com and a-b.c.com both become router "a-b-c-com"; Traefik would refuse the second one.
+    const p = validateWizard(state([service({ domain: domain({ host: 'a.b-c.com' }) }), service({ name: 'api', domain: domain({ host: 'a-b.c.com' }) })]))
+    expect(p.fields.get('services.1.domain.host')).toMatch(/router name/)
+    expect(p.fields.has('services.0.domain.host')).toBe(false)
+  })
+  it('does not flag a router-name clash when one of the domains is behind Caddy', () => {
+    const p = validateWizard(state([service({ domain: domain({ host: 'a.b-c.com' }) }), service({ name: 'api', domain: domain({ host: 'a-b.c.com', proxy: 'CADDY' }) })]))
+    expect(p.fields.size).toBe(0)
+  })
+  it('accepts Traefik domains with different router names', () => {
+    const p = validateWizard(state([service({ domain: domain({ host: 'app.example.com' }) }), service({ name: 'api', domain: domain({ host: 'app.example.org' }) })]))
+    expect(p.fields.size).toBe(0)
+  })
   it('round-trips through specToState', () => {
     const spec = buildSpec(state([service({ domain: domain({ network: 'proxy' }) })]))
     expect(buildSpec(specToState(spec)).services[0].domain).toEqual(spec.services[0].domain)
