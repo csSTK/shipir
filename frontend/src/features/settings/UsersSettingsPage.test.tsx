@@ -58,7 +58,7 @@ describe('UsersSettingsPage', () => {
   })
 
   it('disables the password reset for SSO users and keeps it for local users', async () => {
-    const sso: ManagedUser = { ...base, id: 'u4', username: 'sam', role: 'OPERATOR', externalIdentity: true }
+    const sso: ManagedUser = { ...base, id: 'u4', username: 'sam', role: 'OPERATOR', disabled: false, externalIdentity: true }
     renderPage(undefined, [me, anna, sso])
     expect(await screen.findByText('sam')).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Password managed by SSO for sam' }) as HTMLButtonElement).disabled).toBe(true)
