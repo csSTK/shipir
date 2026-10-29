@@ -128,8 +128,21 @@ test('downloads the log with the selected tail and timestamps', async ({ page, a
   await page.getByLabel('Show last').selectOption('1000')
   await page.getByLabel('Timestamps').check()
   await expect(page.getByText(/Downloads are capped/)).toBeVisible()
-  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: /Download/ }).click()])
-  expect(download.url()).toContain('/api/hosts/a/containers/c1/logs/download?tail=1000&timestamps=true')
+  const [request, download] = await Promise.all([
+    page.waitForRequest((r) => r.url().includes('/api/hosts/a/containers/c1/logs/download?tail=1000&timestamps=true')),
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: /Download/ }).click(),
+  ])
+  expect(request.method()).toBe('GET')
+  expect(download.suggestedFilename()).toBe('container-logs.txt')
+})
+
+test('shows an inline message when downloads are throttled', async ({ page, api }) => {
+  api.mock('GET', '/api/hosts/a/containers/c1/logs/download', { status: 429, body: { code: 'TOO_MANY_DOWNLOADS' } })
+  await mockBroker(page, () => {})
+  await page.goto('/environments/a/containers/c1/logs')
+  await page.getByRole('button', { name: /Download/ }).click()
+  await expect(page.getByRole('alert')).toContainText(/too many downloads/i)
 })
 
 test('explains a refused log stream', async ({ page }) => {

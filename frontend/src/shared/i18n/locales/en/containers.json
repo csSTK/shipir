@@ -238,6 +238,8 @@
   "LogOptions.download": "Download",
   "LogOptions.downloadsAreCappedInSize": "Downloads are capped in size; if the limit is reached the file ends with a note.",
   "LogOptions.all": "All",
+  "LogOptions.tooManyDownloads": "Too many downloads are running right now. Try again in a moment.",
+  "LogOptions.downloadFailed": "The download failed. Try again.",
   "LogView.searchAndFilter": "Search and filter",
   "LogView.searchLogs": "Search logs",
   "LogView.noMatches": "No matches",

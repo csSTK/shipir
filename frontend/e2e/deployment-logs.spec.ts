@@ -77,8 +77,12 @@ test('shows the merged stream, toggles a service and downloads one container', a
   await expect(log.locator('mark')).toHaveCount(1)
 
   await page.getByLabel('Download container').selectOption('c2')
-  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: /Download/ }).click()])
-  expect(download.url()).toContain('/api/hosts/a/containers/c2/logs/download?tail=100&timestamps=false')
+  const [request] = await Promise.all([
+    page.waitForRequest((r) => r.url().includes('/api/hosts/a/containers/c2/logs/download?tail=100&timestamps=false')),
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: /Download/ }).click(),
+  ])
+  expect(request.method()).toBe('GET')
 })
 
 test('shows project-level banners without ending the stream', async ({ page }) => {

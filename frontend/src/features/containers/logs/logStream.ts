@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { subscribeToTopic, type ConnectionState } from '../../../shared/realtime/stomp.ts'
+import { stripAnsi } from './ansi.ts'
 
 export type TailOption = '100' | '200' | '500' | '1000' | 'all'
 export type LogEnd = { status: 'ENDED' } | { status: 'ERROR'; code: string }
@@ -65,7 +66,7 @@ function applyFrame(prev: LogStreamState, frame: Frame, combined: boolean): LogS
     const line: LogLine = {
       seq: frame.seq,
       stream: frame.stream === 'STDERR' ? 'STDERR' : 'STDOUT',
-      text: frame.line ?? '',
+      text: stripAnsi(frame.line ?? ''),
       timestamp: frame.timestamp,
     }
     if (combined) {

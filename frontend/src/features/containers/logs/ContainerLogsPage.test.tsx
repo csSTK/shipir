@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -26,7 +26,11 @@ function renderPage() {
   )
 }
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
 beforeEach(() => {
   subscribe.mockReset()
   unsubscribe.mockReset()
@@ -134,13 +138,34 @@ describe('ContainerLogsPage', () => {
     expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull()
   })
 
-  it('links the download to the endpoint with the current tail and timestamps and hints at the cap', () => {
+  it('downloads through fetch with the current tail and timestamps and hints at the cap', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('x', { status: 200, headers: { 'Content-Disposition': 'attachment; filename="web-logs.txt"' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    URL.createObjectURL = vi.fn(() => 'blob:x')
+    URL.revokeObjectURL = vi.fn()
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     renderPage()
-    expect(screen.getByRole('link', { name: /Download/ })).toHaveAttribute('href', '/api/hosts/h1/containers/c1/logs/download?tail=200&timestamps=false')
     fireEvent.change(screen.getByLabelText('Show last'), { target: { value: 'all' } })
     fireEvent.click(screen.getByLabelText('Timestamps'))
-    expect(screen.getByRole('link', { name: /Download/ })).toHaveAttribute('href', '/api/hosts/h1/containers/c1/logs/download?tail=all&timestamps=true')
     expect(screen.getByText(/capped/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Download/ }))
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled())
+    expect(fetchMock).toHaveBeenCalledWith('/api/hosts/h1/containers/c1/logs/download?tail=all&timestamps=true', expect.anything())
+  })
+
+  it('shows an inline message when the download is throttled (429 TOO_MANY_DOWNLOADS)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 'TOO_MANY_DOWNLOADS' }), { status: 429 })))
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: /Download/ }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/too many downloads/i)
+  })
+
+  it('strips ANSI escape codes and renders HTML as text', () => {
+    renderPage()
+    send({ seq: 1, type: 'LINE', stream: 'STDOUT', line: '\u001b[31mred\u001b[0m <b>bold</b>' })
+    const row = screen.getByRole('log').children[0]
+    expect(row).toHaveTextContent('red <b>bold</b>')
+    expect(row.querySelector('b')).toBeNull()
   })
 
   it('says when the oldest lines were dropped from the buffer', () => {

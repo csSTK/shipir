@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TopicHandlers } from '../../../shared/realtime/stomp.ts'
@@ -32,7 +32,11 @@ function open() {
   fireEvent.click(screen.getByRole('button', { name: 'Show logs' }))
 }
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
 beforeEach(() => {
   subscribe.mockReset()
   unsubscribe.mockReset()
@@ -116,15 +120,19 @@ describe('DeploymentLogsPanel', () => {
     }
   })
 
-  it('downloads one container chosen in the select with the current options', () => {
+  it('downloads one container chosen in the select with the current options', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('x', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    URL.createObjectURL = vi.fn(() => 'blob:x')
+    URL.revokeObjectURL = vi.fn()
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     open()
-    const link = screen.getByRole('link', { name: /Download/ })
-    expect(link).toHaveAttribute('href', '/api/hosts/h1/containers/c1/logs/download?tail=100&timestamps=false')
     fireEvent.change(screen.getByLabelText('Download container'), { target: { value: 'c2' } })
     fireEvent.change(screen.getByLabelText('Show last'), { target: { value: 'all' } })
     fireEvent.click(screen.getByLabelText('Timestamps'))
-    expect(screen.getByRole('link', { name: /Download/ })).toHaveAttribute('href', '/api/hosts/h1/containers/c2/logs/download?tail=all&timestamps=true')
     expect(screen.getByText(/capped/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Download/ }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/hosts/h1/containers/c2/logs/download?tail=all&timestamps=true', expect.anything()))
   })
 
   it('offers only the containers of this project for download', () => {
