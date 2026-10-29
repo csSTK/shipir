@@ -21,7 +21,6 @@ const templates = [
     id: 'nginx',
     name: 'Nginx',
     description: 'Web server',
-    logo: 'nginx',
     env: [],
     spec: { services: [{ name: 'web', image: 'nginx:1.27', ports: [{ host: 8080, container: 80, protocol: 'tcp' }] }], networks: [], volumes: [] },
   },
@@ -29,7 +28,6 @@ const templates = [
     id: 'wordpress',
     name: 'WordPress',
     description: 'Blog engine with MySQL',
-    logo: 'wordpress',
     env: [{ key: 'DB_PASSWORD', description: 'Database password', secret: true }],
     spec: {
       services: [

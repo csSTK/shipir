@@ -18,12 +18,11 @@ const BASE = '/api/hosts/a/managed-deployments'
 const yaml = 'services:\n  wp:\n    image: wordpress:6\n'
 const created = { id: 's1', name: 'wordpress', status: 'STOPPED', source: 'FILE', lastDeployedAt: null, createdAt: '2026-10-01T10:00:00Z', yaml, envKeys: ['DB_PASSWORD'] }
 const templates = [
-  { id: 'nginx', name: 'Nginx', description: 'Web server', logo: 'nginx', env: [], spec: { services: [{ name: 'web', image: 'nginx:1.27', ports: [{ host: 8080, container: 80 }] }], networks: [], volumes: [] } },
+  { id: 'nginx', name: 'Nginx', description: 'Web server', env: [], spec: { services: [{ name: 'web', image: 'nginx:1.27', ports: [{ host: 8080, container: 80 }] }], networks: [], volumes: [] } },
   {
     id: 'wordpress',
     name: 'WordPress',
     description: 'Blog engine with MySQL',
-    logo: 'wordpress',
     env: [{ key: 'DB_PASSWORD', description: 'Database password', secret: true }],
     spec: {
       services: [

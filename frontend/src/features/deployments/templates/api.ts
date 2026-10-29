@@ -13,8 +13,6 @@ export interface AppTemplate {
   id: string
   name: string
   description: string
-  /** Slug of the app, not an image URL. */
-  logo: string
   env: TemplateEnvHint[]
   spec: TemplateSpecInput
 }

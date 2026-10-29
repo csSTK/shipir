@@ -3,7 +3,6 @@
     "id": "nginx",
     "name": "Nginx",
     "description": "Static web server. Serves the files in ./html on port 8080.",
-    "logo": "nginx",
     "env": [],
     "spec": {
       "services": [
@@ -33,7 +32,6 @@
     "id": "postgres",
     "name": "PostgreSQL",
     "description": "PostgreSQL 16 database with a named volume. Not published on the host; reach it from other containers on the same network.",
-    "logo": "postgres",
     "env": [
       {
         "key": "POSTGRES_PASSWORD",
@@ -78,7 +76,6 @@
     "id": "redis",
     "name": "Redis",
     "description": "Redis 7 with append-only persistence. Not published on the host.",
-    "logo": "redis",
     "env": [],
     "spec": {
       "services": [
@@ -112,7 +109,6 @@
     "id": "mariadb",
     "name": "MariaDB",
     "description": "MariaDB 11 database with a named volume and an initial database. Not published on the host.",
-    "logo": "mariadb",
     "env": [
       {
         "key": "MARIADB_ROOT_PASSWORD",
@@ -157,7 +153,6 @@
     "id": "wordpress",
     "name": "WordPress",
     "description": "WordPress with its own MariaDB database. Open port 8081 after the first deploy to finish the setup.",
-    "logo": "wordpress",
     "env": [
       {
         "key": "DB_ROOT_PASSWORD",
@@ -259,7 +254,6 @@
     "id": "uptime-kuma",
     "name": "Uptime Kuma",
     "description": "Self-hosted uptime monitoring with a status page. Open port 3001 after the first deploy.",
-    "logo": "uptime-kuma",
     "env": [],
     "spec": {
       "services": [
@@ -295,7 +289,6 @@
     "id": "adminer",
     "name": "Adminer",
     "description": "Lightweight web UI for SQL databases. Open port 8082 and connect to your database from there.",
-    "logo": "adminer",
     "env": [],
     "spec": {
       "services": [
@@ -318,7 +311,6 @@
     "id": "vaultwarden",
     "name": "Vaultwarden",
     "description": "Lightweight Bitwarden-compatible password manager. Open port 8083 after the first deploy. Browsers need HTTPS for the web vault, so put it behind a domain.",
-    "logo": "vaultwarden",
     "env": [
       {
         "key": "ADMIN_TOKEN",
@@ -366,7 +358,6 @@
     "id": "gitea",
     "name": "Gitea",
     "description": "Self-hosted Git service with a web UI. Open port 3000 after the first deploy to finish the setup. SSH is not published.",
-    "logo": "gitea",
     "env": [],
     "spec": {
       "services": [
@@ -402,7 +393,6 @@
     "id": "grafana",
     "name": "Grafana",
     "description": "Dashboards and alerting for metrics and logs. Open port 3100 after the first deploy and log in as admin with the password you set.",
-    "logo": "grafana",
     "env": [
       {
         "key": "GF_SECURITY_ADMIN_PASSWORD",
@@ -450,7 +440,6 @@
     "id": "jellyfin",
     "name": "Jellyfin",
     "description": "Media server for movies, shows and music. Open port 8096 after the first deploy. No media folder is mounted; add a bind mount for your library in the wizard.",
-    "logo": "jellyfin",
     "env": [],
     "spec": {
       "services": [
@@ -495,7 +484,6 @@
     "id": "home-assistant",
     "name": "Home Assistant",
     "description": "Home automation hub. Open port 8123 after the first deploy. Runs on bridge networking, so device discovery that needs the host network does not work.",
-    "logo": "home-assistant",
     "env": [],
     "spec": {
       "services": [
@@ -531,7 +519,6 @@
     "id": "nextcloud",
     "name": "Nextcloud",
     "description": "Self-hosted file sync and sharing. Open port 8084 after the first deploy. Set the trusted domains to the names you open it with, or Nextcloud refuses them.",
-    "logo": "nextcloud",
     "env": [
       {
         "key": "NEXTCLOUD_ADMIN_PASSWORD",

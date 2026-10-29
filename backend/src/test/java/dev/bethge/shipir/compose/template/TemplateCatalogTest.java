@@ -1,6 +1,7 @@
 package dev.bethge.shipir.compose.template;
 
 import dev.bethge.shipir.compose.generator.ComposeGeneratorService;
+import dev.bethge.shipir.compose.generator.model.ComposeSpec;
 import dev.bethge.shipir.compose.generator.model.EnvVarSpec;
 import dev.bethge.shipir.compose.generator.model.PortSpec;
 import dev.bethge.shipir.compose.generator.model.ServiceSpec;
@@ -10,6 +11,7 @@ import org.springframework.core.io.ClassPathResource;
 import tools.jackson.dataformat.yaml.YAMLMapper;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,7 +60,6 @@ class TemplateCatalogTest {
         assertThat(templates).allSatisfy(t -> {
             assertThat(t.name()).isNotBlank();
             assertThat(t.description()).isNotBlank();
-            assertThat(t.logo()).isNotBlank();
         });
     }
 
@@ -82,8 +83,22 @@ class TemplateCatalogTest {
 
     @Test
     void bundledHostPortsAreUniqueAcrossTemplates() {
+        assertThat(hostPortCollisions(bundled().all())).isEmpty();
+    }
+
+    @Test
+    void hostPortCollisionNamesBothOwners() {
+        AppTemplate a = template("a", 8080);
+        AppTemplate b = template("b", 8080);
+        assertThat(hostPortCollisions(List.of(a, b)))
+                .containsExactly("host port 8080 used by a/web and b/web");
+    }
+
+    /** One message per host port claimed by a second service; each names the earlier and the later owner. */
+    static List<String> hostPortCollisions(List<AppTemplate> templates) {
         Map<Integer, String> owners = new HashMap<>();
-        for (AppTemplate t : bundled().all()) {
+        List<String> collisions = new ArrayList<>();
+        for (AppTemplate t : templates) {
             for (ServiceSpec s : services(t)) {
                 if (s.ports() == null) {
                     continue;
@@ -91,13 +106,21 @@ class TemplateCatalogTest {
                 for (PortSpec port : s.ports()) {
                     if (port.host() != null) {
                         String owner = t.id() + "/" + s.name();
-                        assertThat(owners.put(port.host(), owner))
-                                .as("host port %d used by %s and %s", port.host(), owners.get(port.host()), owner)
-                                .isNull();
+                        String previous = owners.put(port.host(), owner);
+                        if (previous != null) {
+                            collisions.add(String.format("host port %d used by %s and %s", port.host(), previous, owner));
+                        }
                     }
                 }
             }
         }
+        return collisions;
+    }
+
+    private static AppTemplate template(String id, int hostPort) {
+        ServiceSpec web = new ServiceSpec("web", "nginx:1.27", null, null,
+                List.of(new PortSpec(hostPort, 80, "tcp")), null, null, null, null, null);
+        return new AppTemplate(id, id, "d", List.of(), new ComposeSpec(List.of(web), null, null));
     }
 
     @Test
@@ -132,7 +155,7 @@ class TemplateCatalogTest {
     @Test
     void invalidBundledSpecFailsCatalogLoad() {
         String json = """
-                [{"id":"broken","name":"Broken","description":"d","logo":"x",
+                [{"id":"broken","name":"Broken","description":"d",
                   "spec":{"services":[{"name":"web","image":"nginx","ports":[{"container":0}]}]}}]""";
         assertThatThrownBy(() -> load(json))
                 .isInstanceOf(IllegalStateException.class)
@@ -150,7 +173,7 @@ class TemplateCatalogTest {
     @Test
     void unknownPropertyFailsCatalogLoad() {
         String json = """
-                [{"id":"typo","name":"T","description":"d","logo":"x","colour":"red",
+                [{"id":"typo","name":"T","description":"d","colour":"red",
                   "spec":{"services":[{"name":"web","image":"nginx"}]}}]""";
         assertThatThrownBy(() -> load(json)).isInstanceOf(IllegalStateException.class);
     }
@@ -158,7 +181,7 @@ class TemplateCatalogTest {
     @Test
     void duplicateIdFailsCatalogLoad() {
         String one = """
-                {"id":"same","name":"T","description":"d","logo":"x",
+                {"id":"same","name":"T","description":"d",
                  "spec":{"services":[{"name":"web","image":"nginx"}]}}""";
         assertThatThrownBy(() -> load("[" + one + "," + one + "]"))
                 .isInstanceOf(IllegalStateException.class)
@@ -168,7 +191,7 @@ class TemplateCatalogTest {
     @Test
     void invalidIdFailsCatalogLoad() {
         String json = """
-                [{"id":"Bad Id","name":"T","description":"d","logo":"x",
+                [{"id":"Bad Id","name":"T","description":"d",
                   "spec":{"services":[{"name":"web","image":"nginx"}]}}]""";
         assertThatThrownBy(() -> load(json)).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Bad Id");

@@ -62,8 +62,8 @@ public class TemplateCatalog {
         if (!ids.add(t.id())) {
             throw new IllegalStateException(SOURCE + ": duplicate id \"" + t.id() + "\"");
         }
-        if (blank(t.name()) || blank(t.description()) || blank(t.logo())) {
-            throw new IllegalStateException(SOURCE + ": template \"" + t.id() + "\" needs name, description and logo");
+        if (blank(t.name()) || blank(t.description())) {
+            throw new IllegalStateException(SOURCE + ": template \"" + t.id() + "\" needs name and description");
         }
         try {
             generator.generate(t.spec());
