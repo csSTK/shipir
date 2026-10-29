@@ -59,7 +59,7 @@
   "backup.theScheduleIsNotValid": "Der Zeitplan ist ungültig.",
   "backup.thisScheduleNoLongerExists": "Dieser Zeitplan existiert nicht mehr.",
   "backup.youAreNotAllowedTo": "Das darfst du nicht.",
-  "backup.couldNotReachTheDocker": "Der Docker-Host ist nicht erreichbar.",
+  "backup.couldNotReachTheDocker": "Der Docker-Host ist nicht erreichbar. Prüfe Adresse, Port, TLS-Einstellungen und Firewall.",
   "backup.theConnectionToTheDocker": "Bei der Verbindung zum Docker-Host ist eine Zeitüberschreitung aufgetreten.",
   "backup.theRequestFailedTryAgain": "Die Anfrage ist fehlgeschlagen. Versuche es erneut.",
   "StoredBackupsDialog.storedBackupsOfVolume": "Gespeicherte Backups von {{volume}}",

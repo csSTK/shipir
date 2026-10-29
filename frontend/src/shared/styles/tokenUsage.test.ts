@@ -160,4 +160,47 @@ describe('design token usage', () => {
     expect(wizard).toBeDefined()
     expect(wizardViolations(wizard!.css)).toEqual([])
   })
+
+  // Assistant dock badge (shipr-ycvc.20): count text on the warn fill must reach WCAG AA 4.5:1 in every theme.
+  // tokens.css defines each theme block once (light, OS dark, forced dark), so the values are read in that order.
+  describe('assistant dock tokens', () => {
+    const tokensCss = readFileSync(join(srcRoot, 'shared/styles/tokens.css'), 'utf8')
+    const tokenValues = (name: string) =>
+      [...tokensCss.matchAll(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})\\b`, 'g'))].map((m) => m[1])
+    const luminance = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => {
+        const c = parseInt(hex.slice(i, i + 2), 16) / 255
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+      })
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+    const contrast = (a: string, b: string) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+      return (hi + 0.05) / (lo + 0.05)
+    }
+
+    it('badge count text on the warn fill meets 4.5:1 in light, OS dark and forced dark', () => {
+      const fills = tokenValues('color-warn-solid')
+      const texts = tokenValues('color-on-warn-solid')
+      expect(fills).toHaveLength(3)
+      expect(texts).toHaveLength(3)
+      fills.forEach((fill, i) => expect(contrast(texts[i], fill)).toBeGreaterThanOrEqual(4.5))
+    })
+
+    it('badge uses the warn text token, not white', () => {
+      const dock = allSheets.find((s) => s.path === '/features/ai-chat/AssistantDock.css')
+      expect(dock).toBeDefined()
+      const badge = strip(dock!.css).match(/\.assistant-dock__badge\s*\{([^}]*)\}/)?.[1] ?? ''
+      expect(badge).toMatch(/color:\s*var\(--color-on-warn-solid\)/)
+    })
+
+    it('dock stylesheet takes spin duration, border width and opacity from tokens', () => {
+      const dock = allSheets.find((s) => s.path === '/features/ai-chat/AssistantDock.css')
+      expect(dock).toBeDefined()
+      const c = strip(dock!.css).replace(/var\([^)]*\)/g, '')
+      expect([...c.matchAll(/opacity\s*:\s*0?\.\d+/gi), ...c.matchAll(/(?<![\w.-])\d*\.?\d+m?s\b/gi)].map((m) => m[0])).toEqual([])
+      const rawBorders = [...strip(dock!.css).matchAll(/border(?:-[a-z]+)?\s*:[^;{}]*?\b\d+px\b[^;{}]*/gi)].map((m) => m[0])
+      expect(rawBorders).toEqual([])
+    })
+  })
 })

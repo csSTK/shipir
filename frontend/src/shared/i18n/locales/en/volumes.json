@@ -59,7 +59,7 @@
   "backup.theScheduleIsNotValid": "The schedule is not valid.",
   "backup.thisScheduleNoLongerExists": "This schedule no longer exists.",
   "backup.youAreNotAllowedTo": "You are not allowed to do this.",
-  "backup.couldNotReachTheDocker": "Could not reach the Docker host.",
+  "backup.couldNotReachTheDocker": "Could not reach the Docker host. Check the address, port, TLS setup and firewall.",
   "backup.theConnectionToTheDocker": "The connection to the Docker host timed out.",
   "backup.theRequestFailedTryAgain": "The request failed. Try again.",
   "StoredBackupsDialog.storedBackupsOfVolume": "Stored backups of {{volume}}",

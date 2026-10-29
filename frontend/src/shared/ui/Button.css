@@ -90,7 +90,7 @@ a.ui-btn {
   border: 2px solid var(--btn-fg, var(--color-text));
   border-right-color: transparent;
   border-radius: var(--radius-pill);
-  animation: ui-spin 700ms linear infinite;
+  animation: ui-spin var(--duration-spin) linear infinite;
 }
 @keyframes ui-spin {
   to {
