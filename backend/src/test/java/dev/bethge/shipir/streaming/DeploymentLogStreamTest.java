@@ -459,6 +459,45 @@ class DeploymentLogStreamTest {
     }
 
     @Test
+    void failedFollowIsRetriedAndLinesFlowOnceItSucceeds() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        when(logService.follow(any(), any(DockerEndpoint.class), eq("c-db"), anyInt(), anyBoolean(), any(), any()))
+                .thenAnswer(inv -> {
+                    if (attempts.incrementAndGet() == 1) {
+                        throw new DockerConnectionException(DockerErrorCode.UNREACHABLE, "down", null);
+                    }
+                    lineSinks.put("c-db", inv.getArgument(5));
+                    endSinks.put("c-db", inv.getArgument(6));
+                    return mock(Closeable.class);
+                });
+        StompSession s = connect();
+        BlockingQueue<String> q = subscribe(s, topic("shop"));
+        assertThat(q.poll(5, TimeUnit.SECONDS)).contains("\"status\":\"ERROR\"").contains("\"service\":\"db\"");
+        awaitFollowing("c-db"); // picked up by a later refresh without a new SUBSCRIBE
+        lineSinks.get("c-db").accept(line("back again"));
+        assertThat(drain(q, 500)).anyMatch(f -> f.contains("back again") && f.contains("\"service\":\"db\""));
+        assertThat(attempts.get()).isEqualTo(2);
+        s.disconnect();
+    }
+
+    @Test
+    void failedFollowIsRetriedOnlyAFewTimesAndErrorIsReportedOnce() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        when(logService.follow(any(), any(DockerEndpoint.class), eq("c-db"), anyInt(), anyBoolean(), any(), any()))
+                .thenAnswer(inv -> {
+                    attempts.incrementAndGet();
+                    throw new DockerConnectionException(DockerErrorCode.UNREACHABLE, "down", null);
+                });
+        StompSession s = connect();
+        BlockingQueue<String> q = subscribe(s, topic("shop"));
+        await().atMost(10, TimeUnit.SECONDS).until(() -> attempts.get() >= 4);
+        Thread.sleep(1500); // many refresh rounds: no further attempt
+        assertThat(attempts.get()).isEqualTo(4); // first try + 3 retries
+        assertThat(drain(q, 300).stream().filter(f -> f.contains("\"service\":\"db\"")).count()).isEqualTo(1);
+        s.disconnect();
+    }
+
+    @Test
     void containerStartedLaterIsPickedUpByTheRefresh() throws Exception {
         containers.set(List.of(container("c-web", "web", "shop", "running")));
         StompSession s = connect();

@@ -65,9 +65,7 @@ public class LogStreamHandler {
         boolean ended;
         boolean closed;
         Closeable follow;
-        long windowSecond = Long.MIN_VALUE;
-        int windowLines;
-        int dropped;
+        final LogStreamSupport.RateWindow rate = new LogStreamSupport.RateWindow();
 
         Stream(Key key) {
             this.key = key;
@@ -111,24 +109,8 @@ public class LogStreamHandler {
      * default false) SUBSCRIBE headers. Throws {@link IllegalArgumentException} for any other value.
      */
     Options parseOptions(String tailHeader, String timestampsHeader) {
-        int tail = properties.tail();
-        if (tailHeader != null) {
-            tail = switch (tailHeader) {
-                case "100" -> 100;
-                case "500" -> 500;
-                case "1000" -> 1000;
-                case "all" -> -1;
-                default -> throw new IllegalArgumentException("Invalid tail");
-            };
-        }
-        boolean timestamps = false;
-        if (timestampsHeader != null) {
-            timestamps = switch (timestampsHeader) {
-                case "true" -> true;
-                case "false" -> false;
-                default -> throw new IllegalArgumentException("Invalid timestamps");
-            };
-        }
+        int tail = LogStreamSupport.parseTail(tailHeader, properties.tail());
+        boolean timestamps = LogStreamSupport.parseTimestamps(timestampsHeader);
         return new Options(tail, timestamps);
     }
 
@@ -257,7 +239,7 @@ public class LogStreamHandler {
             }
             streams.remove(stream.key, stream);
         }
-        closeQuietly(follow);
+        LogStreamSupport.closeQuietly(follow);
     }
 
     private void startFollow(Stream stream) {
@@ -278,7 +260,7 @@ public class LogStreamHandler {
                 }
             }
             if (stop) {
-                closeQuietly(follow);
+                LogStreamSupport.closeQuietly(follow);
             }
         } catch (DockerConnectionException e) {
             fail(stream, e.getCode().name());
@@ -294,27 +276,17 @@ public class LogStreamHandler {
             if (stream.ended || stream.closed) {
                 return;
             }
-            long second = clock.millis() / 1000;
-            if (second != stream.windowSecond) {
-                stream.windowSecond = second;
-                stream.windowLines = 0;
-                if (stream.dropped > 0) {
-                    publish(stream, LogStreamMessage.Type.LINE, "STDERR",
-                            "[" + stream.dropped + " lines skipped: rate limit]", null, null);
-                    stream.dropped = 0;
-                }
+            int skipped = stream.rate.roll(clock.millis() / 1000);
+            if (skipped > 0) {
+                publish(stream, LogStreamMessage.Type.LINE, "STDERR", LogStreamSupport.skippedMarker(skipped), null, null);
             }
-            if (stream.windowLines >= properties.maxLinesPerSecond()) {
-                stream.dropped++;
+            if (stream.rate.isFull(properties.maxLinesPerSecond())) {
+                stream.rate.drop();
                 return;
             }
-            stream.windowLines++;
-            String text = line.text();
-            if (text.length() > properties.maxLineLength()) {
-                text = text.substring(0, properties.maxLineLength()) + " [truncated]";
-            }
-            String timestamp = line.timestamp() == null || !stream.key.options().timestamps()
-                    ? null : line.timestamp().toString();
+            stream.rate.take();
+            String text = LogStreamSupport.capLength(line.text(), properties.maxLineLength());
+            String timestamp = LogStreamSupport.timestampOf(line, stream.key.options().timestamps());
             publish(stream, LogStreamMessage.Type.LINE, line.stream().name(), text, null, timestamp);
         }
     }
@@ -365,16 +337,5 @@ public class LogStreamHandler {
 
     static String destination(Target t) {
         return TOPIC_PREFIX + t.hostId() + "/containers/" + t.containerId() + "/logs";
-    }
-
-    private static void closeQuietly(Closeable c) {
-        if (c == null) {
-            return;
-        }
-        try {
-            c.close();
-        } catch (Exception e) {
-            // closing is best effort, the stream is gone either way
-        }
     }
 }

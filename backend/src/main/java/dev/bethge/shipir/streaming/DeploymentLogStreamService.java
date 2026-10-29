@@ -47,8 +47,8 @@ import java.util.regex.Pattern;
  * <p>Bounds: at most {@code max-containers} followed per project (the rest is reported once as project-level
  * CONTAINER_LIMIT), line length, lines per second per container and for the whole project (excess dropped and
  * summarized in one marker line), and the replay buffer. Known limit: a container whose follow could not be started
- * (e.g. the daemon refused the log call) is reported once and not retried while the stream lives; a new SUBSCRIBE after
- * the last one left starts over.
+ * (e.g. the daemon refused the log call) is reported once and retried by the worker at most {@link #MAX_START_RETRIES}
+ * times with backoff; after that it stays failed until the last subscriber left and a new SUBSCRIBE starts over.
  * Lines of different containers are not re-sorted by time.
  */
 @Service
@@ -56,6 +56,14 @@ import java.util.regex.Pattern;
 public class DeploymentLogStreamService {
 
     private static final Logger log = LoggerFactory.getLogger(DeploymentLogStreamService.class);
+
+    /**
+     * A follow that could not be started is retried by the refresh worker itself (no new SUBSCRIBE needed), at most
+     * this many times, waiting 1, 2, 4 refresh rounds in between (backoff in rounds, not wall-clock, so it needs no
+     * timer and scales with {@code refresh-interval}). Bounded so a container whose log call is refused for good does
+     * not hit the daemon for as long as somebody watches; the error is published only for the first failure.
+     */
+    static final int MAX_START_RETRIES = 3;
 
     static final String TOPIC_PREFIX = "/topic/hosts/";
     private static final Pattern TOPIC = Pattern.compile(
@@ -85,9 +93,11 @@ public class DeploymentLogStreamService {
         int generation;
         boolean ended;
         boolean failed;
-        long windowSecond = Long.MIN_VALUE;
-        int windowLines;
-        int dropped;
+        /** Consecutive failed starts; reset by a successful start. */
+        int failures;
+        /** Refresh rounds to wait before the next retry of a failed start. */
+        int ticksUntilRetry;
+        final LogStreamSupport.RateWindow rate = new LogStreamSupport.RateWindow();
 
         Follower(ContainerDto c) {
             this.containerId = c.id();
@@ -105,9 +115,7 @@ public class DeploymentLogStreamService {
         long nextSeq = 1;
         boolean closed;
         boolean limitReported;
-        long windowSecond = Long.MIN_VALUE;
-        int windowLines;
-        int dropped;
+        final LogStreamSupport.RateWindow rate = new LogStreamSupport.RateWindow();
 
         Stream(Key key) {
             this.key = key;
@@ -153,24 +161,8 @@ public class DeploymentLogStreamService {
      * default false) SUBSCRIBE headers. Throws {@link IllegalArgumentException} for any other value.
      */
     Options parseOptions(String tailHeader, String timestampsHeader) {
-        int tail = properties.tail();
-        if (tailHeader != null) {
-            tail = switch (tailHeader) {
-                case "100" -> 100;
-                case "500" -> 500;
-                case "1000" -> 1000;
-                case "all" -> -1;
-                default -> throw new IllegalArgumentException("Invalid tail");
-            };
-        }
-        boolean timestamps = false;
-        if (timestampsHeader != null) {
-            timestamps = switch (timestampsHeader) {
-                case "true" -> true;
-                case "false" -> false;
-                default -> throw new IllegalArgumentException("Invalid timestamps");
-            };
-        }
+        int tail = LogStreamSupport.parseTail(tailHeader, properties.tail());
+        boolean timestamps = LogStreamSupport.parseTimestamps(timestampsHeader);
         return new Options(tail, timestamps);
     }
 
@@ -256,7 +248,7 @@ public class DeploymentLogStreamService {
             }
             streams.remove(stream.key, stream);
         }
-        toClose.forEach(DeploymentLogStreamService::closeQuietly);
+        toClose.forEach(LogStreamSupport::closeQuietly);
     }
 
     private void release(Stream stream) {
@@ -277,7 +269,7 @@ public class DeploymentLogStreamService {
             }
             streams.remove(stream.key, stream);
         }
-        toClose.forEach(DeploymentLogStreamService::closeQuietly);
+        toClose.forEach(LogStreamSupport::closeQuietly);
     }
 
     // ---- worker ----
@@ -354,7 +346,14 @@ public class DeploymentLogStreamService {
                     toStart.add(f);
                     tails.add(stream.key.options().tail());
                     generations.add(++f.generation);
-                } else if (f.ended && !f.failed && "running".equals(c.state())) {
+                } else if (f.ended && f.failed) {
+                    if (f.failures <= MAX_START_RETRIES && --f.ticksUntilRetry <= 0) {
+                        f.ended = false;
+                        toStart.add(f);
+                        tails.add(stream.key.options().tail()); // nothing was delivered yet
+                        generations.add(++f.generation);
+                    }
+                } else if (f.ended && "running".equals(c.state())) {
                     f.ended = false;
                     toStart.add(f);
                     tails.add(0); // restarted: the old lines were delivered by the previous follow
@@ -381,10 +380,12 @@ public class DeploymentLogStreamService {
                 stop = stream.closed || f.generation != generation;
                 if (!stop) {
                     f.follow = follow;
+                    f.failed = false;
+                    f.failures = 0;
                 }
             }
             if (stop) {
-                closeQuietly(follow);
+                LogStreamSupport.closeQuietly(follow);
             }
         } catch (DockerConnectionException e) {
             containerFailed(stream, f, e.getCode().name());
@@ -401,8 +402,12 @@ public class DeploymentLogStreamService {
             }
             f.ended = true;
             f.failed = true;
-            publish(stream, DeploymentLogMessage.Type.STATUS, f, null, code,
-                    DeploymentLogMessage.Status.ERROR, null);
+            f.failures++;
+            f.ticksUntilRetry = 1 << Math.min(f.failures - 1, MAX_START_RETRIES);
+            if (f.failures == 1) { // retries stay silent, the client already knows
+                publish(stream, DeploymentLogMessage.Type.STATUS, f, null, code,
+                        DeploymentLogMessage.Status.ERROR, null);
+            }
         }
     }
 
@@ -423,40 +428,28 @@ public class DeploymentLogStreamService {
                 return;
             }
             long second = clock.millis() / 1000;
-            if (second != stream.windowSecond) {
-                stream.windowSecond = second;
-                stream.windowLines = 0;
-                if (stream.dropped > 0) {
-                    publish(stream, DeploymentLogMessage.Type.LINE, null, "STDERR",
-                            "[" + stream.dropped + " lines skipped: rate limit]", null, null);
-                    stream.dropped = 0;
-                }
+            int skipped = stream.rate.roll(second);
+            if (skipped > 0) {
+                publish(stream, DeploymentLogMessage.Type.LINE, null, "STDERR", LogStreamSupport.skippedMarker(skipped),
+                        null, null);
             }
-            if (second != f.windowSecond) {
-                f.windowSecond = second;
-                f.windowLines = 0;
-                if (f.dropped > 0) {
-                    publish(stream, DeploymentLogMessage.Type.LINE, f, "STDERR",
-                            "[" + f.dropped + " lines skipped: rate limit]", null, null);
-                    f.dropped = 0;
-                }
+            int skippedOfContainer = f.rate.roll(second);
+            if (skippedOfContainer > 0) {
+                publish(stream, DeploymentLogMessage.Type.LINE, f, "STDERR",
+                        LogStreamSupport.skippedMarker(skippedOfContainer), null, null);
             }
-            if (f.windowLines >= properties.maxLinesPerSecondPerContainer()) {
-                f.dropped++;
+            if (f.rate.isFull(properties.maxLinesPerSecondPerContainer())) {
+                f.rate.drop();
                 return;
             }
-            if (stream.windowLines >= properties.maxLinesPerSecond()) {
-                stream.dropped++;
+            if (stream.rate.isFull(properties.maxLinesPerSecond())) {
+                stream.rate.drop();
                 return;
             }
-            f.windowLines++;
-            stream.windowLines++;
-            String text = line.text();
-            if (text.length() > properties.maxLineLength()) {
-                text = text.substring(0, properties.maxLineLength()) + " [truncated]";
-            }
-            String timestamp = line.timestamp() == null || !stream.key.options().timestamps()
-                    ? null : line.timestamp().toString();
+            f.rate.take();
+            stream.rate.take();
+            String text = LogStreamSupport.capLength(line.text(), properties.maxLineLength());
+            String timestamp = LogStreamSupport.timestampOf(line, stream.key.options().timestamps());
             publish(stream, DeploymentLogMessage.Type.LINE, f, line.stream().name(), text, null, timestamp);
         }
     }
@@ -499,16 +492,5 @@ public class DeploymentLogStreamService {
 
     static String destination(Target t) {
         return TOPIC_PREFIX + t.hostId() + "/deployments/" + t.project() + "/logs";
-    }
-
-    private static void closeQuietly(Closeable c) {
-        if (c == null) {
-            return;
-        }
-        try {
-            c.close();
-        } catch (Exception e) {
-            // closing is best effort, the stream is gone either way
-        }
     }
 }
