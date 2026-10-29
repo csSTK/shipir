@@ -67,7 +67,8 @@ class TemplateCatalogTest {
     void bundledCatalogIncludesTheCuratedSelfHostedApps() {
         assertThat(bundled().all().stream().map(AppTemplate::id).toList())
                 .contains("vaultwarden", "gitea", "grafana", "jellyfin", "home-assistant", "nextcloud",
-                        "pihole", "nginx-proxy-manager", "homepage", "filebrowser", "syncthing");
+                        "pihole", "nginx-proxy-manager", "homepage", "filebrowser", "syncthing",
+                        "mysql", "mongodb", "rabbitmq", "minio", "influxdb");
     }
 
     @Test

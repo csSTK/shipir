@@ -847,5 +847,359 @@
         }
       ]
     }
+  },
+  {
+    "id": "mysql",
+    "name": "MySQL",
+    "description": "MySQL 8.4 database with a named volume and an initial database. Connect to host port 3307 with the root user and the generated root password.",
+    "logo": "mysql",
+    "env": [
+      {
+        "key": "MYSQL_ROOT_PASSWORD",
+        "description": "Root password",
+        "secret": true,
+        "generate": true
+      },
+      {
+        "key": "MYSQL_DATABASE",
+        "description": "Initial database name",
+        "secret": false,
+        "defaultValue": "app"
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "db",
+          "image": "mysql:8.4",
+          "ports": [
+            {
+              "host": 3307,
+              "container": 3306,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "MYSQL_ROOT_PASSWORD",
+              "ref": "MYSQL_ROOT_PASSWORD"
+            },
+            {
+              "key": "MYSQL_DATABASE",
+              "ref": "MYSQL_DATABASE"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "mysql-data",
+              "target": "/var/lib/mysql",
+              "readOnly": false
+            }
+          ],
+          "restart": "unless-stopped"
+        }
+      ],
+      "volumes": [
+        {
+          "name": "mysql-data",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "mongodb",
+    "name": "MongoDB",
+    "description": "MongoDB 7 document database with authentication. Connect to host port 27018 with the admin user and the generated password.",
+    "logo": "mongodb",
+    "env": [
+      {
+        "key": "MONGO_INITDB_ROOT_USERNAME",
+        "description": "Admin user name",
+        "secret": false,
+        "defaultValue": "admin"
+      },
+      {
+        "key": "MONGO_INITDB_ROOT_PASSWORD",
+        "description": "Admin password",
+        "secret": true,
+        "generate": true
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "mongo",
+          "image": "mongo:7.0",
+          "ports": [
+            {
+              "host": 27018,
+              "container": 27017,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "MONGO_INITDB_ROOT_USERNAME",
+              "ref": "MONGO_INITDB_ROOT_USERNAME"
+            },
+            {
+              "key": "MONGO_INITDB_ROOT_PASSWORD",
+              "ref": "MONGO_INITDB_ROOT_PASSWORD"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "mongo-data",
+              "target": "/data/db",
+              "readOnly": false
+            }
+          ],
+          "restart": "unless-stopped"
+        }
+      ],
+      "volumes": [
+        {
+          "name": "mongo-data",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "rabbitmq",
+    "name": "RabbitMQ",
+    "description": "Message broker with the management UI. Open port 15673 after the first deploy and sign in with the user and password below. Applications connect over AMQP on port 5673.",
+    "logo": "rabbitmq",
+    "env": [
+      {
+        "key": "RABBITMQ_DEFAULT_USER",
+        "description": "Management and AMQP user",
+        "secret": false,
+        "defaultValue": "admin"
+      },
+      {
+        "key": "RABBITMQ_DEFAULT_PASS",
+        "description": "Management and AMQP password",
+        "secret": true,
+        "generate": true
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "rabbitmq",
+          "image": "rabbitmq:3.13-management",
+          "ports": [
+            {
+              "host": 5673,
+              "container": 5672,
+              "protocol": "tcp"
+            },
+            {
+              "host": 15673,
+              "container": 15672,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "RABBITMQ_DEFAULT_USER",
+              "ref": "RABBITMQ_DEFAULT_USER"
+            },
+            {
+              "key": "RABBITMQ_DEFAULT_PASS",
+              "ref": "RABBITMQ_DEFAULT_PASS"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "rabbitmq-data",
+              "target": "/var/lib/rabbitmq",
+              "readOnly": false
+            }
+          ],
+          "restart": "unless-stopped"
+        }
+      ],
+      "volumes": [
+        {
+          "name": "rabbitmq-data",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "minio",
+    "name": "MinIO",
+    "description": "S3-compatible object storage. Open the console on port 9101 after the first deploy and sign in with the user and password below. The S3 API listens on port 9100.",
+    "logo": "minio",
+    "env": [
+      {
+        "key": "MINIO_ROOT_USER",
+        "description": "Root user name",
+        "secret": false,
+        "defaultValue": "admin"
+      },
+      {
+        "key": "MINIO_ROOT_PASSWORD",
+        "description": "Root password (at least 8 characters)",
+        "secret": true,
+        "generate": true
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "minio",
+          "image": "minio/minio:RELEASE.2024-10-13T13-34-11Z",
+          "command": [
+            "server",
+            "/data",
+            "--console-address",
+            ":9001"
+          ],
+          "ports": [
+            {
+              "host": 9100,
+              "container": 9000,
+              "protocol": "tcp"
+            },
+            {
+              "host": 9101,
+              "container": 9001,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "MINIO_ROOT_USER",
+              "ref": "MINIO_ROOT_USER"
+            },
+            {
+              "key": "MINIO_ROOT_PASSWORD",
+              "ref": "MINIO_ROOT_PASSWORD"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "minio-data",
+              "target": "/data",
+              "readOnly": false
+            }
+          ],
+          "restart": "unless-stopped"
+        }
+      ],
+      "volumes": [
+        {
+          "name": "minio-data",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "influxdb",
+    "name": "InfluxDB",
+    "description": "Time series database, version 2. Open port 8087 after the first deploy and sign in with the user and password below. The API token below is for clients.",
+    "logo": "influxdb",
+    "env": [
+      {
+        "key": "DOCKER_INFLUXDB_INIT_USERNAME",
+        "description": "Admin user name",
+        "secret": false,
+        "defaultValue": "admin"
+      },
+      {
+        "key": "DOCKER_INFLUXDB_INIT_PASSWORD",
+        "description": "Admin password (at least 8 characters)",
+        "secret": true,
+        "generate": true
+      },
+      {
+        "key": "DOCKER_INFLUXDB_INIT_ORG",
+        "description": "Initial organization",
+        "secret": false,
+        "defaultValue": "shipir"
+      },
+      {
+        "key": "DOCKER_INFLUXDB_INIT_BUCKET",
+        "description": "Initial bucket",
+        "secret": false,
+        "defaultValue": "default"
+      },
+      {
+        "key": "DOCKER_INFLUXDB_INIT_ADMIN_TOKEN",
+        "description": "Admin API token",
+        "secret": true,
+        "generate": true
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "influxdb",
+          "image": "influxdb:2.7",
+          "ports": [
+            {
+              "host": 8087,
+              "container": 8086,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "DOCKER_INFLUXDB_INIT_MODE",
+              "value": "setup"
+            },
+            {
+              "key": "DOCKER_INFLUXDB_INIT_USERNAME",
+              "ref": "DOCKER_INFLUXDB_INIT_USERNAME"
+            },
+            {
+              "key": "DOCKER_INFLUXDB_INIT_PASSWORD",
+              "ref": "DOCKER_INFLUXDB_INIT_PASSWORD"
+            },
+            {
+              "key": "DOCKER_INFLUXDB_INIT_ORG",
+              "ref": "DOCKER_INFLUXDB_INIT_ORG"
+            },
+            {
+              "key": "DOCKER_INFLUXDB_INIT_BUCKET",
+              "ref": "DOCKER_INFLUXDB_INIT_BUCKET"
+            },
+            {
+              "key": "DOCKER_INFLUXDB_INIT_ADMIN_TOKEN",
+              "ref": "DOCKER_INFLUXDB_INIT_ADMIN_TOKEN"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "influxdb-data",
+              "target": "/var/lib/influxdb2",
+              "readOnly": false
+            },
+            {
+              "source": "influxdb-config",
+              "target": "/etc/influxdb2",
+              "readOnly": false
+            }
+          ],
+          "restart": "unless-stopped"
+        }
+      ],
+      "volumes": [
+        {
+          "name": "influxdb-data",
+          "external": false
+        },
+        {
+          "name": "influxdb-config",
+          "external": false
+        }
+      ]
+    }
   }
 ]
