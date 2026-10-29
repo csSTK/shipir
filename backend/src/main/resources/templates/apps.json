@@ -1744,5 +1744,390 @@
         }
       ]
     }
+  },
+  {
+    "id": "plex",
+    "name": "Plex",
+    "description": "Media server for movies, shows and music. Open port 32400/web after the first deploy. To claim the server, set PLEX_CLAIM (token from plex.tv/claim, valid 4 minutes) in the wizard, or finish setup from a browser on the same network as the host. Host networking is not available here, so local network discovery (GDM, DLNA) is limited; add the server by IP in your Plex apps. Media uses a named volume; replace it with a bind mount for an existing library.",
+    "logo": "plex",
+    "env": [
+      {
+        "key": "TZ",
+        "description": "Time zone, e.g. Europe/Berlin",
+        "secret": false,
+        "defaultValue": "Etc/UTC"
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "plex",
+          "image": "plexinc/pms-docker:1.43.5.11079-b3b13e506",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 32400,
+              "container": 32400,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "TZ",
+              "ref": "TZ"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "plex-config",
+              "target": "/config",
+              "readOnly": false
+            },
+            {
+              "source": "plex-transcode",
+              "target": "/transcode",
+              "readOnly": false
+            },
+            {
+              "source": "plex-media",
+              "target": "/data",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "plex-config",
+          "external": false
+        },
+        {
+          "name": "plex-transcode",
+          "external": false
+        },
+        {
+          "name": "plex-media",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "sonarr",
+    "name": "Sonarr",
+    "description": "TV show manager that finds, downloads and organizes episodes. Open port 8989 after the first deploy. Config and media use named volumes; to use an existing library, replace the media volume with a bind mount in the wizard.",
+    "logo": "sonarr",
+    "env": [
+      {
+        "key": "PUID",
+        "description": "User ID the app runs as",
+        "secret": false,
+        "defaultValue": "1000"
+      },
+      {
+        "key": "PGID",
+        "description": "Group ID the app runs as",
+        "secret": false,
+        "defaultValue": "1000"
+      },
+      {
+        "key": "TZ",
+        "description": "Time zone, e.g. Europe/Berlin",
+        "secret": false,
+        "defaultValue": "Etc/UTC"
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "sonarr",
+          "image": "lscr.io/linuxserver/sonarr:4.0.20",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 8989,
+              "container": 8989,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "PUID",
+              "ref": "PUID"
+            },
+            {
+              "key": "PGID",
+              "ref": "PGID"
+            },
+            {
+              "key": "TZ",
+              "ref": "TZ"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "sonarr-config",
+              "target": "/config",
+              "readOnly": false
+            },
+            {
+              "source": "sonarr-tv",
+              "target": "/tv",
+              "readOnly": false
+            },
+            {
+              "source": "sonarr-downloads",
+              "target": "/downloads",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "sonarr-config",
+          "external": false
+        },
+        {
+          "name": "sonarr-tv",
+          "external": false
+        },
+        {
+          "name": "sonarr-downloads",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "radarr",
+    "name": "Radarr",
+    "description": "Movie manager that finds, downloads and organizes films. Open port 7878 after the first deploy. Config and media use named volumes; to use an existing library, replace the media volume with a bind mount in the wizard.",
+    "logo": "radarr",
+    "env": [
+      {
+        "key": "PUID",
+        "description": "User ID the app runs as",
+        "secret": false,
+        "defaultValue": "1000"
+      },
+      {
+        "key": "PGID",
+        "description": "Group ID the app runs as",
+        "secret": false,
+        "defaultValue": "1000"
+      },
+      {
+        "key": "TZ",
+        "description": "Time zone, e.g. Europe/Berlin",
+        "secret": false,
+        "defaultValue": "Etc/UTC"
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "radarr",
+          "image": "lscr.io/linuxserver/radarr:6.4.4",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 7878,
+              "container": 7878,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "PUID",
+              "ref": "PUID"
+            },
+            {
+              "key": "PGID",
+              "ref": "PGID"
+            },
+            {
+              "key": "TZ",
+              "ref": "TZ"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "radarr-config",
+              "target": "/config",
+              "readOnly": false
+            },
+            {
+              "source": "radarr-movies",
+              "target": "/movies",
+              "readOnly": false
+            },
+            {
+              "source": "radarr-downloads",
+              "target": "/downloads",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "radarr-config",
+          "external": false
+        },
+        {
+          "name": "radarr-movies",
+          "external": false
+        },
+        {
+          "name": "radarr-downloads",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "navidrome",
+    "name": "Navidrome",
+    "description": "Music streaming server compatible with Subsonic apps. Open port 4533 after the first deploy and create the admin user on first visit. Music uses a named volume; replace it with a bind mount for an existing library.",
+    "logo": "navidrome",
+    "env": [
+      {
+        "key": "ND_LOGLEVEL",
+        "description": "Log level (error, warn, info, debug)",
+        "secret": false,
+        "defaultValue": "info"
+      },
+      {
+        "key": "ND_SESSIONTIMEOUT",
+        "description": "Session lifetime",
+        "secret": false,
+        "defaultValue": "24h"
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "navidrome",
+          "image": "deluan/navidrome:0.64.2",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 4533,
+              "container": 4533,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "ND_LOGLEVEL",
+              "ref": "ND_LOGLEVEL"
+            },
+            {
+              "key": "ND_SESSIONTIMEOUT",
+              "ref": "ND_SESSIONTIMEOUT"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "navidrome-data",
+              "target": "/data",
+              "readOnly": false
+            },
+            {
+              "source": "navidrome-music",
+              "target": "/music",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "navidrome-data",
+          "external": false
+        },
+        {
+          "name": "navidrome-music",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "audiobookshelf",
+    "name": "Audiobookshelf",
+    "description": "Audiobook and podcast server. Open port 13378 after the first deploy and create the root user on first visit. Libraries use named volumes; replace them with bind mounts for existing files.",
+    "logo": "audiobookshelf",
+    "env": [
+      {
+        "key": "TZ",
+        "description": "Time zone, e.g. Europe/Berlin",
+        "secret": false,
+        "defaultValue": "Etc/UTC"
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "audiobookshelf",
+          "image": "ghcr.io/advplyr/audiobookshelf:2.37.2",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 13378,
+              "container": 80,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "TZ",
+              "ref": "TZ"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "audiobookshelf-config",
+              "target": "/config",
+              "readOnly": false
+            },
+            {
+              "source": "audiobookshelf-metadata",
+              "target": "/metadata",
+              "readOnly": false
+            },
+            {
+              "source": "audiobookshelf-audiobooks",
+              "target": "/audiobooks",
+              "readOnly": false
+            },
+            {
+              "source": "audiobookshelf-podcasts",
+              "target": "/podcasts",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "audiobookshelf-config",
+          "external": false
+        },
+        {
+          "name": "audiobookshelf-metadata",
+          "external": false
+        },
+        {
+          "name": "audiobookshelf-audiobooks",
+          "external": false
+        },
+        {
+          "name": "audiobookshelf-podcasts",
+          "external": false
+        }
+      ]
+    }
   }
 ]

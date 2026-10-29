@@ -69,7 +69,8 @@ class TemplateCatalogTest {
                 .contains("vaultwarden", "gitea", "grafana", "jellyfin", "home-assistant", "nextcloud",
                         "pihole", "nginx-proxy-manager", "homepage", "filebrowser", "syncthing",
                         "mysql", "mongodb", "rabbitmq", "minio", "influxdb",
-                        "ghost", "n8n", "paperless-ngx", "bookstack", "linkding");
+                        "ghost", "n8n", "paperless-ngx", "bookstack", "linkding",
+                        "plex", "sonarr", "radarr", "navidrome", "audiobookshelf");
     }
 
     @Test
