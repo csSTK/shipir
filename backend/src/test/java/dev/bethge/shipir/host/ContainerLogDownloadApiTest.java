@@ -310,6 +310,90 @@ class ContainerLogDownloadApiTest extends HostApiTestBase {
         }
     }
 
+    private void asAdmin(java.util.concurrent.Callable<?> body) throws Exception {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("admin", "x",
+                        List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN"))));
+        try {
+            body.call();
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    /** open() takes the permit; a failure before the body runs (headers, output stream) must still free it. */
+    @Test
+    void permitIsFreedWhenTheResponseFailsBetweenOpenAndWrite() throws Exception {
+        lines = List.of(out("one"));
+        var controller = new ContainerLogDownloadController(downloads);
+        var failingHeaders = mock(jakarta.servlet.http.HttpServletResponse.class);
+        org.mockito.Mockito.doThrow(new IllegalStateException("committed")).when(failingHeaders).setContentType(any());
+        var failingStream = mock(jakarta.servlet.http.HttpServletResponse.class);
+        when(failingStream.getOutputStream()).thenThrow(new java.io.IOException("gone"));
+        asAdmin(() -> {
+            // more failures than max-per-user and max-concurrent: a leaked permit would turn one into a 429
+            for (int i = 0; i < 6; i++) {
+                var r = i % 2 == 0 ? failingHeaders : failingStream;
+                org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> controller.download(UUID.fromString(host), "web1", null, null, "false", r))
+                        .isNotInstanceOf(HostException.class);
+            }
+            return null;
+        });
+    }
+
+    /** A client that stops reading blocks inside out.write; the watchdog closes the stream so the permit comes back. */
+    @Test
+    @org.junit.jupiter.api.Timeout(30)
+    void stalledClientWriteIsAbortedAfterTheTimeAndFreesThePermit() throws Exception {
+        lines = List.of(out("one"));
+        hang = true;
+        asAdmin(() -> {
+            for (int i = 0; i < 3; i++) { // per-user limit is 2: leaked permits would produce a 429 on the third
+                var d = downloads.open(UUID.fromString(host), "web1", null, null, "false");
+                var closed = new java.util.concurrent.CountDownLatch(1);
+                var stalled = new java.io.OutputStream() {
+                    @Override
+                    public void write(int b) throws java.io.IOException {
+                        write(new byte[] {(byte) b}, 0, 1);
+                    }
+
+                    @Override
+                    public void write(byte[] b, int off, int len) throws java.io.IOException {
+                        try {
+                            closed.await(); // the client never reads
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                        throw new java.io.IOException("stream closed");
+                    }
+
+                    @Override
+                    public void close() {
+                        closed.countDown();
+                    }
+                };
+                long t0 = System.nanoTime();
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> d.body().writeTo(stalled))
+                        .isInstanceOf(java.io.IOException.class);
+                assertThat((System.nanoTime() - t0) / 1_000_000).isBetween(2500L, 10_000L);
+            }
+            return null;
+        });
+    }
+
+    /** A watchdog firing after the download finished closes the Docker read but must not touch the response stream. */
+    @Test
+    void watchdogLeavesTheResponseStreamAloneOnceTheDownloadIsDone() throws Exception {
+        var out = mock(java.io.OutputStream.class);
+        var docker = mock(Closeable.class);
+        var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
+        ContainerLogDownloadService.abortStalled(new java.util.concurrent.atomic.AtomicBoolean(true), cancelled, out, docker);
+        verify(docker).close();
+        assertThat(cancelled).isTrue();
+        verifyNoInteractions(out);
+    }
+
     @Test
     @org.junit.jupiter.api.Timeout(20)
     void limitsConcurrentDownloadsPerUserAndGlobally() throws Exception {

@@ -19,6 +19,9 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.Semaphore;
 import dev.bethge.shipir.permission.CurrentAccess;
 import dev.bethge.shipir.permission.PermissionSubject;
@@ -49,8 +52,35 @@ public class ContainerLogDownloadService {
     private static final String TRUNCATED_TIME = "[output truncated: time limit reached]\n";
     private static final String FAILED = "[log stream failed]\n";
 
-    /** The response body and the file name to offer. */
-    public record Download(String fileName, StreamingResponseBody body) {
+    /**
+     * The response body and the file name to offer. {@code release} frees the download permit taken by {@link #open};
+     * it is idempotent and also called by the body itself, so a caller that fails between {@code open} and writing
+     * the body (headers, output stream) can call it without double-releasing.
+     */
+    public record Download(String fileName, StreamingResponseBody body, Runnable release) {
+    }
+
+    /** Extra time after the download deadline before a write that is still blocked is aborted. */
+    static final long WRITE_GRACE_MILLIS = 1000;
+
+    /**
+     * Watchdog for writes stalled in the client socket: a blocking {@code out.write} cannot notice the deadline, so
+     * a timer bounds what it can. The Docker read is closed first and always (that bound is guaranteed). Closing the
+     * response stream is best effort: it may itself block on the stalled socket, so it runs on its own short-lived
+     * thread and never holds up the shared watchdog thread; Tomcat's own socket write timeout is the real backstop
+     * for the response side. Interrupting the request thread would not help, blocking socket writes are not
+     * interruptible.
+     */
+    private static final ScheduledExecutorService WATCHDOG = newWatchdog();
+
+    private static ScheduledExecutorService newWatchdog() {
+        var executor = new ScheduledThreadPoolExecutor(1, r -> {
+            Thread t = new Thread(r, "log-download-watchdog");
+            t.setDaemon(true);
+            return t;
+        });
+        executor.setRemoveOnCancelPolicy(true);
+        return executor;
     }
 
     private record End(Throwable failure) {
@@ -94,15 +124,21 @@ public class ContainerLogDownloadService {
             String fileName = fileName(container.name());
             long maxBytes = properties.maxBytes().toBytes();
             long timeoutNanos = properties.timeout().toNanos();
+            AtomicBoolean released = new AtomicBoolean();
+            Runnable releasePermit = () -> {
+                if (released.compareAndSet(false, true)) {
+                    release(user);
+                }
+            };
             StreamingResponseBody body = out -> {
                 try {
                     write(out, hostId, endpoint, container.id(), tailLines, sinceInstant, withTimestamps, maxBytes,
                             timeoutNanos);
                 } finally {
-                    release(user);
+                    releasePermit.run();
                 }
             };
-            return new Download(fileName, body);
+            return new Download(fileName, body, releasePermit);
         } catch (RuntimeException e) {
             release(user);
             throw e;
@@ -169,6 +205,8 @@ public class ContainerLogDownloadService {
         });
         long deadline = System.nanoTime() + timeoutNanos;
         long written = 0;
+        AtomicBoolean done = new AtomicBoolean();
+        ScheduledFuture<?> watchdog = WATCHDOG.schedule(() -> abortStalled(done, cancelled, out, handle.get()), timeoutNanos + TimeUnit.MILLISECONDS.toNanos(WRITE_GRACE_MILLIS), TimeUnit.NANOSECONDS);
         try {
             while (true) {
                 long remaining = deadline - System.nanoTime();
@@ -198,8 +236,26 @@ public class ContainerLogDownloadService {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } finally {
+            done.set(true); // before the permit is released and the response completes: the watchdog must not touch out later
+            watchdog.cancel(false);
             cancelled.set(true);
             closeQuietly(handle.get());
+        }
+    }
+
+    /**
+     * Watchdog action. The Docker handle is always closed; the response stream only while the download is not done
+     * (cancel does not wait for a task already running, and the stream may belong to a finished request by now).
+     */
+    static void abortStalled(AtomicBoolean done, AtomicBoolean cancelled, OutputStream out, Closeable docker) {
+        cancelled.set(true);
+        closeQuietly(docker);
+        if (!done.get()) {
+            Thread.ofVirtual().name("log-download-abort").start(() -> {
+                if (!done.get()) {
+                    closeQuietly(out);
+                }
+            });
         }
     }
 

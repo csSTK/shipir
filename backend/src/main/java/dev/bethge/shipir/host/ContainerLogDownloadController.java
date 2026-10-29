@@ -32,10 +32,14 @@ class ContainerLogDownloadController {
                   @RequestParam(required = false) String since, @RequestParam(required = false) String tail,
                   @RequestParam(required = false) String timestamps, HttpServletResponse response) throws IOException {
         ContainerLogDownloadService.Download d = service.open(hostId, containerId, since, tail, timestamps);
-        response.setContentType("text/plain;charset=UTF-8");
-        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(d.fileName()).build().toString());
-        response.setHeader("X-Content-Type-Options", "nosniff");
-        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
-        d.body().writeTo(response.getOutputStream());
+        try {
+            response.setContentType("text/plain;charset=UTF-8");
+            response.setHeader(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(d.fileName()).build().toString());
+            response.setHeader("X-Content-Type-Options", "nosniff");
+            response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+            d.body().writeTo(response.getOutputStream());
+        } finally {
+            d.release().run(); // idempotent; covers a failure before the body ran (open() already took the permit)
+        }
     }
 }
