@@ -251,10 +251,13 @@ describe('AssistantDock', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'New chat' }))
       return screen.findByLabelText('Message')
     }
+    // Waits until this message's POST has been issued. The stream is not finished in these tests, so the
+    // input stays busy; a missing send fails the waitFor instead of being swallowed.
     const ask = async (text: string) => {
+      const before = sentBodies().length
       fireEvent.change(await screen.findByLabelText('Message'), { target: { value: text } })
       fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-      await waitFor(() => expect(screen.getByLabelText('Message')).toBeEnabled(), { timeout: 100 }).catch(() => {})
+      await waitFor(() => expect(sentBodies()).toHaveLength(before + 1))
     }
 
     it('sends host and deployment ids and shows a chip on a deployment page', async () => {

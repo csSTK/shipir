@@ -21,6 +21,7 @@
 }
 
 .view-chip__remove {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -35,6 +36,13 @@
   transition:
     transform var(--duration-press) var(--ease-out),
     background-color var(--duration-fast) var(--ease-out);
+}
+
+/* Invisible hit area: grows the 2rem button to 3rem (44px+ touch target) without growing the chip */
+.view-chip__remove::after {
+  content: '';
+  position: absolute;
+  inset: calc((var(--space-6) - var(--space-7)) / 2);
 }
 
 .view-chip__remove:hover {

@@ -276,6 +276,29 @@ test('removing the chip sends the message without context', async ({ page, api }
   expect(await body).toEqual({ content: 'no context please' })
 })
 
+test('the chip remove button has a hit area of at least 44px in both directions', async ({ page, api }) => {
+  setup(api)
+  await mockBroker(page)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Open assistant' }).click()
+  const panel = page.getByRole('dialog', { name: 'Assistant' })
+  await panel.getByRole('combobox', { name: 'Chat' }).selectOption('s1')
+  const remove = panel.getByRole('button', { name: /Remove view context/ })
+  await expect(remove).toBeVisible()
+  // The visible button is 32px. Points 22px from its centre (44px across) must hit it or one of its children.
+  // Measured and hit-tested in one synchronous step: the dock pops with a spring, so a box read earlier is stale.
+  const misses = await remove.evaluate((el) => {
+    const box = el.getBoundingClientRect()
+    const cx = box.left + box.width / 2
+    const cy = box.top + box.height / 2
+    return [[cx - 22, cy], [cx + 22, cy], [cx, cy - 22], [cx, cy + 22]].filter(([x, y]) => {
+      const hit = document.elementFromPoint(x, y)
+      return hit === null || (hit !== el && !el.contains(hit))
+    })
+  })
+  expect(misses, 'points 22px from the centre of the remove button that miss it').toEqual([])
+})
+
 test('after sending a message Escape still closes the dock and focus returns to the icon', async ({ page, api }) => {
   setup(api)
   await mockBroker(page)
