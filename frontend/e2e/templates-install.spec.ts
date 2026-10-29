@@ -79,7 +79,7 @@ test('one click installs a template with its defaults and opens the deployment',
   expect(body.name).toBe('wordpress')
   expect(body.yaml).toBe(yaml)
   expect(body.env).toEqual([
-    { key: 'DB_PASSWORD', value: expect.stringMatching(/^[A-Za-z0-9]{24}$/) },
+    { key: 'DB_PASSWORD', value: expect.stringMatching(/^[A-Za-z0-9]{32}$/) },
     { key: 'DB_USER', value: 'wp' },
   ])
   await deploy

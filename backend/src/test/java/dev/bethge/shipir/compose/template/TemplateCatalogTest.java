@@ -68,7 +68,8 @@ class TemplateCatalogTest {
         assertThat(bundled().all().stream().map(AppTemplate::id).toList())
                 .contains("vaultwarden", "gitea", "grafana", "jellyfin", "home-assistant", "nextcloud",
                         "pihole", "nginx-proxy-manager", "homepage", "filebrowser", "syncthing",
-                        "mysql", "mongodb", "rabbitmq", "minio", "influxdb");
+                        "mysql", "mongodb", "rabbitmq", "minio", "influxdb",
+                        "ghost", "n8n", "paperless-ngx", "bookstack", "linkding");
     }
 
     @Test

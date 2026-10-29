@@ -1201,5 +1201,548 @@
         }
       ]
     }
+  },
+  {
+    "id": "ghost",
+    "name": "Ghost",
+    "description": "Publishing platform and blog with its own MySQL database. Open port 2368 after the first deploy; the admin setup is at /ghost.",
+    "logo": "ghost",
+    "env": [
+      {
+        "key": "GHOST_URL",
+        "description": "Public URL of the site (change it when you put a domain in front)",
+        "secret": false,
+        "defaultValue": "http://localhost:2368"
+      },
+      {
+        "key": "DB_ROOT_PASSWORD",
+        "description": "MySQL root password",
+        "secret": true,
+        "generate": true
+      },
+      {
+        "key": "DB_PASSWORD",
+        "description": "Password of the Ghost database user",
+        "secret": true,
+        "generate": true
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "ghost",
+          "image": "ghost:5.130.6",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 2368,
+              "container": 2368,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "url",
+              "ref": "GHOST_URL"
+            },
+            {
+              "key": "database__client",
+              "value": "mysql"
+            },
+            {
+              "key": "database__connection__host",
+              "value": "db"
+            },
+            {
+              "key": "database__connection__user",
+              "value": "ghost"
+            },
+            {
+              "key": "database__connection__password",
+              "ref": "DB_PASSWORD"
+            },
+            {
+              "key": "database__connection__database",
+              "value": "ghost"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "ghost-content",
+              "target": "/var/lib/ghost/content",
+              "readOnly": false
+            }
+          ],
+          "dependsOn": [
+            "db"
+          ]
+        },
+        {
+          "name": "db",
+          "image": "mysql:8.4.3",
+          "restart": "unless-stopped",
+          "environment": [
+            {
+              "key": "MYSQL_ROOT_PASSWORD",
+              "ref": "DB_ROOT_PASSWORD"
+            },
+            {
+              "key": "MYSQL_DATABASE",
+              "value": "ghost"
+            },
+            {
+              "key": "MYSQL_USER",
+              "value": "ghost"
+            },
+            {
+              "key": "MYSQL_PASSWORD",
+              "ref": "DB_PASSWORD"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "ghost-db",
+              "target": "/var/lib/mysql",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "ghost-content",
+          "external": false
+        },
+        {
+          "name": "ghost-db",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "n8n",
+    "name": "n8n",
+    "description": "Workflow automation. Open port 5678 after the first deploy and create the owner account.",
+    "logo": "n8n",
+    "env": [
+      {
+        "key": "N8N_ENCRYPTION_KEY",
+        "description": "Key that encrypts stored credentials; keep it, losing it makes saved credentials unreadable",
+        "secret": true,
+        "generate": true
+      },
+      {
+        "key": "GENERIC_TIMEZONE",
+        "description": "Time zone for schedules (for example Europe/Berlin)",
+        "secret": false,
+        "defaultValue": "UTC"
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "n8n",
+          "image": "n8nio/n8n:1.100.1",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 5678,
+              "container": 5678,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "N8N_ENCRYPTION_KEY",
+              "ref": "N8N_ENCRYPTION_KEY"
+            },
+            {
+              "key": "GENERIC_TIMEZONE",
+              "ref": "GENERIC_TIMEZONE"
+            },
+            {
+              "key": "TZ",
+              "ref": "GENERIC_TIMEZONE"
+            },
+            {
+              "key": "N8N_SECURE_COOKIE",
+              "value": "false"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "n8n-data",
+              "target": "/home/node/.n8n",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "n8n-data",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "paperless-ngx",
+    "name": "Paperless-ngx",
+    "description": "Document management with OCR, backed by PostgreSQL and Redis. Open port 8010 after the first deploy and sign in with the admin user below. Drop files into the consume volume to import them.",
+    "logo": "paperless-ngx",
+    "env": [
+      {
+        "key": "PAPERLESS_ADMIN_USER",
+        "description": "Name of the first admin user",
+        "secret": false,
+        "defaultValue": "admin"
+      },
+      {
+        "key": "PAPERLESS_ADMIN_PASSWORD",
+        "description": "Password of the first admin user",
+        "secret": true,
+        "generate": true
+      },
+      {
+        "key": "PAPERLESS_SECRET_KEY",
+        "description": "Django secret key for sessions",
+        "secret": true,
+        "generate": true
+      },
+      {
+        "key": "DB_PASSWORD",
+        "description": "Password of the PostgreSQL database user",
+        "secret": true,
+        "generate": true
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "webserver",
+          "image": "ghcr.io/paperless-ngx/paperless-ngx:2.14.7",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 8010,
+              "container": 8000,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "PAPERLESS_REDIS",
+              "value": "redis://broker:6379"
+            },
+            {
+              "key": "PAPERLESS_DBHOST",
+              "value": "db"
+            },
+            {
+              "key": "PAPERLESS_DBNAME",
+              "value": "paperless"
+            },
+            {
+              "key": "PAPERLESS_DBUSER",
+              "value": "paperless"
+            },
+            {
+              "key": "PAPERLESS_DBPASS",
+              "ref": "DB_PASSWORD"
+            },
+            {
+              "key": "PAPERLESS_SECRET_KEY",
+              "ref": "PAPERLESS_SECRET_KEY"
+            },
+            {
+              "key": "PAPERLESS_ADMIN_USER",
+              "ref": "PAPERLESS_ADMIN_USER"
+            },
+            {
+              "key": "PAPERLESS_ADMIN_PASSWORD",
+              "ref": "PAPERLESS_ADMIN_PASSWORD"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "paperless-data",
+              "target": "/usr/src/paperless/data",
+              "readOnly": false
+            },
+            {
+              "source": "paperless-media",
+              "target": "/usr/src/paperless/media",
+              "readOnly": false
+            },
+            {
+              "source": "paperless-consume",
+              "target": "/usr/src/paperless/consume",
+              "readOnly": false
+            }
+          ],
+          "dependsOn": [
+            "db",
+            "broker"
+          ]
+        },
+        {
+          "name": "db",
+          "image": "postgres:16.4-alpine",
+          "restart": "unless-stopped",
+          "environment": [
+            {
+              "key": "POSTGRES_DB",
+              "value": "paperless"
+            },
+            {
+              "key": "POSTGRES_USER",
+              "value": "paperless"
+            },
+            {
+              "key": "POSTGRES_PASSWORD",
+              "ref": "DB_PASSWORD"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "paperless-db",
+              "target": "/var/lib/postgresql/data",
+              "readOnly": false
+            }
+          ]
+        },
+        {
+          "name": "broker",
+          "image": "redis:7.4.1-alpine",
+          "restart": "unless-stopped",
+          "volumes": [
+            {
+              "source": "paperless-redis",
+              "target": "/data",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "paperless-data",
+          "external": false
+        },
+        {
+          "name": "paperless-media",
+          "external": false
+        },
+        {
+          "name": "paperless-consume",
+          "external": false
+        },
+        {
+          "name": "paperless-db",
+          "external": false
+        },
+        {
+          "name": "paperless-redis",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "bookstack",
+    "name": "BookStack",
+    "description": "Wiki and documentation platform with its own MariaDB database. Open port 6875 after the first deploy and sign in as admin@admin.com with the password 'password', then change both.",
+    "logo": "bookstack",
+    "env": [
+      {
+        "key": "APP_URL",
+        "description": "Public URL of the wiki (change it when you put a domain in front)",
+        "secret": false,
+        "defaultValue": "http://localhost:6875"
+      },
+      {
+        "key": "APP_KEY",
+        "description": "Application encryption key, exactly 32 characters",
+        "secret": true,
+        "generate": true
+      },
+      {
+        "key": "DB_ROOT_PASSWORD",
+        "description": "MariaDB root password",
+        "secret": true,
+        "generate": true
+      },
+      {
+        "key": "DB_PASSWORD",
+        "description": "Password of the BookStack database user",
+        "secret": true,
+        "generate": true
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "bookstack",
+          "image": "lscr.io/linuxserver/bookstack:24.10.3",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 6875,
+              "container": 80,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "PUID",
+              "value": "1000"
+            },
+            {
+              "key": "PGID",
+              "value": "1000"
+            },
+            {
+              "key": "APP_URL",
+              "ref": "APP_URL"
+            },
+            {
+              "key": "APP_KEY",
+              "ref": "APP_KEY"
+            },
+            {
+              "key": "DB_HOST",
+              "value": "db"
+            },
+            {
+              "key": "DB_PORT",
+              "value": "3306"
+            },
+            {
+              "key": "DB_DATABASE",
+              "value": "bookstack"
+            },
+            {
+              "key": "DB_USERNAME",
+              "value": "bookstack"
+            },
+            {
+              "key": "DB_PASSWORD",
+              "ref": "DB_PASSWORD"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "bookstack-config",
+              "target": "/config",
+              "readOnly": false
+            }
+          ],
+          "dependsOn": [
+            "db"
+          ]
+        },
+        {
+          "name": "db",
+          "image": "mariadb:11.5.2",
+          "restart": "unless-stopped",
+          "environment": [
+            {
+              "key": "MARIADB_ROOT_PASSWORD",
+              "ref": "DB_ROOT_PASSWORD"
+            },
+            {
+              "key": "MARIADB_DATABASE",
+              "value": "bookstack"
+            },
+            {
+              "key": "MARIADB_USER",
+              "value": "bookstack"
+            },
+            {
+              "key": "MARIADB_PASSWORD",
+              "ref": "DB_PASSWORD"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "bookstack-db",
+              "target": "/var/lib/mysql",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "bookstack-config",
+          "external": false
+        },
+        {
+          "name": "bookstack-db",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "linkding",
+    "name": "Linkding",
+    "description": "Bookmark manager. Open port 9090 after the first deploy and sign in with the admin user below.",
+    "logo": "linkding",
+    "env": [
+      {
+        "key": "LD_SUPERUSER_NAME",
+        "description": "Name of the admin user",
+        "secret": false,
+        "defaultValue": "admin"
+      },
+      {
+        "key": "LD_SUPERUSER_PASSWORD",
+        "description": "Password of the admin user",
+        "secret": true,
+        "generate": true
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "linkding",
+          "image": "sissbruecker/linkding:1.47.0",
+          "restart": "unless-stopped",
+          "ports": [
+            {
+              "host": 9090,
+              "container": 9090,
+              "protocol": "tcp"
+            }
+          ],
+          "environment": [
+            {
+              "key": "LD_SUPERUSER_NAME",
+              "ref": "LD_SUPERUSER_NAME"
+            },
+            {
+              "key": "LD_SUPERUSER_PASSWORD",
+              "ref": "LD_SUPERUSER_PASSWORD"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "linkding-data",
+              "target": "/etc/linkding/data",
+              "readOnly": false
+            }
+          ]
+        }
+      ],
+      "volumes": [
+        {
+          "name": "linkding-data",
+          "external": false
+        }
+      ]
+    }
   }
 ]

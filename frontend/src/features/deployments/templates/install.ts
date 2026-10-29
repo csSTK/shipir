@@ -5,7 +5,7 @@ import type { AppTemplate } from './api.ts'
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 
 /** Random alphanumeric secret from the browser's CSPRNG (rejection sampling, no modulo bias). */
-export function generateSecret(length = 24): string {
+export function generateSecret(length = 32): string {
   const limit = 256 - (256 % ALPHABET.length)
   let out = ''
   while (out.length < length) {

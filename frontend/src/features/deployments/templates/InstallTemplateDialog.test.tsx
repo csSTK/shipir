@@ -82,7 +82,7 @@ const calls = (path: string, method?: string) => apiFetch.mock.calls.filter((c) 
 describe('helpers', () => {
   it('generateSecret returns distinct, non-empty, url-safe values', () => {
     const a = generateSecret()
-    expect(a.length).toBeGreaterThanOrEqual(24)
+    expect(a.length).toBeGreaterThanOrEqual(32)
     expect(a).toMatch(/^[A-Za-z0-9]+$/)
     expect(generateSecret()).not.toBe(a)
   })
@@ -106,7 +106,7 @@ describe('InstallTemplateDialog', () => {
     expect(body.name).toBe('wordpress')
     expect(body.yaml).toBe('services: {}\n')
     expect(body.env).toEqual([
-      { key: 'DB_PASSWORD', value: expect.stringMatching(/^[A-Za-z0-9]{24,}$/) },
+      { key: 'DB_PASSWORD', value: expect.stringMatching(/^[A-Za-z0-9]{32,}$/) },
       { key: 'DB_USER', value: 'wp' },
     ])
     expect(calls('/hosts/h1/managed-deployments/s1/deploy', 'POST')).toHaveLength(1)
