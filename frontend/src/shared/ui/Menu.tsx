@@ -7,6 +7,8 @@ import './Menu.css'
 export type MenuEntry =
   | { type?: 'item'; label: string; onSelect: () => void; icon?: ReactNode; danger?: boolean; disabled?: boolean }
   | { type: 'separator' }
+  /** Non-interactive heading for the group below it, exposed as a group named by its label. */
+  | { type: 'label'; label: string }
 
 /**
  * Dropdown menu: Radix handles keyboard (arrows, typeahead, Esc, focus return to the trigger),
@@ -26,6 +28,10 @@ export function Menu({ trigger, items, align = 'end' }: { trigger: ReactElement;
                 {items.map((entry, i) =>
                   entry.type === 'separator' ? (
                     <DropdownMenu.Separator key={`sep-${i}`} className="ui-menu__sep" />
+                  ) : entry.type === 'label' ? (
+                    <div key={`label-${i}`} role="group" aria-label={entry.label} className="ui-menu__label">
+                      {entry.label}
+                    </div>
                   ) : (
                     <DropdownMenu.Item
                       key={entry.label}

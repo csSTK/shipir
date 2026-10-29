@@ -31,7 +31,8 @@ function Switcher({ currentId, rest }: { currentId?: string; rest: string }) {
       }
       items={groupByTag(envs).flatMap((group, i): MenuEntry[] => [
         ...(i > 0 ? [{ type: 'separator' as const }] : []),
-        ...group.map((env) => ({
+        ...(group.tag ? [{ type: 'label' as const, label: group.tag }] : []),
+        ...group.envs.map((env) => ({
           label: env.name,
           icon: <StatusDot tone={env.status === 'UP' ? 'ok' : env.status === 'DOWN' ? 'bad' : 'muted'} />,
           onSelect: () => navigate(`/environments/${env.id}${rest ? `/${rest}` : ''}`),
@@ -44,8 +45,9 @@ function Switcher({ currentId, rest }: { currentId?: string; rest: string }) {
 /**
  * Groups environments by their first tag (alphabetical), untagged ones last. Each environment
  * sits in exactly one group, so a multi-tag environment is listed under its first tag only.
+ * `tag` is null for the untagged group.
  */
-function groupByTag(envs: HostOverview[]): HostOverview[][] {
+function groupByTag(envs: HostOverview[]): { tag: string | null; envs: HostOverview[] }[] {
   const groups = new Map<string | null, HostOverview[]>()
   for (const env of envs) {
     // Overview rows from an older API may lack `tags`; treat them as untagged.
@@ -58,5 +60,5 @@ function groupByTag(envs: HostOverview[]): HostOverview[][] {
     if (b === null) return -1
     return a.localeCompare(b)
   })
-  return keys.map((key) => groups.get(key) ?? [])
+  return keys.map((key) => ({ tag: key, envs: groups.get(key) ?? [] }))
 }

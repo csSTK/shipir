@@ -124,7 +124,7 @@ test('admin edits tags with the chip input and sees them on the card', async ({ 
   await expect(card.getByRole('list', { name: 'Tags' })).not.toContainText('prod')
 })
 
-test('the top bar environment switcher groups environments by their first tag', async ({ page, api }) => {
+test('the top bar environment switcher groups environments by their first tag and names each group', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: user('VIEWER') })
   api.mock('GET', '/api/hosts/overview', { body: [staging, berlin, local] })
   api.mock('GET', '/api/hosts/a/images', { body: [] })
@@ -136,6 +136,8 @@ test('the top bar environment switcher groups environments by their first tag', 
   const sequence = await menu.evaluate((el) =>
     Array.from(el.children).map((child) => (child.getAttribute('role') === 'separator' ? 'sep' : child.textContent)),
   )
-  // Local and Berlin share the first tag "eu"; untagged Staging goes last.
-  expect(sequence).toEqual(['Berlin', 'Local', 'sep', 'Staging'])
+  // Local and Berlin share the first tag "eu" and sit under its name; untagged Staging goes last without a label.
+  expect(sequence).toEqual(['eu', 'Berlin', 'Local', 'sep', 'Staging'])
+  await expect(menu.getByRole('group')).toHaveCount(1)
+  await expect(menu.getByRole('group', { name: 'eu' })).toBeVisible()
 })

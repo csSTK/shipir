@@ -64,12 +64,20 @@ describe('EnvironmentSwitcher grouping', () => {
       env('local', 'Local', ['eu', 'prod']),
     ])
 
-    expect(await menuSequence()).toEqual(['Tokyo', 'sep', 'Berlin', 'Local', 'sep', 'Staging'])
+    expect(await menuSequence()).toEqual(['apac', 'Tokyo', 'sep', 'eu', 'Berlin', 'Local', 'sep', 'Staging'])
   })
 
   it('shows no separator when every environment shares the same group', async () => {
     renderSwitcher([env('berlin', 'Berlin', ['eu']), env('local', 'Local', ['eu'])])
 
-    expect(await menuSequence()).toEqual(['Berlin', 'Local'])
+    expect(await menuSequence()).toEqual(['eu', 'Berlin', 'Local'])
+  })
+
+  it('names each tagged group after its tag and gives the untagged group no label', async () => {
+    renderSwitcher([env('berlin', 'Berlin', ['eu']), env('staging', 'Staging', [])])
+
+    fireEvent.keyDown(await screen.findByRole('button', { name: /Environment: / }), { key: 'Enter' })
+    expect(await screen.findByRole('group', { name: 'eu' })).toBeInTheDocument()
+    expect(screen.getAllByRole('group')).toHaveLength(1)
   })
 })

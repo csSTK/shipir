@@ -88,6 +88,25 @@ describe('Menu', () => {
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
   })
 
+  it('renders a label entry as a named, non-interactive group', async () => {
+    render(
+      <Menu
+        trigger={<button>Actions</button>}
+        items={[
+          { type: 'label', label: 'eu' },
+          { label: 'Berlin', onSelect: vi.fn() },
+        ]}
+      />,
+    )
+    const trigger = screen.getByRole('button', { name: 'Actions' })
+    trigger.focus()
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+    const group = await screen.findByRole('group', { name: 'eu' })
+    expect(group).toHaveTextContent('eu')
+    expect(screen.queryByRole('menuitem', { name: 'eu' })).not.toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Berlin' })).toBeInTheDocument()
+  })
+
   it('closes on Escape and returns focus to the trigger', async () => {
     setup()
     const trigger = screen.getByRole('button', { name: 'Actions' })

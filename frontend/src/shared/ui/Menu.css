@@ -38,6 +38,14 @@
 .ui-menu__icon {
   display: inline-flex;
 }
+.ui-menu__label {
+  padding: var(--space-2) var(--space-3) var(--space-1);
+  font-size: var(--text-caption-size);
+  letter-spacing: var(--text-caption-tracking);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-subtle);
+  user-select: none;
+}
 .ui-menu__sep {
   height: 1px;
   margin: var(--space-1) 0;
