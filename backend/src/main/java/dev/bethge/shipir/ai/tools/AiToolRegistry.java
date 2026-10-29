@@ -242,6 +242,8 @@ public class AiToolRegistry {
             }
             // the exception text is not forwarded (could carry internals); the type is enough for the log
             log.warn("AI tool {} failed: {}", tool.name(), e.getClass().getSimpleName());
+            // the message can name paths or values, so it stays at DEBUG; arguments and stack traces are never logged
+            log.debug("AI tool {} failed: {}: {}", tool.name(), e.getClass().getSimpleName(), e.getMessage());
             return ToolResult.error("TOOL_FAILED", "The tool could not be executed.");
         }
     }

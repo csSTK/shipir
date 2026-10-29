@@ -2,8 +2,13 @@ package dev.bethge.shipir.ai.tools;
 
 import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.compose.DeploymentException;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import dev.bethge.shipir.host.HostException;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -322,6 +327,61 @@ class AiToolRegistryTest {
 
         assertThat(registry.execute("small", "{\"hostId\":\"" + UUID.randomUUID() + "\"}", ctx(Role.VIEWER)).content())
                 .isEqualTo("\"ok\"");
+    }
+
+    /** Runs the action with the registry logger at DEBUG and returns every event it logged. */
+    private static List<ILoggingEvent> logsWhile(Runnable action) {
+        Logger logger = (Logger) LoggerFactory.getLogger(AiToolRegistry.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        Level previous = logger.getLevel();
+        logger.setLevel(Level.DEBUG);
+        logger.addAppender(appender);
+        try {
+            action.run();
+        } finally {
+            logger.detachAppender(appender);
+            logger.setLevel(previous);
+            appender.stop();
+        }
+        return appender.list;
+    }
+
+    @Test
+    void unexpectedToolFailureLogsExceptionClassAndMessageAtDebug() {
+        AiToolRegistry registry = registry(tool("boom", Role.VIEWER, false, (a, c) -> {
+            throw new IllegalStateException("unit-marker-message: /data/stacks/outside");
+        }));
+
+        List<ILoggingEvent> events = logsWhile(() -> registry.execute("boom", args(), ctx(Role.VIEWER)));
+
+        assertThat(events).filteredOn(e -> e.getLevel() == Level.DEBUG)
+                .singleElement()
+                .satisfies(e -> assertThat(e.getFormattedMessage())
+                        .contains("IllegalStateException", "unit-marker-message: /data/stacks/outside"));
+    }
+
+    @Test
+    void unexpectedToolFailureNeverLogsArgumentsOrAStackTrace() {
+        AiToolRegistry registry = new AiToolRegistry(List.of(new FunctionTool("boom", "desc",
+                Map.of("type", "object", "properties", Map.of("note", Map.of("type", "string"))),
+                Role.VIEWER, false, (a, c) -> {
+                    throw new IllegalStateException("unit-marker-message");
+                }, v -> MAPPER.writeValueAsString(v))), MAPPER);
+
+        List<ILoggingEvent> events = logsWhile(() -> registry.execute("boom", "{\"note\":\"SECRET-ARG\"}", ctx(Role.VIEWER)));
+
+        assertThat(events).isNotEmpty();
+        assertThat(events).allSatisfy(e -> {
+            assertThat(e.getFormattedMessage()).doesNotContain("SECRET-ARG");
+            assertThat(e.getArgumentArray()).allSatisfy(arg -> assertThat(String.valueOf(arg)).doesNotContain("SECRET-ARG"));
+            assertThat(e.getThrowableProxy()).isNull();
+        });
+        assertThat(events).filteredOn(e -> e.getLevel() == Level.WARN)
+                .singleElement()
+                .satisfies(e -> assertThat(e.getFormattedMessage())
+                        .contains("boom", "IllegalStateException")
+                        .doesNotContain("unit-marker-message"));
     }
 
     @Test
