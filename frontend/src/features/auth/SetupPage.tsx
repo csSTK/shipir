@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Button, Card } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { useQueryClient } from '@tanstack/react-query'
@@ -6,6 +6,7 @@ import { EnvironmentForm } from '../hosts/index.ts'
 import { AuthBrand } from './AuthBrand.tsx'
 import { TwoFactorEnrollment } from './TwoFactorEnrollment.tsx'
 import { CURRENT_USER_KEY, useChangePassword, type SetupStep } from './api.ts'
+import { fieldError } from './fieldError.ts'
 import { checkPassword, isPasswordValid, violationMessage } from './passwordPolicy.ts'
 import { useTranslation } from 'react-i18next'
 import i18n from 'i18next'
@@ -126,6 +127,8 @@ function PasswordStep({ username }: { username: string }) {
   const [next, setNext] = useState('')
   const [confirmation, setConfirmation] = useState('')
   const currentRef = useRef<HTMLInputElement>(null)
+  const errorId = useId()
+  const errorCode = changePassword.error instanceof ApiError ? changePassword.error.code : undefined
 
   useEffect(() => {
     currentRef.current?.focus()
@@ -168,6 +171,7 @@ function PasswordStep({ username }: { username: string }) {
             onChange={(e) => setCurrent(e.target.value)}
             autoComplete="current-password"
             disabled={changePassword.isPending}
+            {...fieldError(errorId, errorCode === 'INVALID_CURRENT_PASSWORD')}
           />
         </label>
         <label className="setup__field">
@@ -178,6 +182,7 @@ function PasswordStep({ username }: { username: string }) {
             onChange={(e) => setNext(e.target.value)}
             autoComplete="new-password"
             disabled={changePassword.isPending}
+            {...fieldError(errorId, errorCode === 'PASSWORD_POLICY')}
           />
         </label>
         <label className="setup__field">
@@ -200,7 +205,7 @@ function PasswordStep({ username }: { username: string }) {
             </li>
           ))}
         </ul>
-        <div className="setup__error" role="alert">
+        <div id={errorId} className="setup__error" role="alert">
           {changePassword.isError &&
             errorMessages(changePassword.error).map((message) => <p key={message}>{message}</p>)}
         </div>

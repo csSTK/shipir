@@ -97,7 +97,12 @@ describe('password reset', () => {
     fillStepTwo()
     apiFetchMock.mockRejectedValueOnce(new ApiError(400, 'bad', 'INVALID_RESET_CODE'))
     fireEvent.click(confirm())
-    expect(await screen.findByRole('alert')).toHaveTextContent(/invalid or expired/i)
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/invalid or expired/i)
+    const code = screen.getByLabelText('6-digit code')
+    expect(code).toHaveAttribute('aria-describedby', alert.id)
+    expect(code).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('New password')).not.toHaveAttribute('aria-invalid')
     expect(apiFetchMock).toHaveBeenLastCalledWith('/auth/password-reset/confirm', {
       method: 'POST',
       body: { username: 'admin', code: '123456', newPassword: GOOD },
@@ -114,7 +119,11 @@ describe('password reset', () => {
       new ApiError(400, 'x', 'PASSWORD_POLICY', ['MISSING_SYMBOL']),
     )
     fireEvent.click(confirm())
-    expect(await screen.findByText('The password needs a symbol.')).toBeInTheDocument()
+    const message = await screen.findByText('The password needs a symbol.')
+    const next = screen.getByLabelText('New password')
+    expect(next).toHaveAttribute('aria-describedby', message.closest('[role="alert"]')?.id)
+    expect(next).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('6-digit code')).not.toHaveAttribute('aria-invalid')
   })
 
   it('returns to login with a success notice after a reset', async () => {
@@ -135,6 +144,7 @@ describe('password reset throttling', () => {
     apiFetchMock.mockRejectedValueOnce(new ApiError(429, 'x', 'TOO_MANY_ATTEMPTS', undefined, undefined, 42))
     fireEvent.click(screen.getByRole('button', { name: /request code/i }))
     expect(await screen.findByText('Too many attempts, try again in 42 seconds.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Username')).not.toHaveAttribute('aria-invalid')
   })
 
   it('shows the wait from Retry-After when the code confirmation is throttled', async () => {

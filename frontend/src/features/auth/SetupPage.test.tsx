@@ -112,6 +112,10 @@ describe('SetupPage', () => {
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent(/different from the current/i)
     expect(alert).toHaveTextContent(/symbol/i)
+    const next = screen.getByLabelText('New password')
+    expect(next).toHaveAttribute('aria-describedby', alert.id)
+    expect(next).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('Current password')).not.toHaveAttribute('aria-invalid')
   })
 
   it('shows a message for INVALID_CURRENT_PASSWORD and focuses the field', async () => {
@@ -120,7 +124,12 @@ describe('SetupPage', () => {
     fillValid()
     fireEvent.click(submit())
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/current password is (incorrect|wrong)/i)
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/current password is (incorrect|wrong)/i)
+    const current = screen.getByLabelText('Current password')
+    expect(current).toHaveAttribute('aria-describedby', alert.id)
+    expect(current).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('New password')).not.toHaveAttribute('aria-invalid')
     await waitFor(() => expect(screen.getByLabelText('Current password')).toHaveFocus())
   })
 

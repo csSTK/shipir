@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Button, Card, Skeleton } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { isMfaRequired, useLogin, useOidcConfig, useVerifyTwoFactor } from './api.ts'
 import { throttleMessage } from './throttleErrors.ts'
 import { twoFactorErrorMessage } from './twoFactorErrors.ts'
+import { fieldError } from './fieldError.ts'
 import { AuthBrand } from './AuthBrand.tsx'
 import { PasswordResetPage } from './PasswordResetPage.tsx'
 import { useTranslation } from 'react-i18next'
@@ -105,6 +106,7 @@ function SignInForm({
   const [password, setPassword] = useState('')
   const usernameRef = useRef<HTMLInputElement>(null)
   const passwordRef = useRef<HTMLInputElement>(null)
+  const errorId = useId()
 
   useEffect(() => {
     if (showLocal) usernameRef.current?.focus()
@@ -134,6 +136,9 @@ function SignInForm({
       : login.error instanceof ApiError && login.error.code === 'LOCAL_LOGIN_DISABLED'
         ? t('LoginPage.localLoginIsDisabledUse')
       : t('LoginPage.signInFailedPleaseTry'))
+
+  // Only a rejected credential pair belongs to the two fields; throttling and server errors are form-level.
+  const credentialsError = fieldError(errorId, login.error instanceof ApiError && login.error.status === 401)
 
   return (
     <main className="login">
@@ -180,6 +185,7 @@ function SignInForm({
             spellCheck={false}
             required
             disabled={login.isPending}
+            {...credentialsError}
           />
         </label>
         <label className="login__field">
@@ -192,9 +198,10 @@ function SignInForm({
             autoComplete="current-password"
             required
             disabled={login.isPending}
+            {...credentialsError}
           />
         </label>
-        <p className="login__error" role="alert">
+        <p id={errorId} className="login__error" role="alert">
           {errorMessage}
         </p>
         <Button className="login__submit" variant="primary" type="submit" disabled={login.isPending} loading={login.isPending}>
@@ -218,6 +225,7 @@ function CodeStep({ onBack }: { onBack: (notice: string | null) => void }) {
   const verify = useVerifyTwoFactor()
   const [code, setCode] = useState('')
   const codeRef = useRef<HTMLInputElement>(null)
+  const errorId = useId()
 
   useEffect(() => {
     codeRef.current?.focus()
@@ -257,9 +265,10 @@ function CodeStep({ onBack }: { onBack: (notice: string | null) => void }) {
                 autoCapitalize="characters"
                 spellCheck={false}
                 disabled={verify.isPending}
+                {...fieldError(errorId, verify.error instanceof ApiError && verify.error.code === 'INVALID_CODE')}
               />
             </label>
-            <p className="login__error" role="alert">
+            <p id={errorId} className="login__error" role="alert">
               {verify.isError && twoFactorErrorMessage(verify.error, t('LoginPage.verificationFailedPleaseTryAgain'))}
             </p>
             <Button className="login__submit" variant="primary" type="submit" disabled={verify.isPending} loading={verify.isPending}>

@@ -94,7 +94,11 @@ describe('AccountPage', () => {
     renderPage()
     fillValid()
     fireEvent.click(submit())
-    expect(await screen.findByText(/current password is incorrect/i)).toBeInTheDocument()
+    const error = await screen.findByText(/current password is incorrect/i)
+    const current = screen.getByLabelText('Current password')
+    expect(current).toHaveAttribute('aria-describedby', error.closest('[role="alert"]')?.id)
+    expect(current).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('New password')).not.toHaveAttribute('aria-invalid')
   })
 
   it('shows server policy violations inline', async () => {
@@ -106,7 +110,11 @@ describe('AccountPage', () => {
     renderPage()
     fillValid()
     fireEvent.click(submit())
-    expect(await screen.findByText(/must be different from the current/i)).toBeInTheDocument()
+    const error = await screen.findByText(/must be different from the current/i)
+    const next = screen.getByLabelText('New password')
+    expect(next).toHaveAttribute('aria-describedby', error.closest('[role="alert"]')?.id)
+    expect(next).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('Current password')).not.toHaveAttribute('aria-invalid')
   })
 
   it('loads preferences and saves a toggle', async () => {

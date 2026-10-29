@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Button, Card } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { AuthBrand } from './AuthBrand.tsx'
 import { useConfirmPasswordReset, useRequestPasswordReset } from './api.ts'
 import { checkPassword, isPasswordValid, violationMessage } from './passwordPolicy.ts'
 import { throttleMessage } from './throttleErrors.ts'
+import { fieldError } from './fieldError.ts'
 import { useTranslation } from 'react-i18next'
 import i18n from 'i18next'
 import './LoginPage.css'
@@ -18,22 +19,23 @@ interface Props {
   onDone: () => void
 }
 
-function confirmErrors(error: unknown): { invalidCode: boolean; messages: string[] } {
+function confirmErrors(error: unknown): { invalidCode: boolean; policy: boolean; messages: string[] } {
   const throttled = throttleMessage(error)
-  if (throttled) return { invalidCode: false, messages: [throttled] }
+  if (throttled) return { invalidCode: false, policy: false, messages: [throttled] }
   if (error instanceof ApiError && error.status === 400) {
     if (error.code === 'INVALID_RESET_CODE') {
-      return { invalidCode: true, messages: [i18n.t('auth:PasswordResetPage.theCodeIsInvalidOr')] }
+      return { invalidCode: true, policy: false, messages: [i18n.t('auth:PasswordResetPage.theCodeIsInvalidOr')] }
     }
     if (error.code === 'PASSWORD_POLICY') {
       const violations = error.violations ?? []
       return {
         invalidCode: false,
+        policy: true,
         messages: violations.length > 0 ? violations.map(violationMessage) : [i18n.t('auth:PasswordResetPage.thePasswordDoesNotMeet')],
       }
     }
   }
-  return { invalidCode: false, messages: [i18n.t('auth:PasswordResetPage.couldNotResetThePassword')] }
+  return { invalidCode: false, policy: false, messages: [i18n.t('auth:PasswordResetPage.couldNotResetThePassword')] }
 }
 
 /** Self-service reset: request a one-time code for a username, then set a new password with it. */
@@ -62,6 +64,7 @@ function RequestStep({
   const { t } = useTranslation('auth')
   const request = useRequestPasswordReset()
   const ref = useRef<HTMLInputElement>(null)
+  const errorId = useId()
   useEffect(() => ref.current?.focus(), [])
 
   const onSubmit = (event: FormEvent) => {
@@ -89,9 +92,10 @@ function RequestStep({
             spellCheck={false}
             required
             disabled={request.isPending}
+            {...fieldError(errorId, request.isError && throttleMessage(request.error) === null)}
           />
         </label>
-        <p className="login__error" role="alert">
+        <p id={errorId} className="login__error" role="alert">
           {request.isError && (throttleMessage(request.error) ?? t('PasswordResetPage.couldNotRequestACode'))}
         </p>
         <Button className="login__submit" variant="primary" type="submit" disabled={request.isPending || username.trim() === ''} loading={request.isPending}>
@@ -124,6 +128,7 @@ function ConfirmStep({
   const [next, setNext] = useState('')
   const [confirmation, setConfirmation] = useState('')
   const ref = useRef<HTMLInputElement>(null)
+  const errorId = useId()
   useEffect(() => ref.current?.focus(), [])
 
   const rules = checkPassword(next, username, confirmation)
@@ -157,6 +162,7 @@ function ConfirmStep({
             autoComplete="one-time-code"
             maxLength={6}
             disabled={confirm.isPending}
+            {...fieldError(errorId, errors?.invalidCode === true)}
           />
         </label>
         <label className="login__field">
@@ -167,6 +173,7 @@ function ConfirmStep({
             onChange={(e) => setNext(e.target.value)}
             autoComplete="new-password"
             disabled={confirm.isPending}
+            {...fieldError(errorId, errors?.policy === true)}
           />
         </label>
         <label className="login__field">
@@ -189,7 +196,7 @@ function ConfirmStep({
             </li>
           ))}
         </ul>
-        <div className="login__error reset__errors" role="alert">
+        <div id={errorId} className="login__error reset__errors" role="alert">
           {errors?.messages.map((message) => <p key={message}>{message}</p>)}
         </div>
         {errors?.invalidCode && (

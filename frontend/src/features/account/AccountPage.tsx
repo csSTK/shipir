@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Badge, Button, Card, PageHeader, Select, Skeleton, Switch, TextField } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { useQueryClient } from '@tanstack/react-query'
@@ -11,6 +11,7 @@ import {
   useDisableTwoFactor,
   type CurrentUser,
 } from '../auth/index.ts'
+import { fieldError } from '../auth/fieldError.ts'
 import { checkPassword, isPasswordValid, violationMessage } from '../auth/passwordPolicy.ts'
 import {
   NOTIFICATION_TYPE_LABELS,
@@ -44,6 +45,10 @@ function PasswordSection({ username }: { username: string }) {
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirmation, setConfirmation] = useState('')
+  const errorId = useId()
+  const errorCode = changePassword.error instanceof ApiError ? changePassword.error.code : undefined
+  // Which field the server error belongs to: the wrong current password, or the new one breaking the policy.
+  const invalidField = errorCode === 'INVALID_CURRENT_PASSWORD' ? 0 : errorCode === 'PASSWORD_POLICY' ? 1 : -1
 
   const rules = checkPassword(next, username, confirmation)
   const canSubmit =
@@ -74,7 +79,7 @@ function PasswordSection({ username }: { username: string }) {
           [t('AccountPage.newPassword'), next, setNext, 'new-password'],
           [t('AccountPage.confirmNewPassword'), confirmation, setConfirmation, 'new-password'],
         ] as const
-      ).map(([label, value, set, autoComplete]) => (
+      ).map(([label, value, set, autoComplete], index) => (
         <label key={label} className="account__field">
           <span>{label}</span>
           <input
@@ -83,6 +88,7 @@ function PasswordSection({ username }: { username: string }) {
             onChange={(e) => set(e.target.value)}
             autoComplete={autoComplete}
             disabled={changePassword.isPending}
+            {...fieldError(errorId, invalidField === index)}
           />
         </label>
       ))}
@@ -94,7 +100,7 @@ function PasswordSection({ username }: { username: string }) {
           </li>
         ))}
       </ul>
-      <div className="account__error" role="alert">
+      <div id={errorId} className="account__error" role="alert">
         {changePassword.isError &&
           passwordErrors(changePassword.error).map((message) => <p key={message}>{message}</p>)}
       </div>
