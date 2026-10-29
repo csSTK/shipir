@@ -16,3 +16,49 @@ export function findMatches(text: string, query: string): MatchRange[] {
   }
   return ranges
 }
+
+export interface SearchResult {
+  /** Matches per line seq; lines without a match are absent. */
+  ranges: Map<number, MatchRange[]>
+  /** Lines with matches in display order, with their match count. */
+  matched: { seq: number; count: number }[]
+  total: number
+}
+
+/**
+ * Remembers each line's matches for the current query, so a changed buffer only searches the lines it has not seen.
+ * Lines that left the buffer are forgotten on the next call.
+ */
+export class MatchCache {
+  private query = ''
+  private bySeq = new Map<number, MatchRange[]>()
+
+  private readonly find: (text: string, query: string) => MatchRange[]
+
+  constructor(find: (text: string, query: string) => MatchRange[] = findMatches) {
+    this.find = find
+  }
+
+  search(lines: readonly { seq: number; text: string }[], query: string): SearchResult {
+    const ranges = new Map<number, MatchRange[]>()
+    const matched: { seq: number; count: number }[] = []
+    let total = 0
+    if (query !== this.query) {
+      this.query = query
+      this.bySeq = new Map()
+    }
+    if (!query) return { ranges, matched, total }
+    const next = new Map<number, MatchRange[]>()
+    for (const l of lines) {
+      const r = this.bySeq.get(l.seq) ?? this.find(l.text, query)
+      next.set(l.seq, r)
+      if (r.length) {
+        ranges.set(l.seq, r)
+        matched.push({ seq: l.seq, count: r.length })
+        total += r.length
+      }
+    }
+    this.bySeq = next
+    return { ranges, matched, total }
+  }
+}

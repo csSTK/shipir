@@ -1,8 +1,9 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { ArrowDown, ChevronDown, ChevronUp } from 'lucide-react'
 import { Checkbox, Button, IconButton, SearchField, Toolbar } from '../../../shared/ui/index.ts'
 import type { LogLine } from './logStream.ts'
-import { findMatches, type MatchRange } from './logSearch.ts'
+import { MatchCache, type MatchRange } from './logSearch.ts'
+import { Highlighted } from './Highlighted.tsx'
 import { useTranslation } from 'react-i18next'
 import './LogView.css'
 
@@ -22,7 +23,11 @@ interface LogViewProps {
   serviceEnds?: Record<string, 'ENDED' | 'ERROR'>
 }
 
-/** Search box with match navigation, filters and the log itself. Searching and filtering happen on the buffered lines only. */
+/**
+ * Search box with match navigation, filters and the log itself. Searching and filtering happen on the buffered lines only.
+ * Cost model: lines arrive batched, so the remaining O(buffer) passes (filter, match totals) run once per animation frame
+ * (about 60 per second at most), not per line; matches are cached per line and unchanged rows are memoised.
+ */
 export function LogView({ lines, label, emptyText, truncated = false, services, serviceEnds = {} }: LogViewProps) {
   const { t: tr } = useTranslation('containers')
   const [input, setInput] = useState('')
@@ -41,25 +46,20 @@ export function LogView({ lines, label, emptyText, truncated = false, services, 
     [lines, stderrOnly, hidden],
   )
 
-  // Matches per line plus the running index of each line's first match, so the active match maps to one <mark>.
-  const { ranges, offsets, total } = useMemo(() => {
-    const ranges = new Map<number, MatchRange[]>()
-    const offsets = new Map<number, number>()
-    let total = 0
-    if (query) {
-      for (const l of visible) {
-        const r = findMatches(l.text, query)
-        if (r.length) {
-          ranges.set(l.seq, r)
-          offsets.set(l.seq, total)
-          total += r.length
-        }
-      }
-    }
-    return { ranges, offsets, total }
-  }, [visible, query])
+
+  const [matchCache] = useState(() => new MatchCache())
+  const { ranges, matched, total } = useMemo(() => matchCache.search(visible, query), [matchCache, visible, query])
 
   const current = total === 0 ? 0 : Math.min(active, total - 1)
+  // The line holding the active match and the match's index inside it; every other row gets -1 and stays memoised.
+  const { activeSeq, activeLocal } = useMemo(() => {
+    let before = 0
+    for (const m of matched) {
+      if (current < before + m.count) return { activeSeq: m.seq, activeLocal: current - before }
+      before += m.count
+    }
+    return { activeSeq: -1, activeLocal: -1 }
+  }, [matched, current])
 
   const logRef = useRef<HTMLDivElement>(null)
   const [following, setFollowing] = useState(true)
@@ -178,11 +178,13 @@ export function LogView({ lines, label, emptyText, truncated = false, services, 
             <span className="logv__empty">{lines.length > 0 ? tr('LogView.noLinesMatchTheFilters') : emptyText}</span>
           ) : (
             visible.map((l) => (
-              <div key={l.seq} className={`logv__line${l.stream === 'STDERR' ? ' logv__line--err' : ''}`}>
-                {l.service && <span className={`logv__svc logv__svc--${colour(l.service)}`}>{l.service}</span>}
-                {l.timestamp && <time className="logv__time">{l.timestamp}</time>}
-                <Highlighted text={l.text} ranges={ranges.get(l.seq)} offset={offsets.get(l.seq) ?? 0} active={current} />
-              </div>
+              <LogRow
+                key={l.seq}
+                line={l}
+                colourIndex={colour(l.service)}
+                ranges={ranges.get(l.seq)}
+                activeLocal={l.seq === activeSeq ? activeLocal : -1}
+              />
             ))
           )}
         </div>
@@ -196,20 +198,12 @@ export function LogView({ lines, label, emptyText, truncated = false, services, 
   )
 }
 
-function Highlighted({ text, ranges, offset, active }: { text: string; ranges?: MatchRange[]; offset: number; active: number }) {
-  if (!ranges) return <>{text || ' '}</>
-  const parts: React.ReactNode[] = []
-  let at = 0
-  ranges.forEach((r, i) => {
-    if (r.start > at) parts.push(text.slice(at, r.start))
-    const isActive = offset + i === active
-    parts.push(
-      <mark key={i} className="logv__mark" data-active={isActive ? 'true' : undefined}>
-        {text.slice(r.start, r.end)}
-      </mark>,
-    )
-    at = r.end
-  })
-  if (at < text.length) parts.push(text.slice(at))
-  return <Fragment>{parts}</Fragment>
-}
+const LogRow = memo(function LogRow({ line: l, colourIndex, ranges, activeLocal }: { line: LogLine; colourIndex: number; ranges?: MatchRange[]; activeLocal: number }) {
+  return (
+    <div className={`logv__line${l.stream === 'STDERR' ? ' logv__line--err' : ''}`}>
+      {l.service && <span className={`logv__svc logv__svc--${colourIndex}`}>{l.service}</span>}
+      {l.timestamp && <time className="logv__time">{l.timestamp}</time>}
+      <Highlighted text={l.text} ranges={ranges} active={activeLocal} />
+    </div>
+  )
+})

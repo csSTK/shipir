@@ -32,6 +32,8 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 beforeEach(() => {
+  // Frames are applied once per animation frame; run it synchronously so tests see each message at once.
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => (cb(0), 0))
   subscribe.mockReset()
   unsubscribe.mockReset()
   subscribe.mockImplementation((_d: string, h: TopicHandlers) => {

@@ -16,7 +16,7 @@ export interface LogLine {
   containerId?: string
 }
 
-interface Frame {
+export interface Frame {
   seq: number
   type: 'LINE' | 'STATUS'
   stream?: 'STDOUT' | 'STDERR'
@@ -61,8 +61,12 @@ export interface LogStreamState {
 
 const fresh = (key: string): LogStreamState => ({ key, lines: [], truncated: false, end: null, notices: [], services: [], serviceEnds: {}, refused: false })
 
-function applyFrame(prev: LogStreamState, frame: Frame, combined: boolean): LogStreamState {
-  if (frame.type === 'LINE') {
+/** Appends lines in one copy, so a whole batch costs one pass over the buffer instead of one per line. */
+function appendLines(prev: LogStreamState, frames: Frame[], combined: boolean): LogStreamState {
+  if (frames.length === 0) return prev
+  const added: LogLine[] = []
+  let services = prev.services
+  for (const frame of frames) {
     const line: LogLine = {
       seq: frame.seq,
       stream: frame.stream === 'STDERR' ? 'STDERR' : 'STDOUT',
@@ -73,11 +77,15 @@ function applyFrame(prev: LogStreamState, frame: Frame, combined: boolean): LogS
       line.service = frame.service
       line.container = frame.container
       line.containerId = frame.containerId
+      if (line.service && !services.includes(line.service)) services = [...services, line.service]
     }
-    const all = [...prev.lines, line]
-    const services = combined && line.service && !prev.services.includes(line.service) ? [...prev.services, line.service] : prev.services
-    return { ...prev, lines: all.slice(-MAX_LOG_LINES), truncated: prev.truncated || all.length > MAX_LOG_LINES, services }
+    added.push(line)
   }
+  const all = prev.lines.concat(added)
+  return { ...prev, lines: all.length > MAX_LOG_LINES ? all.slice(-MAX_LOG_LINES) : all, truncated: prev.truncated || all.length > MAX_LOG_LINES, services }
+}
+
+function applyStatus(prev: LogStreamState, frame: Frame, combined: boolean): LogStreamState {
   if (frame.status !== 'ENDED' && frame.status !== 'ERROR') return prev
   if (!combined) {
     return { ...prev, end: frame.status === 'ENDED' ? { status: 'ENDED' } : { status: 'ERROR', code: frame.line ?? 'UNKNOWN' } }
@@ -89,6 +97,28 @@ function applyFrame(prev: LogStreamState, frame: Frame, combined: boolean): LogS
   const code = frame.line ?? 'UNKNOWN'
   return prev.notices.includes(code) ? prev : { ...prev, notices: [...prev.notices, code] }
 }
+
+/**
+ * Applies a batch of frames in order; consecutive LINE frames share one buffer copy. The hook applies one batch per
+ * animation frame, so the O(buffer) copy is amortised over all lines of that frame (about 60 passes per second at
+ * most), not paid per line.
+ */
+export function applyFrames(prev: LogStreamState, frames: Frame[], combined: boolean): LogStreamState {
+  let state = prev
+  let run: Frame[] = []
+  for (const frame of frames) {
+    if (frame.type === 'LINE') {
+      run.push(frame)
+    } else {
+      state = applyStatus(appendLines(state, run, combined), frame, combined)
+      run = []
+    }
+  }
+  return appendLines(state, run, combined)
+}
+
+/** Incoming frames are applied at most once per animation frame; this caps the wait when the tab is hidden. */
+const FLUSH_FALLBACK_MS = 250
 
 /**
  * Live log over one STOMP topic. Options are fixed per subscription, so changing them resubscribes and starts with an
@@ -103,9 +133,31 @@ export function useLogStream(topic: string, tail: TailOption, timestamps: boolea
   useEffect(() => {
     let lastSeq = -1
     let done = false
+    let pending: Frame[] = []
+    let scheduled = false
+    let rafId = 0
+    let timerId: ReturnType<typeof setTimeout> | undefined
+    const cancelScheduled = () => {
+      cancelAnimationFrame(rafId)
+      clearTimeout(timerId)
+      scheduled = false
+    }
     const update = (fn: (prev: LogStreamState) => LogStreamState) =>
       // A state from a previous subscription is replaced, so the first frame starts fresh.
       setState((prev) => fn(prev.key === key ? prev : fresh(key)))
+    const flush = () => {
+      cancelScheduled()
+      if (pending.length === 0) return
+      const batch = pending
+      pending = []
+      update((prev) => applyFrames(prev, batch, combined))
+    }
+    const schedule = () => {
+      if (scheduled) return
+      scheduled = true
+      timerId = setTimeout(flush, FLUSH_FALLBACK_MS)
+      rafId = requestAnimationFrame(flush)
+    }
     const unsubscribe = subscribeToTopic(
       topic,
       {
@@ -116,15 +168,19 @@ export function useLogStream(topic: string, tail: TailOption, timestamps: boolea
           const frame = parseFrame(body)
           if (!frame || done || frame.seq <= lastSeq) return
           lastSeq = frame.seq
-          update((prev) => applyFrame(prev, frame, combined))
+          pending.push(frame)
           if (!combined && frame.type === 'STATUS' && (frame.status === 'ENDED' || frame.status === 'ERROR')) {
             done = true
+            flush()
             unsubscribe() // stream is complete: stop reconnecting
+          } else {
+            schedule()
           }
         },
         onError: () => {
           if (done) return
           done = true
+          flush()
           update((prev) => ({ ...prev, refused: true }))
           unsubscribe() // refused (e.g. no permission): retrying would only repeat the refusal
         },
@@ -133,6 +189,7 @@ export function useLogStream(topic: string, tail: TailOption, timestamps: boolea
     )
     return () => {
       done = true
+      cancelScheduled()
       unsubscribe()
     }
   }, [topic, tail, timestamps, combined, key])
