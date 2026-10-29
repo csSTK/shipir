@@ -7,6 +7,7 @@ import { ContainerDetailsPage } from './ContainerDetailsPage.tsx'
 
 let role = 'ADMIN'
 let operatorEnabled = false
+let execScope: { hostOperable: boolean; operableProjects: string[] } = { hostOperable: true, operableProjects: [] }
 const apiFetch = vi.fn()
 vi.mock('../../../shared/api/client.ts', async (importActual) => ({
   ...(await importActual<typeof import('../../../shared/api/client.ts')>()),
@@ -56,6 +57,7 @@ function renderPage(respond: () => unknown) {
   apiFetch.mockImplementation((path: string) => {
     if (path === '/auth/me') return Promise.resolve({ username: 'u', role, setupRequired: false })
     if (path === '/exec/capabilities') return Promise.resolve({ operatorEnabled })
+    if (path === '/exec/access?hostId=h1') return Promise.resolve(execScope)
     if (path.includes('/stats/history')) return Promise.resolve({ range: '24h', from: '', to: '', bucketSeconds: 60, seriesTotal: 0, truncated: false, series: [] })
     return Promise.resolve().then(respond)
   })
@@ -138,6 +140,22 @@ describe('ContainerDetailsPage', () => {
     await screen.findByRole('link', { name: 'Logs' })
     expect(screen.queryByRole('link', { name: 'Console' })).not.toBeInTheDocument()
     expect(apiFetch.mock.calls.map((c) => c[0])).not.toContain('/exec/capabilities')
+    operatorEnabled = false
+  })
+
+  it('hides console from an OPERATOR without OPERATE on the host or the container deployment', async () => {
+    operatorEnabled = true
+    role = 'OPERATOR'
+    execScope = { hostOperable: false, operableProjects: ['other'] }
+    renderPage(() => details)
+    await screen.findByRole('link', { name: 'Logs' })
+    await vi.waitFor(() => expect(apiFetch.mock.calls.map((c) => c[0])).toContain('/exec/access?hostId=h1'))
+    expect(screen.queryByRole('link', { name: 'Console' })).not.toBeInTheDocument()
+    cleanup()
+    execScope = { hostOperable: false, operableProjects: ['shop'] }
+    renderPage(() => details)
+    expect(await screen.findByRole('link', { name: 'Console' })).toBeInTheDocument()
+    execScope = { hostOperable: true, operableProjects: [] }
     operatorEnabled = false
   })
 

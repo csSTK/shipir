@@ -54,6 +54,32 @@ class StreamAccess {
                 : permissions.canOperate(s.get(), hostId, deploymentId);
     }
 
+    /**
+     * Where the user may hold a console on {@code hostId}, for the UI to hide the action (the checks at start stay
+     * authoritative): {@code hostOperable} = any container of the host (ADMIN, or OPERATE on the host), and the
+     * Compose project names of managed deployments of the host the user may operate. Nothing for non-ADMIN/OPERATOR
+     * or when {@code operatorEnabled} is off for an OPERATOR.
+     */
+    ExecScope execScope(String username, UUID hostId, boolean operatorEnabled) {
+        Optional<PermissionSubject> s = subject(username);
+        if (s.isEmpty()) {
+            return ExecScope.NONE;
+        }
+        if (s.get().role() == Role.ADMIN) {
+            return new ExecScope(true, java.util.List.of());
+        }
+        if (s.get().role() != Role.OPERATOR || !operatorEnabled || !permissions.canView(s.get(), hostId)) {
+            return ExecScope.NONE;
+        }
+        if (permissions.canOperate(s.get(), hostId)) {
+            return new ExecScope(true, java.util.List.of());
+        }
+        java.util.List<String> projects = managedDeployments.managedDeploymentIds(hostId).entrySet().stream()
+                .filter(e -> permissions.canOperate(s.get(), hostId, e.getValue()))
+                .map(java.util.Map.Entry::getKey).sorted().toList();
+        return new ExecScope(false, projects);
+    }
+
     /** Console access for the container's owner: 404 unless the container is visible to the user. */
     boolean containerVisible(String username, UUID hostId, UUID deploymentId) {
         Optional<PermissionSubject> s = subject(username);

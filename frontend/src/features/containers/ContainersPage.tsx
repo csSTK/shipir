@@ -222,7 +222,7 @@ export function ContainersPage() {
     )
   }
   const isAdmin = user?.role === 'ADMIN'
-  const canConsole = useCanOpenConsole()
+  const canConsole = useCanOpenConsole(id)
   const navigate = useNavigate()
   const { series } = useContainerStats(id)
   const deployments = useDeployments(id)
@@ -252,7 +252,7 @@ export function ContainersPage() {
       primary.push({ label: LABELS[toggle][0], icon: TOGGLE_ICONS[toggle], onSelect: () => run(c, toggle), disabled: busy })
     }
     primary.push({ label: t('ContainersPage.logs'), icon: ScrollText, onSelect: () => navigate(`${c.id}/logs`) })
-    if (canConsole && c.state === 'running') {
+    if (canConsole(c.composeProject) && c.state === 'running') {
       primary.push({ label: t('ContainersPage.console'), icon: SquareTerminal, onSelect: () => navigate(`${c.id}/console`) })
     }
     const menu: MenuEntry[] = []

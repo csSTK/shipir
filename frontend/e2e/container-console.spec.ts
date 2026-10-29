@@ -101,6 +101,7 @@ for (const [role, operatorEnabled] of [['OPERATOR', false], ['VIEWER', false], [
 test('OPERATOR sees the console link when operator exec is enabled and gets a clear message on 403', async ({ page, api }) => {
   asRole(api, 'OPERATOR')
   api.mock('GET', '/api/exec/capabilities', { body: { operatorEnabled: true } })
+  api.mock('GET', '/api/exec/access', { body: { hostOperable: true, operableProjects: [] } })
   api.mock('POST', '/api/hosts/a/containers/c1/exec', { status: 403, body: { code: 'FORBIDDEN', message: 'x' } })
   await mockBroker(page)
   await page.goto('/environments/a/containers')
@@ -110,4 +111,13 @@ test('OPERATOR sees the console link when operator exec is enabled and gets a cl
   await page.getByRole('button', { name: 'Connect' }).click()
   await expect(page.getByRole('alert')).toContainText("You don't have permission to open a console for this container")
   await expect(page.getByRole('status')).toHaveText('Not connected')
+})
+
+test('OPERATOR without OPERATE on the host or deployment sees no console link', async ({ page, api }) => {
+  asRole(api, 'OPERATOR')
+  api.mock('GET', '/api/exec/capabilities', { body: { operatorEnabled: true } })
+  api.mock('GET', '/api/exec/access', { body: { hostOperable: false, operableProjects: [] } })
+  await page.goto('/environments/a/containers')
+  await expect(page.getByRole('button', { name: 'Logs web' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Console web' })).toHaveCount(0)
 })

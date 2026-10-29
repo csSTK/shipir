@@ -43,6 +43,8 @@ export const test = base.extend<{ api: ApiMock }>({
         [key('GET', '/api/auth/oidc/config'), { body: { enabled: false, displayName: null, localLoginEnabled: true } }],
         // OPERATOR logins ask whether operator exec is enabled; default to off, specs override.
         [key('GET', '/api/exec/capabilities'), { body: { operatorEnabled: false } }],
+        // Where an OPERATOR may open consoles on the host (query hostId); default none, specs override.
+        [key('GET', '/api/exec/access'), { body: { hostOperable: false, operableProjects: [] } }],
       ])
       const unmocked: string[] = []
 

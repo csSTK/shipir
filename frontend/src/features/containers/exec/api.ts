@@ -49,8 +49,31 @@ export function useConsoleAccess(): { allowed: boolean; pending: boolean } {
   }
 }
 
-export function useCanOpenConsole(): boolean {
-  return useConsoleAccess().allowed
+/** Response of `GET /api/exec/access?hostId=`: where the user holds OPERATE (UI hint, the server re-checks). */
+interface ExecScope {
+  hostOperable: boolean
+  operableProjects: string[]
+}
+
+/**
+ * Per-container console visibility: ADMIN everywhere; an OPERATOR (while operator exec is on) only with OPERATE on
+ * the host or on the managed deployment owning the container (its Compose project). Never VIEWER. Hides the action
+ * only; the server stays authoritative and a 403 is still handled on the console page.
+ */
+export function useCanOpenConsole(hostId: string): (composeProject: string | null) => boolean {
+  const { allowed } = useConsoleAccess()
+  const { data: user } = useCurrentUser()
+  const isOperator = user?.role === 'OPERATOR'
+  const scope = useQuery({
+    queryKey: ['exec', 'access', hostId],
+    queryFn: () => apiFetch<ExecScope>(`/exec/access?hostId=${encodeURIComponent(hostId)}`),
+    enabled: allowed && isOperator && hostId !== '',
+  })
+  if (!allowed) return () => false
+  if (!isOperator) return () => true
+  const data = scope.data
+  return (composeProject) =>
+    !!data && (data.hostOperable || (composeProject !== null && data.operableProjects.includes(composeProject)))
 }
 
 const ERROR_TEXT: Record<string, string> = {

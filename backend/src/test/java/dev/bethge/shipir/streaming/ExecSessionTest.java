@@ -527,6 +527,53 @@ class ExecSessionTest {
         assertThat(anonymous.statusCode()).isEqualTo(401);
     }
 
+    private String accessOf(Client c) throws Exception {
+        var r = c.call(HttpRequest.newBuilder(URI.create(base() + "/api/exec/access?hostId=" + hostId)));
+        assertThat(r.statusCode()).isEqualTo(200);
+        return r.body();
+    }
+
+    @Test
+    void accessScopeFollowsRoleAndGrants() throws Exception {
+        assertThat(accessOf(admin())).contains("\"hostOperable\":true");
+        assertThat(accessOf(operatorClient("execviewer", Role.VIEWER))).contains("\"hostOperable\":false")
+                .contains("\"operableProjects\":[]");
+
+        Client none = operatorClient("execnone", Role.OPERATOR);
+        assertThat(accessOf(none)).contains("\"hostOperable\":false").contains("\"operableProjects\":[]");
+
+        Client viewGrant = operatorClient("execview", Role.OPERATOR);
+        grantHost(viewGrant, "VIEW");
+        assertThat(accessOf(viewGrant)).contains("\"hostOperable\":false").contains("\"operableProjects\":[]");
+
+        Client hostOp = operatorClient("exechostop", Role.OPERATOR);
+        grantHost(hostOp, "OPERATE");
+        assertThat(accessOf(hostOp)).contains("\"hostOperable\":true");
+
+        Client depOp = operatorClient("execdepop", Role.OPERATOR);
+        UUID mine = deployment("mine");
+        UUID viewOnly = deployment("viewonly");
+        deployment("other");
+        grantDeployment(depOp, mine, "OPERATE");
+        grantDeployment(depOp, viewOnly, "VIEW");
+        assertThat(accessOf(depOp)).contains("\"hostOperable\":false").contains("\"operableProjects\":[\"mine\"]");
+    }
+
+    @Test
+    void accessScopeIsAuthenticatedOnlyAndGivesNoOracleForUnknownOrUnviewableHosts() throws Exception {
+        var anonymous = HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                URI.create(base() + "/api/exec/access?hostId=" + hostId)).build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(anonymous.statusCode()).isEqualTo(401);
+
+        Client op = operatorClient("execop", Role.OPERATOR);
+        // unknown host, and an existing host the caller has no grant on: identical answer
+        for (UUID target : new UUID[] {UUID.randomUUID(), hostId}) {
+            var r = op.call(HttpRequest.newBuilder(URI.create(base() + "/api/exec/access?hostId=" + target)));
+            assertThat(r.statusCode()).isEqualTo(200);
+            assertThat(r.body()).isEqualTo("{\"hostOperable\":false,\"operableProjects\":[]}");
+        }
+    }
+
     @Test
     void createNeedsCsrfToken() throws Exception {
         assertThat(admin().exec("web", "{}", false).statusCode()).isEqualTo(403);

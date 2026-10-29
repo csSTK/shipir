@@ -281,7 +281,7 @@ export function ContainerDetailsPage() {
   const { t } = useTranslation('containers')
   const { id: hostId = '', cid = '' } = useParams()
   const { data: user } = useCurrentUser()
-  const canConsole = useCanOpenConsole()
+  const canOpenConsole = useCanOpenConsole(hostId)
   const { data: c, isPending, error, refetch } = useContainerDetails(hostId, cid)
   const navigate = useNavigate()
   const [dialog, setDialog] = useState<'edit' | 'duplicate' | 'limits' | null>(null)
@@ -358,7 +358,7 @@ export function ContainerDetailsPage() {
                 <Button asChild>
                   <Link to={`${base}/${cid}/logs`}>{t('ContainerDetailsPage.logs')}</Link>
                 </Button>
-                {canConsole && c.state === 'running' && (
+                {canOpenConsole(c.composeProject) && c.state === 'running' && (
                   <Button asChild>
                     <Link to={`${base}/${cid}/console`}>{t('ContainerDetailsPage.console')}</Link>
                   </Button>

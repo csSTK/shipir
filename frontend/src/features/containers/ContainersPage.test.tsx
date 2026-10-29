@@ -168,10 +168,11 @@ describe('ContainersPage', () => {
     })
 
     describe('console action', () => {
-      function mockCaps(operatorEnabled: boolean) {
+      function mockCaps(operatorEnabled: boolean, scope = { hostOperable: true, operableProjects: [] as string[] }) {
         apiFetch.mockImplementation((path: string) => {
           if (path === '/auth/me') return Promise.resolve({ username: 'u', role: apiFetchRole, setupRequired: false })
           if (path === '/exec/capabilities') return Promise.resolve({ operatorEnabled })
+          if (path === '/exec/access?hostId=h1') return Promise.resolve(scope)
           return Promise.resolve(path === '/hosts/h1/containers' ? containers : [])
         })
       }
@@ -186,6 +187,26 @@ describe('ContainersPage', () => {
         mockCaps(false)
         renderAt('/environments/h1/containers', 'OPERATOR')
         await screen.findByRole('button', { name: 'Logs web' })
+        expect(screen.queryByRole('button', { name: 'Console web' })).toBeNull()
+      })
+
+      it('hides Console from an OPERATOR with only a VIEW grant (no host or deployment OPERATE)', async () => {
+        mockCaps(true, { hostOperable: false, operableProjects: [] })
+        renderAt('/environments/h1/containers', 'OPERATOR')
+        await screen.findByRole('button', { name: 'Logs web' })
+        await vi.waitFor(() => expect(apiFetch.mock.calls.map((c) => c[0])).toContain('/exec/access?hostId=h1'))
+        expect(screen.queryByRole('button', { name: 'Console web' })).toBeNull()
+      })
+
+      it('shows Console only for containers of a deployment the OPERATOR may operate', async () => {
+        mockCaps(true, { hostOperable: false, operableProjects: ['shop'] })
+        renderAt('/environments/h1/containers', 'OPERATOR')
+        expect(await screen.findByRole('button', { name: 'Console web' })).toBeInTheDocument()
+        cleanup()
+        mockCaps(true, { hostOperable: false, operableProjects: ['other'] })
+        renderAt('/environments/h1/containers', 'OPERATOR')
+        await screen.findByRole('button', { name: 'Logs web' })
+        await vi.waitFor(() => expect(apiFetch.mock.calls.map((c) => c[0])).toContain('/exec/access?hostId=h1'))
         expect(screen.queryByRole('button', { name: 'Console web' })).toBeNull()
       })
 
