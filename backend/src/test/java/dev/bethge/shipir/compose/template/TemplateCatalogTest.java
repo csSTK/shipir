@@ -66,7 +66,8 @@ class TemplateCatalogTest {
     @Test
     void bundledCatalogIncludesTheCuratedSelfHostedApps() {
         assertThat(bundled().all().stream().map(AppTemplate::id).toList())
-                .contains("vaultwarden", "gitea", "grafana", "jellyfin", "home-assistant", "nextcloud");
+                .contains("vaultwarden", "gitea", "grafana", "jellyfin", "home-assistant", "nextcloud",
+                        "pihole", "nginx-proxy-manager", "homepage", "filebrowser", "syncthing");
     }
 
     @Test
@@ -91,12 +92,12 @@ class TemplateCatalogTest {
         AppTemplate a = template("a", 8080);
         AppTemplate b = template("b", 8080);
         assertThat(hostPortCollisions(List.of(a, b)))
-                .containsExactly("host port 8080 used by a/web and b/web");
+                .containsExactly("host port 8080/tcp used by a/web and b/web");
     }
 
     /** One message per host port claimed by a second service; each names the earlier and the later owner. */
     static List<String> hostPortCollisions(List<AppTemplate> templates) {
-        Map<Integer, String> owners = new HashMap<>();
+        Map<String, String> owners = new HashMap<>();
         List<String> collisions = new ArrayList<>();
         for (AppTemplate t : templates) {
             for (ServiceSpec s : services(t)) {
@@ -106,9 +107,11 @@ class TemplateCatalogTest {
                 for (PortSpec port : s.ports()) {
                     if (port.host() != null) {
                         String owner = t.id() + "/" + s.name();
-                        String previous = owners.put(port.host(), owner);
+                        String protocol = port.protocol() == null ? "tcp" : port.protocol();
+                        String key = port.host() + "/" + protocol;
+                        String previous = owners.put(key, owner);
                         if (previous != null) {
-                            collisions.add(String.format("host port %d used by %s and %s", port.host(), previous, owner));
+                            collisions.add(String.format("host port %s used by %s and %s", key, previous, owner));
                         }
                     }
                 }

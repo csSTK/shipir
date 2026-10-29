@@ -582,5 +582,270 @@
         }
       ]
     }
+  },
+  {
+    "id": "pihole",
+    "name": "Pi-hole",
+    "description": "Network-wide ad blocker and DNS server. Open port 8085 and sign in at /admin with the generated password, then point your devices or router at this host as DNS server. Port 53 must be free on the host.",
+    "logo": "pihole",
+    "env": [
+      {
+        "key": "WEBPASSWORD",
+        "description": "Password of the admin web interface",
+        "secret": true,
+        "generate": true
+      },
+      {
+        "key": "TZ",
+        "description": "Time zone, e.g. Europe/Berlin",
+        "secret": false,
+        "defaultValue": "UTC"
+      }
+    ],
+    "spec": {
+      "services": [
+        {
+          "name": "pihole",
+          "image": "pihole/pihole:2024.07.0",
+          "environment": [
+            {
+              "key": "WEBPASSWORD",
+              "ref": "WEBPASSWORD"
+            },
+            {
+              "key": "TZ",
+              "ref": "TZ"
+            }
+          ],
+          "ports": [
+            {
+              "host": 53,
+              "container": 53,
+              "protocol": "tcp"
+            },
+            {
+              "host": 53,
+              "container": 53,
+              "protocol": "udp"
+            },
+            {
+              "host": 8085,
+              "container": 80,
+              "protocol": "tcp"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "pihole-etc",
+              "target": "/etc/pihole",
+              "readOnly": false
+            },
+            {
+              "source": "pihole-dnsmasq",
+              "target": "/etc/dnsmasq.d",
+              "readOnly": false
+            }
+          ],
+          "restart": "unless-stopped"
+        }
+      ],
+      "volumes": [
+        {
+          "name": "pihole-etc",
+          "external": false
+        },
+        {
+          "name": "pihole-dnsmasq",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "nginx-proxy-manager",
+    "name": "Nginx Proxy Manager",
+    "description": "Reverse proxy with a web UI and Let's Encrypt certificates. Open port 8086 after the first deploy and sign in with admin@example.com / changeme, then change both. Proxied traffic arrives on ports 8088 (HTTP) and 8443 (HTTPS).",
+    "logo": "nginx-proxy-manager",
+    "env": [],
+    "spec": {
+      "services": [
+        {
+          "name": "npm",
+          "image": "jc21/nginx-proxy-manager:2.11.3",
+          "ports": [
+            {
+              "host": 8088,
+              "container": 80,
+              "protocol": "tcp"
+            },
+            {
+              "host": 8443,
+              "container": 443,
+              "protocol": "tcp"
+            },
+            {
+              "host": 8086,
+              "container": 81,
+              "protocol": "tcp"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "npm-data",
+              "target": "/data",
+              "readOnly": false
+            },
+            {
+              "source": "npm-letsencrypt",
+              "target": "/etc/letsencrypt",
+              "readOnly": false
+            }
+          ],
+          "restart": "unless-stopped"
+        }
+      ],
+      "volumes": [
+        {
+          "name": "npm-data",
+          "external": false
+        },
+        {
+          "name": "npm-letsencrypt",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "homepage",
+    "name": "Homepage",
+    "description": "Customizable start page for your services. Open port 3002 after the first deploy and edit the YAML files in the config volume to add your services.",
+    "logo": "homepage",
+    "env": [],
+    "spec": {
+      "services": [
+        {
+          "name": "homepage",
+          "image": "ghcr.io/gethomepage/homepage:v0.9.13",
+          "ports": [
+            {
+              "host": 3002,
+              "container": 3000,
+              "protocol": "tcp"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "homepage-config",
+              "target": "/app/config",
+              "readOnly": false
+            }
+          ],
+          "restart": "unless-stopped"
+        }
+      ],
+      "volumes": [
+        {
+          "name": "homepage-config",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "filebrowser",
+    "name": "File Browser",
+    "description": "Web file manager for a storage volume. Open port 8089 after the first deploy and sign in with admin / admin, then change the password right away.",
+    "logo": "filebrowser",
+    "env": [],
+    "spec": {
+      "services": [
+        {
+          "name": "filebrowser",
+          "image": "filebrowser/filebrowser:v2.31.2",
+          "ports": [
+            {
+              "host": 8089,
+              "container": 80,
+              "protocol": "tcp"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "filebrowser-files",
+              "target": "/srv",
+              "readOnly": false
+            },
+            {
+              "source": "filebrowser-db",
+              "target": "/database",
+              "readOnly": false
+            }
+          ],
+          "restart": "unless-stopped"
+        }
+      ],
+      "volumes": [
+        {
+          "name": "filebrowser-files",
+          "external": false
+        },
+        {
+          "name": "filebrowser-db",
+          "external": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "syncthing",
+    "name": "Syncthing",
+    "description": "Continuous peer-to-peer file synchronization. Open port 8384 after the first deploy and set a GUI password under Actions, Settings. Sync traffic uses port 22000, local discovery 21027.",
+    "logo": "syncthing",
+    "env": [],
+    "spec": {
+      "services": [
+        {
+          "name": "syncthing",
+          "image": "syncthing/syncthing:1.27.12",
+          "ports": [
+            {
+              "host": 8384,
+              "container": 8384,
+              "protocol": "tcp"
+            },
+            {
+              "host": 22000,
+              "container": 22000,
+              "protocol": "tcp"
+            },
+            {
+              "host": 22000,
+              "container": 22000,
+              "protocol": "udp"
+            },
+            {
+              "host": 21027,
+              "container": 21027,
+              "protocol": "udp"
+            }
+          ],
+          "volumes": [
+            {
+              "source": "syncthing-data",
+              "target": "/var/syncthing",
+              "readOnly": false
+            }
+          ],
+          "restart": "unless-stopped"
+        }
+      ],
+      "volumes": [
+        {
+          "name": "syncthing-data",
+          "external": false
+        }
+      ]
+    }
   }
 ]
