@@ -339,6 +339,7 @@
   "UsersSettingsPage.disable": "Deaktivieren",
   "UsersSettingsPage.reset2faFor": "2FA zurücksetzen für",
   "UsersSettingsPage.resetPasswordFor": "Passwort zurücksetzen für",
+  "UsersSettingsPage.passwordManagedBySsoFor": "Passwort wird per SSO verwaltet für",
   "UsersSettingsPage.couldNotLoadUsers": "Die Benutzer konnten nicht geladen werden.",
   "UsersSettingsPage.couldNotResetThePassword": "Das Passwort konnte nicht zurückgesetzt werden. Versuche es erneut.",
   "UsersSettingsPage.couldNotResetTwoFactor": "Die Zwei-Faktor-Authentifizierung konnte nicht zurückgesetzt werden. Versuche es erneut.",

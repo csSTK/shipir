@@ -57,6 +57,15 @@ describe('UsersSettingsPage', () => {
     expect(screen.getByRole('button', { name: 'Enable bob' })).toBeTruthy()
   })
 
+  it('disables the password reset for SSO users and keeps it for local users', async () => {
+    const sso: ManagedUser = { ...base, id: 'u4', username: 'sam', role: 'OPERATOR', externalIdentity: true }
+    renderPage(undefined, [me, anna, sso])
+    expect(await screen.findByText('sam')).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Password managed by SSO for sam' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Reset password for sam' })).toBeNull()
+    expect((screen.getByRole('button', { name: 'Reset password for anna' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
   it('shows the password change date, or the pending badge until the user chooses a password', async () => {
     const dana: ManagedUser = {
       ...base,

@@ -418,6 +418,8 @@ export interface ManagedUser {
   passwordChangedAt: string | null
   disabledAt: string | null
   twoFactorEnabled?: boolean
+  /** True for SSO users: they have no local password to reset. */
+  externalIdentity?: boolean
 }
 
 export type PermissionLevel = 'VIEW' | 'OPERATE'

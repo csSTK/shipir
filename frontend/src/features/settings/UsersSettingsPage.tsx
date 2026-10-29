@@ -300,7 +300,12 @@ export function UsersSettingsPage({ currentUsername }: { currentUsername: string
               ...(u.twoFactorEnabled
                 ? [{ label: t('UsersSettingsPage.reset2faFor'), icon: ShieldOff, onSelect: () => open({ kind: 'reset2fa', user: u }) }]
                 : []),
-              { label: t('UsersSettingsPage.resetPasswordFor'), icon: RotateCcw, onSelect: () => open({ kind: 'reset', user: u }) },
+              {
+                label: u.externalIdentity ? t('UsersSettingsPage.passwordManagedBySsoFor') : t('UsersSettingsPage.resetPasswordFor'),
+                icon: RotateCcw,
+                disabled: u.externalIdentity,
+                onSelect: () => open({ kind: 'reset', user: u }),
+              },
               { label: t('UsersSettingsPage.delete'), icon: Trash2, danger: true, onSelect: () => open({ kind: 'delete', user: u }) },
             ]
           : []),

@@ -196,6 +196,22 @@ class UserAdminApiTest {
         assertThat(userNode(list, "admin").get("passwordChangedAt").isString()).isTrue();
     }
 
+    @Test
+    void listFlagsSsoUsersWithoutExposingIssuerOrSubject() throws Exception {
+        Session admin = admin();
+        activeUser(admin, "ssouser", "OPERATOR");
+        jdbc.update("UPDATE users SET external_issuer = 'https://idp.example', external_subject = 'sub-1' "
+                + "WHERE username = 'ssouser'");
+
+        JsonNode list = json.readTree(call(admin, "GET", "/api/users", null).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertThat(userNode(list, "ssouser").get("externalIdentity").asBoolean()).isTrue();
+        assertThat(userNode(list, "admin").get("externalIdentity").asBoolean()).isFalse();
+        assertThat(userNode(list, "ssouser").has("externalIssuer")).isFalse();
+        assertThat(userNode(list, "ssouser").has("externalSubject")).isFalse();
+        assertThat(list.toString()).doesNotContain("idp.example").doesNotContain("sub-1");
+    }
+
     private static JsonNode userNode(JsonNode list, String username) {
         for (JsonNode node : list) {
             if (username.equals(node.get("username").asString())) {
