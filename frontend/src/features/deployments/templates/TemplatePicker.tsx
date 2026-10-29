@@ -3,12 +3,16 @@ import { describeDeploymentError } from '../deploymentErrors.ts'
 import { useTemplates, type AppTemplate } from './api.ts'
 import './templates.css'
 import { Button, TextField } from '../../../shared/ui/index.ts'
+import { useCurrentUser } from '../../auth/index.ts'
 import { useTranslation } from 'react-i18next'
 
-/** Searchable grid of bundled app templates; choosing one hands it to `onSelect`. */
+/** Searchable grid of bundled app templates; each card offers Install (`onInstall`) and Customize (`onSelect`), both hidden for VIEWER. */
 export function TemplatePicker({ onSelect, onInstall, selectedId }: { onSelect: (template: AppTemplate) => void; onInstall?: (template: AppTemplate) => void; selectedId?: string | null }) {
   const { t: tr } = useTranslation('deployments')
   const { data, isPending, error, refetch } = useTemplates()
+  const { data: user } = useCurrentUser()
+  // A VIEWER is read-only: no install, no wizard. Hidden until the role is known.
+  const canAct = !!user && user.role !== 'VIEWER'
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()
   const shown = (data ?? []).filter((t) => q === '' || t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q))
@@ -33,18 +37,23 @@ export function TemplatePicker({ onSelect, onInstall, selectedId }: { onSelect: 
       {shown.length > 0 && (
         <ul className="tp__grid" aria-label={tr('TemplatePicker.templates')}>
           {shown.map((t) => (
-            <li key={t.id}>
-              <button type="button" className="tp__card" aria-pressed={selectedId === t.id} onClick={() => onSelect(t)}>
-                <span className="tp__logo" aria-hidden="true">
-                  {t.name.charAt(0).toUpperCase()}
-                </span>
-                <span className="tp__name" id={`tp-name-${t.id}`}>{t.name}</span>
-                <span className="tp__desc">{t.description}</span>
-              </button>
-              {onInstall && (
-                <Button variant="primary" size="sm" className="tp__install" onClick={() => onInstall(t)} aria-describedby={`tp-name-${t.id}`}>
-                  {tr('InstallTemplateDialog.install')}
-                </Button>
+            <li key={t.id} className="tp__card" data-selected={selectedId === t.id}>
+              <span className="tp__logo" aria-hidden="true">
+                {t.name.charAt(0).toUpperCase()}
+              </span>
+              <span className="tp__name" id={`tp-name-${t.id}`}>{t.name}</span>
+              <span className="tp__desc">{t.description}</span>
+              {canAct && (
+                <div className="tp__actions">
+                  {onInstall && (
+                    <Button variant="primary" size="sm" onClick={() => onInstall(t)} aria-describedby={`tp-name-${t.id}`}>
+                      {tr('InstallTemplateDialog.install')}
+                    </Button>
+                  )}
+                  <Button variant="secondary" size="sm" onClick={() => onSelect(t)} aria-pressed={selectedId === t.id} aria-describedby={`tp-name-${t.id}`}>
+                    {tr('TemplatePicker.customize')}
+                  </Button>
+                </div>
               )}
             </li>
           ))}

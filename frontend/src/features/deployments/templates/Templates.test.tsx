@@ -40,18 +40,22 @@ const templates = [
   },
 ]
 
-function serve(list: unknown = templates, ports: unknown = { used: [], suggestions: [{ preferred: 8080, free: 8080 }] }) {
+function serve(list: unknown = templates, ports: unknown = { used: [], suggestions: [{ preferred: 8080, free: 8080 }] }, role = 'OPERATOR') {
   apiFetch.mockImplementation((path: string) => {
     if (path.startsWith('/hosts/h1/ports/free')) return ports instanceof Error ? Promise.reject(ports) : Promise.resolve(ports)
-    if (path === '/auth/me') return Promise.resolve({ username: 'u', role: 'OPERATOR', setupRequired: false })
+    if (path === '/auth/me') return Promise.resolve({ username: 'u', role, setupRequired: false })
     if (path === '/templates') return list instanceof Error ? Promise.reject(list) : Promise.resolve(list)
     return Promise.reject(new ApiError(404, 'x', 'NOT_FOUND'))
   })
 }
 
-function open() {
+function customizeButton(name: string) {
+  return screen.findByRole('button', { name: 'Customize', description: name })
+}
+
+function open(client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={client}>
       <MemoryRouter>
         <AddDeploymentDialog hostId="h1" onClose={() => {}} />
       </MemoryRouter>
@@ -64,10 +68,10 @@ describe('template picker', () => {
   it('lists templates and filters by search', async () => {
     serve()
     open()
-    expect(await screen.findByRole('button', { name: /WordPress/ })).toBeInTheDocument()
+    expect(await customizeButton('WordPress')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Search templates'), { target: { value: 'blog' } })
-    expect(screen.queryByRole('button', { name: /Nginx/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /WordPress/ })).toBeInTheDocument()
+    expect(screen.queryByText('Nginx')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Customize', description: 'WordPress' })).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Search templates'), { target: { value: 'zzz' } })
     expect(screen.getByText('No template matches your search.')).toBeInTheDocument()
   })
@@ -82,7 +86,7 @@ describe('template picker', () => {
   it('fills the wizard from the chosen template and pre-creates env rows', async () => {
     serve()
     open()
-    fireEvent.click(await screen.findByRole('button', { name: /WordPress/ }))
+    fireEvent.click(await customizeButton('WordPress'))
     expect(screen.getByRole('radio', { name: 'Form wizard' })).toBeChecked()
     expect(screen.getByLabelText('Name', { exact: true })).toHaveValue('wordpress')
     expect(screen.getByLabelText('Service 1 name')).toHaveValue('wp')
@@ -99,7 +103,7 @@ describe('template picker', () => {
     serve()
     open()
     fireEvent.change(screen.getByLabelText('Name', { exact: true }), { target: { value: 'mysite' } })
-    fireEvent.click(await screen.findByRole('button', { name: /Nginx/ }))
+    fireEvent.click(await customizeButton('Nginx'))
     expect(screen.getByLabelText('Name', { exact: true })).toHaveValue('mysite')
     expect(within(await screen.findByRole('group', { name: 'Service 1' })).getByLabelText('Service 1 image')).toHaveValue('nginx:1.27')
   })
@@ -107,7 +111,7 @@ describe('template picker', () => {
   it('replaces a clashing host port, shows a notice and leaves the port editable', async () => {
     serve(templates, { used: [{ port: 8080, protocol: 'tcp' }], suggestions: [{ preferred: 8080, free: 8083 }] })
     open()
-    fireEvent.click(await screen.findByRole('button', { name: /Nginx/ }))
+    fireEvent.click(await customizeButton('Nginx'))
     expect(await screen.findByText('Port 8080 was taken, using 8083.')).toBeInTheDocument()
     expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/ports/free?preferred=8080')
     const host = screen.getByLabelText('Service 1 port 1 host')
@@ -119,7 +123,7 @@ describe('template picker', () => {
   it('leaves non-clashing ports untouched without a notice', async () => {
     serve()
     open()
-    fireEvent.click(await screen.findByRole('button', { name: /Nginx/ }))
+    fireEvent.click(await customizeButton('Nginx'))
     expect(await screen.findByLabelText('Service 1 port 1 host')).toHaveValue('8080')
     expect(screen.queryByText(/was taken/)).not.toBeInTheDocument()
   })
@@ -127,7 +131,7 @@ describe('template picker', () => {
   it('falls back to the template defaults when the ports lookup fails', async () => {
     serve(templates, new ApiError(500, 'boom', 'X'))
     open()
-    fireEvent.click(await screen.findByRole('button', { name: /Nginx/ }))
+    fireEvent.click(await customizeButton('Nginx'))
     expect(await screen.findByLabelText('Service 1 port 1 host')).toHaveValue('8080')
     expect(screen.getByRole('radio', { name: 'Form wizard' })).toBeChecked()
     expect(screen.queryByText(/was taken/)).not.toBeInTheDocument()
@@ -141,9 +145,9 @@ describe('template picker', () => {
       path.startsWith('/hosts/h1/ports/free') ? new Promise((r) => (release = r)) : base(path),
     )
     open()
-    fireEvent.click(await screen.findByRole('button', { name: /Nginx/ }))
+    fireEvent.click(await customizeButton('Nginx'))
     expect(await screen.findByText('Checking free ports…')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /WordPress/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Customize', description: 'WordPress' }))
     expect(await screen.findByLabelText('Service 1 image')).toHaveValue('wordpress:6')
     release({ used: [], suggestions: [{ preferred: 8080, free: 8083 }] })
     fireEvent.click(screen.getByRole('radio', { name: 'From template' }))
@@ -151,5 +155,92 @@ describe('template picker', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Form wizard' }))
     expect(screen.getByLabelText('Service 1 image')).toHaveValue('wordpress:6')
     expect(screen.queryByText(/was taken/)).not.toBeInTheDocument()
+  })
+})
+
+describe('template card actions', () => {
+  it('Install opens the install dialog for that template', async () => {
+    serve()
+    open()
+    fireEvent.click(await screen.findByRole('button', { name: 'Install', description: 'Nginx' }))
+    expect(await screen.findByRole('dialog', { name: 'Install Nginx' })).toBeInTheDocument()
+  })
+
+  it('Customize opens the wizard for that template', async () => {
+    serve()
+    open()
+    fireEvent.click(await customizeButton('Nginx'))
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Form wizard' })).toBeChecked())
+    expect(screen.queryByRole('dialog', { name: 'Install Nginx' })).not.toBeInTheDocument()
+  })
+
+  it('offers both actions on every card, reachable by keyboard', async () => {
+    serve()
+    open()
+    await customizeButton('Nginx')
+    for (const name of ['Nginx', 'WordPress']) {
+      for (const action of ['Install', 'Customize']) {
+        const b = screen.getByRole('button', { name: action, description: name })
+        expect(b.tabIndex).toBeGreaterThanOrEqual(0)
+        b.focus()
+        expect(b).toHaveFocus()
+      }
+    }
+  })
+
+  it('marks the selected template as pressed on its Customize button', async () => {
+    serve()
+    open()
+    const nginx = await customizeButton('Nginx')
+    expect(nginx).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(nginx)
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Form wizard' })).toBeChecked())
+    fireEvent.click(screen.getByRole('radio', { name: 'From template' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Customize', description: 'Nginx' })).toHaveAttribute('aria-pressed', 'true'))
+    expect(screen.getByRole('button', { name: 'Customize', description: 'WordPress' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  describe('role gating', () => {
+    function holdMe(role: string) {
+      serve()
+      const base = apiFetch.getMockImplementation()!
+      let release: () => void = () => {}
+      const gate = new Promise<void>((r) => (release = r))
+      apiFetch.mockImplementation((path: string) =>
+        path === '/auth/me' ? gate.then(() => ({ username: 'u', role, setupRequired: false })) : base(path),
+      )
+      return release
+    }
+    const client = () => new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+    it('shows no actions while the role is still loading', async () => {
+      holdMe('OPERATOR')
+      open()
+      expect(await screen.findByText('Nginx')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Install' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Customize' })).not.toBeInTheDocument()
+    })
+
+    it('shows both actions for an OPERATOR once the role resolved', async () => {
+      const release = holdMe('OPERATOR')
+      open()
+      await screen.findByText('Nginx')
+      release()
+      expect(await screen.findAllByRole('button', { name: 'Install' })).toHaveLength(2)
+      expect(screen.getAllByRole('button', { name: 'Customize' })).toHaveLength(2)
+    })
+
+    it('hides Install and Customize for a VIEWER after the role resolved', async () => {
+      const release = holdMe('VIEWER')
+      const qc = client()
+      open(qc)
+      await screen.findByText('Nginx')
+      release()
+      // Role resolved: nothing is fetching any more and the user is in the cache.
+      await waitFor(() => expect(qc.isFetching()).toBe(0))
+      expect(qc.getQueryCache().findAll().some((q) => (q.state.data as { role?: string } | undefined)?.role === 'VIEWER')).toBe(true)
+      expect(screen.queryByRole('button', { name: 'Install' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Customize' })).not.toBeInTheDocument()
+    })
   })
 })

@@ -324,6 +324,7 @@
   "DeploymentLogsPanel.connectionLostReconnecting": "Connection lost, reconnecting…",
   "TemplatePicker.searchTemplates": "Search templates",
   "TemplatePicker.loadingTemplates": "Loading templates…",
+  "TemplatePicker.customize": "Customize",
   "TemplatePicker.retry": "Retry",
   "TemplatePicker.noTemplatesAvailable": "No templates available.",
   "TemplatePicker.noTemplateMatchesYourSearch": "No template matches your search.",

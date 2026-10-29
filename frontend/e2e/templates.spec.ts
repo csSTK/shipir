@@ -59,8 +59,8 @@ test('operator picks a template, fills the variable and creates the deployment',
   await page.getByRole('radio', { name: 'From template' }).check()
 
   await page.getByLabel('Search templates').fill('blog')
-  await expect(page.getByRole('button', { name: /Nginx/ })).toHaveCount(0)
-  await page.getByRole('button', { name: /WordPress/ }).click()
+  await expect(page.getByRole('listitem').filter({ hasText: 'Nginx' })).toHaveCount(0)
+  await page.getByRole('listitem').filter({ hasText: 'WordPress' }).getByRole('button', { name: 'Customize' }).click()
 
   // The wizard is filled in and the name suggested.
   await expect(page.getByLabel('Name', { exact: true })).toHaveValue('wordpress')
@@ -93,7 +93,7 @@ test('clashing template port is replaced, noticed and stays editable', async ({ 
   await page.goto('/environments/a/deployments')
   await page.getByRole('button', { name: 'Add deployment' }).click()
   await page.getByRole('radio', { name: 'From template' }).check()
-  await page.getByRole('button', { name: /Nginx/ }).click()
+  await page.getByRole('listitem').filter({ hasText: 'Nginx' }).getByRole('button', { name: 'Customize' }).click()
   await expect(page.getByText('Port 8080 was taken, using 8083.')).toBeVisible()
   const host = page.getByLabel('Service 1 port 1 host')
   await expect(host).toHaveValue('8083')
@@ -107,7 +107,7 @@ test('ports lookup failure falls back to the template default', async ({ page, a
   await page.goto('/environments/a/deployments')
   await page.getByRole('button', { name: 'Add deployment' }).click()
   await page.getByRole('radio', { name: 'From template' }).check()
-  await page.getByRole('button', { name: /Nginx/ }).click()
+  await page.getByRole('listitem').filter({ hasText: 'Nginx' }).getByRole('button', { name: 'Customize' }).click()
   await expect(page.getByLabel('Service 1 port 1 host')).toHaveValue('8080')
   await expect(page.getByText(/was taken/)).toHaveCount(0)
 })
