@@ -102,6 +102,29 @@ describe('ServicesCard', () => {
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith(`${BASE}/profiles`, { method: 'PUT', body: { profiles: ['tools'] } }))
   })
 
+  it('keeps the selection and shows an error when saving profiles fails', async () => {
+    renderCard({ profiles: ['debug'] })
+    const tools = await screen.findByRole('checkbox', { name: 'tools' })
+    apiFetch.mockImplementation((_path: string, init?: { method?: string }) =>
+      init?.method === 'PUT' ? Promise.reject(new ApiError(500, 'boom')) : Promise.resolve({ services: ['db', 'web'], profiles: ['debug', 'tools'] }),
+    )
+    fireEvent.click(tools)
+    fireEvent.click(screen.getByRole('button', { name: 'Save profiles' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not save the profiles/i)
+    expect(tools).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Save profiles' })).toBeEnabled()
+  })
+
+  it('keeps an active profile the file no longer defines, so it can be removed', async () => {
+    renderCard({ profiles: ['old'], services: { services: ['web'], profiles: ['debug'] } })
+    const old = await screen.findByRole('checkbox', { name: 'old' })
+    expect(old).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'debug' })).not.toBeChecked()
+    fireEvent.click(old)
+    fireEvent.click(screen.getByRole('button', { name: 'Save profiles' }))
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith(`${BASE}/profiles`, { method: 'PUT', body: { profiles: [] } }))
+  })
+
   it('shows a hint when the file defines no profiles', async () => {
     renderCard({ services: { services: ['web'], profiles: [] } })
     expect(await screen.findByText(/no profiles/i)).toBeInTheDocument()
