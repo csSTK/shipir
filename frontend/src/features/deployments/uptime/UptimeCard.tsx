@@ -26,7 +26,7 @@ function displayUrl(raw: string): string {
   }
 }
 
-function RowActions({ hostId, deploymentId, check, onEdit, onDelete }: { hostId: string; deploymentId: string; check: UptimeCheck; onEdit: () => void; onDelete: () => void }) {
+function UptimeRowActions({ hostId, deploymentId, check, onEdit, onDelete }: { hostId: string; deploymentId: string; check: UptimeCheck; onEdit: () => void; onDelete: () => void }) {
   const { t } = useTranslation('deployments')
   const save = useSaveUptimeCheck(hostId, deploymentId, check.id)
   return (
@@ -130,7 +130,7 @@ export function UptimeCard({ hostId, deploymentId, canOperate }: { hostId: strin
                     </span>
                   )}
                 </div>
-                <RowActions
+                <UptimeRowActions
                   hostId={hostId}
                   deploymentId={deploymentId}
                   check={c}

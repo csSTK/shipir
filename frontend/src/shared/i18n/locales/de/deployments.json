@@ -40,7 +40,6 @@
   "AdoptDeploymentDialog.theComposeFileIsNot": "Die Compose-Datei ist ungültig.",
   "AdoptDeploymentDialog.pasteACorrectedFileBelow": " Füge unten eine korrigierte Datei ein.",
   "AdoptDeploymentDialog.couldNotAdoptTheProject": "Das Projekt konnte nicht übernommen werden. Versuche es erneut.",
-  "ConfirmDialog.cancel": "Abbrechen",
   "DeploymentContentPanel.composeFile": "Compose-Datei",
   "DeploymentContentPanel.edit": "Bearbeiten",
   "DeploymentContentPanel.savedAsADraftDeploy": "Als Entwurf gespeichert. Führe ein Deploy aus, um die Änderungen anzuwenden.",

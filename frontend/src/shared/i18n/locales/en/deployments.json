@@ -40,7 +40,6 @@
   "AdoptDeploymentDialog.theComposeFileIsNot": "The Compose file is not valid.",
   "AdoptDeploymentDialog.pasteACorrectedFileBelow": " Paste a corrected file below.",
   "AdoptDeploymentDialog.couldNotAdoptTheProject": "Could not adopt the project. Try again.",
-  "ConfirmDialog.cancel": "Cancel",
   "DeploymentContentPanel.composeFile": "Compose file",
   "DeploymentContentPanel.edit": "Edit",
   "DeploymentContentPanel.savedAsADraftDeploy": "Saved as a draft. Deploy to apply the changes.",
