@@ -17,6 +17,8 @@ import org.springframework.stereotype.Component;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
@@ -30,7 +32,9 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>One worker (virtual thread) per host, started by {@link #sync()} and stopped when the host is deleted; a dropped
  * stream is reopened with exponential backoff by the shared {@link ReconnectingEventStream}. The same problem of the same container is reported once per
- * {@code dedupe-window}, so a crash loop yields one event, not one per restart. Off with
+ * {@code dedupe-window}, so a crash loop yields one event, not one per restart. When a container crashes
+ * {@code restart-loop-threshold} times within {@code restart-loop-window}, one further event reports it as a restart loop
+ * with the crash count; it fires once per dedupe window, not on every further crash. Off with
  * {@code shipir.host.container-watch.enabled=false}.
  */
 @Component
@@ -55,6 +59,7 @@ class ContainerHealthWatcher {
     private final ContainerWatchProperties properties;
     private final Map<UUID, ReconnectingEventStream> workers = new ConcurrentHashMap<>();
     private final Map<String, Instant> lastReported = new ConcurrentHashMap<>();
+    private final Map<String, Deque<Instant>> crashes = new ConcurrentHashMap<>();
     private final Map<String, Instant> killedAt = new ConcurrentHashMap<>();
 
     ContainerHealthWatcher(DockerHostRepository hosts, HostEndpointResolver endpoints, DockerEventService events,
@@ -154,7 +159,17 @@ class ContainerHealthWatcher {
             return;
         }
         Instant now = clock.instant();
-        if (!firstInWindow(hostId + "/" + event.id() + "/" + kind, now)) {
+        String key = hostId + "/" + event.id() + "/" + kind;
+        Integer loopCount = null;
+        if (kind == ContainerProblemEvent.Kind.CRASHED) {
+            int count = recordCrash(hostId + "/" + event.id(), now);
+            int threshold = properties.restartLoopThreshold();
+            if (threshold > 0 && count >= threshold && firstInWindow(key + "/LOOP", now)) {
+                loopCount = count;
+                lastReported.put(key, now); // the loop report replaces the plain one of this window
+            }
+        }
+        if (loopCount == null && !firstInWindow(key, now)) {
             return;
         }
         try {
@@ -167,9 +182,28 @@ class ContainerHealthWatcher {
             }
             String name = event.name() != null ? event.name() : shortId(event.id());
             publisher.publishEvent(new ContainerProblemEvent(kind, hostId, hostName, event.id(), name, deploymentId,
-                    deploymentName, kind == ContainerProblemEvent.Kind.CRASHED ? event.exitCode() : null, now));
+                    deploymentName, kind == ContainerProblemEvent.Kind.CRASHED ? event.exitCode() : null, now, loopCount,
+                    loopCount == null ? null : properties.restartLoopWindow()));
         } catch (RuntimeException e) {
             log.warn("Could not publish container event of host {}: {}", hostId, e.getClass().getSimpleName());
+        }
+    }
+
+    /** Remembers a crash and returns how many of this container fall into the restart loop window. */
+    private int recordCrash(String containerKey, Instant now) {
+        Instant cutoff = now.minus(properties.restartLoopWindow());
+        crashes.values().removeIf(d -> {
+            synchronized (d) {
+                return d.isEmpty() || d.peekLast().isBefore(cutoff);
+            }
+        });
+        Deque<Instant> times = crashes.computeIfAbsent(containerKey, k -> new ArrayDeque<>());
+        synchronized (times) {
+            times.addLast(now);
+            while (times.peekFirst().isBefore(cutoff)) {
+                times.removeFirst();
+            }
+            return times.size();
         }
     }
 

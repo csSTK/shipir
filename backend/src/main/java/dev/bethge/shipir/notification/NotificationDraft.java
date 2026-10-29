@@ -62,7 +62,11 @@ record NotificationDraft(NotificationType type, UUID hostId, String hostName, UU
 
     static NotificationDraft of(ContainerProblemEvent e) {
         boolean crashed = e.kind() == ContainerProblemEvent.Kind.CRASHED;
-        String message = crashed
+        String message = crashed && e.restartCount() != null
+                ? "Container \"%s\" on \"%s\" is in a restart loop (%d crashes within %d minutes, last exit code %s)"
+                        .formatted(e.containerName(), e.hostName(), e.restartCount(), e.restartWindow().toMinutes(),
+                                e.exitCode())
+                : crashed
                 ? "Container \"%s\" on \"%s\" crashed (exit code %s)".formatted(e.containerName(), e.hostName(),
                         e.exitCode())
                 : "Container \"%s\" on \"%s\" is unhealthy".formatted(e.containerName(), e.hostName());

@@ -55,7 +55,7 @@ class ContainerHealthWatcherTest {
         fake = new FakeEvents();
         watcher = new ContainerHealthWatcher(hosts, endpoints, fake, managed, published::add, clock,
                 new ContainerWatchProperties(true, Duration.ofMinutes(1), Duration.ofMinutes(10),
-                        Duration.ofMillis(10), Duration.ofMillis(50)));
+                        Duration.ofMillis(10), Duration.ofMillis(50), 3, Duration.ofMinutes(5)));
     }
 
     private static DockerEventDto container(String action, String id, String project, Integer exit) {
@@ -193,6 +193,64 @@ class ContainerHealthWatcherTest {
         clock.advance(Duration.ofMinutes(6));
         watcher.handle(hostId, container("die", "c1", null, 1));
         assertThat(published).hasSize(4);
+    }
+
+    @Test
+    void crashesReachingTheThresholdWithinTheWindowAreReportedOnceAsRestartLoopWithCount() {
+        watcher.handle(hostId, container("die", "c1", null, 1));
+        clock.advance(Duration.ofMinutes(1));
+        watcher.handle(hostId, container("die", "c1", null, 1));
+        assertThat(published).hasSize(1);
+        assertThat(((ContainerProblemEvent) published.get(0)).restartCount()).isNull();
+
+        clock.advance(Duration.ofMinutes(1));
+        watcher.handle(hostId, container("die", "c1", null, 1)); // 3rd crash: threshold
+        assertThat(published).hasSize(2);
+        ContainerProblemEvent loop = (ContainerProblemEvent) published.get(1);
+        assertThat(loop.kind()).isEqualTo(ContainerProblemEvent.Kind.CRASHED);
+        assertThat(loop.restartCount()).isEqualTo(3);
+        assertThat(loop.restartWindow()).isEqualTo(Duration.ofMinutes(5));
+
+        clock.advance(Duration.ofSeconds(30));
+        watcher.handle(hostId, container("die", "c1", null, 1)); // no spam: still inside the dedupe window
+        watcher.handle(hostId, container("die", "c1", null, 1));
+        assertThat(published).hasSize(2);
+    }
+
+    @Test
+    void crashesSpreadBeyondTheLoopWindowAreNoRestartLoop() {
+        for (int i = 0; i < 4; i++) {
+            watcher.handle(hostId, container("die", "c1", null, 1));
+            clock.advance(Duration.ofMinutes(6)); // older than the 5 minute loop window each time
+        }
+        assertThat(published).allSatisfy(e -> assertThat(((ContainerProblemEvent) e).restartCount()).isNull());
+    }
+
+    @Test
+    void restartLoopIsCountedPerContainerAndFiresAgainInTheNextDedupeWindow() {
+        watcher.handle(hostId, container("die", "c1", null, 1));
+        watcher.handle(hostId, container("die", "c2", null, 1));
+        watcher.handle(hostId, container("die", "c1", null, 1));
+        watcher.handle(hostId, container("die", "c2", null, 1));
+        assertThat(published).hasSize(2); // 2 crashes each: below threshold
+
+        clock.advance(Duration.ofMinutes(11));
+        for (int i = 0; i < 3; i++) {
+            watcher.handle(hostId, container("die", "c1", null, 1));
+        }
+        assertThat(published).hasSize(4); // first crash normal, third one the loop report
+        assertThat(((ContainerProblemEvent) published.get(3)).restartCount()).isEqualTo(3);
+    }
+
+    @Test
+    void thresholdZeroDisablesRestartLoopDetection() {
+        watcher = new ContainerHealthWatcher(hosts, endpoints, fake, managed, published::add, clock,
+                new ContainerWatchProperties(true, Duration.ofMinutes(1), Duration.ofMinutes(10),
+                        Duration.ofMillis(10), Duration.ofMillis(50), 0, Duration.ofMinutes(5)));
+        for (int i = 0; i < 5; i++) {
+            watcher.handle(hostId, container("die", "c1", null, 1));
+        }
+        assertThat(published).singleElement().satisfies(e -> assertThat(((ContainerProblemEvent) e).restartCount()).isNull());
     }
 
     @Test

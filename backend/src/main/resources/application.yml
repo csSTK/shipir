@@ -23,6 +23,11 @@ shipir:
       max-line-length: 65536
   host:
     overview-timeout: 5s
+    container-watch:
+      # This many crashes of one container within restart-loop-window are reported as one restart-loop
+      # notification with the count (once per dedupe-window, default 10m); 0 turns the restart-loop report off.
+      restart-loop-threshold: 3
+      restart-loop-window: 5m
   stats:
     # resource usage history: one sample per running container and tick, kept for retention_settings.stats_days
     recorder-enabled: true

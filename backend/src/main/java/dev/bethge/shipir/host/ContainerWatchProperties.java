@@ -14,5 +14,8 @@ public record ContainerWatchProperties(
         /** The same problem of the same container is reported at most once per window. */
         @DefaultValue("10m") Duration dedupeWindow,
         @DefaultValue("1s") Duration reconnectInitial,
-        @DefaultValue("60s") Duration reconnectMax) {
+        @DefaultValue("60s") Duration reconnectMax,
+        /** This many crashes of one container within {@code restartLoopWindow} are reported as a restart loop; 0 turns it off. */
+        @DefaultValue("3") int restartLoopThreshold,
+        @DefaultValue("5m") Duration restartLoopWindow) {
 }
