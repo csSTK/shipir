@@ -6,7 +6,7 @@ import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.client.ImageService;
 import dev.bethge.shipir.docker.dto.RegistryLogin;
 import dev.bethge.shipir.streaming.ComposeOutputStreamService;
-import dev.bethge.shipir.streaming.RunStatus;
+import dev.bethge.shipir.common.stream.RunStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

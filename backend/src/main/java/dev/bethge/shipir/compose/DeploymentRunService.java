@@ -28,7 +28,7 @@ import dev.bethge.shipir.git.GitCheckout;
 import dev.bethge.shipir.git.GitRepositoryService;
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.streaming.ComposeOutputStreamService;
-import dev.bethge.shipir.streaming.RunStatus;
+import dev.bethge.shipir.common.stream.RunStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -44,7 +44,6 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.nio.file.Path;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -492,8 +491,7 @@ public class DeploymentRunService {
             return true;
         }
         try (var entries = Files.list(dir)) {
-            return entries.allMatch(p -> Set.of(ComposeFileRepository.COMPOSE_FILE, ComposeFileRepository.ENV_FILE,
-                    ComposeFileRepository.ROLLBACK_OVERRIDE_FILE).contains(p.getFileName().toString()));
+            return entries.allMatch(p -> ComposeFileRepository.SHIPIR_WRITTEN_FILES.contains(p.getFileName().toString()));
         } catch (IOException | RuntimeException e) {
             return false; // cannot tell: fail closed
         }

@@ -3,7 +3,7 @@ package dev.bethge.shipir.compose;
 import com.jayway.jsonpath.JsonPath;
 import dev.bethge.shipir.compose.execution.ComposeCommand;
 import dev.bethge.shipir.streaming.ComposeOutputStreamService;
-import dev.bethge.shipir.streaming.RunStatus;
+import dev.bethge.shipir.common.stream.RunStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;

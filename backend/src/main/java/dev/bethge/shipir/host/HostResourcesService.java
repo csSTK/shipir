@@ -40,8 +40,8 @@ import dev.bethge.shipir.docker.dto.RegistryLogin;
 import dev.bethge.shipir.host.dto.PullImageRequest;
 import dev.bethge.shipir.host.dto.PullImageResponse;
 import dev.bethge.shipir.permission.CurrentAccess;
-import dev.bethge.shipir.streaming.ComposeOutputStreamService;
-import dev.bethge.shipir.streaming.RunStatus;
+import dev.bethge.shipir.common.stream.RunOutput;
+import dev.bethge.shipir.common.stream.RunStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -77,7 +77,7 @@ public class HostResourcesService {
     private final VolumeService volumes;
     private final ManagedDeploymentLookup managedDeployments;
     private final CurrentAccess access;
-    private final ComposeOutputStreamService streams;
+    private final RunOutput streams;
     private final RegistryAuthSource registryAuths;
     private final ImageUpdateStore imageUpdates;
     private final DockerSystemService system;
@@ -87,7 +87,7 @@ public class HostResourcesService {
     HostResourcesService(DockerHostRepository hosts, HostEndpointResolver endpoints, ContainerService containers,
                          ImageService images, NetworkService networks, VolumeService volumes,
                          ManagedDeploymentLookup managedDeployments, CurrentAccess access,
-                         ComposeOutputStreamService streams, RegistryAuthSource registryAuths,
+                         RunOutput streams, RegistryAuthSource registryAuths,
                          ImageUpdateStore imageUpdates, DockerSystemService system, EgressPolicy egress) {
         this.system = system;
         this.egress = egress;

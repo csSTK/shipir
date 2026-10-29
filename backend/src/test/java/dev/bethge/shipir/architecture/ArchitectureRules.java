@@ -53,6 +53,12 @@ final class ArchitectureRules {
                 .as("audit/ must not depend on ai/");
     }
 
+    static ArchRule hostNotOnStreaming(String root) {
+        return noClasses().that().resideInAPackage(root + ".host..")
+                .should().dependOnClassesThat().resideInAPackage(root + ".streaming..")
+                .as("host/ must not depend on streaming/");
+    }
+
     static ArchRule gitNotOnCompose(String root) {
         return noClasses().that().resideInAPackage(root + ".git..")
                 .should().dependOnClassesThat().resideInAPackage(root + ".compose..")

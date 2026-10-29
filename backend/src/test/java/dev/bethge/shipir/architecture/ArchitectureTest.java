@@ -23,6 +23,9 @@ class ArchitectureTest {
     static final ArchRule auditNotOnAi = ArchitectureRules.auditNotOnAi(ROOT);
 
     @ArchTest
+    static final ArchRule hostNotOnStreaming = ArchitectureRules.hostNotOnStreaming(ROOT);
+
+    @ArchTest
     static final ArchRule gitNotOnCompose = ArchitectureRules.gitNotOnCompose(ROOT);
 
     @ArchTest

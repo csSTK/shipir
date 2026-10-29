@@ -4,7 +4,7 @@ import com.jayway.jsonpath.JsonPath;
 import dev.bethge.shipir.compose.execution.ComposeCommand;
 import dev.bethge.shipir.compose.execution.ComposeOptions;
 import dev.bethge.shipir.streaming.ComposeOutputStreamService;
-import dev.bethge.shipir.streaming.RunStatus;
+import dev.bethge.shipir.common.stream.RunStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -303,6 +303,16 @@ class DeploymentServicesApiTest extends DeploymentTestBase {
         }
         mvc.perform(op.write(put(url() + "/" + id + "/profiles")).contentType(APPLICATION_JSON).content("{}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void underscorePrefixedProfileIsAcceptedAsCompose() throws Exception {
+        // Compose allows '_' as the first character of a profile name, so a "_debug" profile must be settable via the API.
+        Login op = login("operator");
+        String id = create(op);
+        setProfiles(op, id, "{\"profiles\":[\"_debug\"]}");
+        assertThat(jdbc.queryForObject("SELECT profiles[1] FROM deployments WHERE id = ?::uuid", String.class, id))
+                .isEqualTo("_debug");
     }
 
     @Test

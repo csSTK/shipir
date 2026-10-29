@@ -1,5 +1,7 @@
 package dev.bethge.shipir.streaming;
 
+import dev.bethge.shipir.common.stream.RunOutput;
+import dev.bethge.shipir.common.stream.RunStatus;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Lazy;
@@ -36,7 +38,7 @@ import java.util.function.Predicate;
  */
 @Service
 @EnableConfigurationProperties(StreamProperties.class)
-public class ComposeOutputStreamService {
+public class ComposeOutputStreamService implements RunOutput {
 
     public static final String TOPIC_PREFIX = "/topic/deployments/";
 
@@ -60,6 +62,7 @@ public class ComposeOutputStreamService {
     }
 
     /** Records which deployment (null for a host-level run such as an image pull) a run belongs to; call before {@link #start}. */
+    @Override
     public void registerRun(String runId, java.util.UUID hostId, java.util.UUID deploymentId) {
         runTargets.put(runId, new RunTarget(hostId, deploymentId));
     }
@@ -84,6 +87,7 @@ public class ComposeOutputStreamService {
     }
 
     /** Opens (or resets) the stream and returns the sink for Compose output lines. */
+    @Override
     public Consumer<String> start(String runId) {
         synchronized (streams) {
             evictExpired();
@@ -97,6 +101,7 @@ public class ComposeOutputStreamService {
     }
 
     /** Publishes the final status; later lines are ignored. */
+    @Override
     public void complete(String runId, RunStatus status) {
         publish(runId, StreamMessage.Type.STATUS, null, status);
     }

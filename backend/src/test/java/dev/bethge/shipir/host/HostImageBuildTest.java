@@ -10,7 +10,7 @@ import dev.bethge.shipir.git.GitCheckout;
 import dev.bethge.shipir.git.GitOperationException;
 import dev.bethge.shipir.git.GitRepositoryService;
 import dev.bethge.shipir.streaming.ComposeOutputStreamService;
-import dev.bethge.shipir.streaming.RunStatus;
+import dev.bethge.shipir.common.stream.RunStatus;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.junit.jupiter.api.BeforeEach;

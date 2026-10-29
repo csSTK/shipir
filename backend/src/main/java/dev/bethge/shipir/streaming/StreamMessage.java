@@ -1,5 +1,6 @@
 package dev.bethge.shipir.streaming;
 
+import dev.bethge.shipir.common.stream.RunStatus;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**

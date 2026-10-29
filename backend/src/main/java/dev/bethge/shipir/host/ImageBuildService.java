@@ -19,8 +19,8 @@ import dev.bethge.shipir.host.dto.ImageRunResponse;
 import dev.bethge.shipir.host.dto.PushImageRequest;
 import dev.bethge.shipir.host.dto.TagImageRequest;
 import dev.bethge.shipir.permission.CurrentAccess;
-import dev.bethge.shipir.streaming.ComposeOutputStreamService;
-import dev.bethge.shipir.streaming.RunStatus;
+import dev.bethge.shipir.common.stream.RunOutput;
+import dev.bethge.shipir.common.stream.RunStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -83,7 +83,7 @@ class ImageBuildService {
     private final HostEndpointResolver endpoints;
     private final ImageService images;
     private final CurrentAccess access;
-    private final ComposeOutputStreamService streams;
+    private final RunOutput streams;
     private final RegistryAuthSource registryAuths;
     private final GitRepositoryService git;
     private final ImageBuildProperties properties;
@@ -91,7 +91,7 @@ class ImageBuildService {
     private final Set<UUID> buildingHosts = ConcurrentHashMap.newKeySet();
 
     ImageBuildService(DockerHostRepository hosts, HostEndpointResolver endpoints, ImageService images, CurrentAccess access,
-                      ComposeOutputStreamService streams, RegistryAuthSource registryAuths, GitRepositoryService git,
+                      RunOutput streams, RegistryAuthSource registryAuths, GitRepositoryService git,
                       ImageBuildProperties properties, EgressPolicy egress) {
         this.egress = egress;
         this.hosts = hosts;

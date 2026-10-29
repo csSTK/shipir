@@ -40,6 +40,11 @@ class ArchitectureRulesFailTest {
     }
 
     @Test
+    void hostOnStreamingFails() {
+        fails(ArchitectureRules.hostNotOnStreaming(ROOT), "BadStreamingUser");
+    }
+
+    @Test
     void gitOnComposeFails() {
         fails(ArchitectureRules.gitNotOnCompose(ROOT), "BadGit");
     }

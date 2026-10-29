@@ -2,6 +2,7 @@ package dev.bethge.shipir.streaming;
 
 import dev.bethge.shipir.PostgresTestConfiguration;
 import dev.bethge.shipir.auth.Role;
+import dev.bethge.shipir.common.stream.RunStatus;
 import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
