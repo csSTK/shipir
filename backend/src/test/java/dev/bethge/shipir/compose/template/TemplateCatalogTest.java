@@ -196,4 +196,66 @@ class TemplateCatalogTest {
         assertThatThrownBy(() -> load(json)).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Bad Id");
     }
+
+    private static String withHint(String hint) {
+        return """
+                [{"id":"hinted","name":"T","description":"d","logo":"x",
+                  "env":[%s],
+                  "spec":{"services":[{"name":"web","image":"nginx","environment":[{"key":"A","ref":"A"}]}]}}]""".formatted(hint);
+    }
+
+    @Test
+    void parsesDefaultValueAndGenerateOnEnvHints() {
+        var t = load(withHint("""
+                {"key":"A","description":"d","secret":false,"defaultValue":"x"},
+                {"key":"S","description":"d","secret":true,"generate":true}""")).all().get(0);
+        assertThat(t.env().get(0).defaultValue()).isEqualTo("x");
+        assertThat(t.env().get(0).generate()).isFalse();
+        assertThat(t.env().get(1).generate()).isTrue();
+        assertThat(t.env().get(1).defaultValue()).isNull();
+    }
+
+    @Test
+    void generateWithoutSecretFailsCatalogLoad() {
+        assertThatThrownBy(() -> load(withHint("{\"key\":\"A\",\"description\":\"d\",\"secret\":false,\"generate\":true}")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("hinted")
+                .hasMessageContaining("generate");
+    }
+
+    @Test
+    void defaultValueOnSecretFailsCatalogLoad() {
+        assertThatThrownBy(() -> load(withHint("{\"key\":\"A\",\"description\":\"d\",\"secret\":true,\"defaultValue\":\"pw\"}")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("hinted")
+                .hasMessageContaining("defaultValue");
+    }
+
+    @Test
+    void defaultValueForKeyNotInSpecFailsCatalogLoad() {
+        assertThatThrownBy(() -> load(withHint("{\"key\":\"Z\",\"description\":\"d\",\"secret\":false,\"defaultValue\":\"x\"}")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("hinted")
+                .hasMessageContaining("Z");
+    }
+
+    @Test
+    void unknownEnvHintPropertyFailsCatalogLoad() {
+        assertThatThrownBy(() -> load(withHint("{\"key\":\"A\",\"description\":\"d\",\"secret\":false,\"colour\":\"x\"}")))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void everyBundledEnvHintHasADefaultOrIsGenerated() {
+        for (AppTemplate t : bundled().all()) {
+            for (AppTemplate.EnvHint h : t.env()) {
+                if (h.secret()) {
+                    assertThat(h.generate()).as("%s/%s secret must be generated", t.id(), h.key()).isTrue();
+                    assertThat(h.defaultValue()).as("%s/%s", t.id(), h.key()).isNull();
+                } else {
+                    assertThat(h.defaultValue()).as("%s/%s needs a default", t.id(), h.key()).isNotBlank();
+                }
+            }
+        }
+    }
 }

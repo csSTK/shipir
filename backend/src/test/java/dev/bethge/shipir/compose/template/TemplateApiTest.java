@@ -83,6 +83,16 @@ class TemplateApiTest {
     }
 
     @Test
+    void envHintsExposeDefaultValueAndGenerate() throws Exception {
+        Login viewer = login("viewer");
+        mvc.perform(viewer.apply(get("/api/templates")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id=='postgres')].env[0].generate").value(true))
+                .andExpect(jsonPath("$[?(@.id=='postgres')].env[0].secret").value(true))
+                .andExpect(jsonPath("$[?(@.id=='nextcloud')].env[1].defaultValue").value("localhost"));
+    }
+
+    @Test
     void anonymousIsUnauthorized() throws Exception {
         mvc.perform(get("/api/templates")).andExpect(status().isUnauthorized());
     }
