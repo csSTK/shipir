@@ -8,8 +8,8 @@ import java.util.function.Supplier;
  * authentication nor this scope is denied everything.
  *
  * <p>Backed by a {@link ScopedValue}: bound only for the duration of {@link #call}/{@link #run}, never leaks to later
- * work on a pooled thread, and is not inherited by threads started inside (they never need it: workers use no
- * permission checks).
+ * work on a pooled thread. It is not inherited by threads started inside: code that hands permission-checked work to
+ * an executor must re-bind it on the worker (see {@code SearchService}), otherwise the worker is denied everything.
  */
 public final class SystemScope {
 

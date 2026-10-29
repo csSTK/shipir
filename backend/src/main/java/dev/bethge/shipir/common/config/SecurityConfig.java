@@ -67,8 +67,11 @@ import java.util.List;
 class SecurityConfig {
 
     /**
-     * Same policy as frontend/nginx/default.conf.template (keep both in sync; the CSP e2e reads the nginx one).
+     * Same policy as frontend/nginx/security-headers.inc.template (keep both in sync; the CSP e2e reads that file).
      * Inline styles are needed by the UI libraries (style attributes, Monaco); scripts stay 'self' only.
+     *
+     * <p>Limitation: {@code connect-src 'self'} also governs the same-origin WebSocket (STOMP). It needs Safari 15.4+
+     * or a current Firefox; older browsers block the live features.
      */
     static final String CONTENT_SECURITY_POLICY = "default-src 'self'; script-src 'self'; "
             + "style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; "
