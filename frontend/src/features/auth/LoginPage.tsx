@@ -26,15 +26,26 @@ const OIDC_ERRORS: Record<string, string> = {
 }
 const OIDC_GENERIC_ERROR = () => i18n.t('auth:LoginPage.singleSignOnFailedPlease')
 
+/** Pure read (no side effects), so StrictMode's double-invoked state initializer is harmless. */
 function readOidcError(): string | null {
   try {
     const code = new URLSearchParams(window.location.search).get('oidc_error')
     if (code === null) return null
-    window.history.replaceState(null, '', window.location.pathname)
     // Own keys only: a plain object lookup would resolve `constructor`, `toString`, `__proto__` etc. from Object.prototype.
     return Object.hasOwn(OIDC_ERRORS, code) ? OIDC_ERRORS[code] : OIDC_GENERIC_ERROR()
   } catch {
     return null
+  }
+}
+
+/** Drops the one-shot `oidc_error` from the address bar. Runs in an effect, after the error was captured into state. */
+function clearOidcErrorParam() {
+  try {
+    if (new URLSearchParams(window.location.search).has('oidc_error')) {
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+  } catch {
+    // Address bar not writable: the error still shows, it just stays in the URL.
   }
 }
 
@@ -45,6 +56,10 @@ export function LoginPage() {
   const [mfaPending, setMfaPending] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const [oidcError] = useState(readOidcError)
+
+  useEffect(() => {
+    clearOidcErrorParam()
+  }, [])
 
   if (mfaPending) {
     return (
@@ -145,74 +160,74 @@ function SignInForm({
       <div className="auth-stack">
         <AuthBrand />
         <Card className="auth-card">
-        <form className="login__card" onSubmit={onSubmit}>
-        <h1 className="login__title">{t('LoginPage.signInToShipir')}</h1>
-        {oidcError && (
-          <p className="login__error" role="alert">
-            {oidcError}
-          </p>
-        )}
-        {configPending && <Skeleton height="var(--space-8)" />}
-        {showOidc && (
-          <Button
-            className="login__submit"
-            variant={showLocal ? 'secondary' : 'primary'}
-            onClick={() => window.location.assign('/api/auth/oidc/authorize')}
-          >
-            {t('LoginPage.signInWithDisplayname', { displayName: oidc.displayName ?? 'single sign-on' })}
-          </Button>
-        )}
-        {showOidc && !showLocal && (
-          <Button className="login__link" variant="ghost" size="sm" onClick={() => setForceLocal(true)}>
-            {t('LoginPage.useLocalLogin')}
-          </Button>
-        )}
-        {showLocal && (
-          <>
-        {notice && (
-          <p className="login__notice" role="status">
-            {notice}
-          </p>
-        )}
-        <label className="login__field">
-          <span>{t('LoginPage.username')}</span>
-          <input
-            ref={usernameRef}
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoComplete="username"
-            autoCapitalize="none"
-            spellCheck={false}
-            required
-            disabled={login.isPending}
-            {...credentialsError}
-          />
-        </label>
-        <label className="login__field">
-          <span>{t('LoginPage.password')}</span>
-          <input
-            ref={passwordRef}
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            required
-            disabled={login.isPending}
-            {...credentialsError}
-          />
-        </label>
-        <p id={errorId} className="login__error" role="alert">
-          {errorMessage}
-        </p>
-        <Button className="login__submit" variant="primary" type="submit" disabled={login.isPending} loading={login.isPending}>
-          {login.isPending ? t('LoginPage.signingIn') : t('LoginPage.signIn')}
-        </Button>
-        <Button className="login__link" variant="ghost" size="sm" onClick={onForgot}>
-          {t('LoginPage.forgotPassword')}
-        </Button>
-          </>
-        )}
-        </form>
+          <form className="login__card" onSubmit={onSubmit}>
+            <h1 className="login__title">{t('LoginPage.signInToShipir')}</h1>
+            {oidcError && (
+              <p className="login__error" role="alert">
+                {oidcError}
+              </p>
+            )}
+            {configPending && <Skeleton height="var(--space-8)" />}
+            {showOidc && (
+              <Button
+                className="login__submit"
+                variant={showLocal ? 'secondary' : 'primary'}
+                onClick={() => window.location.assign('/api/auth/oidc/authorize')}
+              >
+                {t('LoginPage.signInWithDisplayname', { displayName: oidc.displayName ?? 'single sign-on' })}
+              </Button>
+            )}
+            {showOidc && !showLocal && (
+              <Button className="login__link" variant="ghost" size="sm" onClick={() => setForceLocal(true)}>
+                {t('LoginPage.useLocalLogin')}
+              </Button>
+            )}
+            {showLocal && (
+              <>
+                {notice && (
+                  <p className="login__notice" role="status">
+                    {notice}
+                  </p>
+                )}
+                <label className="login__field">
+                  <span>{t('LoginPage.username')}</span>
+                  <input
+                    ref={usernameRef}
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    required
+                    disabled={login.isPending}
+                    {...credentialsError}
+                  />
+                </label>
+                <label className="login__field">
+                  <span>{t('LoginPage.password')}</span>
+                  <input
+                    ref={passwordRef}
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    required
+                    disabled={login.isPending}
+                    {...credentialsError}
+                  />
+                </label>
+                <p id={errorId} className="login__error" role="alert">
+                  {errorMessage}
+                </p>
+                <Button className="login__submit" variant="primary" type="submit" disabled={login.isPending} loading={login.isPending}>
+                  {login.isPending ? t('LoginPage.signingIn') : t('LoginPage.signIn')}
+                </Button>
+                <Button className="login__link" variant="ghost" size="sm" onClick={onForgot}>
+                  {t('LoginPage.forgotPassword')}
+                </Button>
+              </>
+            )}
+          </form>
         </Card>
       </div>
     </main>
