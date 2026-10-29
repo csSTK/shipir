@@ -229,6 +229,7 @@
   "api.thisFileNoLongerExists": "This file no longer exists.",
   "api.thisDeploymentNoLongerExists": "This deployment no longer exists.",
   "api.thisFileIsTooLarge": "This file is too large to edit here.",
+  "api.envFileNeedsOperateAccess": "This file may contain secrets, so only people with operate access to this deployment can open it.",
   "api.youAreNotAllowedTo": "You are not allowed to do this.",
   "DeployOutput.deploymentOutput": "Deployment output",
   "DeployOutput.titleRunIdRunid": "<strong>{{title}}</strong><span>Run ID <code>{{runId}}</code></span>",

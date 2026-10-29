@@ -141,4 +141,24 @@ describe('describeConfigError', () => {
     const message = describeConfigError(new ApiError(409, 'busy', 'DEPLOYMENT_IN_PROGRESS'), 'fallback')
     expect(message).toMatch(/run is already in progress/i)
   })
+
+  it('explains that env-like files need operate access instead of a generic refusal', () => {
+    const message = describeConfigError(new ApiError(403, 'forbidden', 'ENV_FILE_RESTRICTED'), 'fallback')
+    expect(message).toMatch(/secrets/i)
+    expect(message).toMatch(/operate access/i)
+    expect(message).not.toMatch(/not allowed/i)
+  })
+})
+
+describe('ConfigFilesPanel env-like files', () => {
+  it('shows the env-file explanation to a viewer who opens a secret file', async () => {
+    const envEntry = { path: 'db.env', directory: false, size: 4, modifiedAt: '2026-10-01T10:00:00Z', readOnly: false }
+    serve({
+      [`GET ${BASE}`]: () => [...tree, envEntry],
+      [`GET ${BASE}?path=db.env`]: () => new ApiError(403, 'forbidden', 'ENV_FILE_RESTRICTED'),
+    })
+    renderPanel(false)
+    fireEvent.click(await screen.findByRole('button', { name: 'db.env' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/operate access/i)
+  })
 })

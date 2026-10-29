@@ -39,7 +39,7 @@ function mockCommon(api: import('./fixtures/api.ts').ApiMock, role: string) {
 }
 
 /** The files endpoints share one path (tree vs. file by query), which the shared mock cannot tell apart: a small stateful stub. */
-async function stubFiles(page: Page, opts: { putStatus?: number; putBody?: unknown } = {}) {
+async function stubFiles(page: Page, opts: { putStatus?: number; putBody?: unknown; envFile?: boolean } = {}) {
   const state = { content: 'a=1\n', backups: [] as { id: string; createdAt: string; size: number }[], restored: [] as unknown[] }
   await page.route(
     (url) => url.pathname.startsWith(`${BASE}/s1/files`),
@@ -48,7 +48,14 @@ async function stubFiles(page: Page, opts: { putStatus?: number; putBody?: unkno
       const url = new URL(req.url())
       const sub = url.pathname.slice(`${BASE}/s1/files`.length)
       const m = req.method()
-      if (sub === '' && m === 'GET' && !url.searchParams.has('path')) return route.fulfill({ json: [{ ...entry, path: 'app.conf' }] })
+      if (sub === '' && m === 'GET' && !url.searchParams.has('path')) {
+        const tree = [{ ...entry, path: 'app.conf' }]
+        if (opts.envFile) tree.push({ ...entry, path: 'db.env' })
+        return route.fulfill({ json: tree })
+      }
+      if (sub === '' && m === 'GET' && url.searchParams.get('path') === 'db.env') {
+        return route.fulfill({ status: 403, json: { code: 'ENV_FILE_RESTRICTED', message: 'restricted' } })
+      }
       if (sub === '' && m === 'GET') return route.fulfill({ json: { ...file, content: state.content, modifiedAt: String(state.backups.length) } })
       if (sub === '' && m === 'PUT') {
         if (opts.putStatus) return route.fulfill({ status: opts.putStatus, json: opts.putBody })
@@ -114,4 +121,15 @@ test('viewer cannot edit', async ({ page, api }) => {
   await expect(page.getByText('No backups yet')).toBeVisible()
   await expect(page.getByRole('button', { name: 'New file' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Save' })).toHaveCount(0)
+})
+
+test('viewer opening an env-like file sees why it is restricted', async ({ page, api }) => {
+  mockCommon(api, 'VIEWER')
+  await stubFiles(page, { envFile: true })
+
+  await page.goto('/environments/a/deployments/s1')
+  await page.getByRole('button', { name: 'db.env' }).click()
+  // Monaco renders its own role="alert" nodes, so pick the panel's message by its text.
+  await expect(page.getByRole('alert').filter({ hasText: 'operate access' })).toBeVisible()
+  await expect(page.getByText('You are not allowed to do this.')).toHaveCount(0)
 })

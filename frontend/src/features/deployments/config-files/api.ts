@@ -107,6 +107,8 @@ export function describeConfigError(error: unknown, fallback: string): string {
         return i18n.t('deployments:deploymentErrors.aRunIsAlreadyIn')
       case 'FILE_TOO_LARGE':
         return i18n.t('deployments:api.thisFileIsTooLarge')
+      case 'ENV_FILE_RESTRICTED':
+        return i18n.t('deployments:api.envFileNeedsOperateAccess')
     }
     if (error.status === 403) return i18n.t('deployments:api.youAreNotAllowedTo')
   }
