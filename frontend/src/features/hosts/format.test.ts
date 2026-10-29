@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatSize } from './format.ts'
+import { describeError, formatSize } from './format.ts'
 
 const KIB = 1024
 const MIB = 1024 ** 2
@@ -31,5 +31,20 @@ describe('formatSize', () => {
 
   it('stays in PiB for huge values instead of growing the unit count', () => {
     expect(formatSize(2 ** 61)).toBe('2048 PiB')
+  })
+})
+
+describe('describeError', () => {
+  it('explains UNREACHABLE with address, port, TLS and firewall as causes', () => {
+    const message = describeError('UNREACHABLE')
+    expect(message).toMatch(/address/i)
+    expect(message).toMatch(/port/i)
+    expect(message).toMatch(/tls/i)
+    expect(message).toMatch(/firewall/i)
+  })
+
+  it('keeps the TLS and permission messages for stored environments on the overview', () => {
+    expect(describeError('TLS_ERROR')).toMatch(/tls handshake/i)
+    expect(describeError('PERMISSION_DENIED')).toMatch(/permission/i)
   })
 })

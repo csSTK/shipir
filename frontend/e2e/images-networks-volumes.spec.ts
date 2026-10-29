@@ -74,7 +74,7 @@ test('volumes: missing created date renders a dash, unused marked', async ({ pag
 test('images: unreachable host shows the error, retry shows the empty state', async ({ page, api }) => {
   api.mock('GET', '/api/hosts/a/images', { status: 502, body: { code: 'UNREACHABLE', message: 'x' } })
   await page.goto('/environments/a/images')
-  await expect(page.getByRole('alert')).toHaveText('Could not reach the Docker host.')
+  await expect(page.getByRole('alert')).toHaveText('Could not reach the Docker host. Check the address, port, TLS setup and firewall.')
   api.mock('GET', '/api/hosts/a/images', { body: [] })
   await page.getByRole('button', { name: 'Retry' }).click()
   await expect(page.getByText('No images in this environment.')).toBeVisible()

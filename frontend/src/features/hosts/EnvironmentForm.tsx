@@ -16,18 +16,20 @@ import './EnvironmentForm.css'
 
 const DEFAULT_PORT = '2376'
 
-const CONNECTION_MESSAGES: Record<ConnectionErrorCode, string> = {
+/**
+ * Messages for connection test and create results. TLS_ERROR has no entry: a remote (TCP) target reports every failure
+ * as UNREACHABLE, and a local socket has no TLS, so it never arrives here.
+ */
+const CONNECTION_MESSAGES: Partial<Record<ConnectionErrorCode, string>> = {
   get UNREACHABLE() { return i18n.t('hosts:EnvironmentForm.couldNotReachTheDocker') },
   get TIMEOUT() { return i18n.t('hosts:EnvironmentForm.theConnectionTimedOutCheck') },
-  get TLS_ERROR() { return i18n.t('hosts:EnvironmentForm.theTlsHandshakeFailedCheck') },
   get PERMISSION_DENIED() { return i18n.t('hosts:EnvironmentForm.permissionDeniedShipirIsNot') },
   get INVALID_TLS_MATERIAL() { return i18n.t('hosts:EnvironmentForm.theCertificateOrKeyCould') },
 }
 
 function connectionMessage(code: string | null | undefined): string {
-  return code && code in CONNECTION_MESSAGES
-    ? CONNECTION_MESSAGES[code as ConnectionErrorCode]
-    : i18n.t('hosts:EnvironmentForm.theConnectionFailed')
+  const message = code ? CONNECTION_MESSAGES[code as ConnectionErrorCode] : undefined
+  return message ?? i18n.t('hosts:EnvironmentForm.theConnectionFailed')
 }
 
 function submitMessages(error: unknown): string[] {
@@ -42,7 +44,7 @@ function submitMessages(error: unknown): string[] {
           i18n.t('hosts:EnvironmentForm.theServerHasNoEncryption'),
         ]
       case 'INVALID_TLS_MATERIAL':
-        return [CONNECTION_MESSAGES.INVALID_TLS_MATERIAL]
+        return [connectionMessage('INVALID_TLS_MATERIAL')]
       case 'CONNECTION_FAILED':
         return [connectionMessage(error.details?.[0])]
       case 'VALIDATION_ERROR':
@@ -54,7 +56,7 @@ function submitMessages(error: unknown): string[] {
 
 function testErrorMessage(error: unknown): string {
   if (error instanceof ApiError && error.code === 'INVALID_TLS_MATERIAL') {
-    return CONNECTION_MESSAGES.INVALID_TLS_MATERIAL
+    return connectionMessage('INVALID_TLS_MATERIAL')
   }
   return i18n.t('hosts:EnvironmentForm.couldNotRunTheConnection')
 }

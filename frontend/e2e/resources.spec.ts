@@ -73,7 +73,7 @@ test('containers: unreachable host shows the error', async ({ page, api }) => {
   api.mock('GET', '/api/hosts/a/images', { body: [] })
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   await page.goto('/environments/a/containers')
-  await expect(page.getByRole('alert')).toHaveText('Could not reach the Docker host.')
+  await expect(page.getByRole('alert')).toHaveText('Could not reach the Docker host. Check the address, port, TLS setup and firewall.')
 })
 
 test('deployments: timeout shows the error, empty list shows empty state', async ({ page, api }) => {

@@ -134,7 +134,6 @@ describe('EnvironmentForm', () => {
   it.each([
     ['UNREACHABLE', /could not reach/i],
     ['TIMEOUT', /timed out/i],
-    ['TLS_ERROR', /tls handshake/i],
     ['PERMISSION_DENIED', /permission/i],
     ['INVALID_TLS_MATERIAL', /certificate or key/i],
   ])('shows a human message for %s', async (errorCode, expected) => {
@@ -142,6 +141,18 @@ describe('EnvironmentForm', () => {
     renderForm()
     fireEvent.click(button(/test connection/i))
     expect(await screen.findByText(expected)).toBeInTheDocument()
+  })
+
+  it('names address, port, TLS and firewall as causes for UNREACHABLE', async () => {
+    // A remote TCP target reports every failure as UNREACHABLE, so this text has to cover all of them.
+    apiFetchMock.mockResolvedValue({ ok: false, dockerVersion: null, errorCode: 'UNREACHABLE', message: 'raw' })
+    renderForm()
+    fireEvent.click(button(/test connection/i))
+    const message = await screen.findByText(/could not reach/i)
+    expect(message).toHaveTextContent(/address/i)
+    expect(message).toHaveTextContent(/port/i)
+    expect(message).toHaveTextContent(/tls/i)
+    expect(message).toHaveTextContent(/firewall/i)
   })
 
   it('shows INVALID_TLS_MATERIAL returned as 400 for the connection test', async () => {

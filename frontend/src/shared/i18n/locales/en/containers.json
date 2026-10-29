@@ -187,7 +187,7 @@
   "api.thisEnvironmentDoesNotExist": "This environment does not exist or was deleted.",
   "api.thisShellIsNotAllowed": "This shell is not allowed.",
   "api.theTerminalSizeIsNot": "The terminal size is not valid.",
-  "api.couldNotReachTheDocker": "Could not reach the Docker host.",
+  "api.couldNotReachTheDocker": "Could not reach the Docker host. Check the address, port, TLS setup and firewall.",
   "api.theConnectionToTheDocker": "The connection to the Docker host timed out.",
   "api.youDontHavePermissionToOpen": "You don't have permission to open a console for this container.",
   "api.couldNotOpenTheConsole": "Could not open the console.",
