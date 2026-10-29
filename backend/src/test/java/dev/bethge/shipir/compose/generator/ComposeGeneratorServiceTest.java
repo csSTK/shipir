@@ -144,7 +144,9 @@ class ComposeGeneratorServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"Web", "-web", "we b", "web/../x", "", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+    // '*' is the internal "all profiles" marker and must never become a service name. A leading '_' is rejected on purpose:
+    // generated service names are also DNS hostnames on the Docker network (see ComposeGeneratorService.NAME).
+    @ValueSource(strings = {"Web", "-web", "_web", "*", "we b", "web/../x", "", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
     void invalidServiceNameRejected(String name) {
         ComposeSpec spec = new ComposeSpec(
                 List.of(new ServiceSpec(name, "alpine", null, null, null, null, null, null, null, null)), null, null);

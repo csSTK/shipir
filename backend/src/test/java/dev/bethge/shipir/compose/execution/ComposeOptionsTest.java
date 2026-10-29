@@ -18,6 +18,13 @@ class ComposeOptionsTest {
     }
 
     @Test
+    void rejectsAllProfilesMarkerAsServiceName() {
+        // '*' is only valid as a profile lookup (all profiles), never as a service name.
+        assertThatThrownBy(() -> ComposeOptions.NONE.withServices(List.of("*")))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void rejectsNamesStartingWithDashBecauseTheyWouldReadAsFlags() {
         for (String bad : List.of("-web", "--privileged", "-", "--")) {
             assertThatThrownBy(() -> ComposeOptions.NONE.withServices(List.of(bad))).as("service " + bad)
