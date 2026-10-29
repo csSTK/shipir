@@ -112,4 +112,120 @@ class ContainerLogServiceTest {
         org.mockito.Mockito.verify(cmd).withTimestamps(true);
         org.mockito.Mockito.verify(cmd, org.mockito.Mockito.never()).withFollowStream(true);
     }
+
+    @Test
+    void newlineFreeStreamIsSplitAtTheCapWithBoundedBufferAndNoContentLost() {
+        List<LogLine> lines = new ArrayList<>();
+        var cb = new ContainerLogServiceImpl.LineCallback(false, lines::add, e -> { }, 100);
+        String chunk = "x".repeat(1000);
+        int total = 0;
+        for (int i = 0; i < 2000; i++) { // 2 MB without a single newline
+            cb.onNext(frame(StreamType.STDOUT, chunk));
+            total += chunk.length();
+            assertThat(cb.bufferedChars()).isLessThanOrEqualTo(100);
+        }
+        cb.onComplete();
+
+        assertThat(lines).allSatisfy(l -> assertThat(l.text().length()).isLessThanOrEqualTo(100));
+        assertThat(lines.stream().mapToInt(l -> l.text().length()).sum()).isEqualTo(total);
+    }
+
+    @Test
+    void overlongLineFollowedByNewlineKeepsFollowingLinesIntact() {
+        List<LogLine> lines = new ArrayList<>();
+        var cb = new ContainerLogServiceImpl.LineCallback(false, lines::add, e -> { }, 10);
+        cb.onNext(frame(StreamType.STDOUT, "a".repeat(25) + "\r\nnext\n" + "b".repeat(10) + "\r\nend\n"));
+
+        assertThat(lines).extracting(LogLine::text).containsExactly(
+                "a".repeat(10), "a".repeat(10), "aaaaa", "next", "b".repeat(10), "end");
+    }
+
+    @Test
+    void splitNeverCutsASurrogatePair() {
+        List<LogLine> lines = new ArrayList<>();
+        var cb = new ContainerLogServiceImpl.LineCallback(false, lines::add, e -> { }, 5);
+        cb.onNext(frame(StreamType.STDOUT, "abcd\uD83D\uDE00efgh\n")); // emoji straddles the cap
+        assertThat(lines).extracting(LogLine::text).containsExactly("abcd", "\uD83D\uDE00efg", "h");
+    }
+
+    @Test
+    void continuationChunkIsNotParsedForATimestamp() {
+        List<LogLine> lines = new ArrayList<>();
+        var cb = new ContainerLogServiceImpl.LineCallback(true, lines::add, e -> { }, 60);
+        String ts = "2026-10-23T10:00:00.123456789Z";
+        cb.onNext(frame(StreamType.STDOUT, ts + " " + "z".repeat(40) + "\n"));
+        assertThat(lines.get(0).timestamp()).isEqualTo(Instant.parse(ts));
+        assertThat(lines.get(0).text()).isEqualTo("z".repeat(29));
+        assertThat(lines.get(1).timestamp()).isNull();
+        assertThat(lines.get(1).text()).isEqualTo("z".repeat(11));
+    }
+
+    @Test
+    void multiByteCharactersSplitAcrossFramesAreDecodedCorrectly() {
+        List<LogLine> lines = new ArrayList<>();
+        var cb = new ContainerLogServiceImpl.LineCallback(false, lines::add, e -> { });
+        byte[] bytes = "gr\u00FC\u00DFe \u65E5\u672C \uD83D\uDE00\n".getBytes(StandardCharsets.UTF_8);
+        for (byte b : bytes) { // one byte per frame
+            cb.onNext(new Frame(StreamType.STDOUT, new byte[]{b}));
+        }
+        assertThat(lines).extracting(LogLine::text).containsExactly("gr\u00FC\u00DFe \u65E5\u672C \uD83D\uDE00");
+    }
+
+    @Test
+    void crlfStraddlingTheCapAcrossFramesYieldsOneLine() {
+        List<LogLine> lines = new ArrayList<>();
+        var cb = new ContainerLogServiceImpl.LineCallback(false, lines::add, e -> { }, 10);
+        cb.onNext(frame(StreamType.STDOUT, "a".repeat(10) + "\r"));
+        cb.onNext(frame(StreamType.STDOUT, "\n"));
+        cb.onComplete();
+        assertThat(lines).extracting(LogLine::text).containsExactly("a".repeat(10));
+    }
+
+    @Test
+    void trailingCarriageReturnAtEndOfStreamIsStripped() {
+        List<LogLine> lines = new ArrayList<>();
+        var cb = new ContainerLogServiceImpl.LineCallback(false, lines::add, e -> { });
+        cb.onNext(frame(StreamType.STDOUT, "abc\r"));
+        cb.onComplete();
+        assertThat(lines).extracting(LogLine::text).containsExactly("abc");
+    }
+
+    @Test
+    void loneCarriageReturnLeftAfterASplitIsNotItsOwnLineAtEndOfStream() {
+        List<LogLine> lines = new ArrayList<>();
+        var cb = new ContainerLogServiceImpl.LineCallback(false, lines::add, e -> { }, 10);
+        cb.onNext(frame(StreamType.STDOUT, "a".repeat(11) + "\r"));
+        cb.onComplete();
+        assertThat(lines).extracting(LogLine::text).containsExactly("a".repeat(10), "a");
+
+        lines.clear();
+        var cb2 = new ContainerLogServiceImpl.LineCallback(false, lines::add, e -> { }, 10);
+        cb2.onNext(frame(StreamType.STDOUT, "a".repeat(10) + "b"));
+        cb2.onNext(frame(StreamType.STDOUT, "\r"));
+        cb2.onComplete();
+        assertThat(lines).extracting(LogLine::text).containsExactly("a".repeat(10), "b");
+    }
+
+    @Test
+    void danglingPartialUtf8SequenceAtEndBecomesOneReplacementCharacter() {
+        List<LogLine> lines = new ArrayList<>();
+        var cb = new ContainerLogServiceImpl.LineCallback(false, lines::add, e -> { });
+        cb.onNext(new Frame(StreamType.STDOUT, new byte[]{'o', 'k', (byte) 0xE6, (byte) 0x97}));
+        cb.onComplete();
+        assertThat(lines).extracting(LogLine::text).containsExactly("ok\uFFFD");
+    }
+
+    @Test
+    void invalidUtf8NeverGrowsTheBufferPastTheCap() {
+        List<LogLine> lines = new ArrayList<>();
+        var cb = new ContainerLogServiceImpl.LineCallback(false, lines::add, e -> { }, 50);
+        byte[] junk = new byte[1000];
+        java.util.Arrays.fill(junk, (byte) 0xFF);
+        for (int i = 0; i < 500; i++) {
+            cb.onNext(new Frame(StreamType.STDOUT, junk));
+            assertThat(cb.bufferedChars()).isLessThanOrEqualTo(50);
+        }
+        cb.onComplete();
+        assertThat(lines).allSatisfy(l -> assertThat(l.text().length()).isLessThanOrEqualTo(50));
+    }
 }

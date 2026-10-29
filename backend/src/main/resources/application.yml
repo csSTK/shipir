@@ -17,6 +17,10 @@ shipir:
     local-socket: unix:///var/run/docker.sock
     connect-timeout: 3s
     read-timeout: 10s
+    logs:
+      # container log lines longer than this many chars are split into several lines while reading from Docker,
+      # so a stream without newlines can't grow the buffer without limit
+      max-line-length: 65536
   host:
     overview-timeout: 5s
   stats:
