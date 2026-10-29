@@ -29,7 +29,9 @@ function DockPanel({ isAdmin, narrow, onClose }: { isAdmin: boolean; narrow: boo
   // Document level: sending disables the composer and drops focus to the body, where a panel listener would miss Escape.
   // Something inside that already handled the key (a dialog, an open popup) calls preventDefault and keeps it.
   const closeRef = useRef(onClose)
-  closeRef.current = onClose
+  useEffect(() => {
+    closeRef.current = onClose
+  })
   useEffect(() => {
     const onKeyDown = (e: globalThis.KeyboardEvent) => {
       if (e.key === 'Escape' && !e.defaultPrevented) closeRef.current()
