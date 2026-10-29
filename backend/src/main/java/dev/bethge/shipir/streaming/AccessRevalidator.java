@@ -12,8 +12,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * handshake principal, so without this an open console or log subscription would outlive the revoked right. Runs
  * after commit, so the checks see the new database state; without a transaction it runs immediately.
  * Exec consoles of a user who may no longer open them (not an enabled ADMIN, nor an OPERATOR with OPERATE on the
- * host or the container's deployment while operator consoles are enabled) are ended; deploy output and chat subscriptions the user may no longer follow, and log and event subscriptions of hosts the
- * user no longer fully sees are dropped. Stats frames are filtered per frame and need nothing here.
+ * host or the container's deployment while operator consoles are enabled) are ended; deploy output and chat subscriptions the user may no longer follow, container log subscriptions the user may no longer follow (same policy as at SUBSCRIBE) and event subscriptions of
+ * hosts the user no longer fully sees are dropped. Stats frames are filtered per frame and need nothing here.
  */
 @Component
 class AccessRevalidator {
@@ -48,7 +48,7 @@ class AccessRevalidator {
         String user = event.username();
         execSessions.revalidate(user,
                 (hostId, deploymentId) -> access.mayExec(user, hostId, deploymentId, execSessions.operatorEnabled()));
-        logStreams.revalidate(user, hostId -> access.hostFullyVisible(user, hostId));
+        logStreams.revalidate(user, t -> access.mayFollowContainer(user, t.hostId(), t.containerId()));
         eventStreams.revalidate(user, hostId -> access.hostFullyVisible(user, hostId));
         runStreams.revalidate(user, target -> access.mayFollowRun(user, target));
         chatSubscriptions.revalidate(user, chatId -> chatAccess.maySubscribe(user, chatId));

@@ -132,14 +132,6 @@ public class LogStreamHandler {
         return new Options(tail, timestamps);
     }
 
-    /**
-     * Permission hook: may this user follow the logs of this container? Today every authenticated user may
-     * (read access); the permissions epic narrows it per host here.
-     */
-    boolean mayFollow(String username, Target target) {
-        return true;
-    }
-
     /** Registers a subscription, replays the buffer and starts the Docker follow for the first subscriber. */
     void subscribe(Target target, Options options, String username, String sessionId, String subscriptionId) {
         Key key = new Key(target, options);
@@ -191,22 +183,24 @@ public class LogStreamHandler {
     }
 
     /**
-     * Drops the user's subscriptions whose host they may no longer follow (role, grant or account changed after
+     * Drops the user's subscriptions whose container they may no longer follow (role, grant or account changed after
      * SUBSCRIBE). Nothing is sent to them any more; the STOMP connection itself stays.
      */
-    void revalidate(String username, Predicate<UUID> hostStillAllowed) {
+    void revalidate(String username, Predicate<Target> stillAllowed) {
         List<Stream> all;
         synchronized (streams) {
             all = new ArrayList<>(streams.values());
         }
         for (Stream stream : all) {
-            if (hostStillAllowed.test(stream.target.hostId())) {
+            List<Subscription> own;
+            synchronized (stream) {
+                own = stream.subscribers.stream().filter(s -> username.equals(s.username)).toList();
+            }
+            // the predicate may look the container up in Docker: only ask for streams this user is on
+            if (own.isEmpty() || stillAllowed.test(stream.target)) {
                 continue;
             }
-            List<Subscription> revoked;
-            synchronized (stream) {
-                revoked = stream.subscribers.stream().filter(s -> username.equals(s.username)).toList();
-            }
+            List<Subscription> revoked = own;
             revoked.forEach(s -> unsubscribe(s.sessionId, s.subscriptionId));
         }
     }

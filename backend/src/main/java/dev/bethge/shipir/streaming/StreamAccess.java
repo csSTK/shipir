@@ -2,9 +2,15 @@ package dev.bethge.shipir.streaming;
 
 import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.auth.UserRepository;
+import dev.bethge.shipir.docker.client.ContainerService;
+import dev.bethge.shipir.docker.dto.ContainerDetailsDto;
+import dev.bethge.shipir.host.DockerHostRepository;
+import dev.bethge.shipir.host.HostEndpointResolver;
 import dev.bethge.shipir.host.ManagedDeploymentLookup;
 import dev.bethge.shipir.permission.PermissionService;
 import dev.bethge.shipir.permission.PermissionSubject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
@@ -19,14 +25,23 @@ import java.util.UUID;
 @Component
 class StreamAccess {
 
+    private static final Logger log = LoggerFactory.getLogger(StreamAccess.class);
+
     private final PermissionService permissions;
     private final UserRepository users;
     private final ManagedDeploymentLookup managedDeployments;
+    private final ContainerService containers;
+    private final DockerHostRepository hosts;
+    private final HostEndpointResolver endpoints;
 
-    StreamAccess(PermissionService permissions, UserRepository users, ManagedDeploymentLookup managedDeployments) {
+    StreamAccess(PermissionService permissions, UserRepository users, ManagedDeploymentLookup managedDeployments,
+                 ContainerService containers, DockerHostRepository hosts, HostEndpointResolver endpoints) {
         this.permissions = permissions;
         this.users = users;
         this.managedDeployments = managedDeployments;
+        this.containers = containers;
+        this.hosts = hosts;
+        this.endpoints = endpoints;
     }
 
     /** Role of an enabled user, empty for unknown or disabled ones. */
@@ -129,6 +144,16 @@ class StreamAccess {
      * host the user may view. Unmanaged projects need the whole host.
      */
     boolean mayFollowProject(String username, UUID hostId, String project) {
+        return subject(username).map(s -> mayViewProject(s, hostId, project)).orElse(false);
+    }
+
+    /**
+     * Logs of one container, same policy as {@link #mayFollowProject}: the whole host visible, or the container
+     * carries the Compose project label of a managed deployment the user may view. Anything else fails closed:
+     * unknown or unlabelled container, unmanaged project, no grant, Docker not answering. The container is only
+     * looked up in Docker when the host is visible through deployment grants alone.
+     */
+    boolean mayFollowContainer(String username, UUID hostId, String containerId) {
         Optional<PermissionSubject> s = subject(username);
         if (s.isEmpty()) {
             return false;
@@ -136,8 +161,36 @@ class StreamAccess {
         if (permissions.hostFullyVisible(s.get(), hostId)) {
             return true;
         }
-        UUID deploymentId = managedDeployments.managedDeploymentIds(hostId).get(project);
-        return deploymentId != null && permissions.canView(s.get(), hostId, deploymentId);
+        if (!permissions.canView(s.get(), hostId)) {
+            return false;
+        }
+        String project = composeProjectOf(hostId, containerId);
+        return project != null && mayViewProject(s.get(), hostId, project);
+    }
+
+    /** The one policy: whole host visible, or the project is a managed deployment of the host the user may view. */
+    private boolean mayViewProject(PermissionSubject s, UUID hostId, String project) {
+        if (permissions.hostFullyVisible(s, hostId)) {
+            return true;
+        }
+        UUID deploymentId = project == null ? null : managedDeployments.managedDeploymentIds(hostId).get(project);
+        return deploymentId != null && permissions.canView(s, hostId, deploymentId);
+    }
+
+    /** Compose project label of the container, null when unknown, unlabelled or Docker cannot tell. */
+    private String composeProjectOf(UUID hostId, String containerId) {
+        try {
+            var host = hosts.findById(hostId).orElse(null);
+            if (host == null) {
+                return null;
+            }
+            ContainerDetailsDto details = containers.inspect(hostId, endpoints.endpointOf(host), containerId);
+            String project = details == null ? null : details.composeProject();
+            return project == null || project.isBlank() ? null : project;
+        } catch (RuntimeException e) {
+            log.debug("Container lookup for log access failed: {}", e.getClass().getSimpleName());
+            return null;
+        }
     }
 
     /** Output of a deploy or image-pull run: the user may view the run's deployment (ADMIN: any run, even unknown ones). */

@@ -22,7 +22,7 @@ import java.util.regex.Pattern;
  * {@code X-XSRF-TOKEN} equal to the {@code XSRF-TOKEN} cookie of the handshake, see {@link CsrfHandshakeInterceptor}),
  * SUBSCRIBE only to {@code /topic/deployments/{id}} (needs view access to the run's deployment; registers the subscription for replay) and
  * {@code /topic/chat/{sessionId}} (owner only, via {@link ChatTopicAccess}) and container logs
- * {@code /topic/hosts/{hostId}/containers/{id}/logs} (hosts the user fully sees, see {@link LogStreamHandler}), project logs {@code /topic/hosts/{hostId}/deployments/{project}/logs} (view of the managed deployment or the whole host, see {@link DeploymentLogStreamService}), Docker events {@code /topic/hosts/{hostId}/events} (hosts the user fully sees, see {@link DockerEventStreamService}), container stats {@code /topic/hosts/{hostId}/stats} (visible hosts, frames filtered per user, see {@link ContainerStatsStreamService}), interactive console {@code /topic/exec/{id}} (ADMIN or OPERATOR owner, see {@link ExecSessionHandler}); clients may only SEND
+ * {@code /topic/hosts/{hostId}/containers/{id}/logs} (whole host, or a container of a managed deployment the user may view, see {@link LogStreamHandler}), project logs {@code /topic/hosts/{hostId}/deployments/{project}/logs} (view of the managed deployment or the whole host, see {@link DeploymentLogStreamService}), Docker events {@code /topic/hosts/{hostId}/events} (hosts the user fully sees, see {@link DockerEventStreamService}), container stats {@code /topic/hosts/{hostId}/stats} (visible hosts, frames filtered per user, see {@link ContainerStatsStreamService}), interactive console {@code /topic/exec/{id}} (ADMIN or OPERATOR owner, see {@link ExecSessionHandler}); clients may only SEND
  * input/resize frames of their own console to {@code /app/exec/{id}/{input|resize}}.
  * CONNECT and SUBSCRIBE are refused with SETUP_REQUIRED while the user has a pending {@link SetupStatus} step.
  */
@@ -140,8 +140,7 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                 }
                 var logTarget = LogStreamHandler.parse(destination);
                 if (logTarget != null) {
-                    if (!logStreams.mayFollow(accessor.getUser().getName(), logTarget)
-                            || !access.hostFullyVisible(accessor.getUser().getName(), logTarget.hostId())) {
+                    if (!access.mayFollowContainer(accessor.getUser().getName(), logTarget.hostId(), logTarget.containerId())) {
                         throw new MessageDeliveryException("Subscription destination not allowed");
                     }
                     LogStreamHandler.Options options;

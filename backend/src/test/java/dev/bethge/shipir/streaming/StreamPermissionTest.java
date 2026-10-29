@@ -273,6 +273,123 @@ class StreamPermissionTest {
         assertAllowed(deploymentLogs("d"));
     }
 
+    @Autowired
+    StreamAccess streamAccess;
+
+    private void inspectReturns(String containerId, String composeProject) {
+        var details = org.mockito.Mockito.mock(dev.bethge.shipir.docker.dto.ContainerDetailsDto.class);
+        when(details.composeProject()).thenReturn(composeProject);
+        when(containerService.inspect(any(), any(dev.bethge.shipir.docker.DockerEndpoint.class), org.mockito.ArgumentMatchers.eq(containerId)))
+                .thenReturn(details);
+    }
+
+    private void followMocked() {
+        when(logService.follow(any(), any(dev.bethge.shipir.docker.DockerEndpoint.class), any(), anyInt(), anyBoolean(), any(), any()))
+                .thenReturn(() -> {
+                });
+    }
+
+    @Test
+    void containerLogsOfAGrantedDeploymentAreAllowedWithDeploymentGrantOnly() throws Exception {
+        followMocked();
+        inspectReturns("web", "d");
+        jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) VALUES (?, ?, 'VIEW')", userId, deploymentId);
+        StompSession s = connect();
+        subscribe(s, "/topic/hosts/" + hostId + "/containers/web/logs");
+        var target = new LogStreamHandler.Target(hostId, "web");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> logStreams.subscriberCount(target) == 1);
+        s.disconnect();
+    }
+
+    @Test
+    void containerLogsOfAnotherDeploymentAreRefusedWithDeploymentGrantOnly() throws Exception {
+        jdbc.update("INSERT INTO deployments (name, host_id, compose_file_path, created_by) VALUES ('e', ?, 'x', ?)",
+                hostId, userId);
+        inspectReturns("other", "e");
+        jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) VALUES (?, ?, 'VIEW')", userId, deploymentId);
+        assertRefused("/topic/hosts/" + hostId + "/containers/other/logs");
+        assertThat(logStreams.subscriberCount(new LogStreamHandler.Target(hostId, "other"))).isZero();
+    }
+
+    @Test
+    void containerLogsOfUnlabelledUnmanagedAndUnknownContainersAreRefusedWithDeploymentGrantOnly() throws Exception {
+        jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) VALUES (?, ?, 'VIEW')", userId, deploymentId);
+        inspectReturns("plain", null);
+        inspectReturns("foreign", "not-managed");
+        // "ghost" is not inspectable at all
+        when(containerService.inspect(any(), any(dev.bethge.shipir.docker.DockerEndpoint.class), org.mockito.ArgumentMatchers.eq("ghost")))
+                .thenThrow(new dev.bethge.shipir.docker.DockerConnectionException(
+                        dev.bethge.shipir.docker.DockerErrorCode.NOT_FOUND, "no such container", null));
+        assertRefused("/topic/hosts/" + hostId + "/containers/plain/logs");
+        assertRefused("/topic/hosts/" + hostId + "/containers/foreign/logs");
+        assertRefused("/topic/hosts/" + hostId + "/containers/ghost/logs");
+        verify(logService, never()).follow(any(), any(dev.bethge.shipir.docker.DockerEndpoint.class), any(), anyInt(),
+                anyBoolean(), any(), any());
+    }
+
+    @Test
+    void containerLogsAreRefusedForADisabledUserEvenWithHostGrant() {
+        jdbc.update("INSERT INTO permissions (user_id, host_id, level) VALUES (?, ?, 'VIEW')", userId, hostId);
+        assertThat(streamAccess.mayFollowContainer("streamop", hostId, "web")).isTrue();
+        jdbc.update("UPDATE users SET disabled_at = now() WHERE id = ?", userId);
+        assertThat(streamAccess.mayFollowContainer("streamop", hostId, "web")).isFalse();
+        assertThat(streamAccess.mayFollowContainer("nobody-" + UUID.randomUUID(), hostId, "web")).isFalse();
+        jdbc.update("UPDATE users SET disabled_at = NULL WHERE id = ?", userId);
+    }
+
+    @Test
+    void revokedDeploymentGrantStopsContainerLogSubscription() throws Exception {
+        followMocked();
+        inspectReturns("web", "d");
+        jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) VALUES (?, ?, 'VIEW')", userId, deploymentId);
+        StompSession s = connect();
+        subscribe(s, "/topic/hosts/" + hostId + "/containers/web/logs");
+        var target = new LogStreamHandler.Target(hostId, "web");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> logStreams.subscriberCount(target) == 1);
+
+        Map<String, String> adminJar = loginAs("streamadmin", Role.ADMIN);
+        var r = callWith(adminJar, HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/users/" + userId + "/permissions"))
+                .header("Content-Type", "application/json").header("X-XSRF-TOKEN", adminJar.get("XSRF-TOKEN"))
+                .PUT(HttpRequest.BodyPublishers.ofString("{\"grants\":[]}")));
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
+        await().atMost(5, TimeUnit.SECONDS).until(() -> logStreams.subscriberCount(target) == 0);
+        s.disconnect();
+    }
+
+    @Test
+    void revalidateOfOneUserNeitherAsksNorDropsAnotherUsersStream() {
+        followMocked();
+        var mine = new LogStreamHandler.Target(hostId, "mine");
+        var theirs = new LogStreamHandler.Target(hostId, "theirs");
+        var options = new LogStreamHandler.Options(100, false);
+        logStreams.subscribe(mine, options, "streamop", "sess-a", "sub-a");
+        logStreams.subscribe(theirs, options, "someone-else", "sess-b", "sub-b");
+        java.util.List<LogStreamHandler.Target> asked = new java.util.concurrent.CopyOnWriteArrayList<>();
+        try {
+            logStreams.revalidate("streamop", t -> {
+                asked.add(t);
+                return false;
+            });
+            assertThat(asked).containsExactly(mine);
+            assertThat(logStreams.subscriberCount(mine)).isZero();
+            assertThat(logStreams.subscriberCount(theirs)).isEqualTo(1);
+        } finally {
+            logStreams.unsubscribe("sess-a", null);
+            logStreams.unsubscribe("sess-b", null);
+        }
+    }
+
+    @Test
+    void containerWithoutUsableComposeLabelIsRefusedWithDeploymentGrantOnly() {
+        jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) VALUES (?, ?, 'VIEW')", userId, deploymentId);
+        // inspect returns null (mock default)
+        assertThat(streamAccess.mayFollowContainer("streamop", hostId, "nothing")).isFalse();
+        inspectReturns("blank", "  ");
+        assertThat(streamAccess.mayFollowContainer("streamop", hostId, "blank")).isFalse();
+        inspectReturns("labelled", "d");
+        assertThat(streamAccess.mayFollowContainer("streamop", hostId, "labelled")).isTrue();
+    }
+
     private void assertRefused(String destination) throws Exception {
         StompSession s = connect();
         subscribe(s, destination);
