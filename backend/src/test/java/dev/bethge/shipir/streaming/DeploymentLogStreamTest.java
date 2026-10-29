@@ -81,6 +81,7 @@ import static org.mockito.Mockito.when;
         "shipir.streaming.deployment-logs.buffer-lines=4",
         "shipir.streaming.deployment-logs.refresh-interval=200ms"})
 @Import({PostgresTestConfiguration.class, DeploymentLogStreamTest.FixedClockConfig.class})
+@org.junit.jupiter.api.Timeout(60)
 class DeploymentLogStreamTest {
 
     static final String PASSWORD = "A-test-Passw0rd-for-streams!";
@@ -249,6 +250,20 @@ class DeploymentLogStreamTest {
         return new LogLine(LogLine.Stream.STDOUT, text, null);
     }
 
+    private long listings() {
+        return org.mockito.Mockito.mockingDetails(containerService).getInvocations().stream()
+                .filter(i -> i.getMethod().getName().equals("listContainers")).count();
+    }
+
+    /**
+     * Waits until {@code rounds} refresh rounds have completed. A round starts with one container listing and the worker
+     * runs rounds one after the other, so the listing of round n+1 proves round n (follow attempts included) is done.
+     */
+    private void awaitRefreshRounds(int rounds) {
+        long target = listings() + rounds + 1;
+        await().atMost(10, TimeUnit.SECONDS).until(() -> listings() >= target);
+    }
+
     private void awaitFollowing(String... ids) {
         await().atMost(5, TimeUnit.SECONDS).until(() -> {
             for (String id : ids) {
@@ -263,7 +278,9 @@ class DeploymentLogStreamTest {
     private List<String> drain(BlockingQueue<String> q, long quietMillis) throws Exception {
         List<String> out = new ArrayList<>();
         String f;
-        while ((f = q.poll(quietMillis, TimeUnit.MILLISECONDS)) != null) {
+        // hard deadline: a producer that never goes quiet must make the caller's assertion fail, not hang the test
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(Math.max(quietMillis * 10, 5000));
+        while (System.nanoTime() < deadline && (f = q.poll(quietMillis, TimeUnit.MILLISECONDS)) != null) {
             out.add(f);
         }
         return out;
@@ -368,11 +385,12 @@ class DeploymentLogStreamTest {
         s.disconnect();
         var target = DeploymentLogStreamService.parse(topic("shop"));
         await().atMost(5, TimeUnit.SECONDS).until(() -> service.subscriberCount(target) == 0);
-        Thread.sleep(500); // let a running refresh finish
+        // the stream is closed under its lock before it leaves the map, so no refresh can start a follow any more
         containers.set(List.of(container("c-late", "late", "shop", "running")));
-        Thread.sleep(700);
-        verify(logService, never()).follow(any(), any(DockerEndpoint.class), eq("c-late"), anyInt(), anyBoolean(),
-                any(), any());
+        // inherently a negative check: a worker that kept refreshing (every 200ms) would follow c-late inside the window
+        await().during(600, TimeUnit.MILLISECONDS).atMost(5, TimeUnit.SECONDS).untilAsserted(() ->
+                verify(logService, never()).follow(any(), any(DockerEndpoint.class), eq("c-late"), anyInt(),
+                        anyBoolean(), any(), any()));
     }
 
     @Test
@@ -491,7 +509,7 @@ class DeploymentLogStreamTest {
         StompSession s = connect();
         BlockingQueue<String> q = subscribe(s, topic("shop"));
         await().atMost(10, TimeUnit.SECONDS).until(() -> attempts.get() >= 4);
-        Thread.sleep(1500); // many refresh rounds: no further attempt
+        awaitRefreshRounds(10); // more rounds than the longest backoff (4 rounds) needs: no further attempt
         assertThat(attempts.get()).isEqualTo(4); // first try + 3 retries
         assertThat(drain(q, 300).stream().filter(f -> f.contains("\"service\":\"db\"")).count()).isEqualTo(1);
         s.disconnect();
@@ -521,7 +539,7 @@ class DeploymentLogStreamTest {
         awaitFollowing("c-web", "c-db");
         containers.set(List.of(container("c-web", "web", "shop", "exited"), container("c-db", "db", "shop", "running")));
         endSinks.get("c-web").accept(null);
-        Thread.sleep(500);
+        awaitRefreshRounds(2);
         assertThat(followsOf("c-web")).isEqualTo(1); // not running: not followed again
         containers.set(List.of(container("c-web", "web", "shop", "running"), container("c-db", "db", "shop", "running")));
         await().atMost(5, TimeUnit.SECONDS).until(() -> followsOf("c-web") == 2);
@@ -536,7 +554,7 @@ class DeploymentLogStreamTest {
         StompSession s = connect();
         BlockingQueue<String> q = subscribe(s, topic("shop"));
         awaitFollowing("c1", "c2", "c3");
-        Thread.sleep(700); // several refresh rounds
+        awaitRefreshRounds(3);
         assertThat(lineSinks).doesNotContainKey("c4");
         List<String> frames = drain(q, 300);
         assertThat(frames.stream().filter(f -> f.contains("CONTAINER_LIMIT")).count()).isEqualTo(1);
@@ -596,7 +614,7 @@ class DeploymentLogStreamTest {
         StompSession s1 = connect();
         BlockingQueue<String> q1 = subscribe(s1, topic("shop"));
         assertThat(q1.poll(5, TimeUnit.SECONDS)).contains("\"status\":\"ERROR\"").contains("NOT_FOUND");
-        Thread.sleep(300); // the worker has ended
+        await().atMost(5, TimeUnit.SECONDS).until(() -> service.subscriberCount(DeploymentLogStreamService.parse(topic("shop"))) == 0); // the dead stream left the map
 
         when(containerService.listContainers(any(), any(DockerEndpoint.class))).thenAnswer(inv -> containers.get());
         StompSession s2 = connect();

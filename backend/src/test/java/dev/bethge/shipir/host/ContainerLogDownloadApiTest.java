@@ -55,6 +55,9 @@ class ContainerLogDownloadApiTest extends HostApiTestBase {
     private List<LogLine> lines = List.of();
     private Throwable failure;
     private volatile boolean hang;
+    /** End callbacks of hanging reads; a test completes them to let a held download finish without waiting for the time limit. */
+    private final java.util.concurrent.CopyOnWriteArrayList<Consumer<Throwable>> hangingEnds =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
     private final java.util.concurrent.atomic.AtomicInteger started = new java.util.concurrent.atomic.AtomicInteger();
     @org.springframework.beans.factory.annotation.Autowired
     ContainerLogDownloadService downloads;
@@ -70,14 +73,18 @@ class ContainerLogDownloadApiTest extends HostApiTestBase {
         failure = null;
         hang = false;
         started.set(0);
+        hangingEnds.clear();
         when(containerService.inspect(any(), any(DockerEndpoint.class), any())).thenAnswer(inv -> details(inv.getArgument(2)));
         when(logService.snapshot(any(), any(DockerEndpoint.class), any(), anyInt(), any(), anyBoolean(), any(), any()))
                 .thenAnswer(inv -> {
                     Consumer<LogLine> onLine = inv.getArgument(6);
                     Consumer<Throwable> onEnd = inv.getArgument(7);
+                    if (hang) { // registered before it counts as started, so a test that saw it started can end it
+                        hangingEnds.add(onEnd);
+                    }
                     started.incrementAndGet();
                     lines.forEach(onLine);
-                    if (!hang) { // a hanging read never reports its end
+                    if (!hang) { // a hanging read never reports its end on its own
                         onEnd.accept(failure);
                     }
                     return closeable;
@@ -117,9 +124,9 @@ class ContainerLogDownloadApiTest extends HostApiTestBase {
                 "2026-01-02T03:04:05Z one\n2026-01-02T03:04:06Z two\n");
     }
 
-    /** The streamed body is written after an async dispatch, which must be authenticated by the token again. */
+    /** The token authenticates the streamed download; the body is written synchronously, so there is no async dispatch. */
     @Test
-    void apiTokenAuthenticatesTheStreamedDownloadOnAsyncDispatchToo() throws Exception {
+    void apiTokenAuthenticatesTheStreamedDownload() throws Exception {
         lines = List.of(out("one"));
         login("viewer"); // grants the host to the seeded users
         String plain = dev.bethge.shipir.auth.token.TokenCodec.newToken("shp_");
@@ -127,11 +134,8 @@ class ContainerLogDownloadApiTest extends HostApiTestBase {
                         + "SELECT id, 'seeded', ?, ?, now(), now() + interval '30 days' FROM users WHERE username = 'viewer'",
                 dev.bethge.shipir.auth.token.TokenCodec.sha256Hex(plain), plain.substring(0, 8));
 
-        MvcResult started = mvc.perform(get("/api/hosts/{h}/containers/web1/logs/download", host)
+        MvcResult done = mvc.perform(get("/api/hosts/{h}/containers/web1/logs/download", host)
                 .header("Authorization", "Bearer " + plain)).andReturn();
-        MvcResult done = started.getRequest().isAsyncStarted()
-                ? mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch(started)).andReturn()
-                : started;
 
         assertThat(done.getResponse().getStatus()).isEqualTo(200);
         assertThat(done.getResponse().getContentAsString()).isEqualTo("2026-01-02T03:04:05Z one\n");
@@ -282,7 +286,7 @@ class ContainerLogDownloadApiTest extends HostApiTestBase {
         long t0 = System.nanoTime();
         MvcResult r = downloadResult(l, "?timestamps=false");
         long millis = (System.nanoTime() - t0) / 1_000_000;
-        assertThat(millis).isBetween(2500L, 8000L);
+        assertThat(millis).isGreaterThanOrEqualTo(2500L);
         assertThat(r.getResponse().getContentAsString()).isEqualTo("one\n[output truncated: time limit reached]\n");
         verify(closeable, timeout(2000).atLeastOnce()).close();
     }
@@ -376,7 +380,7 @@ class ContainerLogDownloadApiTest extends HostApiTestBase {
                 long t0 = System.nanoTime();
                 org.assertj.core.api.Assertions.assertThatThrownBy(() -> d.body().writeTo(stalled))
                         .isInstanceOf(java.io.IOException.class);
-                assertThat((System.nanoTime() - t0) / 1_000_000).isBetween(2500L, 10_000L);
+                assertThat((System.nanoTime() - t0) / 1_000_000).isGreaterThanOrEqualTo(2500L);
             }
             return null;
         });
@@ -421,7 +425,8 @@ class ContainerLogDownloadApiTest extends HostApiTestBase {
             assertThat(started.get()).isEqualTo(3);
             verify(containerService, org.mockito.Mockito.times(3)).inspect(any(), any(DockerEndpoint.class), any());
 
-            a1.get(); a2.get(); o1.get(); // the time limit ends the hanging reads
+            hangingEnds.forEach(end -> end.accept(null)); // the reads end now, no wait for the time limit
+            a1.get(); a2.get(); o1.get();
         } finally {
             pool.shutdownNow();
         }

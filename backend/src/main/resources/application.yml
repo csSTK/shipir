@@ -100,6 +100,9 @@ shipir:
     # one container log download stops (with a marker line) at this many bytes or this much time
     max-bytes: 50MB
     timeout: 2m
+    # downloads running at once on this server (each holds a request thread), and per user; above that: 429
+    max-concurrent: 8
+    max-per-user: 2
   openapi:
     # OpenAPI spec at /api/v3/api-docs and Swagger UI at /api/docs; both need a login (anyRequest().authenticated()).
     # Set SHIPIR_OPENAPI_ENABLED=false to switch both off.
