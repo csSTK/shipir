@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { ApiError, apiFetch, readCookie } from '../../../shared/api/client.ts'
+import { ApiError, apiFetch } from '../../../shared/api/client.ts'
+import { uploadMultipart } from '../../../shared/api/transfer.ts'
 import i18n from 'i18next'
 
 export interface ContainerFileEntry {
@@ -38,33 +39,13 @@ export function uploadFile(
   file: File,
   onProgress: (fraction: number) => void,
 ): { promise: Promise<void>; abort: () => void } {
-  const xhr = new XMLHttpRequest()
-  const promise = new Promise<void>((resolve, reject) => {
-    xhr.open('PUT', `/api${base(hostId, cid)}?path=${encodeURIComponent(dir)}`)
-    const token = readCookie('XSRF-TOKEN')
-    if (token) xhr.setRequestHeader('X-XSRF-TOKEN', token)
-    xhr.setRequestHeader('Accept', 'application/json')
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) onProgress(e.loaded / e.total)
-    }
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) return resolve()
-      let code: string | undefined
-      try {
-        const parsed: unknown = JSON.parse(xhr.responseText)
-        if (parsed && typeof parsed === 'object' && 'code' in parsed && typeof parsed.code === 'string') code = parsed.code
-      } catch {
-        // not JSON
-      }
-      reject(new ApiError(xhr.status, xhr.responseText || xhr.statusText, code))
-    }
-    xhr.onerror = () => reject(new ApiError(0, i18n.t('containers:api.networkError')))
-    xhr.onabort = () => reject(new ApiError(0, i18n.t('containers:api.uploadCancelled'), 'ABORTED'))
-    const form = new FormData()
-    form.append('file', file)
-    xhr.send(form)
+  const form = new FormData()
+  form.append('file', file)
+  return uploadMultipart(`/api${base(hostId, cid)}?path=${encodeURIComponent(dir)}`, form, {
+    method: 'PUT',
+    onProgress,
+    messages: { network: i18n.t('containers:api.networkError'), aborted: i18n.t('containers:api.uploadCancelled') },
   })
-  return { promise, abort: () => xhr.abort() }
 }
 
 const LIST_ERRORS: Record<string, string> = {

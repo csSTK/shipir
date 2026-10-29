@@ -1,3 +1,5 @@
+import { ApiError } from '../../../shared/api/client.ts'
+import { downloadFile, saveBlob } from '../../../shared/api/transfer.ts'
 import type { TailOption } from './logStream.ts'
 
 /** Download URL for one container. */
@@ -30,24 +32,12 @@ function safeFilename(raw: string | undefined): string {
  * 429 TOO_MANY_DOWNLOADS can be shown inline instead of a broken download.
  */
 export async function downloadLog(href: string): Promise<void> {
-  const response = await fetch(href, { credentials: 'same-origin' })
-  if (!response.ok) {
-    let code: string | undefined
-    try {
-      const body = (await response.json()) as { code?: unknown }
-      if (typeof body.code === 'string') code = body.code
-    } catch {
-      // not JSON: status alone
-    }
-    throw new LogDownloadError(response.status, code)
+  let file
+  try {
+    file = await downloadFile(href)
+  } catch (error) {
+    if (error instanceof ApiError) throw new LogDownloadError(error.status, error.code)
+    throw error
   }
-  const filename = safeFilename(response.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/i)?.[1])
-  const url = URL.createObjectURL(await response.blob())
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 30_000)
+  saveBlob({ blob: file.blob, filename: safeFilename(file.filename) })
 }

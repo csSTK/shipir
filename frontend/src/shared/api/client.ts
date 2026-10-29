@@ -1,6 +1,6 @@
 const API_BASE = '/api'
-const CSRF_COOKIE = 'XSRF-TOKEN'
-const CSRF_HEADER = 'X-XSRF-TOKEN'
+export const CSRF_COOKIE = 'XSRF-TOKEN'
+export const CSRF_HEADER = 'X-XSRF-TOKEN'
 
 export class ApiError extends Error {
   readonly status: number
@@ -50,12 +50,12 @@ function stringArray(value: unknown): string[] | undefined {
 }
 
 /** Only a plain number of seconds counts; an HTTP date or junk is ignored. */
-function retryAfterSeconds(response: Response): number | undefined {
+export function retryAfterSeconds(response: Response): number | undefined {
   const value = response.headers.get('Retry-After')
   return value !== null && /^\d+$/.test(value.trim()) ? Number(value) : undefined
 }
 
-function parseErrorBody(text: string): {
+export function parseErrorBody(text: string): {
   code?: string
   violations?: string[]
   details?: string[]
