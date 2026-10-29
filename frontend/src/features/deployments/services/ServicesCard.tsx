@@ -11,6 +11,11 @@ function sameSet(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((x) => b.includes(x))
 }
 
+/** Like `describeDeploymentError`, but NOT_DEPLOYED gets a "deploy first" text (the shared one talks about pulling updates). */
+function describeServiceError(error: unknown, fallback: string, notDeployed: string): string {
+  return error instanceof ApiError && error.code === 'NOT_DEPLOYED' ? notDeployed : describeDeploymentError(error, fallback)
+}
+
 /** Profile checkboxes; remounted (via `key`) when the saved profiles change, so the draft resets. */
 function ProfilePicker({ hostId, deploymentId, available, active }: { hostId: string; deploymentId: string; available: string[]; active: string[] }) {
   const { t } = useTranslation('deployments')
@@ -95,7 +100,7 @@ export function ServicesCard({
       { service, action: act },
       {
         onSuccess: (r) => onRunStarted(kind, r.runId),
-        onError: (e) => setError(describeDeploymentError(e, t('ServicesCard.actionFailed', { kind }))),
+        onError: (e) => setError(describeServiceError(e, t('ServicesCard.actionFailed', { kind }), t('ServicesCard.notDeployed'))),
       },
     )
   }
@@ -104,7 +109,7 @@ export function ServicesCard({
     setError(null)
     startAll.mutate(undefined, {
       onSuccess: (r) => onRunStarted(t('ServicesCard.start'), r.runId),
-      onError: (e) => setError(describeDeploymentError(e, t('ServicesCard.startAllFailed'))),
+      onError: (e) => setError(describeServiceError(e, t('ServicesCard.startAllFailed'), t('ServicesCard.notDeployed'))),
     })
   }
 

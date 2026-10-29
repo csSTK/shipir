@@ -88,6 +88,30 @@ describe('ServicesCard', () => {
     expect(onRun).not.toHaveBeenCalled()
   })
 
+  it('tells the user to deploy first when starting a never-deployed deployment', async () => {
+    const onRun = renderCard()
+    apiFetch.mockImplementation((_path: string, init?: { method?: string }) =>
+      init?.method === 'POST'
+        ? Promise.reject(new ApiError(400, 'not deployed', 'NOT_DEPLOYED'))
+        : Promise.resolve({ services: ['db', 'web'], profiles: ['debug', 'tools'] }),
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Start all' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Deploy this deployment once before starting its services.')
+    expect(onRun).not.toHaveBeenCalled()
+  })
+
+  it('tells the user to deploy first when restarting a never-deployed deployment', async () => {
+    const onRun = renderCard()
+    apiFetch.mockImplementation((_path: string, init?: { method?: string }) =>
+      init?.method === 'POST'
+        ? Promise.reject(new ApiError(400, 'not deployed', 'NOT_DEPLOYED'))
+        : Promise.resolve({ services: ['db', 'web'], profiles: ['debug', 'tools'] }),
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Restart web' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Deploy this deployment once before starting its services.')
+    expect(onRun).not.toHaveBeenCalled()
+  })
+
   it('saves the selected profiles', async () => {
     renderCard({ profiles: ['debug'] })
     const debug = await screen.findByRole('checkbox', { name: 'debug' })
