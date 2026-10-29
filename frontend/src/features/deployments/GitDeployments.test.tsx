@@ -235,6 +235,28 @@ describe('DeploymentDetailPage, Git deployment', () => {
     expect(await within(panel).findByRole('status')).toHaveTextContent('Saved')
   })
 
+  it('keeps the saved confirmation when the refreshed detail changes the auto-update settings', async () => {
+    let current: typeof gitDeployment = gitDeployment
+    serve('OPERATOR', {
+      [`GET ${BASE}/s1`]: () => current,
+      [`PUT ${BASE}/s1/git/auto-update`]: () => {
+        current = { ...current, git: { ...current.git, autoUpdateEnabled: true, autoUpdateIntervalSeconds: 600 } }
+        return current
+      },
+    })
+    renderPage()
+    const panel = await screen.findByRole('region', { name: 'Git source' })
+    fireEvent.click(within(panel).getByRole('switch', { name: 'Auto-update' }))
+    fireEvent.change(within(panel).getByLabelText('Check every (minutes)'), { target: { value: '10' } })
+    fireEvent.click(within(panel).getByRole('button', { name: 'Save auto-update' }))
+    expect(await within(panel).findByRole('status')).toHaveTextContent('Saved')
+    // The save invalidates the detail query; wait until the refreshed detail (auto-update on) has arrived.
+    await waitFor(() => expect(apiFetch.mock.calls.filter(([path, init]) => path === `${BASE}/s1` && !init).length).toBeGreaterThan(1))
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Auto-update' })).toBeChecked())
+    // Query again from the screen: a remounted panel is a new element, so the old reference would be stale.
+    expect(within(screen.getByRole('region', { name: 'Git source' })).getByRole('status')).toHaveTextContent('Saved')
+  })
+
   it('rejects an interval below one minute without calling the server', async () => {
     serve('OPERATOR')
     renderPage()

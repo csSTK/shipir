@@ -59,7 +59,7 @@ describe('ImageAutoUpdatePanel', () => {
     )
   })
 
-  it('rejects a half-filled window and an empty one-hour-less window without calling the API', () => {
+  it('rejects a half-filled window and a window whose start equals its end, without calling the API', () => {
     renderPanel()
     fireEvent.change(screen.getByLabelText('Window start (UTC)'), { target: { value: '02:00' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))

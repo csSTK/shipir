@@ -214,6 +214,27 @@ describe('DeploymentDetailPage', () => {
     expect(screen.getByText('pu-7')).toBeInTheDocument()
   })
 
+  it('keeps the saved confirmation when the refreshed detail changes the image auto-update settings', async () => {
+    let current = { ...deployment, imageAutoUpdate: { enabled: false, windowStart: null, windowEnd: null, lastAttemptAt: null, lastResult: null } }
+    serve('OPERATOR', {
+      [`GET ${BASE}`]: () => current,
+      [`PUT ${BASE}/image-auto-update`]: () => {
+        current = { ...current, imageAutoUpdate: { ...current.imageAutoUpdate, enabled: true } }
+        return current
+      },
+    })
+    renderPage()
+    const panel = await screen.findByRole('region', { name: 'Automatic image updates' })
+    fireEvent.click(within(panel).getByRole('switch', { name: 'Automatic image updates' }))
+    fireEvent.click(within(panel).getByRole('button', { name: 'Save' }))
+    expect(await within(panel).findByRole('status')).toHaveTextContent('Saved')
+    // The save invalidates the detail query; wait until the refreshed detail (enabled: true) has arrived.
+    await waitFor(() => expect(apiFetch.mock.calls.filter(([path, init]) => path === BASE && !init).length).toBeGreaterThan(1))
+    // Query again from the screen: a remounted panel is a new element, so the old reference would be stale.
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Automatic image updates' })).toBeChecked())
+    expect(within(screen.getByRole('region', { name: 'Automatic image updates' })).getByRole('status')).toHaveTextContent('Saved')
+  })
+
   it('disables Pull & update until a version was deployed', async () => {
     serve('OPERATOR', { [`GET ${BASE}/versions`]: () => [versions[0]] })
     renderPage()

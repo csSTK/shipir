@@ -250,11 +250,12 @@ export function DeploymentDetailPage() {
         />
       )}
 
-      {data.git && <GitSourcePanel key={`${data.git.autoUpdateEnabled}-${data.git.autoUpdateIntervalSeconds}`} deploymentId={deploymentId} hostId={hostId} git={data.git} canWrite={canWrite} />}
+      {/* Keyed by deployment only: a key on the saved values would remount the panel when the save refetches the detail and drop its 'Saved' message. */}
+      {data.git && <GitSourcePanel key={deploymentId} deploymentId={deploymentId} hostId={hostId} git={data.git} canWrite={canWrite} />}
 
       {data.imageAutoUpdate && (
         <ImageAutoUpdatePanel
-          key={`${data.imageAutoUpdate.enabled}-${data.imageAutoUpdate.windowStart}-${data.imageAutoUpdate.windowEnd}`}
+          key={deploymentId}
           deploymentId={deploymentId}
           hostId={hostId}
           info={data.imageAutoUpdate}
