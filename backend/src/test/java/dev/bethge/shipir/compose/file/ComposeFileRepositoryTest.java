@@ -151,6 +151,19 @@ class ComposeFileRepositoryTest {
     }
 
     @Test
+    void shipirWrittenFilesNamesEveryFileTheRepositoryWrites() throws IOException {
+        repo.write(HOST, "web", "x", "A=1");
+        repo.writeRollbackOverride(HOST, "web", "y");
+        try (var entries = Files.list(repo.deploymentDir(HOST, "web"))) {
+            assertThat(entries.map(p -> p.getFileName().toString()))
+                    .allMatch(ComposeFileRepository.SHIPIR_WRITTEN_FILES::contains);
+        }
+        assertThat(ComposeFileRepository.SHIPIR_WRITTEN_FILES)
+                .containsExactlyInAnyOrder(ComposeFileRepository.COMPOSE_FILE, ComposeFileRepository.ENV_FILE,
+                        ComposeFileRepository.ROLLBACK_OVERRIDE_FILE);
+    }
+
+    @Test
     void repoDirIsSubdirectoryOfDeploymentDir() {
         assertThat(repo.repoDir(HOST, "web")).isEqualTo(repo.deploymentDir(HOST, "web").resolve("repo"));
     }

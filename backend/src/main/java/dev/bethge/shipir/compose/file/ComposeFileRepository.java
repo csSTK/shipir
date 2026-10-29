@@ -35,6 +35,8 @@ public class ComposeFileRepository {
     /** Temporary compose file merged over {@code compose.yaml} while rolling back an image update. */
     public static final String ROLLBACK_OVERRIDE_FILE = "compose.rollback.yaml";
     public static final String REPO_DIR = "repo";
+    /** Every file this repository writes into a deployment directory (other files there are not Shipir-approved). */
+    public static final Set<String> SHIPIR_WRITTEN_FILES = Set.of(COMPOSE_FILE, ENV_FILE, ROLLBACK_OVERRIDE_FILE);
 
     private static final FileAttribute<Set<PosixFilePermission>> DIR_PERMISSIONS =
             PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------"));
