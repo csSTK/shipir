@@ -1,8 +1,9 @@
-import { Trash2 } from 'lucide-react'
+import { Archive, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Button, ConfirmDialog, Dialog, IconButton, Select, TextField } from '../../shared/ui/index.ts'
 import type { Volume } from './api.ts'
 import { describeBackupError, type BackupSchedule, useBackupSchedules, useCreateSchedule, useDeleteSchedule } from './backup.ts'
+import { StoredBackupsDialog } from './StoredBackupsDialog.tsx'
 import { LastBackupBadge } from './LastBackupBadge.tsx'
 import { useTranslation } from 'react-i18next'
 import { Trans } from '../../shared/i18n/Trans.tsx'
@@ -14,6 +15,7 @@ interface Props {
   volumes: Volume[]
   initialVolume?: string
   onClose: () => void
+  onDone?: (message: string) => void
 }
 
 const rangeError = (raw: string, max: number) => {
@@ -22,7 +24,7 @@ const rangeError = (raw: string, max: number) => {
 }
 
 /** Lists the environment's backup schedules and adds or removes them. */
-export function BackupSchedulesDialog({ hostId, volumes, initialVolume, onClose }: Props) {
+export function BackupSchedulesDialog({ hostId, volumes, initialVolume, onClose, onDone }: Props) {
   const { t } = useTranslation('volumes')
   const schedules = useBackupSchedules(hostId)
   const create = useCreateSchedule(hostId)
@@ -32,6 +34,7 @@ export function BackupSchedulesDialog({ hostId, volumes, initialVolume, onClose 
   const [keep, setKeep] = useState('7')
   const [touched, setTouched] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [storedFor, setStoredFor] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<BackupSchedule | null>(null)
 
   const intervalError = rangeError(interval, 8760)
@@ -68,6 +71,11 @@ export function BackupSchedulesDialog({ hostId, volumes, initialVolume, onClose 
                   <Trans t={t} i18nKey="BackupSchedulesDialog.volumenameEveryIntervalhoursHKeep" values={{ volumeName: s.volumeName, intervalHours: s.intervalHours, keepCount: s.keepCount }} components={{ strong: <strong />, span: <span className="ui-hint" /> }} />
                 </div>
                 <LastBackupBadge status={s.lastStatus} at={s.lastRunAt} />
+                <IconButton
+                  icon={Archive}
+                  aria-label={t('BackupSchedulesDialog.storedBackupsOfVolumename', { volumeName: s.volumeName })}
+                  onClick={() => setStoredFor(s.volumeName)}
+                />
                 <IconButton
                   icon={Trash2}
                   variant="danger"
@@ -107,6 +115,15 @@ export function BackupSchedulesDialog({ hostId, volumes, initialVolume, onClose 
           </div>
         </form>
       </div>
+      {storedFor && (
+        <StoredBackupsDialog
+          hostId={hostId}
+          volume={storedFor}
+          inUse={volumes.find((v) => v.name === storedFor)?.inUse}
+          onDone={onDone}
+          onClose={() => setStoredFor(null)}
+        />
+      )}
       {deleting && (
         <ConfirmDialog
           open

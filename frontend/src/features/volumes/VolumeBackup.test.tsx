@@ -197,6 +197,22 @@ describe('BackupSchedulesDialog', () => {
     expect(within(row).getByText('Backup OK')).toBeInTheDocument()
   })
 
+  it('opens the stored backups of a schedule whose volume no longer exists in Docker', async () => {
+    mockApi([schedule({ volumeName: 'gone' })])
+    apiFetch.mockImplementation((path: string, init?: { method?: string }) => {
+      if (path === '/hosts/h1/volume-backup-schedules') return Promise.resolve([schedule({ volumeName: 'gone' })])
+      if (path === '/hosts/h1/volumes/gone/stored-backups')
+        return Promise.resolve([{ name: 'gone-20260101T000000Z.tar', sizeBytes: 12, createdAt: '2026-01-01T00:00:00Z' }])
+      return Promise.resolve(init ? undefined : [])
+    })
+    render(wrap(<BackupSchedulesDialog hostId="h1" volumes={volumes} initialVolume="cache" onClose={() => {}} />))
+    fireEvent.click(await screen.findByRole('button', { name: 'Stored backups of gone' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Stored backups of gone' })
+    expect(await within(dialog).findByText('gone-20260101T000000Z.tar')).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Download gone-20260101T000000Z.tar' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Restore gone-20260101T000000Z.tar' })).toBeInTheDocument()
+  })
+
   const deleteCalls = () => apiFetch.mock.calls.filter(([, init]) => init?.method === 'DELETE')
 
   it('asks before deleting a schedule and says its stored backups go too', async () => {

@@ -154,3 +154,22 @@ test('viewer gets no backup actions', async ({ page, api }) => {
   await expect(page.getByRole('button', { name: /More actions/ })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Backup schedules' })).toHaveCount(0)
 })
+
+test('operator opens the stored backups of a schedule whose volume is gone from Docker', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', as('OPERATOR'))
+  api.mock('GET', '/api/hosts/a/volume-backup-schedules', { body: [{ ...schedule, id: 's2', volumeName: 'gone', lastStatus: 'SUCCESS' }] })
+  api.mock('GET', '/api/hosts/a/volumes/gone/stored-backups', {
+    body: [{ name: 'gone-20260101T000000Z.tar', sizeBytes: 12, createdAt: '2026-01-01T00:00:00Z' }],
+  })
+  await page.route('**/api/hosts/a/volumes/gone/stored-backups/gone-20260101T000000Z.tar', (route) =>
+    route.fulfill({ status: 200, body: 'tar', headers: { 'Content-Type': 'application/x-tar', 'Content-Disposition': 'attachment; filename="gone-20260101T000000Z.tar"' } }),
+  )
+  await page.goto('/environments/a/volumes')
+  await page.getByRole('button', { name: 'Backup schedules' }).click()
+  await page.getByRole('dialog', { name: 'Backup schedules' }).getByRole('button', { name: 'Stored backups of gone' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Stored backups of gone' })
+  await expect(dialog.getByRole('listitem')).toHaveCount(1)
+  const download = page.waitForEvent('download')
+  await dialog.getByRole('button', { name: 'Download gone-20260101T000000Z.tar' }).click()
+  expect((await download).suggestedFilename()).toBe('gone-20260101T000000Z.tar')
+})

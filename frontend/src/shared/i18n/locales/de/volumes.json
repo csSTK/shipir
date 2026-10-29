@@ -4,6 +4,7 @@
   "BackupSchedulesDialog.loading": "Wird geladen…",
   "BackupSchedulesDialog.noSchedulesYet": "Noch keine Zeitpläne.",
   "BackupSchedulesDialog.volumenameEveryIntervalhoursHKeep": "<strong>{{volumeName}}</strong><span>alle {{intervalHours}} Std., {{keepCount}} behalten</span>",
+  "BackupSchedulesDialog.storedBackupsOfVolumename": "Gespeicherte Backups von {{volumeName}}",
   "BackupSchedulesDialog.deleteScheduleForVolumename": "Zeitplan für {{volumeName}} löschen",
   "BackupSchedulesDialog.volume": "Volume",
   "BackupSchedulesDialog.thisVolumeIsInUse": "Dieses Volume wird verwendet; ein Backup, das während des Schreibens entsteht, kann inkonsistent sein.",
