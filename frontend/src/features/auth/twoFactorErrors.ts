@@ -1,14 +1,15 @@
 import { ApiError } from '../../shared/api/client.ts'
 import i18n from 'i18next'
+import { throttleMessage } from './throttleErrors.ts'
 
-/** User-facing text for 2FA API errors; unknown errors get `fallback`. */
+/** User-facing text for 2FA API errors; unknown errors get `fallback`. Throttling (429) uses the shared `throttleMessage` wording. */
 export function twoFactorErrorMessage(error: unknown, fallback: string): string {
+  const throttled = throttleMessage(error)
+  if (throttled !== null) return throttled
   if (error instanceof ApiError) {
     switch (error.code) {
       case 'INVALID_CODE':
         return i18n.t('auth:twoFactorErrors.thatCodeIsNotValid')
-      case 'TOO_MANY_ATTEMPTS':
-        return i18n.t('auth:twoFactorErrors.tooManyAttemptsWaitA')
       case 'NO_SETUP_IN_PROGRESS':
         return i18n.t('auth:twoFactorErrors.theSetupExpiredStartAgain')
       case 'TWO_FACTOR_ALREADY_ENABLED':

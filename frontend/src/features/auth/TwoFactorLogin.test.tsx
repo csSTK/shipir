@@ -69,6 +69,14 @@ describe('LoginPage second step', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/too many attempts/i)
   })
 
+  it('names the Retry-After wait when the code is throttled', async () => {
+    await reachSecondStep()
+    apiFetchMock.mockRejectedValueOnce(new ApiError(429, 'slow down', 'TOO_MANY_ATTEMPTS', undefined, undefined, 30))
+    fireEvent.change(screen.getByLabelText('Authentication code'), { target: { value: '000000' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Too many attempts, try again in 30 seconds.')
+  })
+
   it('returns to the credentials when the pending sign-in expired', async () => {
     await reachSecondStep()
     apiFetchMock.mockRejectedValueOnce(new ApiError(401, 'expired', 'UNAUTHENTICATED'))
