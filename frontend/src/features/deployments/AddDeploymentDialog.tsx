@@ -8,6 +8,7 @@ import { describeDeploymentError } from './deploymentErrors.ts'
 import { GitSourceFields, type GitFormValue } from './GitSourceFields.tsx'
 import { ComposeWizard, applyFreePorts, preferredHostPorts, referencedEnvKeys, specToState, type WizardState } from './wizard/index.ts'
 import { TemplatePicker, type AppTemplate } from './templates/index.ts'
+import { InstallTemplateDialog, type InstallSeed } from './templates/InstallTemplateDialog.tsx'
 import { fetchFreePorts } from './templates/api.ts'
 import './wizard/wizard.css'
 import './templates/templates.css'
@@ -34,6 +35,7 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
   const [mode, setMode] = useState<'template' | 'yaml' | 'wizard'>('yaml')
   const [template, setTemplate] = useState<AppTemplate | null>(null)
   const [seed, setSeed] = useState<{ key: number; state?: WizardState }>({ key: 0 })
+  const [installing, setInstalling] = useState<AppTemplate | null>(null)
   const latestPick = useRef(0)
   const [checkingPorts, setCheckingPorts] = useState(false)
   const [portNotices, setPortNotices] = useState<{ from: number; to: number }[]>([])
@@ -73,6 +75,17 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
     setSeed((current) => ({ key: current.key + 1, state }))
     addEnvKeys([...t.env.map((h) => h.key), ...referencedEnvKeys(state)])
     setName((current) => (current.trim() === '' ? t.id : current))
+    setMode('wizard')
+  }
+
+  /** "Advanced" in the install dialog: continue in the wizard with the name, ports and variables already chosen. */
+  function continueFromInstall({ template: t, name: installName, state, env: values }: InstallSeed) {
+    setInstalling(null)
+    setTemplate(t)
+    setPortNotices([])
+    setSeed((current) => ({ key: current.key + 1, state }))
+    setEnv(values)
+    setName(installName)
     setMode('wizard')
   }
 
@@ -154,7 +167,7 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
             </label>
           ))}
         </div>
-        {source === 'file' && mode === 'template' && <TemplatePicker onSelect={(t) => void pickTemplate(t)} selectedId={template?.id} />}
+        {source === 'file' && mode === 'template' && <TemplatePicker onSelect={(t) => void pickTemplate(t)} onInstall={setInstalling} selectedId={template?.id} />}
         {source === 'file' && mode === 'template' && checkingPorts && (
           <p className="tp__hint" role="status">
             {tr('AddDeploymentDialog.checkingFreePorts')}
@@ -205,6 +218,7 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
           </Button>
         </div>
       </form>
+      {installing && <InstallTemplateDialog hostId={hostId} template={installing} onClose={() => setInstalling(null)} onAdvanced={continueFromInstall} />}
     </Dialog>
   )
 }

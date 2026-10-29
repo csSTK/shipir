@@ -552,5 +552,16 @@
   "ComposeWizard.proxyNameTRAEFIK": "Traefik",
   "ComposeWizard.proxyNameCADDY": "Caddy",
   "AddDeploymentDialog.checkingFreePorts": "Checking free ports…",
-  "AddDeploymentDialog.portTakenUsing": "Port {{from}} was taken, using {{to}}."
+  "AddDeploymentDialog.portTakenUsing": "Port {{from}} was taken, using {{to}}.",
+  "InstallTemplateDialog.installName": "Install {{name}}",
+  "InstallTemplateDialog.hostPortFor": "Host port for {{service}} (container port {{container}})",
+  "InstallTemplateDialog.portTakenTry": "Port {{port}} is taken. Try {{free}}.",
+  "InstallTemplateDialog.portTakenNoFree": "Port {{port}} is taken and no free port was found.",
+  "InstallTemplateDialog.couldNotBuildTheComposeFile": "Could not build the Compose file.",
+  "InstallTemplateDialog.couldNotStartTheDeployment": "The deployment was created but could not be started. Try again.",
+  "InstallTemplateDialog.showKey": "Show {{key}}",
+  "InstallTemplateDialog.hideKey": "Hide {{key}}",
+  "InstallTemplateDialog.generateNewKey": "Generate a new {{key}}",
+  "InstallTemplateDialog.advanced": "Advanced",
+  "InstallTemplateDialog.install": "Install"
 }

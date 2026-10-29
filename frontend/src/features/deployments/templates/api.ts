@@ -6,6 +6,10 @@ export interface TemplateEnvHint {
   key: string
   description: string
   secret: boolean
+  /** Prefilled value; absent when the user has to choose one. */
+  defaultValue?: string | null
+  /** True when the installer fills in a random value (passwords, keys). */
+  generate?: boolean
 }
 
 /** A bundled app template (`GET /api/templates`); `spec` is the bare Compose spec the wizard sends. */

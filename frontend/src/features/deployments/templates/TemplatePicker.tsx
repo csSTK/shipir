@@ -6,7 +6,7 @@ import { Button, TextField } from '../../../shared/ui/index.ts'
 import { useTranslation } from 'react-i18next'
 
 /** Searchable grid of bundled app templates; choosing one hands it to `onSelect`. */
-export function TemplatePicker({ onSelect, selectedId }: { onSelect: (template: AppTemplate) => void; selectedId?: string | null }) {
+export function TemplatePicker({ onSelect, onInstall, selectedId }: { onSelect: (template: AppTemplate) => void; onInstall?: (template: AppTemplate) => void; selectedId?: string | null }) {
   const { t: tr } = useTranslation('deployments')
   const { data, isPending, error, refetch } = useTemplates()
   const [query, setQuery] = useState('')
@@ -38,9 +38,14 @@ export function TemplatePicker({ onSelect, selectedId }: { onSelect: (template: 
                 <span className="tp__logo" aria-hidden="true">
                   {t.name.charAt(0).toUpperCase()}
                 </span>
-                <span className="tp__name">{t.name}</span>
+                <span className="tp__name" id={`tp-name-${t.id}`}>{t.name}</span>
                 <span className="tp__desc">{t.description}</span>
               </button>
+              {onInstall && (
+                <Button variant="primary" size="sm" className="tp__install" onClick={() => onInstall(t)} aria-describedby={`tp-name-${t.id}`}>
+                  {tr('InstallTemplateDialog.install')}
+                </Button>
+              )}
             </li>
           ))}
         </ul>

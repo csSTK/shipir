@@ -552,5 +552,16 @@
   "ComposeWizard.proxyNameTRAEFIK": "Traefik",
   "ComposeWizard.proxyNameCADDY": "Caddy",
   "AddDeploymentDialog.checkingFreePorts": "Prüfe freie Ports…",
-  "AddDeploymentDialog.portTakenUsing": "Port {{from}} war belegt, verwende {{to}}."
+  "AddDeploymentDialog.portTakenUsing": "Port {{from}} war belegt, verwende {{to}}.",
+  "InstallTemplateDialog.installName": "{{name}} installieren",
+  "InstallTemplateDialog.hostPortFor": "Host-Port für {{service}} (Container-Port {{container}})",
+  "InstallTemplateDialog.portTakenTry": "Port {{port}} ist belegt. Probiere {{free}}.",
+  "InstallTemplateDialog.portTakenNoFree": "Port {{port}} ist belegt und es wurde kein freier Port gefunden.",
+  "InstallTemplateDialog.couldNotBuildTheComposeFile": "Die Compose-Datei konnte nicht erstellt werden.",
+  "InstallTemplateDialog.couldNotStartTheDeployment": "Das Deployment wurde erstellt, konnte aber nicht gestartet werden. Versuche es erneut.",
+  "InstallTemplateDialog.showKey": "{{key}} anzeigen",
+  "InstallTemplateDialog.hideKey": "{{key}} verbergen",
+  "InstallTemplateDialog.generateNewKey": "Neuen Wert für {{key}} erzeugen",
+  "InstallTemplateDialog.advanced": "Erweitert",
+  "InstallTemplateDialog.install": "Installieren"
 }
