@@ -2,6 +2,7 @@
   "BackupSchedulesDialog.backupSchedules": "Backup-Zeitpläne",
   "BackupSchedulesDialog.automaticBackupsAreStoredOn": "Automatische Backups werden auf dem Shipir-Server gespeichert; die neuesten bleiben erhalten.",
   "BackupSchedulesDialog.loading": "Wird geladen…",
+  "BackupSchedulesDialog.noVolumesYet": "In dieser Umgebung gibt es noch keine Volumes. Lege zuerst ein Volume an.",
   "BackupSchedulesDialog.noSchedulesYet": "Noch keine Zeitpläne.",
   "BackupSchedulesDialog.volumenameEveryIntervalhoursHKeep": "<strong>{{volumeName}}</strong><span>alle {{intervalHours}} Std., {{keepCount}} behalten</span>",
   "BackupSchedulesDialog.storedBackupsOfVolumename": "Gespeicherte Backups von {{volumeName}}",

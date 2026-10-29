@@ -95,6 +95,7 @@ export function BackupSchedulesDialog({ hostId, volumes, initialVolume, onClose,
               </option>
             ))}
           </Select>
+          {volumes.length === 0 && <p className="ui-hint">{t('BackupSchedulesDialog.noVolumesYet')}</p>}
           {selected?.inUse && <p className="ui-hint">{t('BackupSchedulesDialog.thisVolumeIsInUse')}</p>}
           <div className="vbackup__row">
             <TextField label={t('BackupSchedulesDialog.intervalHours')} type="number" min={1} max={8760} value={interval} onChange={(e) => setIntervalHours(e.target.value)} error={touched ? intervalError : null} />
@@ -109,7 +110,7 @@ export function BackupSchedulesDialog({ hostId, volumes, initialVolume, onClose,
             <Button variant="ghost" onClick={onClose}>
               {t('BackupSchedulesDialog.close')}
             </Button>
-            <Button variant="primary" type="submit" loading={create.isPending}>
+            <Button variant="primary" type="submit" disabled={volumes.length === 0} loading={create.isPending}>
               {t('BackupSchedulesDialog.addSchedule')}
             </Button>
           </div>

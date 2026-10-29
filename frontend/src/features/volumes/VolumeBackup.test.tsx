@@ -108,6 +108,20 @@ describe('VolumesPage backup', () => {
     expect(URL.createObjectURL).toHaveBeenCalled()
   })
 
+  it('disables Backup while a download is running, so it cannot start twice', async () => {
+    mockApi()
+    let finish: (r: Response) => void = () => {}
+    fetchMock.mockReturnValue(new Promise<Response>((r) => (finish = r)))
+    render(wrap(<VolumesPage />))
+    await openMenu('pgdata', 'Backup')
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions for cache' }), { button: 0, pointerType: 'mouse' })
+    expect(await screen.findByRole('menuitem', { name: 'Backup' })).toHaveAttribute('aria-disabled', 'true')
+    finish(new Response('x', { status: 200 }))
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled())
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('shows a failed backup as an alert', async () => {
     mockApi()
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: 'RESOURCE_NOT_FOUND' }), { status: 404 }))
@@ -285,5 +299,12 @@ describe('BackupSchedulesDialog', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'Add schedule' }))
     expect(await screen.findByText('This volume already has a backup schedule.')).toBeInTheDocument()
+  })
+
+  it('disables Add schedule with a hint when the environment has no volumes', async () => {
+    mockApi([])
+    render(wrap(<BackupSchedulesDialog hostId="h1" volumes={[]} onClose={() => {}} />))
+    expect(await screen.findByText('No volumes in this environment yet. Create a volume first.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add schedule' })).toBeDisabled()
   })
 })

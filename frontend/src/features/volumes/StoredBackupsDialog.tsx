@@ -2,14 +2,12 @@ import { Download, RotateCcw } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { dateTimeFormat } from '../../shared/i18n/format.ts'
+import { dateFormat } from './dateFormat.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { Button, Dialog, IconButton, Switch } from '../../shared/ui/index.ts'
 import { formatSize } from '../hosts/format.ts'
 import { describeBackupError, downloadStoredBackup, restoreStoredBackup, useStoredBackups } from './backup.ts'
 import './VolumeBackup.css'
-
-const dateFormat = dateTimeFormat({ dateStyle: 'medium', timeStyle: 'short' })
 
 interface Props {
   hostId: string

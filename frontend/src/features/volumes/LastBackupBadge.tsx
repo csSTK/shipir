@@ -1,9 +1,7 @@
 import { Badge } from '../../shared/ui/index.ts'
 import type { BackupStatus } from './backup.ts'
 import { useTranslation } from 'react-i18next'
-import { dateTimeFormat } from '../../shared/i18n/format.ts'
-
-const dateFormat = dateTimeFormat({ dateStyle: 'medium', timeStyle: 'short' })
+import { dateFormat } from './dateFormat.ts'
 
 /** Result of the last scheduled backup: status plus time; `–` before the first run. */
 export function LastBackupBadge({ status, at }: { status: BackupStatus | null; at: string | null }) {

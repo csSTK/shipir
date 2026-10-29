@@ -15,11 +15,9 @@ import { LastBackupBadge } from './LastBackupBadge.tsx'
 import { describeBackupError, downloadVolumeBackup, useBackupSchedules } from './backup.ts'
 import { useTranslation } from 'react-i18next'
 import i18n from 'i18next'
-import { dateTimeFormat } from '../../shared/i18n/format.ts'
+import { dateFormat } from './dateFormat.ts'
 import './VolumesPage.css'
 import './VolumeBackup.css'
-
-const dateFormat = dateTimeFormat({ dateStyle: 'medium', timeStyle: 'short' })
 
 const baseColumns: ResourceColumn<Volume>[] = [
   { id: 'name', get header() { return i18n.t('volumes:VolumesPage.name') }, sortValue: (v) => v.name, render: (v) => <strong>{v.name}</strong> },
@@ -53,6 +51,7 @@ export function VolumesPage() {
   const [storedFor, setStoredFor] = useState<string | null>(null)
   const [scheduling, setScheduling] = useState<{ volume?: string } | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [backingUp, setBackingUp] = useState(false)
   const [backupError, setBackupError] = useState<string | null>(null)
 
   const columns = useMemo<ResourceColumn<Volume>[]>(() => {
@@ -73,6 +72,8 @@ export function VolumesPage() {
   }, [canWrite, schedules.data, t])
 
   async function backup(v: Volume) {
+    if (backingUp) return
+    setBackingUp(true)
     setNotice(null)
     setBackupError(null)
     try {
@@ -84,6 +85,8 @@ export function VolumesPage() {
       )
     } catch (e) {
       setBackupError(describeBackupError(e))
+    } finally {
+      setBackingUp(false)
     }
   }
 
@@ -130,7 +133,7 @@ export function VolumesPage() {
           canWrite
             ? (v) => ({
                 menu: [
-                  { label: t('VolumesPage.backup'), icon: <Download size={16} strokeWidth={1.75} />, onSelect: () => void backup(v) },
+                  { label: t('VolumesPage.backup'), icon: <Download size={16} strokeWidth={1.75} />, onSelect: () => void backup(v), disabled: backingUp },
                   { label: t('VolumesPage.restore'), icon: <Upload size={16} strokeWidth={1.75} />, onSelect: () => setRestoring(v) },
                   { label: t('VolumesPage.scheduleBackups'), icon: <CalendarClock size={16} strokeWidth={1.75} />, onSelect: () => setScheduling({ volume: v.name }) },
                   { label: t('VolumesPage.storedBackups'), icon: <Archive size={16} strokeWidth={1.75} />, onSelect: () => setStoredFor(v.name) },
