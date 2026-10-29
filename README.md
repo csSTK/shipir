@@ -2,7 +2,7 @@
 
 A web platform for managing Docker containers and Compose stacks. Think of it as a simplified Portainer, built so non-experts can use it: forms instead of mandatory YAML, with a raw editor for those who want one.
 
-> **Status:** early development. The repo skeleton (backend + frontend) is set up; features are not implemented yet.
+> **Status:** in active development. The features listed below are implemented; the latest tagged release is `v0.1.0`.
 
 ## Screenshots
 
@@ -21,18 +21,19 @@ A web platform for managing Docker containers and Compose stacks. Think of it as
 
 This is a learning and portfolio project focused on Java backend development. The priorities are clean architecture, meaningful tests and well-reasoned decisions over feature count.
 
-## Features (planned)
+## Features
 
-- **Containers:** list, start, stop, inspect and view stats, across one or more Docker hosts. Edit (recreated, with rollback if it fails), duplicate and change resource limits.
+- **Containers:** list, start, stop, restart, pause and kill, inspect (a details page with image, command, mounts, ports, networks and health check; env values are masked for viewers) and view stats, across one or more Docker hosts. Edit (recreated, with rollback if it fails), duplicate and change resource limits. Users with operate access create single containers, networks and volumes with forms.
+- **Container files:** ADMINs browse, download and upload files inside a running container through the Docker archive API. Every transfer is audited and size-limited.
 - **Volumes:** download a volume as a `.tar` backup, restore an archive into a volume (overlays existing files; in-use volumes need an explicit confirm; 100 MB limit, its own property `shipir.volume-backup.max-bytes`; the multipart limits must stay at least as large) and schedule recurring backups with retention (stored under `shipir.volume-backup.dir`, `SHIPIR_VOLUME_BACKUP_DIR`; `docker-compose.yml` mounts the named volume `shipir-volume-backups` at `/data/volume-backups`).
 - **Image build, tag and push:** admins can build an image from an uploaded `.tar`/`.tar.gz` context or a Git repository (Dockerfile path, build args, no-cache, live output); build runs the Dockerfile on the Docker daemon, which is why it is admin only. Admins and operators can tag an image and push it to a registry (stored registry logins are used). Limits: `shipir.images.max-build-context` (default 200 MB, so the multipart upload limit is 201 MB) and `shipir.images.build-timeout` (30 min). Build args are visible in the image history: never put secrets in them.
 - **Disk usage:** the environment dashboard shows how much disk Docker uses (images, containers, volumes, build cache) and what could be reclaimed, with the ten largest items and a link to the cleanup dialog. Needs access to the whole environment.
-- **Hosts:** manage multiple Docker hosts (local Unix socket or remote TCP with TLS), with health checks.
+- **Environments (Docker hosts):** manage multiple Docker hosts (local Unix socket or remote TCP with TLS), with health checks. Environments can be tagged, and the overview can be filtered by tag. Each environment has a dashboard and resource pages for its deployments, containers, images, networks and volumes.
 - **Deployments (Compose projects):**
   - Create deployments from a bundled app template (nginx, postgres, wordpress, vaultwarden, gitea, grafana, jellyfin, home-assistant, nextcloud, ...), with a form wizard that generates the YAML, or write it yourself in an advanced editor with schema validation. About 33 templates ship with pinned image tags. Install on a card opens a small dialog prefilled with a free name, free host ports, default values and randomly generated passwords; one confirm creates and deploys the app (OPERATOR/ADMIN). Customize opens the wizard instead. Host ports already taken on the target host are replaced, and you can edit them.
   - Deploy, stop and pull, with live output.
   - **Domains and HTTPS:** a service in the wizard can get a domain. Shipir detects a running Traefik or caddy-docker-proxy on the host and generates the proxy labels and network (Traefik routers expect an entrypoint `websecure` and a resolver `letsencrypt`). Without a proxy, the wizard offers a bundled Traefik template (needs an ADMIN to deploy, as it mounts the Docker socket).
-  - Every deploy is versioned, so you can see history and roll back.
+  - Every deploy is versioned, so you can see history and roll back. Before a rollback or a deploy of changed files, a diff of the Compose YAML and the `.env` keys shows what changes; values stay hidden.
   - Environment variables per deployment, stored encrypted.
   - Deployments from a (private) Git repository with an access token: Pull & redeploy, and optional polling that redeploys on new commits.
   - Optional automatic image updates for deployments from a file: when a newer image exists, Shipir pulls and restarts inside a daily UTC time window, waits for the containers to be healthy and rolls back to the previous image digests if they are not. Notifications: image update applied or failed.
@@ -42,12 +43,15 @@ This is a learning and portfolio project focused on Java backend development. Th
 - **Compose profiles and per-service actions:** admins and operators pick the active Compose profiles of a deployment and, in the Services card on the deployment page, restart, pull or bring up a single service, or start the whole deployment again without a redeploy. Profiles apply to every run of that deployment, and the host-level settings check also covers services behind a profile.
 - **Usage history:** Shipir records CPU, memory, network and disk I/O of every running container once a minute (`shipir.stats.interval`) and shows history charts (1 hour to 30 days) on the container page and, summed up, on the environment dashboard. Samples are kept for the `stats_days` retention (default 7 days, set via the retention API) and purged daily.
 - **Live streaming:** container logs, container stats (CPU, memory, network, disk I/O with sparklines), Docker events, Compose output and an exec terminal over WebSocket. The exec terminal is ADMIN only by default. OPERATORs can open consoles only if `shipir.streaming.exec.operator-enabled` is `true` (env `SHIPIR_STREAMING_EXEC_OPERATOR_ENABLED`, default `false`; not yet passed through `docker-compose.yml`), and then only with an OPERATE grant on the host or the owning deployment. Consoles are session-only (never via API tokens) and every console is audited with the role.
-- **Access control:** users with roles (Admin, Operator, Viewer) plus fine-grained permissions per host and deployment, which can also be granted to teams (Settings > Teams); a user gets the best level of their own and their teams' grants.
+- **Users and access control:** admins create, edit, disable and delete users. Users have roles (Admin, Operator, Viewer) plus fine-grained permissions per host and deployment, which can also be granted to teams (Settings > Teams); a user gets the best level of their own and their teams' grants.
+- **Registry credentials:** admins store logins for private registries (ghcr.io, Docker Hub, GitLab, self-hosted), and deployments use them when Compose pulls images.
+- **API documentation:** an OpenAPI spec and Swagger UI at `/api/docs`, for signed-in users.
 - **API tokens and webhooks:** every user can create personal API tokens (Account) and call the API with `Authorization: Bearer shp_...`; a token acts with its owner's permissions but never with ADMIN power (the role is capped at OPERATOR: no user management, backup, settings, container exec or host-level Compose features, no WebSocket), is shown once and only stored hashed. At most `shipir.api-tokens.max-per-user` (20) tokens per user; changing or resetting the password revokes all of the user's tokens; the AI chat endpoints are session-only; `/api/auth/me` reports the effective (capped) role; repeated invalid bearer credentials lock the client address for a while (further invalid credentials get 429, valid tokens still work; audited as `LOGIN_THROTTLED`). Each deployment can have a redeploy webhook (`POST /api/webhooks/deploy/<secret>`) that pulls the new images or Git changes, for CI pipelines.
-- **Audit log:** a record of who did what, and when.
+- **Audit log and retention:** a record of who did what, and when. Retention settings control how long audit entries, notifications, AI chat sessions and usage samples are kept; a daily job purges what has expired.
+- **Notifications:** in-app and webhook notifications for host up and down, failed deployments, crashed or unhealthy containers, failed Git or image auto-updates, applied or failed image updates, and uptime checks going down or up. Each user can switch individual notification types off for the in-app feed (all are on by default), and each webhook lists the event types it receives. Webhook URLs are stored encrypted.
 - **Search:** Cmd/Ctrl+K opens a command palette that finds the environments, deployments and containers you can see, and jumps to any page.
 - **Languages:** the UI is available in English and German. Every user picks the language under Account; without a choice it follows the browser language. Backend errors stay English codes and the frontend translates them.
-- **AI assistant:** an in-app chat (any OpenAI-compatible API, NVIDIA build by default; an admin sets the key at Settings > AI assistant) that answers from live data and acts as the signed-in user with their role. Every change waits for an explicit Confirm. Chats are saved, can be reopened, and can be shared read-only with admins for debugging.
+- **AI assistant:** an in-app chat (any OpenAI-compatible API, NVIDIA build by default, or native Google Gemini; an admin picks the provider and sets its key at Settings > AI assistant) that answers from live data and acts as the signed-in user with their role. A floating assistant button on every page opens the chat with the current page as context. Every change waits for an explicit Confirm. Chats are saved, can be reopened, and can be shared read-only with admins for debugging.
 
 **AI assistant: data sent to the provider and limits.** The assistant calls a third-party model (your configured provider) and sends it, on every model call: the system prompt, the newest part of the chat (default: last 40 messages or about 60000 characters; older messages are dropped), your messages, and the results of the read tools you could use yourself (host, container, image, network, volume and deployment data, Compose YAML and deployment versions, notifications, Git credential names, and for ADMINs the audit log). Variable values (`env`), passwords, tokens, private keys and the Git credential secrets are never put into tool results or the history. Tool results are sent wrapped in `<tool_data>` and the model is told to treat them as untrusted data, because names, files and notifications can be written by other users or images; a write still never runs without your Confirm, and the Confirm card shows every argument and warns when the proposal followed tool content. Do not use a provider you do not trust with your infrastructure data. Limits per user (properties under `shipir.ai.chat.*`): `messages-per-minute` (default 20, then 429 `RATE_LIMITED`), `max-concurrent-runs` (default 3, then 429 `TOO_MANY_RUNS`), `max-history-messages` (40), `max-history-chars` (60000), `max-iterations` (8 model calls per run).
 
@@ -364,8 +368,8 @@ shipir/
 │   └── src/main/java/dev/bethge/shipir/  # Organized package-by-feature
 ├── frontend/                         # React + TypeScript + Vite
 │   ├── src/app/                      # Root, providers, React Query client
-│   ├── src/features/                 # Feature folders (containers, hosts, stacks)
-│   ├── src/shared/                   # Shared (api, ui, lib)
+│   ├── src/features/                 # Feature folders (containers, deployments, hosts, images, networks, volumes, ...)
+│   ├── src/shared/                   # Shared (api, charts, i18n, lib, realtime, styles, ui)
 │   └── e2e/                          # Playwright e2e specs; fixtures/api.ts mocks /api
 ├── README.md                         # This file
 ├── CLAUDE.md                         # Development rules and architecture
