@@ -81,22 +81,22 @@
   color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
 }
-/* Categorical series tokens (not health states); the legend text carries the values, so colour is never the only signal. */
+/* Categorical palette tokens (--color-series-N, not health states); the legend text carries the values, so colour is never the only signal. */
 .disk__seg--images,
 .disk__swatch--images {
-  background: var(--color-cat-1);
+  background: var(--color-series-1);
 }
 .disk__seg--containers,
 .disk__swatch--containers {
-  background: var(--color-cat-2);
+  background: var(--color-series-2);
 }
 .disk__seg--volumes,
 .disk__swatch--volumes {
-  background: var(--color-cat-3);
+  background: var(--color-series-3);
 }
 .disk__seg--buildCache,
 .disk__swatch--buildCache {
-  background: var(--color-cat-4);
+  background: var(--color-series-4);
 }
 .disk__foot {
   display: flex;

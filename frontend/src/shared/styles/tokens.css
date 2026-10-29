@@ -157,13 +157,8 @@
   --color-info-soft: #e3effd;
   --color-info-solid: #0a84ff;
 
-  /* Categorical series (charts, legends): neutral hues, not health states. Non-text contrast >= 3:1 on surface. */
-  --color-cat-1: #4f46e5;
-  --color-cat-2: #0f766e;
-  --color-cat-3: #be185d;
-  --color-cat-4: #64748b;
 
-  /* Categorical series (service colours in combined logs): text-safe on sunken surfaces, never the only signal */
+  /* The one categorical palette (log service colours, disk usage segments, legends). Neutral hues, not health states; text-safe (>= 4.5:1) on sunken surfaces, so also fine as 3:1 fills. Never the only signal: the name or label is always shown. Beyond 8 series colours repeat. */
   --color-series-1: #4338ca;
   --color-series-2: #0f766e;
   --color-series-3: #a14a0a;
@@ -220,11 +215,6 @@
     --color-info: #7db7ff;
     --color-info-soft: #112a47;
     --color-info-solid: #0a84ff;
-
-    --color-cat-1: #8b8cf8;
-    --color-cat-2: #2dd4bf;
-    --color-cat-3: #f472b6;
-    --color-cat-4: #94a3b8;
 
     --color-series-1: #a5b4fc;
     --color-series-2: #5eead4;
@@ -286,11 +276,6 @@
   --color-series-6: #86efac;
   --color-series-7: #fda4af;
   --color-series-8: #fde047;
-
-  --color-cat-1: #8b8cf8;
-  --color-cat-2: #2dd4bf;
-  --color-cat-3: #f472b6;
-  --color-cat-4: #94a3b8;
 
   --chart-1: #6d71ee;
   --chart-2: #d57a30;

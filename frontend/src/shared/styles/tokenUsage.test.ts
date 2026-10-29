@@ -288,4 +288,24 @@ describe('design token usage', () => {
     const actual = Object.fromEntries(checked.flatMap((s) => (iconBoxHits(s.css).length ? [[s.path, iconBoxHits(s.css).length] as const] : [])))
     expect(actual).toEqual(iconBoxAllowlist)
   })
+
+  describe('one categorical palette (shipr-anxl.3)', () => {
+    const tokens = allSheets.find((s) => s.path === '/shared/styles/tokens.css')?.css ?? ''
+    const countOf = (name: string) => (strip(tokens).match(new RegExp(`${name}\\s*:`, 'g')) ?? []).length
+
+    it('defines --color-series-1..8 in light, system dark and forced dark, and no --color-cat set', () => {
+      expect(strip(tokens)).not.toMatch(/--color-cat-/)
+      for (let i = 1; i <= 8; i++) expect(countOf(`--color-series-${i}`)).toBe(3)
+    })
+
+    it('no stylesheet references the removed --color-cat tokens', () => {
+      expect(allSheets.filter((s) => /--color-cat-/.test(s.css)).map((s) => s.path)).toEqual([])
+    })
+
+    it('disk usage segments use the series tokens', () => {
+      const disk = allSheets.find((s) => s.path === '/features/hosts/DiskUsageCard.css')
+      expect(disk).toBeDefined()
+      expect(strip(disk!.css)).toMatch(/var\(--color-series-\d\)/)
+    })
+  })
 })
