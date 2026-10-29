@@ -19,7 +19,7 @@
   font-size: var(--text-small-size);
   min-height: var(--control-height);
   padding: 0 var(--space-3);
-  border: 1px solid var(--color-border-strong);
+  border: var(--border-width) solid var(--color-border-strong);
   border-radius: var(--radius-pill);
   background: var(--color-surface);
   color: var(--color-text-muted);

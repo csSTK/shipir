@@ -10,8 +10,8 @@
   white-space: nowrap;
 }
 .ui-dot {
-  width: 0.5rem;
-  height: 0.5rem;
+  width: var(--size-dot);
+  height: var(--size-dot);
   border-radius: var(--radius-pill);
   flex: none;
 }

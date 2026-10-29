@@ -10,6 +10,7 @@
 .logv__field,
 .logv__check {
   display: inline-flex;
+  min-height: var(--control-height);
   align-items: center;
   gap: var(--space-2);
   font-size: var(--text-small-size);
@@ -19,17 +20,13 @@
   min-height: var(--control-height);
   padding: 0 var(--space-3);
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border-strong);
+  border: var(--border-width) solid var(--color-border-strong);
   background: var(--color-surface);
   color: var(--color-text);
 }
-.logv__select:focus-visible,
-.logv__check input:focus-visible {
+.logv__select:focus-visible {
   outline: none;
   box-shadow: var(--shadow-focus);
-}
-.logv__check input {
-  accent-color: var(--color-accent);
 }
 .logv__download {
   text-decoration: none;
@@ -56,7 +53,7 @@
   gap: var(--space-2);
   min-height: var(--control-height);
   padding: 0 var(--space-3);
-  border: 1px solid var(--color-border-strong);
+  border: var(--border-width) solid var(--color-border-strong);
   border-radius: var(--radius-pill);
   background: var(--color-surface);
   color: var(--color-text);
@@ -98,7 +95,7 @@
   min-height: calc(var(--space-8) * 2);
   overflow-y: auto;
   padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface-sunken);
   font-family: var(--font-mono);

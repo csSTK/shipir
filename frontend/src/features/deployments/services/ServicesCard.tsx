@@ -2,7 +2,7 @@ import { Download, EllipsisVertical, Layers, Play, RotateCw } from 'lucide-react
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ApiError } from '../../../shared/api/client.ts'
-import { Button, Card, EmptyState, IconButton, Menu, Skeleton } from '../../../shared/ui/index.ts'
+import { Checkbox, Button, Card, EmptyState, IconButton, Menu, Skeleton } from '../../../shared/ui/index.ts'
 import { describeDeploymentError } from '../deploymentErrors.ts'
 import { useServiceAction, useServices, useSetProfiles, useStartAll, type ServiceAction } from './api.ts'
 import './services.css'
@@ -37,10 +37,7 @@ function ProfilePicker({ hostId, deploymentId, available, active }: { hostId: st
         <legend className="services__legend">{t('ServicesCard.activeProfiles')}</legend>
         <div className="services__chips">
           {names.map((name) => (
-            <label key={name} className="services__chip">
-              <input type="checkbox" checked={selected.includes(name)} onChange={() => toggle(name)} />
-              <span>{name}</span>
-            </label>
+            <Checkbox key={name} className="services__chip" label={name} checked={selected.includes(name)} onChange={() => toggle(name)} />
           ))}
         </div>
       </fieldset>

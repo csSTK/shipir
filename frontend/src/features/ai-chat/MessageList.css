@@ -7,7 +7,7 @@
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-3);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface-sunken);
 }
@@ -33,7 +33,7 @@
 .chat-bubble--assistant {
   align-self: flex-start;
   border-end-start-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   background: var(--color-surface);
 }
 
@@ -46,7 +46,7 @@
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-pill);
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   font-size: var(--text-caption-size);
   color: var(--color-text-muted);
 }
@@ -65,7 +65,7 @@
   width: min(35rem, 100%);
   box-sizing: border-box;
   padding: var(--space-4);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);

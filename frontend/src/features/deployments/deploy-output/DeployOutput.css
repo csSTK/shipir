@@ -22,7 +22,7 @@
 }
 .do__id {
   font-size: var(--text-small-size);
-  opacity: 0.65;
+  opacity: var(--opacity-quiet);
 }
 .do__body {
   position: relative;
@@ -45,7 +45,7 @@
   box-shadow: var(--shadow-focus);
 }
 .do__empty {
-  opacity: 0.6;
+  opacity: var(--opacity-dimmed);
 }
 .do__jump {
   position: absolute;
@@ -53,7 +53,7 @@
   bottom: var(--space-3);
   font: inherit;
   font-size: var(--text-small-size);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   padding: var(--space-2) var(--space-3);
   border: 0;
   border-radius: var(--radius-pill);
@@ -74,7 +74,7 @@
 @keyframes do-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(var(--space-1));
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -88,6 +88,6 @@
 }
 @media (prefers-contrast: more) {
   .do__log {
-    outline: 1px solid var(--color-text);
+    outline: var(--border-width) solid var(--color-text);
   }
 }

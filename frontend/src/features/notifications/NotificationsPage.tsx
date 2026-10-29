@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Bell, CircleArrowDown, CircleArrowUp, CircleX, GitBranch, HeartPulse, PackageCheck, type LucideIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { Button, EmptyState, PageHeader, Skeleton } from '../../shared/ui/index.ts'
+import { Checkbox, Button, EmptyState, PageHeader, Skeleton } from '../../shared/ui/index.ts'
 import {
   NOTIFICATION_TYPE_LABELS,
   useMarkAllRead,
@@ -111,10 +111,7 @@ export function NotificationsPage() {
         title={t('NotificationsPage.notifications')}
         actions={
           <>
-            <label className="notifs__filter">
-              <input type="checkbox" checked={unreadOnly} onChange={(event) => setUnreadOnly(event.target.checked)} />
-              {t('NotificationsPage.unreadOnly')}
-            </label>
+            <Checkbox className="notifs__filter" label={t('NotificationsPage.unreadOnly')} checked={unreadOnly} onChange={(event) => setUnreadOnly(event.target.checked)} />
             <Button disabled={markAll.isPending} onClick={() => markAll.mutate()}>
               {t('NotificationsPage.markAllAsRead')}
             </Button>

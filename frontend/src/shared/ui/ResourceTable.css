@@ -30,7 +30,7 @@
 .rtable__scroll {
   overflow: auto;
   max-height: var(--rtable-max-height, 70vh);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
 }
@@ -46,7 +46,7 @@
   padding: var(--rt-pad-y) var(--rt-pad-x);
   text-align: left;
   vertical-align: middle;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: var(--border-width) solid var(--color-border);
   overflow: hidden;
   background: var(--color-surface);
 }
@@ -89,7 +89,7 @@
   padding-block: var(--space-1);
   padding-inline: var(--space-2);
   overflow: visible;
-  border-left: 1px solid var(--color-border);
+  border-left: var(--border-width) solid var(--color-border);
 }
 .rtable__table th.rtable__actions-cell {
   z-index: calc(var(--z-sticky) + 1);
@@ -140,8 +140,8 @@
 }
 .rtable__arrow {
   display: inline-flex;
-  width: 0.875rem;
-  height: 0.875rem;
+  width: var(--size-icon-xs);
+  height: var(--size-icon-xs);
 }
 
 /* Resize handle: wide invisible hit area, thin line on hover/focus/drag */
@@ -161,7 +161,7 @@
   position: absolute;
   inset-block: var(--space-2);
   left: 50%;
-  width: 2px;
+  width: var(--border-width-thick);
   border-radius: var(--radius-pill);
   transform: translateX(-50%);
   background: var(--color-border-strong);

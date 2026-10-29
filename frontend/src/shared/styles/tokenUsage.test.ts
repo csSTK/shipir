@@ -58,6 +58,46 @@ const countsFor = (rule: Rule): Record<string, number> =>
     }),
   )
 
+// Raw-literal rules (shipr-ycvc.44): border/outline widths, width/height/min-* sizes, grid tracks, translate offsets,
+// decimal opacity, numeric font-weight and stroke-width must come from tokens. Key: `<rule> <file>` -> offending lines.
+// Allowlist entries are legitimate literals only; a stale entry (count no longer matches) fails the test.
+type LiteralRule = 'border-width' | 'size' | 'grid-track' | 'translate' | 'opacity' | 'font-weight' | 'stroke-width'
+
+const decl = (names: string, value: string) => new RegExp(`(?:^|[;{\\s])(?:${names})\\s*:[^;{}]*?${value}[^;{}]*`, 'gim')
+const literalPatterns: Record<LiteralRule, RegExp> = {
+  'border-width': decl('border(?:-(?:top|right|bottom|left|inline|block)(?:-(?:start|end))?)?(?:-width)?|outline(?:-width)?', '(?<![\\w.-])\\d*\\.?\\d+px'),
+  size: decl('width|height|min-width|min-height', '(?<![\\w.-])\\d*\\.?\\d+px'),
+  'grid-track': decl('grid-template-(?:columns|rows)|grid-auto-(?:columns|rows)', '(?<![\\w.-])\\d*\\.?\\d+px'),
+  translate: /(?:^|[;{\s])(?:transform|translate)\s*:[^;{}]*?translate[XYZ]?\([^)]*?\d+(?:\.\d+)?px[^;{}]*/gim,
+  opacity: decl('opacity', '\\s*0?\\.\\d+'),
+  'font-weight': decl('font-weight', '(?<![\\w-])(?:\\d{3}|bold|bolder|lighter)\\b'),
+  'stroke-width': decl('stroke-width', '\\s*\\d'),
+}
+const literalHits = (rule: LiteralRule, css: string): string[] =>
+  [...strip(css).matchAll(literalPatterns[rule])].map((m) => m[0].replace(/^[;{\s]+/, '').trim())
+
+// Visually-hidden pattern (position absolute, 1px box, clip-path) is a fixed accessibility idiom, not a design size;
+// the 1px table cell is the shrink-to-fit trick for the sticky actions column.
+// Square icon boxes (width == height, same rem/em literal in one rule) must use --size-icon-*.
+const iconBoxHits = (css: string): string[] =>
+  [...strip(css).matchAll(/\{[^{}]*\}/g)].flatMap(([block]) => {
+    const w = block.match(/(?<![\w-])width\s*:\s*(\d*\.?\d+(?:rem|em))\s*;/i)?.[1]
+    const h = block.match(/(?<![\w-])height\s*:\s*(\d*\.?\d+(?:rem|em))\s*;/i)?.[1]
+    return w && w === h ? [`${w} x ${h}`] : []
+  })
+// Key: file -> count. Allowlisted entries are control internals, not icons.
+const iconBoxAllowlist: Record<string, number> = {
+  '/shared/ui/Button.css': 1, // spinner sized in em so it scales with the button's font size
+  '/shared/ui/Switch.css': 1, // switch thumb, control internal
+}
+
+const literalAllowlist: Record<string, number> = {
+  'size /features/ai-chat/AssistantDock.css': 2, // visually-hidden live region
+  'size /features/ai-chat/ChatPage.css': 2, // visually-hidden composer label
+  'size /shared/ui/FormField.css': 2, // visually-hidden bare label
+  'size /shared/ui/ResourceTable.css': 3, // visually-hidden .rtable__sr (2) + shrink-to-fit actions cell width (1)
+}
+
 describe('design token usage', () => {
   it('scans enough non-empty stylesheets (never vacuous)', () => {
     expect(allSheets.length).toBeGreaterThan(MIN_SHEETS)
@@ -202,5 +242,50 @@ describe('design token usage', () => {
       const rawBorders = [...strip(dock!.css).matchAll(/border(?:-[a-z]+)?\s*:[^;{}]*?\b\d+px\b[^;{}]*/gi)].map((m) => m[0])
       expect(rawBorders).toEqual([])
     })
+  })
+
+  it('literal scanners catch raw values and ignore tokens', () => {
+    const h = literalHits
+    expect(h('border-width', '.a { border: 1px solid var(--color-border); }')).toHaveLength(1)
+    expect(h('border-width', '.a { border-top: 2px dashed red; outline: 1px solid red; border-left-width: 3px; }')).toHaveLength(3)
+    expect(h('border-width', '.a { border: var(--border-width) solid red; border-radius: 4px; border-top-left-radius: 4px; outline-offset: 2px; }')).toEqual([])
+    expect(h('size', '.a { width: 16px; min-height: 2px; }\n.b { height: 1px; }')).toHaveLength(3)
+    expect(h('size', '.a { width: var(--size-icon); max-width: 10px; line-height: 1px; border-width: 0; }')).toEqual([])
+    expect(h('grid-track', '.a { grid-template-columns: minmax(0, 1fr) 90px auto; }')).toHaveLength(1)
+    expect(h('grid-track', '.a { grid-template-columns: repeat(2, 1fr); }')).toEqual([])
+    expect(h('translate', '.a { transform: translateY(4px); }')).toHaveLength(1)
+    expect(h('translate', '.a { transform: translate(-50%, 4px) scale(1); }')).toHaveLength(1)
+    expect(h('translate', '.a { transform: translateY(var(--space-1)) rotate(4deg); }')).toEqual([])
+    expect(h('opacity', '.a { opacity: 0.6; }\n.b { opacity: .5; }')).toHaveLength(2)
+    expect(h('opacity', '.a { opacity: var(--opacity-dimmed); opacity: 0; opacity: 1; }')).toEqual([])
+    expect(h('font-weight', '.a { font-weight: 600; font-weight: bold; }')).toHaveLength(2)
+    expect(h('font-weight', '.a { font-weight: var(--weight-semibold); font-weight: inherit; }')).toEqual([])
+    expect(h('stroke-width', '.a { stroke-width: 2; }')).toHaveLength(1)
+    expect(h('stroke-width', '.a { stroke-width: var(--border-width); }')).toEqual([])
+  })
+
+  for (const rule of Object.keys(literalPatterns) as LiteralRule[]) {
+    it(`has no raw ${rule} literals outside shared/styles beyond the allowlist`, () => {
+      const actual = Object.fromEntries(
+        checked.flatMap((s) => {
+          const n = literalHits(rule, s.css).length
+          return n > 0 ? [[`${rule} ${s.path}`, n] as const] : []
+        }),
+      )
+      const allowed = Object.fromEntries(Object.entries(literalAllowlist).filter(([k]) => k.startsWith(`${rule} `)))
+      expect(actual).toEqual(allowed)
+    })
+  }
+
+  it('icon box scanner flags square rem/em boxes only', () => {
+    expect(iconBoxHits('.a { width: 1.5rem; height: 1.5rem; }')).toHaveLength(1)
+    expect(iconBoxHits('.a { width: 1.5rem; height: 2rem; }')).toEqual([])
+    expect(iconBoxHits('.a { width: var(--size-icon-lg); height: var(--size-icon-lg); }')).toEqual([])
+    expect(iconBoxHits('.a { min-width: 1rem; line-height: 1rem; }')).toEqual([])
+  })
+
+  it('has no square rem/em icon boxes outside shared/styles beyond the allowlist', () => {
+    const actual = Object.fromEntries(checked.flatMap((s) => (iconBoxHits(s.css).length ? [[s.path, iconBoxHits(s.css).length] as const] : [])))
+    expect(actual).toEqual(iconBoxAllowlist)
   })
 })

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Dialog } from '../../shared/ui/index.ts'
+import { Button, Checkbox, Dialog } from '../../shared/ui/index.ts'
 import { formatSize } from './format.ts'
 import { describePruneError, usePrune, usePrunePreview, type ImagePruneMode, type PruneGroup, type PruneResult } from './prune.ts'
 import { useTranslation } from 'react-i18next'
@@ -80,9 +80,7 @@ function PruneContent({ hostId, onClose }: { hostId: string; onClose: () => void
         <>
           <fieldset className="prune__options">
             <legend className="prune__legend">{t('PruneDialog.remove')}</legend>
-            <label className="prune__check">
-              <input type="checkbox" checked={containers} onChange={(e) => setContainers(e.target.checked)} /> {t('PruneDialog.stoppedContainers')}
-            </label>
+            <Checkbox className="prune__check" label={t('PruneDialog.stoppedContainers')} checked={containers} onChange={(e) => setContainers(e.target.checked)} />
             <label className="prune__check">
               {t('PruneDialog.images')}
               <select value={images} onChange={(e) => setImages(e.target.value as ImagePruneMode | 'NONE')} aria-label={t('PruneDialog.images')}>
@@ -91,17 +89,16 @@ function PruneContent({ hostId, onClose }: { hostId: string; onClose: () => void
                 <option value="UNUSED">{t('PruneDialog.allUnused')}</option>
               </select>
             </label>
-            <label className="prune__check">
-              <input type="checkbox" checked={volumes} onChange={(e) => setVolumes(e.target.checked)} /> {t('PruneDialog.unusedVolumes')}
-            </label>
+            <Checkbox className="prune__check" label={t('PruneDialog.unusedVolumes')} checked={volumes} onChange={(e) => setVolumes(e.target.checked)} />
             {volumes && (
-              <label className="prune__check prune__check--nested">
-                <input type="checkbox" checked={includeManaged} onChange={(e) => setIncludeManaged(e.target.checked)} /> {t('PruneDialog.includeVolumesOfManagedDeployments')}
-              </label>
+              <Checkbox
+                className="prune__check prune__check--nested"
+                label={t('PruneDialog.includeVolumesOfManagedDeployments')}
+                checked={includeManaged}
+                onChange={(e) => setIncludeManaged(e.target.checked)}
+              />
             )}
-            <label className="prune__check">
-              <input type="checkbox" checked={networks} onChange={(e) => setNetworks(e.target.checked)} /> {t('PruneDialog.unusedNetworks')}
-            </label>
+            <Checkbox className="prune__check" label={t('PruneDialog.unusedNetworks')} checked={networks} onChange={(e) => setNetworks(e.target.checked)} />
           </fieldset>
           {preview.isPending && <p className="prune__text">{t('PruneDialog.calculatingPreview')}</p>}
           {preview.isError && (

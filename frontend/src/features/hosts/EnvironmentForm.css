@@ -81,7 +81,7 @@
   min-height: var(--control-height);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
-  border: 1px dashed var(--color-border-strong);
+  border: var(--border-width) dashed var(--color-border-strong);
   font-size: var(--text-body-size);
   font-weight: var(--weight-regular);
   color: var(--color-text-muted);

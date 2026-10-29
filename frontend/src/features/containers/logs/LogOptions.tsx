@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Download } from 'lucide-react'
-import { Button, Toolbar } from '../../../shared/ui/index.ts'
+import { Checkbox, Button, Toolbar } from '../../../shared/ui/index.ts'
 import type { TailOption } from './logStream.ts'
 import { useTranslation } from 'react-i18next'
 import i18n from 'i18next'
@@ -35,10 +35,7 @@ export function LogOptions<T extends TailOption>({ tails, tail, onTail, timestam
             ))}
           </select>
         </label>
-        <label className="logv__check">
-          <input type="checkbox" checked={timestamps} onChange={(e) => onTimestamps(e.target.checked)} />
-          <span>{tr('LogOptions.timestamps')}</span>
-        </label>
+        <Checkbox className="logv__check" label={tr('LogOptions.timestamps')} checked={timestamps} onChange={(e) => onTimestamps(e.target.checked)} />
         {children}
         {downloadHref ? (
           <Button asChild size="sm" className="logv__download">

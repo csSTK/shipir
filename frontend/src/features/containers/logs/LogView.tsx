@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { ArrowDown, ChevronDown, ChevronUp } from 'lucide-react'
-import { Button, IconButton, SearchField, Toolbar } from '../../../shared/ui/index.ts'
+import { Checkbox, Button, IconButton, SearchField, Toolbar } from '../../../shared/ui/index.ts'
 import type { LogLine } from './logStream.ts'
 import { findMatches, type MatchRange } from './logSearch.ts'
 import { useTranslation } from 'react-i18next'
@@ -144,10 +144,7 @@ export function LogView({ lines, label, emptyText, truncated = false, services, 
             <IconButton icon={ChevronDown} aria-label={tr('LogView.nextMatch')} onClick={() => step(1)} disabled={total === 0} />
           </>
         )}
-        <label className="logv__check">
-          <input type="checkbox" checked={stderrOnly} onChange={(e) => setStderrOnly(e.target.checked)} />
-          <span>{tr('LogView.stderrOnly')}</span>
-        </label>
+        <Checkbox className="logv__check" label={tr('LogView.stderrOnly')} checked={stderrOnly} onChange={(e) => setStderrOnly(e.target.checked)} />
         {filtered && (
           <>
             <span className="logv__note">{tr('LogView.showingLengthOfLength2Lines', { shown: visible.length, total: lines.length })}</span>

@@ -7,17 +7,17 @@
 .cfiles__crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); font-size: var(--text-small-size); }
 .cfiles__crumb { background: none; border: 0; padding: var(--space-1) var(--space-2); color: var(--color-text-muted); cursor: pointer; font: inherit; transition: color var(--duration-fast) var(--ease-out); }
 .cfiles__crumb:hover { color: var(--color-text); }
-.cfiles__crumb:active { opacity: 0.6; }
+.cfiles__crumb:active { opacity: var(--opacity-dimmed); }
 .cfiles__crumb--current { color: var(--color-text); font-weight: var(--weight-semibold); cursor: default; }
 .cfiles__crumb + .cfiles__crumb::before { content: '/'; color: var(--color-text-subtle); margin-right: var(--space-2); }
 .cfiles__upload { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; font-size: var(--text-small-size); }
-.cfiles__upload progress { flex: 1; min-width: 120px; accent-color: var(--color-accent); }
+.cfiles__upload progress { flex: 1; min-width: var(--size-progress-min); accent-color: var(--color-accent); }
 .cfiles__done, .cfiles__muted, .cfiles__meta { color: var(--color-text-muted); font-size: var(--text-small-size); }
 .cfiles__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.cfiles__item { display: grid; grid-template-columns: minmax(0, 1fr) 90px 170px auto; gap: var(--space-3); align-items: center; padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border); }
+.cfiles__item { display: grid; grid-template-columns: minmax(0, 1fr) var(--size-file-col-size) var(--size-file-col-date) auto; gap: var(--space-3); align-items: center; padding: var(--space-2) 0; border-bottom: var(--border-width) solid var(--color-border); }
 .cfiles__name { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .cfiles__name--dir { background: none; border: 0; padding: 0; text-align: left; font: inherit; font-weight: var(--weight-semibold); color: var(--color-text); cursor: pointer; transition: opacity var(--duration-fast) var(--ease-out); }
-.cfiles__name--dir:active { opacity: 0.6; }
+.cfiles__name--dir:active { opacity: var(--opacity-dimmed); }
 @media (max-width: 640px) {
   .cfiles__item { grid-template-columns: minmax(0, 1fr) auto; }
   .cfiles__meta { display: none; }

@@ -1,7 +1,7 @@
 import { KeyRound, Pencil, Trash2, Users } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { ApiError } from '../../shared/api/client.ts'
-import { Button, ConfirmDialog, Dialog, ResourceTable, TextField, type ResourceColumn, type RowActions } from '../../shared/ui/index.ts'
+import { Checkbox, Button, ConfirmDialog, Dialog, ResourceTable, TextField, type ResourceColumn, type RowActions } from '../../shared/ui/index.ts'
 import {
   useCreateTeam,
   useDeleteTeam,
@@ -131,10 +131,7 @@ function MembersDialog({ team, onClose }: { team: Team; onClose: () => void }) {
         <fieldset className="settings__group">
           <legend className="settings__legend">{tr('TeamsSettingsPage.usersInThisTeam')}</legend>
           {users.data.map((u) => (
-            <label key={u.id} className="settings__check">
-              <input type="checkbox" checked={selected.includes(u.id)} onChange={() => toggle(u.id)} />
-              {u.username}
-            </label>
+            <Checkbox key={u.id} label={u.username} checked={selected.includes(u.id)} onChange={() => toggle(u.id)} />
           ))}
         </fieldset>
       )}

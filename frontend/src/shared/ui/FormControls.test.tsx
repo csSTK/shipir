@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Select, Switch, TextField } from './index.ts'
+import { Checkbox, Select, Switch, TextField } from './index.ts'
 
 afterEach(cleanup)
 
@@ -76,5 +76,27 @@ describe('Switch', () => {
     const description = screen.getByRole('switch', { name: 'Enabled' }).getAttribute('aria-describedby') ?? ''
     expect(description).toContain('extra')
     expect(screen.getByRole('switch')).toHaveAccessibleDescription(/Explains it/)
+  })
+})
+
+describe('Checkbox', () => {
+  it('is a checkbox named by its label and reports changes', () => {
+    const onChange = vi.fn()
+    render(<Checkbox label="Remove volumes" checked={false} onChange={onChange} />)
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Remove volumes' }))
+    expect(onChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('reflects the checked state and can be disabled', () => {
+    render(<Checkbox label="Force" checked readOnly disabled />)
+    const box = screen.getByLabelText('Force')
+    expect(box).toBeChecked()
+    expect(box).toBeDisabled()
+  })
+
+  it('forwards className to the row and extra props to the input', () => {
+    const { container } = render(<Checkbox label="Profile" className="chip" name="profile" defaultChecked />)
+    expect(container.querySelector('label.chip')).not.toBeNull()
+    expect(screen.getByRole('checkbox')).toHaveAttribute('name', 'profile')
   })
 })

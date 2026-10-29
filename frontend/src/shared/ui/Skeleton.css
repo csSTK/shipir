@@ -8,7 +8,7 @@
 }
 @keyframes ui-pulse {
   50% {
-    opacity: 0.5;
+    opacity: var(--opacity-disabled);
   }
 }
 @media (prefers-reduced-motion: reduce) {

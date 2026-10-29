@@ -1,0 +1,72 @@
+:where(.ui-checkbox) {
+  /* Zero specificity: feature classes passed as className set layout and size regardless of stylesheet order. */
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: calc(var(--control-height) + var(--space-half));
+  font-size: var(--text-body-size);
+  cursor: pointer;
+}
+/* Invisible input covers the whole row: the hit area is the row, at least 44px tall. The extra
+   specificity beats feature classes that size a bare `input` inside their own wrapper. */
+.ui-checkbox .ui-checkbox__input[type='checkbox'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.ui-checkbox__box {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-on-accent);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    transform var(--duration-press) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+.ui-checkbox__mark {
+  width: calc(var(--size-icon-md) * 0.75);
+  height: calc(var(--size-icon-md) * 0.75);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+.ui-checkbox__input:checked + .ui-checkbox__box {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+.ui-checkbox__input:checked + .ui-checkbox__box .ui-checkbox__mark {
+  opacity: 1;
+}
+.ui-checkbox__input:active:not(:disabled) + .ui-checkbox__box {
+  transform: scale(var(--press-scale));
+}
+.ui-checkbox__input:focus-visible + .ui-checkbox__box {
+  box-shadow: var(--shadow-focus);
+}
+.ui-checkbox__input:disabled {
+  cursor: not-allowed;
+}
+.ui-checkbox__input:disabled + .ui-checkbox__box,
+.ui-checkbox__input:disabled ~ .ui-checkbox__label {
+  opacity: var(--opacity-dimmed);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-checkbox__box,
+  .ui-checkbox__mark {
+    transition: none;
+  }
+  .ui-checkbox__input:active:not(:disabled) + .ui-checkbox__box {
+    transform: none;
+  }
+}

@@ -6,7 +6,7 @@
   gap: var(--space-2);
   min-height: var(--control-height);
   padding: 0 var(--space-4);
-  border: 1px solid transparent;
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-sm);
   font: inherit;
   font-size: var(--text-small-size);
@@ -31,7 +31,7 @@
   box-shadow: var(--shadow-focus);
 }
 .ui-btn:disabled {
-  opacity: 0.5;
+  opacity: var(--opacity-disabled);
   cursor: not-allowed;
 }
 .ui-btn[aria-busy='true'] {
@@ -87,7 +87,7 @@ a.ui-btn {
 .ui-btn__spinner {
   width: 1em;
   height: 1em;
-  border: 2px solid var(--btn-fg, var(--color-text));
+  border: var(--border-width-thick) solid var(--btn-fg, var(--color-text));
   border-right-color: transparent;
   border-radius: var(--radius-pill);
   animation: ui-spin var(--duration-spin) linear infinite;

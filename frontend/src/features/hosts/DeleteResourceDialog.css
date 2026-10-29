@@ -16,9 +16,3 @@
   cursor: pointer;
   user-select: none;
 }
-.delres__check input {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  accent-color: var(--color-accent);
-}

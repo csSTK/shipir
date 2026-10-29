@@ -24,7 +24,7 @@
 }
 .tschart__grid {
   stroke: var(--color-border);
-  stroke-width: 1;
+  stroke-width: var(--border-width);
 }
 .tschart__label {
   fill: var(--color-text-subtle);
@@ -34,22 +34,22 @@
 .tschart__line {
   fill: none;
   stroke: var(--series-color);
-  stroke-width: 2;
+  stroke-width: var(--border-width-thick);
   stroke-linejoin: round;
   stroke-linecap: round;
 }
 .tschart__area {
   fill: var(--series-color);
-  opacity: 0.1;
+  opacity: var(--opacity-faint);
 }
 .tschart__dot {
   fill: var(--series-color);
   stroke: var(--color-surface);
-  stroke-width: 2;
+  stroke-width: var(--border-width-thick);
 }
 .tschart__cursor {
   stroke: var(--color-border-strong);
-  stroke-width: 1;
+  stroke-width: var(--border-width);
 }
 .tschart__tip {
   position: absolute;
@@ -60,7 +60,7 @@
   gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
   background: var(--color-surface-raised);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-md);
   font-size: var(--text-small-size);
@@ -93,7 +93,7 @@
 .tschart__key {
   display: inline-block;
   width: var(--space-4);
-  height: 2px;
+  height: var(--border-width-thick);
   border-radius: var(--radius-pill);
 }
 .tschart__legend {

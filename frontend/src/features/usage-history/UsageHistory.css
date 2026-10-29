@@ -19,7 +19,7 @@
   transition: opacity var(--duration-fast) var(--ease-out);
 }
 .usage__body--busy {
-  opacity: 0.6;
+  opacity: var(--opacity-dimmed);
 }
 .usage__empty,
 .usage__note {
@@ -33,7 +33,7 @@
   gap: var(--space-3);
   padding: var(--space-5);
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
 }

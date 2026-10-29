@@ -61,5 +61,5 @@
   cursor: not-allowed;
 }
 .ui-switch__input:disabled + .ui-switch__track {
-  opacity: 0.5;
+  opacity: var(--opacity-disabled);
 }

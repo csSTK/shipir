@@ -1,7 +1,7 @@
 import { Pencil, Send, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { ApiError } from '../../shared/api/client.ts'
-import { Badge, Button, ConfirmDialog, Dialog, ResourceTable, Switch, TextField, type ResourceColumn, type RowActions } from '../../shared/ui/index.ts'
+import { Checkbox, Badge, Button, ConfirmDialog, Dialog, ResourceTable, Switch, TextField, type ResourceColumn, type RowActions } from '../../shared/ui/index.ts'
 import {
   WEBHOOK_EVENT_LABELS,
   useCreateWebhook,
@@ -98,10 +98,7 @@ function WebhookDialog({ webhook, onClose }: { webhook: Webhook | null; onClose:
         <fieldset className="settings__group">
           <legend className="settings__legend">{tr('WebhooksSettingsPage.events')}</legend>
           {EVENT_TYPES.map((type) => (
-            <label key={type} className="settings__check">
-              <input type="checkbox" checked={events.includes(type)} onChange={() => toggle(type)} />
-              {WEBHOOK_EVENT_LABELS[type]}
-            </label>
+            <Checkbox key={type} label={WEBHOOK_EVENT_LABELS[type]} checked={events.includes(type)} onChange={() => toggle(type)} />
           ))}
         </fieldset>
         <Switch label={tr('WebhooksSettingsPage.enabled')} checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />

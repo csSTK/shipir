@@ -23,7 +23,7 @@
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-3) 0;
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-width) solid var(--color-border);
 }
 .tokens__item:first-child {
   border-top: 0;

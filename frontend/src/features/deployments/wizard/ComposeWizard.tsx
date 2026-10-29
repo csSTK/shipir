@@ -17,7 +17,7 @@ import {
   type WizardState,
 } from './model.ts'
 import './wizard.css'
-import { Button, Select, Switch, TextField } from '../../../shared/ui/index.ts'
+import { Checkbox, Button, Select, Switch, TextField } from '../../../shared/ui/index.ts'
 import { useTranslation } from 'react-i18next'
 
 function remove<T>(list: T[], index: number): T[] {
@@ -34,15 +34,14 @@ function Toggle({ name, label, options, selected, onChange }: { name: string; la
       <legend>{label}</legend>
       <div className="wz-chips">
         {options.map((o) => (
-          <label key={o} className="wz-chip">
-            <input
-              type="checkbox"
-              name={name}
-              checked={selected.includes(o)}
-              onChange={(e) => onChange(e.target.checked ? [...selected, o] : selected.filter((x) => x !== o))}
-            />
-            <span>{o}</span>
-          </label>
+          <Checkbox
+            key={o}
+            className="wz-chip"
+            label={o}
+            name={name}
+            checked={selected.includes(o)}
+            onChange={(e) => onChange(e.target.checked ? [...selected, o] : selected.filter((x) => x !== o))}
+          />
         ))}
       </div>
     </fieldset>

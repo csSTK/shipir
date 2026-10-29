@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { FileText, GitBranch, PackagePlus, Play, Square, Trash2 } from 'lucide-react'
 import { describeResourceError } from '../hosts/format.ts'
 import { useCurrentUser } from '../auth/index.ts'
-import { Badge, Button, ConfirmDialog, PageHeader, ResourceTable, type MenuEntry, type ResourceColumn, type RowActions } from '../../shared/ui/index.ts'
+import { Checkbox, Badge, Button, ConfirmDialog, PageHeader, ResourceTable, type MenuEntry, type ResourceColumn, type RowActions } from '../../shared/ui/index.ts'
 import {
   useDeployDeployment,
   useManagedDeployments,
@@ -261,9 +261,7 @@ export function DeploymentsPage() {
           open onOpenChange={(open) => !open && closeRemove()}
         >
           <Trans t={t} i18nKey="DeploymentsPage.stopAndRemoveTheContainers" values={{ removing }} components={{ strong: <strong />, code: <code /> }} />
-          <label className="deployments__check">
-            <input type="checkbox" checked={removeVolumes} onChange={(e) => setRemoveVolumes(e.target.checked)} /> {t('DeploymentsPage.alsoRemoveVolumes')}
-          </label>
+          <Checkbox className="deployments__check" label={t('DeploymentsPage.alsoRemoveVolumes')} checked={removeVolumes} onChange={(e) => setRemoveVolumes(e.target.checked)} />
           {removeVolumes ? t('DeploymentsPage.dataInItsVolumesWill') : t('DeploymentsPage.itsVolumesAreKept')}
         </ConfirmDialog>
       )}

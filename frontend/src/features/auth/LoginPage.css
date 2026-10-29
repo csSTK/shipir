@@ -31,8 +31,8 @@
 .auth-brand__mark {
   display: grid;
   place-items: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: var(--size-icon-3xl);
+  height: var(--size-icon-3xl);
   border-radius: var(--radius-sm);
   background: var(--color-accent);
   color: var(--color-on-accent);
@@ -69,7 +69,7 @@
   min-height: var(--control-height);
   padding: 0 var(--space-3);
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border-strong);
+  border: var(--border-width) solid var(--color-border-strong);
   background: var(--color-surface);
   font-size: var(--text-body-size);
   font-weight: var(--weight-regular);
@@ -85,7 +85,7 @@
 }
 
 .login__field input:disabled {
-  opacity: 0.6;
+  opacity: var(--opacity-dimmed);
 }
 
 .login__error {

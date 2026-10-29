@@ -6,7 +6,7 @@
 }
 .ed-yaml__frame {
   overflow: hidden;
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-md);
   transition: border-color var(--duration-fast) ease;
 }
@@ -21,7 +21,7 @@
   place-items: center;
   height: 100%;
   font-size: var(--text-small-size);
-  opacity: 0.6;
+  opacity: var(--opacity-dimmed);
 }
 .ed-yaml__error {
   font-size: var(--text-small-size);
@@ -67,7 +67,7 @@
   font: inherit;
   font-size: var(--text-body-size);
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface-sunken);
   color: inherit;
@@ -95,7 +95,7 @@
 .ed-hint {
   margin: 0;
   font-size: var(--text-small-size);
-  opacity: 0.7;
+  opacity: var(--opacity-muted);
 }
 @media (max-width: 600px) {
   .ed-env__row {

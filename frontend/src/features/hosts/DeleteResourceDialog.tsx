@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ConfirmDialog } from '../../shared/ui/index.ts'
+import { Checkbox, ConfirmDialog } from '../../shared/ui/index.ts'
 import { resourceNoun, type ResourceKind } from './createResource.ts'
 import { describeDeleteError } from './deleteResource.ts'
 import { useTranslation } from 'react-i18next'
@@ -46,9 +46,7 @@ export function DeleteResourceDialog({ kind, name, forceOption = false, warning 
         </span>
       )}
       {forceOption && (
-        <label className="delres__check">
-          <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} /> {t('DeleteResourceDialog.forceStopAndRemove')}
-        </label>
+        <Checkbox className="delres__check" label={t('DeleteResourceDialog.forceStopAndRemove')} checked={force} onChange={(e) => setForce(e.target.checked)} />
       )}
     </ConfirmDialog>
   )

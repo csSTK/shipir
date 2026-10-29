@@ -42,12 +42,6 @@
   cursor: pointer;
   user-select: none;
 }
-.deployments__check input {
-  width: 1rem;
-  height: 1rem;
-  margin: 0;
-  accent-color: var(--color-accent);
-}
 @media (prefers-reduced-motion: reduce) {
   .deployments__link:active {
     transform: none;

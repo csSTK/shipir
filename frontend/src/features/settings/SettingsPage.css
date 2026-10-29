@@ -28,20 +28,6 @@
   font-size: var(--text-small-size);
   font-weight: var(--weight-medium);
 }
-.settings__check {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: var(--control-height);
-  font-size: var(--text-body-size);
-  cursor: pointer;
-}
-.settings__check input {
-  width: 1.125rem;
-  height: 1.125rem;
-  margin: 0;
-  accent-color: var(--color-accent);
-}
 .settings__actions {
   display: flex;
   justify-content: flex-end;
