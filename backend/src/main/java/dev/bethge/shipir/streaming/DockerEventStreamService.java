@@ -1,8 +1,9 @@
 package dev.bethge.shipir.streaming;
 
-import dev.bethge.shipir.docker.DockerConnectionException;
+import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.client.DockerEventService;
+import dev.bethge.shipir.docker.client.ReconnectingEventStream;
 import dev.bethge.shipir.docker.dto.DockerEventDto;
 import dev.bethge.shipir.host.DockerHostRepository;
 import dev.bethge.shipir.host.HostEndpointResolver;
@@ -12,16 +13,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Service;
 
-import java.io.Closeable;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Predicate;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -61,7 +60,7 @@ public class DockerEventStreamService {
         int omitted;
         long nextSeq = 1;
         boolean closed;
-        Closeable current;
+        ReconnectingEventStream loop;
         ScheduledFuture<?> flush;
         DockerEventMessage lastStatus;
 
@@ -133,6 +132,7 @@ public class DockerEventStreamService {
                 first = stream == null;
                 if (first) {
                     stream = new HostStream(hostId);
+                    stream.loop = loopFor(stream);
                     streams.put(hostId, stream);
                 }
             }
@@ -244,112 +244,50 @@ public class DockerEventStreamService {
     }
 
     private void stop(HostStream stream) {
-        Closeable current;
         synchronized (stream) {
             stream.closed = true;
-            current = stream.current;
-            stream.current = null;
-            stream.notifyAll(); // wakes a worker waiting for the stream end or in backoff; never interrupted
+            stream.loop.stop(); // wakes a worker waiting for the stream end or in backoff and closes the stream
             if (stream.flush != null) {
                 stream.flush.cancel(false);
             }
             stream.pending.clear();
         }
-        closeQuietly(current);
     }
 
-    /** Worker: connect, wait for the stream to end, report, back off, repeat until closed. */
+    /** Worker: drives the shared reconnect loop; the listener turns its steps into STATUS frames. */
     private void run(HostStream stream) {
-        Duration delay = properties.reconnectInitial();
-        try {
-            while (!isClosed(stream)) {
-                CompletableFuture<Throwable> ended = new CompletableFuture<>();
-                String failure;
-                try {
-                    var host = hosts.findById(stream.hostId).orElse(null);
-                    if (host == null) {
-                        statusDisconnected(stream, DockerErrorCode.NOT_FOUND.name());
-                        drop(stream);
-                        return; // host is gone, retrying is pointless
-                    }
-                    if (isClosed(stream)) {
-                        return; // released during the lookup: the lookup finished, no stream is opened
-                    }
-                    Closeable handle = events.stream(stream.hostId, endpoints.endpointOf(host),
-                            event -> onEvent(stream, event), ended::complete);
-                    synchronized (stream) {
-                        if (stream.closed) {
-                            closeQuietly(handle);
-                            return;
-                        }
-                        stream.current = handle;
-                    }
-                    status(stream, DockerEventMessage.Status.CONNECTED, null);
-                    delay = properties.reconnectInitial();
-                    ended.whenComplete((end, error) -> {
-                        synchronized (stream) {
-                            stream.notifyAll();
-                        }
-                    });
-                    synchronized (stream) {
-                        while (!stream.closed && !ended.isDone()) {
-                            stream.wait();
-                        }
-                    }
-                    if (isClosed(stream)) {
-                        return;
-                    }
-                    failure = codeOf(ended.getNow(null));
-                } catch (DockerConnectionException e) {
-                    failure = e.getCode().name();
-                } catch (RuntimeException e) {
-                    // e.g. undecryptable TLS material or missing encryption key: no detail to the client
-                    log.warn("Docker event stream of host {} failed: {}", stream.hostId, e.getClass().getSimpleName());
-                    failure = "UNAVAILABLE";
-                }
-                synchronized (stream) {
-                    closeQuietly(stream.current);
-                    stream.current = null;
-                }
-                if (isClosed(stream)) {
-                    return;
-                }
-                statusDisconnected(stream, failure);
-                awaitBackoff(stream, delay);
-                if (isClosed(stream)) {
-                    return;
-                }
-                delay = delay.multipliedBy(2).compareTo(properties.reconnectMax()) > 0
-                        ? properties.reconnectMax() : delay.multipliedBy(2);
+        stream.loop.run();
+    }
+
+    private ReconnectingEventStream loopFor(HostStream stream) {
+        return new ReconnectingEventStream(stream.hostId, events, properties.reconnectInitial(),
+                properties.reconnectMax(), new ReconnectingEventStream.Listener() {
+            @Override
+            public Optional<DockerEndpoint> endpoint() {
+                return hosts.findById(stream.hostId).map(endpoints::endpointOf);
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
 
-    /** Sleeps for the backoff delay on the stream monitor; {@link #stop} wakes it early. */
-    private void awaitBackoff(HostStream stream, Duration delay) throws InterruptedException {
-        long deadline = System.nanoTime() + delay.toNanos();
-        synchronized (stream) {
-            long remaining;
-            while (!stream.closed && (remaining = deadline - System.nanoTime()) > 0) {
-                TimeUnit.NANOSECONDS.timedWait(stream, remaining);
+            @Override
+            public void onEvent(DockerEventDto event) {
+                DockerEventStreamService.this.onEvent(stream, event);
             }
-        }
-    }
 
-    /** A normal end of a stream we did not close means the daemon dropped us. */
-    private static String codeOf(Throwable end) {
-        if (end instanceof DockerConnectionException e) {
-            return e.getCode().name();
-        }
-        return end == null ? "UNREACHABLE" : "UNAVAILABLE";
-    }
+            @Override
+            public void onConnected() {
+                status(stream, DockerEventMessage.Status.CONNECTED, null);
+            }
 
-    private boolean isClosed(HostStream stream) {
-        synchronized (stream) {
-            return stream.closed;
-        }
+            @Override
+            public void onDisconnected(String code) {
+                statusDisconnected(stream, code);
+            }
+
+            @Override
+            public void onHostGone() {
+                statusDisconnected(stream, DockerErrorCode.NOT_FOUND.name());
+                drop(stream);
+            }
+        });
     }
 
     /** Removes a stream whose worker ended for good so a later SUBSCRIBE starts a fresh one. */
@@ -428,16 +366,5 @@ public class DockerEventStreamService {
 
     private void send(HostStream stream, Subscription sub, DockerEventMessage message) {
         sender.send(sub.sessionId, sub.subscriptionId, destination(stream.hostId), message);
-    }
-
-    private static void closeQuietly(Closeable c) {
-        if (c == null) {
-            return;
-        }
-        try {
-            c.close();
-        } catch (Exception e) {
-            // closing is best effort, the stream is gone either way
-        }
     }
 }

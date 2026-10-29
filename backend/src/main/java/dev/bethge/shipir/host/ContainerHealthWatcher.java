@@ -1,8 +1,9 @@
 package dev.bethge.shipir.host;
 
 import dev.bethge.shipir.common.security.SystemScope;
-import dev.bethge.shipir.docker.DockerConnectionException;
+import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.client.DockerEventService;
+import dev.bethge.shipir.docker.client.ReconnectingEventStream;
 import dev.bethge.shipir.docker.dto.DockerEventDto;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -13,15 +14,14 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.io.Closeable;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -29,7 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * with a non-zero exit code (exit 143, a plain SIGTERM stop, is ignored, as is any death preceded by a {@code kill} event with a terminating signal, i.e. a deliberate stop or kill) or reports {@code health_status: unhealthy}.
  *
  * <p>One worker (virtual thread) per host, started by {@link #sync()} and stopped when the host is deleted; a dropped
- * stream is reopened with exponential backoff. The same problem of the same container is reported once per
+ * stream is reopened with exponential backoff by the shared {@link ReconnectingEventStream}. The same problem of the same container is reported once per
  * {@code dedupe-window}, so a crash loop yields one event, not one per restart. Off with
  * {@code shipir.host.container-watch.enabled=false}.
  */
@@ -53,7 +53,7 @@ class ContainerHealthWatcher {
     private final ApplicationEventPublisher publisher;
     private final Clock clock;
     private final ContainerWatchProperties properties;
-    private final Map<UUID, Thread> workers = new ConcurrentHashMap<>();
+    private final Map<UUID, ReconnectingEventStream> workers = new ConcurrentHashMap<>();
     private final Map<String, Instant> lastReported = new ConcurrentHashMap<>();
     private final Map<String, Instant> killedAt = new ConcurrentHashMap<>();
 
@@ -75,8 +75,11 @@ class ContainerHealthWatcher {
         Set<UUID> current = new HashSet<>();
         for (DockerHost host : hosts.findAll()) {
             current.add(host.getId());
-            workers.computeIfAbsent(host.getId(), id ->
-                    Thread.ofVirtual().name("container-watch-" + id).start(() -> watch(id)));
+            workers.computeIfAbsent(host.getId(), id -> {
+                ReconnectingEventStream loop = watchLoop(id);
+                Thread.ofVirtual().name("container-watch-" + id).start(loop::run);
+                return loop;
+            });
         }
         Instant now = clock.instant();
         killedAt.entrySet().removeIf(e -> e.getValue().plus(KILL_WINDOW).isBefore(now)
@@ -85,7 +88,7 @@ class ContainerHealthWatcher {
             if (current.contains(id)) {
                 return false;
             }
-            workers.get(id).interrupt();
+            workers.get(id).stop();
             killedAt.keySet().removeIf(key -> key.startsWith(id + "/"));
             return true;
         });
@@ -98,41 +101,24 @@ class ContainerHealthWatcher {
 
     @PreDestroy
     void shutdown() {
-        workers.values().forEach(Thread::interrupt);
+        workers.values().forEach(ReconnectingEventStream::stop);
         workers.clear();
     }
 
-    private void watch(UUID hostId) {
-        Duration delay = properties.reconnectInitial();
-        try {
-            while (!Thread.currentThread().isInterrupted()) {
-                CompletableFuture<Throwable> ended = new CompletableFuture<>();
-                Closeable handle = null;
-                try {
-                    DockerHost host = hosts.findById(hostId).orElse(null);
-                    if (host == null) {
-                        return;
+    /** The shared reconnect loop of one host; this class only decides what an event means. */
+    private ReconnectingEventStream watchLoop(UUID hostId) {
+        return new ReconnectingEventStream(hostId, events, properties.reconnectInitial(), properties.reconnectMax(),
+                new ReconnectingEventStream.Listener() {
+                    @Override
+                    public Optional<DockerEndpoint> endpoint() {
+                        return hosts.findById(hostId).map(endpoints::endpointOf);
                     }
-                    handle = events.stream(hostId, endpoints.endpointOf(host), event -> handle(hostId, event),
-                            ended::complete);
-                    delay = properties.reconnectInitial();
-                    ended.get();
-                } catch (DockerConnectionException e) {
-                    // unreachable host: the health check reports it, we just retry
-                } catch (InterruptedException e) {
-                    return;
-                } catch (RuntimeException | java.util.concurrent.ExecutionException e) {
-                    log.warn("Container watch of host {} failed: {}", hostId, e.getClass().getSimpleName());
-                } finally {
-                    close(handle);
-                }
-                Thread.sleep(delay);
-                delay = delay.multipliedBy(2).compareTo(properties.reconnectMax()) > 0
-                        ? properties.reconnectMax() : delay.multipliedBy(2);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+
+                    @Override
+                    public void onEvent(DockerEventDto event) {
+                        handle(hostId, event);
+                    }
+                });
     }
 
     /** Turns one Docker event into at most one {@link ContainerProblemEvent}; package-private for tests. */
@@ -195,16 +181,5 @@ class ContainerHealthWatcher {
 
     private static String shortId(String id) {
         return id == null ? "unknown" : id.substring(0, Math.min(12, id.length()));
-    }
-
-    private static void close(Closeable c) {
-        if (c == null) {
-            return;
-        }
-        try {
-            c.close();
-        } catch (Exception e) {
-            // best effort, the stream is gone either way
-        }
     }
 }
