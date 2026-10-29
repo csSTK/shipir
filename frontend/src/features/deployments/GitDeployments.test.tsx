@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../shared/api/client.ts'
 import { AddDeploymentDialog } from './AddDeploymentDialog.tsx'
+import { deploymentCardAnswer } from '../../test/deploymentCards.ts'
 import { DeploymentDetailPage } from './DeploymentDetailPage.tsx'
 
 vi.mock('../../shared/realtime/stomp.ts', () => ({ subscribeToTopic: () => () => {} }))
@@ -61,11 +62,8 @@ function serve(role: string, overrides: Record<string, Handler> = {}, detail: un
       return role === 'ADMIN' ? Promise.resolve(credentials) : Promise.reject(new ApiError(403, 'no', 'FORBIDDEN'))
     }
     if (path === `${BASE}/s1`) return Promise.resolve(detail)
-    if (path === `${BASE}/s1/services`) return Promise.resolve({ services: ['web'], profiles: [] })
-    if (path === `${BASE}/s1/uptime-checks`) return Promise.resolve([])
-    if (path === `${BASE}/s1/webhook`) return Promise.resolve({ enabled: false, createdAt: null, rotatedAt: null })
-    if (path === `${BASE}/s1/versions`) return Promise.resolve(versions)
-    if (path.startsWith(`${BASE}/s1/files`)) return Promise.resolve([])
+    const card = deploymentCardAnswer(path, `${BASE}/s1`, versions)
+    if (card) return Promise.resolve(card.body)
     return Promise.reject(new ApiError(404, 'x', 'NOT_FOUND'))
   })
 }

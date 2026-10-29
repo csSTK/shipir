@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures/api.ts'
+import { expect, mockDeploymentCards, test } from './fixtures/api.ts'
 
 const SECRET = 'shp_abcd1234E2ESECRETVALUE'
 const WEBHOOK_TOKEN = 'shw_E2EWEBHOOKSECRET'
@@ -77,11 +77,7 @@ test('enables, rotates and disables the redeploy webhook with a one-time URL', a
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   api.mock('GET', BASE, { body: [] })
   api.mock('GET', `${BASE}/s1`, { body: deployment })
-  api.mock('GET', `${BASE}/s1/versions`, { body: [] })
-  api.mock('GET', `${BASE}/s1/files`, { body: [] })
-  api.mock('GET', `${BASE}/s1/webhook`, { body: { enabled: false, createdAt: null, rotatedAt: null } })
-  api.mock('GET', `${BASE}/s1/uptime-checks`, { body: [] })
-  api.mock('GET', `${BASE}/s1/services`, { body: { services: ['web'], profiles: [] } })
+  mockDeploymentCards(api, `${BASE}/s1`)
   const issued = { enabled: true, createdAt: '2026-10-25T10:00:00Z', rotatedAt: null, token: WEBHOOK_TOKEN, path: `/api/webhooks/deploy/${WEBHOOK_TOKEN}` }
   api.mock('PUT', `${BASE}/s1/webhook`, { body: issued })
   api.mock('POST', `${BASE}/s1/webhook/rotate`, { body: issued })
@@ -116,9 +112,8 @@ test('enables, rotates and disables the redeploy webhook with a one-time URL', a
   await expect(page.getByRole('dialog').getByLabel('Webhook URL')).toHaveValue(url)
   await page.getByRole('dialog').getByRole('button', { name: 'Done' }).click()
 
-  api.mock('GET', `${BASE}/s1/webhook`, { body: { enabled: false, createdAt: null, rotatedAt: null } })
-  api.mock('GET', `${BASE}/s1/uptime-checks`, { body: [] })
-  api.mock('GET', `${BASE}/s1/services`, { body: { services: ['web'], profiles: [] } })
+  // Back to the default card answers: the webhook reads as disabled again.
+  mockDeploymentCards(api, `${BASE}/s1`)
   await card.getByRole('button', { name: 'Disable' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Disable' }).click()
   await expect(card.getByText('Disabled')).toBeVisible()
@@ -130,8 +125,7 @@ test('viewers do not see the webhook card', async ({ page, api }) => {
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   api.mock('GET', BASE, { body: [] })
   api.mock('GET', `${BASE}/s1`, { body: deployment })
-  api.mock('GET', `${BASE}/s1/versions`, { body: [] })
-  api.mock('GET', `${BASE}/s1/files`, { body: [] })
+  mockDeploymentCards(api, `${BASE}/s1`)
   await page.goto('/environments/a/deployments/s1')
   await expect(page.getByRole('heading', { name: 'shop' })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Redeploy webhook' })).toHaveCount(0)

@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { expect, test } from './fixtures/api.ts'
+import { expect, mockDeploymentCards, test } from './fixtures/api.ts'
 
 const BASE = '/api/hosts/a/managed-deployments'
 const host = {
@@ -35,10 +35,7 @@ function mockCommon(api: import('./fixtures/api.ts').ApiMock, role: string) {
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   api.mock('GET', BASE, { body: [] })
   api.mock('GET', `${BASE}/s1`, { body: deployment })
-  api.mock('GET', `${BASE}/s1/webhook`, { body: { enabled: false, createdAt: null, rotatedAt: null } })
-  api.mock('GET', `${BASE}/s1/uptime-checks`, { body: [] })
-  api.mock('GET', `${BASE}/s1/services`, { body: { services: ['web'], profiles: [] } })
-  api.mock('GET', `${BASE}/s1/versions`, { body: [] })
+  mockDeploymentCards(api, `${BASE}/s1`)
 }
 
 /** The files endpoints share one path (tree vs. file by query), which the shared mock cannot tell apart: a small stateful stub. */

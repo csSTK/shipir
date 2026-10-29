@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures/api.ts'
+import { expect, mockDeploymentCards, test } from './fixtures/api.ts'
 
 const host = {
   id: 'a',
@@ -38,11 +38,7 @@ function mockPage(api: import('./fixtures/api.ts').ApiMock) {
   api.mock('GET', '/api/hosts/overview', { body: [host] })
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   api.mock('GET', `${BASE}/s1`, { body: deployment })
-  api.mock('GET', `${BASE}/s1/webhook`, { body: { enabled: false, createdAt: null, rotatedAt: null } })
-  api.mock('GET', `${BASE}/s1/uptime-checks`, { body: [] })
-  api.mock('GET', `${BASE}/s1/services`, { body: { services: ['web'], profiles: [] } })
-  api.mock('GET', `${BASE}/s1/versions`, { body: versions })
-  api.mock('GET', `${BASE}/s1/files`, { body: [] })
+  mockDeploymentCards(api, `${BASE}/s1`, versions)
   api.mock('GET', `${BASE}/s1/versions/v2`, {
     body: { ...versions[1], yaml: yaml.v2, baselineVersionId: 'v2', env: [{ key: 'KEEP', changed: false }, { key: 'GONE', changed: false }], removedKeys: [] },
   })

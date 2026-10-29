@@ -1,4 +1,4 @@
-import { expect, test, type ApiMock } from './fixtures/api.ts'
+import { expect, mockDeploymentCards, test, type ApiMock } from './fixtures/api.ts'
 
 const host = {
   id: 'a',
@@ -38,11 +38,7 @@ function mockCommon(api: ApiMock, role: string, detail: unknown = deployment) {
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   api.mock('GET', BASE, { body: [] })
   api.mock('GET', `${BASE}/s1`, { body: detail })
-  api.mock('GET', `${BASE}/s1/webhook`, { body: { enabled: false, createdAt: null, rotatedAt: null } })
-  api.mock('GET', `${BASE}/s1/uptime-checks`, { body: [] })
-  api.mock('GET', `${BASE}/s1/services`, { body: { services: ['web'], profiles: [] } })
-  api.mock('GET', `${BASE}/s1/versions`, { body: versions })
-  api.mock('GET', `${BASE}/s1/files`, { body: [] })
+  mockDeploymentCards(api, `${BASE}/s1`, versions)
 }
 
 test('operator enables image updates with a UTC window', async ({ page, api }) => {

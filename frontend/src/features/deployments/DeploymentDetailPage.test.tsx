@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../shared/api/client.ts'
+import { deploymentCardAnswer } from '../../test/deploymentCards.ts'
 import { DeploymentDetailPage } from './DeploymentDetailPage.tsx'
 
 vi.mock('../../shared/realtime/stomp.ts', () => ({ subscribeToTopic: () => () => {} }))
@@ -59,13 +60,10 @@ function serve(role: string, overrides: Record<string, Handler> = {}) {
     }
     if (path === '/auth/me') return Promise.resolve({ username: 'u', role, setupRequired: false })
     if (path === BASE) return Promise.resolve(deployment)
-    if (path === `${BASE}/services`) return Promise.resolve({ services: ['web'], profiles: [] })
-    if (path === `${BASE}/uptime-checks`) return Promise.resolve([])
-    if (path === `${BASE}/webhook`) return Promise.resolve({ enabled: false, createdAt: null, rotatedAt: null })
-    if (path === `${BASE}/versions`) return Promise.resolve(versions)
+    const card = deploymentCardAnswer(path, BASE, versions)
+    if (card) return Promise.resolve(card.body)
     const m = /\/versions\/([^/]+)$/.exec(path)
     if (m && details[m[1]]) return Promise.resolve(details[m[1]])
-    if (path.startsWith(`${BASE}/files`)) return Promise.resolve([])
     return Promise.reject(new ApiError(404, 'x', 'NOT_FOUND'))
   })
 }

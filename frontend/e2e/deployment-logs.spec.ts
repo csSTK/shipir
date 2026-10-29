@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures/api.ts'
+import { expect, mockDeploymentCards, test } from './fixtures/api.ts'
 import { mockBroker } from './fixtures/stomp.ts'
 
 const host = {
@@ -46,8 +46,7 @@ test.beforeEach(({ api }) => {
   api.mock('GET', '/api/hosts/a/containers', { body: [container('c1', 'shop-web-1', 'web'), container('c2', 'shop-db-1', 'db')] })
   api.mock('GET', BASE, { body: [] })
   api.mock('GET', `${BASE}/s1`, { body: deployment })
-  api.mock('GET', `${BASE}/s1/versions`, { body: [] })
-  api.mock('GET', `${BASE}/s1/files`, { body: [] })
+  mockDeploymentCards(api, `${BASE}/s1`)
 })
 
 const web = (seq: number, line: string, stream = 'STDOUT') => ({ seq, type: 'LINE', service: 'web', container: 'shop-web-1', containerId: 'c1', stream, line })

@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures/api.ts'
+import { expect, mockDeploymentCards, test } from './fixtures/api.ts'
 
 const BASE = '/api/hosts/a/managed-deployments'
 const UPTIME = `${BASE}/s1/uptime-checks`
@@ -48,10 +48,7 @@ function mockCommon(api: import('./fixtures/api.ts').ApiMock, role: string) {
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   api.mock('GET', BASE, { body: [] })
   api.mock('GET', `${BASE}/s1`, { body: deployment })
-  api.mock('GET', `${BASE}/s1/webhook`, { body: { enabled: false, createdAt: null, rotatedAt: null } })
-  api.mock('GET', `${BASE}/s1/versions`, { body: [] })
-  api.mock('GET', `${BASE}/s1/services`, { body: { services: ['web'], profiles: [] } })
-  api.mock('GET', `${BASE}/s1/files`, { body: [] })
+  mockDeploymentCards(api, `${BASE}/s1`)
 }
 
 test('lists checks without query string, adds one, shows a server error, deletes', async ({ page, api }) => {

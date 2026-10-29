@@ -28,6 +28,19 @@ function defaultFor(method: string, path: string): MockResponse | undefined {
 }
 
 /**
+ * The card endpoints of a managed deployment's detail page: services, uptime checks, webhook, versions and config files.
+ * Answers with empty defaults (`versions` is the spec's data). Call it before the spec's own mocks: a later mock() for the same path wins.
+ * A new card's endpoint goes here, so specs need no edit for it.
+ */
+export function mockDeploymentCards(api: ApiMock, deployment: string, versions: unknown[] = []): void {
+  api.mock('GET', `${deployment}/services`, { body: { services: ['web'], profiles: [] } })
+  api.mock('GET', `${deployment}/uptime-checks`, { body: [] })
+  api.mock('GET', `${deployment}/webhook`, { body: { enabled: false, createdAt: null, rotatedAt: null } })
+  api.mock('GET', `${deployment}/versions`, { body: versions })
+  api.mock('GET', `${deployment}/files`, { body: [] })
+}
+
+/**
  * Intercepts every `/api/**` request of a test. Specs register mocks;
  * a call without a mock answers 501 and fails the test afterwards.
  */
