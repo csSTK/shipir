@@ -1,20 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useQueries } from '@tanstack/react-query'
-import { ApiError, apiFetch } from '../../shared/api/client.ts'
+import { ApiError } from '../../shared/api/client.ts'
 import { Button, Dialog, Select } from '../../shared/ui/index.ts'
 import { useHosts, type Host } from '../hosts/api.ts'
 import { useManagedDeployments } from '../deployments/api.ts'
 import {
   useSaveSubjectPermissions,
   useSubjectPermissions,
-  useTeams,
-  TEAMS_KEY,
+  useUserTeams,
   type ManagedUser,
   type PermissionGrant,
   type PermissionGrantInput,
   type PermissionLevel,
-  type TeamDetail,
   type Team,
+  type UserTeam,
+  type UserTeamGrant,
 } from './api.ts'
 import { useTranslation } from 'react-i18next'
 import i18n from 'i18next'
@@ -136,38 +135,24 @@ export type AccessSubject = { kind: 'user'; user: ManagedUser } | { kind: 'team'
 
 const LEVEL_TEXT: Record<PermissionLevel, string> = { get VIEW() { return i18n.t('settings:UserAccessDialog.view') }, get OPERATE() { return i18n.t('settings:UserAccessDialog.operate') } }
 
-function GrantLine({ grant }: { grant: PermissionGrant }) {
-  return grant.deploymentId && grant.deploymentHostId ? (
-    <DeploymentGrantLine deploymentId={grant.deploymentId} hostId={grant.deploymentHostId} level={grant.level} />
-  ) : (
-    <HostGrantLine hostId={grant.hostId ?? ''} level={grant.level} />
-  )
+function GrantLine({ grant }: { grant: UserTeamGrant }) {
+  const { t: tr } = useTranslation('settings')
+  if (grant.deploymentId) {
+    const name = grant.deploymentName ?? tr('UserAccessDialog.deployment')
+    return <li>{tr('UserAccessDialog.nameDeploymentLevelText', { name, LEVEL_TEXT: LEVEL_TEXT[grant.level] })}</li>
+  }
+  return <li>{`${grant.hostName ?? tr('UserAccessDialog.environment')}: ${LEVEL_TEXT[grant.level]}`}</li>
 }
 
-function HostGrantLine({ hostId, level }: { hostId: string; level: PermissionLevel }) {
+function TeamGrants({ team }: { team: UserTeam }) {
   const { t: tr } = useTranslation('settings')
-  const hosts = useHosts()
-  return <li>{`${hosts.data?.find((h) => h.id === hostId)?.name ?? tr('UserAccessDialog.environment')}: ${LEVEL_TEXT[level]}`}</li>
-}
-
-function DeploymentGrantLine({ deploymentId, hostId, level }: { deploymentId: string; hostId: string; level: PermissionLevel }) {
-  const { t: tr } = useTranslation('settings')
-  const deployments = useManagedDeployments(hostId)
-  const name = deployments.data?.find((d) => d.id === deploymentId)?.name ?? tr('UserAccessDialog.deployment')
-  return <li>{tr('UserAccessDialog.nameDeploymentLevelText', { name, LEVEL_TEXT: LEVEL_TEXT[level] })}</li>
-}
-
-function TeamGrants({ team }: { team: Team }) {
-  const { t: tr } = useTranslation('settings')
-  const perms = useSubjectPermissions('team', team.id)
   return (
     <li>
       <strong>{team.name}</strong>
-      {perms.isError && <span className="settings__muted"> {tr('UserAccessDialog.couldNotLoadTheTeam')}</span>}
-      {perms.data && perms.data.grants.length === 0 && <span className="settings__muted"> {tr('UserAccessDialog.noAccessGrantedYet')}</span>}
-      {perms.data && perms.data.grants.length > 0 && (
+      {team.grants.length === 0 && <span className="settings__muted"> {tr('UserAccessDialog.noAccessGrantedYet')}</span>}
+      {team.grants.length > 0 && (
         <ul>
-          {perms.data.grants.map((g) => (
+          {team.grants.map((g) => (
             <GrantLine key={g.deploymentId ?? g.hostId} grant={g} />
           ))}
         </ul>
@@ -179,15 +164,7 @@ function TeamGrants({ team }: { team: Team }) {
 /** Teams the user belongs to with their grants. These add to the direct ones; the effective result is the highest level. */
 function InheritedTeams({ user }: { user: ManagedUser }) {
   const { t: tr } = useTranslation('settings')
-  const teams = useTeams()
-  const details = useQueries({
-    queries: (teams.data ?? []).map((t) => ({
-      queryKey: [...TEAMS_KEY, t.id],
-      queryFn: () => apiFetch<TeamDetail>(`/teams/${t.id}`),
-      gcTime: 0,
-    })),
-  })
-  const memberOf = (teams.data ?? []).filter((_, i) => details[i]?.data?.members.some((m) => m.userId === user.id))
+  const memberOf = useUserTeams(user.id).data?.teams ?? []
   if (memberOf.length === 0) return null
   return (
     <div className="ua-inherited" role="group" aria-label={tr('UserAccessDialog.inheritedTeamAccess')}>

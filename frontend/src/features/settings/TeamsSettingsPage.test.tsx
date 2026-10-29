@@ -26,9 +26,11 @@ const opsDetail = { id: 't1', name: 'Ops', members: [{ userId: 'u2', username: '
 type Handler = (path: string, method: string, body: unknown) => unknown
 
 let teamGrants: unknown[] = []
+let userTeamGrants: unknown[] = []
 
 function mockApi(handler?: Handler, teams = [ops]) {
   teamGrants = []
+  userTeamGrants = []
   apiFetchMock.mockImplementation((path: string, options?: { method?: string; body?: unknown }) => {
     const method = options?.method ?? 'GET'
     if (method === 'GET' && path === '/teams') return Promise.resolve(teams)
@@ -37,6 +39,9 @@ function mockApi(handler?: Handler, teams = [ops]) {
     if (method === 'GET' && path === '/hosts') return Promise.resolve([{ id: 'h1', name: 'prod' }])
     if (method === 'GET' && path === '/hosts/h1/managed-deployments') return Promise.resolve([{ id: 'd1', name: 'web' }])
     if (method === 'GET' && path === '/teams/t1/permissions') return Promise.resolve({ grants: teamGrants })
+    // inherited access of a user: one request with the teams and their named grants
+    if (method === 'GET' && path === '/users/u2/teams') return Promise.resolve({ teams: [{ id: 't1', name: 'Ops', grants: userTeamGrants }] })
+    if (method === 'GET' && path === '/users/u3/teams') return Promise.resolve({ teams: [] })
     const result = handler?.(path, method, options?.body)
     return result instanceof Error ? Promise.reject(result) : Promise.resolve(result)
   })
@@ -122,13 +127,13 @@ describe('TeamsSettingsPage', () => {
 
 describe('UserAccessDialog inherited team access', () => {
   const grants = [
-    { hostId: 'h1', level: 'VIEW' },
-    { deploymentId: 'd1', deploymentHostId: 'h1', level: 'OPERATE' },
+    { hostId: 'h1', hostName: 'prod', deploymentId: null, deploymentName: null, level: 'VIEW' },
+    { hostId: null, hostName: null, deploymentId: 'd1', deploymentName: 'web', level: 'OPERATE' },
   ]
 
   it('shows the grants a member inherits from a team, with names and levels', async () => {
     mockApi((p) => (p === '/users/u2/permissions' ? { grants: [] } : undefined))
-    teamGrants = grants
+    userTeamGrants = grants
     wrap(<UserAccessDialog subject={{ kind: 'user', user: anna }} onClose={() => {}} />)
     const section = within(await screen.findByRole('group', { name: 'Inherited team access' }))
     expect(await section.findByText('Ops')).toBeInTheDocument()
@@ -138,7 +143,7 @@ describe('UserAccessDialog inherited team access', () => {
 
   it('caps the inherited level to View for a viewer', async () => {
     mockApi((p) => (p === '/users/u2/permissions' ? { grants: [] } : undefined))
-    teamGrants = grants
+    userTeamGrants = grants
     wrap(<UserAccessDialog subject={{ kind: 'user', user: { ...anna, role: 'VIEWER' } }} onClose={() => {}} />)
     const section = within(await screen.findByRole('group', { name: 'Inherited team access' }))
     expect(await section.findByText(/never allow Operate/)).toBeInTheDocument()
@@ -146,11 +151,22 @@ describe('UserAccessDialog inherited team access', () => {
 
   it('does not show teams the user is not a member of', async () => {
     mockApi((p) => (p === '/users/u3/permissions' ? { grants: [] } : undefined))
-    teamGrants = grants
+    userTeamGrants = grants
     wrap(<UserAccessDialog subject={{ kind: 'user', user: bob }} onClose={() => {}} />)
     await screen.findByLabelText('Access to prod')
-    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledWith('/teams/t1'))
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledWith('/users/u3/teams'))
     expect(screen.queryByRole('group', { name: 'Inherited team access' })).not.toBeInTheDocument()
     expect(screen.queryByText('Ops')).not.toBeInTheDocument()
+  })
+
+  it('loads the inherited access with a single request instead of one per team', async () => {
+    mockApi((p) => (p === '/users/u2/permissions' ? { grants: [] } : undefined))
+    userTeamGrants = grants
+    wrap(<UserAccessDialog subject={{ kind: 'user', user: anna }} onClose={() => {}} />)
+    const section = within(await screen.findByRole('group', { name: 'Inherited team access' }))
+    await section.findByText('prod: View')
+    const paths = apiFetchMock.mock.calls.map(([path]) => path)
+    expect(paths.filter((p) => p === '/users/u2/teams')).toHaveLength(1)
+    expect(paths.filter((p) => p.startsWith('/teams'))).toEqual([])
   })
 })

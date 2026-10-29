@@ -42,6 +42,7 @@ class PermissionGrantServiceGuardTest {
     private static final List<Consumer<PermissionGrantService>> READS = List.of(
             s -> s.get(UUID.randomUUID()),
             s -> s.getForTeam(UUID.randomUUID()),
+            s -> s.teamsOf(UUID.randomUUID()),
             s -> s.forHost(UUID.randomUUID()),
             s -> s.forDeployment(UUID.randomUUID()));
 

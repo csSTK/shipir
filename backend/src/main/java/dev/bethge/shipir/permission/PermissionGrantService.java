@@ -12,6 +12,9 @@ import dev.bethge.shipir.permission.dto.GrantResponse;
 import dev.bethge.shipir.permission.dto.PermissionsResponse;
 import dev.bethge.shipir.permission.dto.SubjectGrantResponse;
 import dev.bethge.shipir.permission.dto.SubjectGrantsResponse;
+import dev.bethge.shipir.permission.dto.UserTeamGrantResponse;
+import dev.bethge.shipir.permission.dto.UserTeamResponse;
+import dev.bethge.shipir.permission.dto.UserTeamsResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -62,6 +65,40 @@ public class PermissionGrantService {
     public PermissionsResponse get(UUID userId) {
         find(userId);
         return response(userId);
+    }
+
+    /**
+     * The teams the user belongs to with each team's grants (names and levels), for the inherited-access view.
+     * A constant number of queries however many teams the user is in; no member lists.
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @Transactional(readOnly = true)
+    public UserTeamsResponse teamsOf(UUID userId) {
+        find(userId);
+        Set<UUID> teamIds = teamMembers.findByUser(userId).stream().map(TeamMember::getTeamId)
+                .collect(Collectors.toSet());
+        if (teamIds.isEmpty()) {
+            return new UserTeamsResponse(List.of());
+        }
+        List<Team> userTeams = teams.findAllById(teamIds);
+        List<Permission> permissions = grants.findByTeamIdIn(teamIds);
+        Map<UUID, String> hostNames = hosts.findAllById(permissions.stream().map(Permission::getHostId)
+                .filter(Objects::nonNull).collect(Collectors.toSet())).stream()
+                .collect(Collectors.toMap(h -> h.getId(), h -> h.getName()));
+        Map<UUID, String> deploymentNames = deployments.namesOf(permissions.stream().map(Permission::getDeploymentId)
+                .filter(Objects::nonNull).collect(Collectors.toSet()));
+        Map<UUID, List<UserTeamGrantResponse>> byTeam = permissions.stream().collect(Collectors.groupingBy(
+                Permission::getTeamId, Collectors.mapping(p -> new UserTeamGrantResponse(
+                        p.getHostId(), hostNames.get(p.getHostId()),
+                        p.getDeploymentId(), deploymentNames.get(p.getDeploymentId()), p.getLevel()),
+                        Collectors.toList())));
+        return new UserTeamsResponse(userTeams.stream()
+                .sorted(Comparator.comparing(Team::getName, String.CASE_INSENSITIVE_ORDER))
+                .map(t -> new UserTeamResponse(t.getId(), t.getName(), byTeam.getOrDefault(t.getId(), List.of())
+                        .stream().sorted(Comparator.comparing(UserTeamGrantResponse::level).reversed()
+                                .thenComparing(g -> String.valueOf(g.hostName() != null ? g.hostName() : g.deploymentName()),
+                                        String.CASE_INSENSITIVE_ORDER)).toList()))
+                .toList());
     }
 
     @PreAuthorize("hasRole('ADMIN')")

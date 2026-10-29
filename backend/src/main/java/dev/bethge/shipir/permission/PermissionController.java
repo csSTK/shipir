@@ -3,6 +3,7 @@ package dev.bethge.shipir.permission;
 import dev.bethge.shipir.common.exception.ErrorResponse;
 import dev.bethge.shipir.permission.dto.PermissionsResponse;
 import dev.bethge.shipir.permission.dto.UpdatePermissionsRequest;
+import dev.bethge.shipir.permission.dto.UserTeamsResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -27,6 +28,12 @@ class PermissionController {
     @GetMapping("/api/users/{id}/permissions")
     PermissionsResponse get(@PathVariable UUID id) {
         return service.get(id);
+    }
+
+    /** Teams of the user with each team's grants in one response (inherited access view). */
+    @GetMapping("/api/users/{id}/teams")
+    UserTeamsResponse teams(@PathVariable UUID id) {
+        return service.teamsOf(id);
     }
 
     @PutMapping("/api/users/{id}/permissions")

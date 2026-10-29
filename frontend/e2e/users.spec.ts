@@ -65,7 +65,7 @@ test('admin grants an operator access to an environment and a deployment', async
     body: [{ id: 'd1', name: 'web', status: 'RUNNING', source: 'FILE', lastDeployedAt: null, createdAt: '2026-10-01T10:00:00Z' }],
   })
   api.mock('GET', '/api/users/u2/permissions', { body: { grants: [] } })
-  api.mock('GET', '/api/teams', { body: [] })
+  api.mock('GET', '/api/users/u2/teams', { body: { teams: [] } })
   api.mock('PUT', '/api/users/u2/permissions', { body: { grants: [{ deploymentId: 'd1', deploymentHostId: 'h1', level: 'OPERATE' }] } })
   await page.goto('/settings/users')
   await expect(page.getByRole('button', { name: 'Access for u' })).toHaveCount(0)

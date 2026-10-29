@@ -279,6 +279,57 @@ class TeamApiTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM teams", Long.class)).isEqualTo(3);
     }
 
+    @Test
+    void userTeamsListsOnlyTheUsersTeamsWithNamedGrants() throws Exception {
+        Session admin = login("admin", ADMIN_PASSWORD);
+        UUID crew = createTeam(admin, "crew");
+        UUID other = createTeam(admin, "other");
+        UUID empty = createTeam(admin, "alpha");
+        send(admin, put("/api/teams/" + crew + "/members"), members(operatorId, viewerId)).andExpect(status().isOk());
+        send(admin, put("/api/teams/" + empty + "/members"), members(operatorId)).andExpect(status().isOk());
+        send(admin, put("/api/teams/" + other + "/members"), members(viewerId)).andExpect(status().isOk());
+        send(admin, put("/api/teams/" + crew + "/permissions"),
+                "{\"grants\":[{\"hostId\":\"" + host + "\",\"level\":\"VIEW\"},"
+                        + "{\"deploymentId\":\"" + dep + "\",\"level\":\"OPERATE\"}]}").andExpect(status().isOk());
+        send(admin, put("/api/teams/" + other + "/permissions"),
+                "{\"grants\":[{\"hostId\":\"" + host + "\",\"level\":\"OPERATE\"}]}").andExpect(status().isOk());
+
+        String body = send(admin, get("/api/users/" + operatorId + "/teams"), null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.teams.length()").value(2))
+                .andExpect(jsonPath("$.teams[0].name").value("alpha"))
+                .andExpect(jsonPath("$.teams[0].grants.length()").value(0))
+                .andExpect(jsonPath("$.teams[1].id").value(crew.toString()))
+                .andExpect(jsonPath("$.teams[1].name").value("crew"))
+                .andExpect(jsonPath("$.teams[1].grants.length()").value(2))
+                .andExpect(jsonPath("$.teams[1].grants[?(@.hostId == '" + host + "')].hostName").value("h"))
+                .andExpect(jsonPath("$.teams[1].grants[?(@.hostId == '" + host + "')].level").value("VIEW"))
+                .andExpect(jsonPath("$.teams[1].grants[?(@.deploymentId == '" + dep + "')].deploymentName").value("d"))
+                .andExpect(jsonPath("$.teams[1].grants[?(@.deploymentId == '" + dep + "')].level").value("OPERATE"))
+                .andReturn().getResponse().getContentAsString();
+        // no other teams, no members, no user data
+        assertThat(body).doesNotContain("other").doesNotContain("viewer").doesNotContain("members")
+                .doesNotContain("password").doesNotContain(viewerId.toString());
+    }
+
+    @Test
+    void userWithoutTeamsGetsAnEmptyList() throws Exception {
+        Session admin = login("admin", ADMIN_PASSWORD);
+        createTeam(admin, "crew");
+        send(admin, get("/api/users/" + operatorId + "/teams"), null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.teams.length()").value(0));
+    }
+
+    @Test
+    void userTeamsUnknownUserIs404AndNonAdminsAreForbidden() throws Exception {
+        Session admin = login("admin", ADMIN_PASSWORD);
+        send(admin, get("/api/users/" + UUID.randomUUID() + "/teams"), null).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
+        for (Session s : new Session[]{login("oper", PW), login("viewer", PW)}) {
+            send(s, get("/api/users/" + operatorId + "/teams"), null).andExpect(status().isForbidden());
+        }
+        mvc.perform(get("/api/users/" + operatorId + "/teams")).andExpect(status().isUnauthorized());
+    }
+
     private List<UUID> memberTeams(UUID userId) {
         return jdbc.queryForList("SELECT team_id FROM team_members WHERE user_id = ?", UUID.class, userId);
     }

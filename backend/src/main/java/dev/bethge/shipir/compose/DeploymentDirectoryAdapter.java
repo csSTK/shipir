@@ -3,6 +3,8 @@ package dev.bethge.shipir.compose;
 import dev.bethge.shipir.permission.DeploymentDirectory;
 import org.springframework.stereotype.Component;
 
+import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -27,5 +29,11 @@ class DeploymentDirectoryAdapter implements DeploymentDirectory {
     public Set<UUID> deploymentIdsOf(UUID hostId) {
         return deployments.findByHostIdOrderByNameAsc(hostId).stream().map(Deployment::getId)
                 .collect(Collectors.toSet());
+    }
+
+    @Override
+    public Map<UUID, String> namesOf(Collection<UUID> deploymentIds) {
+        return deployments.findAllById(deploymentIds).stream()
+                .collect(Collectors.toMap(Deployment::getId, Deployment::getName));
     }
 }

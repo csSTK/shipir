@@ -484,6 +484,30 @@ export interface TeamDetail {
 
 export const TEAMS_KEY = ['teams'] as const
 
+/** Grant of a team with the target's name: a host grant has `hostName`, a deployment grant `deploymentName`. */
+export interface UserTeamGrant {
+  hostId: string | null
+  hostName: string | null
+  deploymentId: string | null
+  deploymentName: string | null
+  level: PermissionLevel
+}
+
+export interface UserTeam {
+  id: string
+  name: string
+  grants: UserTeamGrant[]
+}
+
+/** The teams of a user with each team's grants, in one request (inherited access). */
+export function useUserTeams(userId: string) {
+  return useQuery({
+    queryKey: ['users', userId, 'teams'] as const,
+    queryFn: () => apiFetch<{ teams: UserTeam[] }>(`/users/${userId}/teams`),
+    gcTime: 0,
+  })
+}
+
 export function useTeams() {
   return useQuery({ queryKey: TEAMS_KEY, queryFn: () => apiFetch<Team[]>('/teams') })
 }
