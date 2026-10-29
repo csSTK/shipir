@@ -294,13 +294,25 @@ public class DeploymentRunService {
         deploymentService.requireHost(hostId);
         Deployment deployment = deploymentService.requireDeployment(hostId, id);
         List<DeploymentVersion> all = versions.findByDeploymentIdOrderByCreatedAtDesc(deployment.getId());
+        UUID currentId = currentVersionId(all);
         Map<UUID, String> names = users.findAllById(all.stream().map(DeploymentVersion::getCreatedBy).distinct().toList())
                 .stream().collect(Collectors.toMap(User::getId, User::getUsername));
         return all.stream()
                 .map(v -> new DeploymentVersionResponse(v.getId(), v.getSource(), v.getCommitSha(),
-                        names.get(v.getCreatedBy()), v.getCreatedAt(), v.getId().equals(deployment.getCurrentVersionId()),
+                        names.get(v.getCreatedBy()), v.getCreatedAt(), v.getId().equals(currentId),
                         v.isDeployed()))
                 .toList();
+    }
+
+    /**
+     * The version the API reports as {@code current}: the latest one whose deploy finished successfully, null when there is
+     * none. Derived from the history on purpose and not from {@code Deployment.currentVersionId}: that column is the
+     * working version (the editable draft after an update, the snapshot of a run that was only started) which update, deploy
+     * and the Git create flow read, so its meaning stays as it is. {@code history} is newest first.
+     */
+    static UUID currentVersionId(List<DeploymentVersion> history) {
+        return history.stream().filter(DeploymentVersion::isDeploySucceeded).findFirst().map(DeploymentVersion::getId)
+                .orElse(null);
     }
 
     /** One version's YAML and env keys, flagged against the currently deployed version; no env values. */
@@ -310,8 +322,9 @@ public class DeploymentRunService {
         Deployment deployment = deploymentService.requireDeployment(hostId, id);
         DeploymentVersion version = versionOf(deployment, versionId);
         // current_version_id may point at a newer draft; the baseline is the latest version that was actually deployed
-        DeploymentVersion baseline = versions.findByDeploymentIdOrderByCreatedAtDesc(deployment.getId()).stream()
-                .filter(DeploymentVersion::isDeployed).findFirst().orElse(null);
+        List<DeploymentVersion> history = versions.findByDeploymentIdOrderByCreatedAtDesc(deployment.getId());
+        DeploymentVersion baseline = history.stream().filter(DeploymentVersion::isDeployed).findFirst().orElse(null);
+        UUID currentId = currentVersionId(history);
 
         Map<String, String> values = envMap(version);
         Map<String, String> base = baseline == null ? Map.of() : envMap(baseline);
@@ -322,7 +335,7 @@ public class DeploymentRunService {
         List<String> removed = base.keySet().stream().filter(k -> !values.containsKey(k)).toList();
         String createdBy = users.findById(version.getCreatedBy()).map(User::getUsername).orElse(null);
         return new DeploymentVersionContentResponse(version.getId(), version.getSource(), version.getCommitSha(),
-                createdBy, version.getCreatedAt(), version.getId().equals(deployment.getCurrentVersionId()),
+                createdBy, version.getCreatedAt(), version.getId().equals(currentId),
                 version.isDeployed(), version.getYamlContent(), baseline == null ? null : baseline.getId(), keys, removed);
     }
 
@@ -706,6 +719,10 @@ public class DeploymentRunService {
                 s.setStatus(ok ? DeploymentStatus.RUNNING : DeploymentStatus.ERROR);
                 if (ok) {
                     s.setLastDeployedAt(clock.instant());
+                    versions.findById(version.getId()).ifPresent(v -> {
+                        v.markDeploySucceeded(clock.instant());
+                        versions.save(v);
+                    });
                 }
                 deployments.save(s);
             }));

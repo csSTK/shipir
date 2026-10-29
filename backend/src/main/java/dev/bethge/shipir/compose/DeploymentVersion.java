@@ -40,6 +40,9 @@ public class DeploymentVersion {
     @Column(name = "deployed_at")
     private Instant deployedAt;
 
+    @Column(name = "deploy_succeeded_at")
+    private Instant deploySucceededAt;
+
     @Column(name = "created_by", nullable = false, updatable = false)
     private UUID createdBy;
 
@@ -79,6 +82,11 @@ public class DeploymentVersion {
     public void setCommitSha(String commitSha) { this.commitSha = commitSha; }
 
     public void markDeployed(Instant now) { this.deployedAt = now; }
+
+    /** True once a compose run for this version finished successfully; a started but failed deploy stays false. */
+    public boolean isDeploySucceeded() { return deploySucceededAt != null; }
+
+    public void markDeploySucceeded(Instant now) { this.deploySucceededAt = now; }
 
     public void replaceContent(String yamlContent, byte[] envCiphertext) {
         this.yamlContent = yamlContent;

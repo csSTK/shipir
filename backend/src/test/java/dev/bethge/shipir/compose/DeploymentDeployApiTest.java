@@ -254,10 +254,11 @@ class DeploymentDeployApiTest extends DeploymentTestBase {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM deployment_versions", Integer.class)).isEqualTo(3);
         mvc.perform(get(url() + "/" + id).session(admin.session())).andExpect(jsonPath("$.yaml").value(YAML_B));
         mvc.perform(get(url() + "/" + id + "/versions").session(admin.session()))
-                .andExpect(jsonPath("$[0].current").value(true))
+                .andExpect(jsonPath("$[0].current").value(false))
                 .andExpect(jsonPath("$[0].deployed").value(false))
                 .andExpect(jsonPath("$[0].source").value("MANUAL"))
-                .andExpect(jsonPath("$[1].deployed").value(true));
+                .andExpect(jsonPath("$[1].deployed").value(true))
+                .andExpect(jsonPath("$[1].current").value(true));
 
         // a second edit changes the draft in place
         mvc.perform(admin.write(put(url() + "/" + id)).contentType(APPLICATION_JSON)
