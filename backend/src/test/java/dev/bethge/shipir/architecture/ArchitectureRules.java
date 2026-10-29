@@ -4,8 +4,6 @@ import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.lang.ArchRule;
 
-import java.util.Set;
-
 import static com.tngtech.archunit.base.DescribedPredicate.describe;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
@@ -14,13 +12,6 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
  * {@link ArchitectureRulesFailTest} can prove each rule fails on a deliberate violation.
  */
 final class ArchitectureRules {
-
-    /**
-     * Frozen violation: these controllers read their repository directly (simple read-only
-     * lookups, no service in between). New controllers must go through a service.
-     */
-    static final Set<String> CONTROLLERS_WITH_REPOSITORY_ACCESS = Set.of(
-            "AuthController", "NotificationController", "ChatRunController", "ChatSessionController");
 
     private ArchitectureRules() {
     }
@@ -71,8 +62,6 @@ final class ArchitectureRules {
                         && c.getPackageName().startsWith(root));
         return noClasses()
                 .that().haveSimpleNameEndingWith("Controller")
-                .and(describe("not a frozen controller",
-                        (JavaClass c) -> !CONTROLLERS_WITH_REPOSITORY_ACCESS.contains(c.getSimpleName())))
                 .should().dependOnClassesThat(repository)
                 .as("controllers must not access repositories directly");
     }

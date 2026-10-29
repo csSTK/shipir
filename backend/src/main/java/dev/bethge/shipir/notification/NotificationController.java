@@ -1,6 +1,6 @@
 package dev.bethge.shipir.notification;
 
-import dev.bethge.shipir.auth.UserRepository;
+import dev.bethge.shipir.auth.UserLookupService;
 import dev.bethge.shipir.common.exception.ErrorResponse;
 import dev.bethge.shipir.notification.dto.NotificationPageResponse;
 import dev.bethge.shipir.notification.dto.NotificationPreferenceDto;
@@ -28,9 +28,9 @@ import java.util.UUID;
 class NotificationController {
 
     private final NotificationService service;
-    private final UserRepository users;
+    private final UserLookupService users;
 
-    NotificationController(NotificationService service, UserRepository users) {
+    NotificationController(NotificationService service, UserLookupService users) {
         this.service = service;
         this.users = users;
     }
@@ -74,7 +74,7 @@ class NotificationController {
     }
 
     private UUID userId(Authentication auth) {
-        return users.findByUsername(auth.getName()).orElseThrow().getId();
+        return users.idOf(auth.getName());
     }
 
     static class NotificationNotFoundException extends RuntimeException {

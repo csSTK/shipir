@@ -50,7 +50,7 @@ class AuthController {
     private final SecurityContextRepository securityContextRepository;
     private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
     private final CsrfTokenRepository csrfTokenRepository;
-    private final UserRepository users;
+    private final UserLookupService users;
     private final UserService userService;
     private final UserSetupStatus setupStatus;
     private final PasswordResetService passwordResetService;
@@ -65,7 +65,7 @@ class AuthController {
                    SecurityContextRepository securityContextRepository,
                    SessionAuthenticationStrategy sessionAuthenticationStrategy,
                    CsrfTokenRepository csrfTokenRepository,
-                   UserRepository users,
+                   UserLookupService users,
                    UserService userService,
                    UserSetupStatus setupStatus,
                    PasswordResetService passwordResetService,

@@ -5,7 +5,7 @@ import dev.bethge.shipir.ai.chat.dto.ChatRunResponse;
 import dev.bethge.shipir.ai.chat.dto.SendChatMessageRequest;
 import dev.bethge.shipir.ai.tools.ToolContext;
 import dev.bethge.shipir.auth.User;
-import dev.bethge.shipir.auth.UserRepository;
+import dev.bethge.shipir.auth.UserLookupService;
 import dev.bethge.shipir.common.exception.ErrorResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -29,9 +29,9 @@ import java.util.UUID;
 class ChatRunController {
 
     private final ChatOrchestrator orchestrator;
-    private final UserRepository users;
+    private final UserLookupService users;
 
-    ChatRunController(ChatOrchestrator orchestrator, UserRepository users) {
+    ChatRunController(ChatOrchestrator orchestrator, UserLookupService users) {
         this.orchestrator = orchestrator;
         this.users = users;
     }
@@ -58,7 +58,7 @@ class ChatRunController {
     }
 
     private ToolContext context(Authentication auth) {
-        User user = users.findByUsername(auth.getName()).orElseThrow();
+        User user = users.requireByUsername(auth.getName());
         return new ToolContext(user.getId(), user.getUsername(), user.getRole());
     }
 

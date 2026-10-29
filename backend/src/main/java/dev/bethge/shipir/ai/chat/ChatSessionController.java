@@ -6,7 +6,7 @@ import dev.bethge.shipir.ai.chat.dto.ChatSessionResponse;
 import dev.bethge.shipir.ai.chat.dto.CreateChatSessionRequest;
 import dev.bethge.shipir.ai.chat.dto.PendingActionCountResponse;
 import dev.bethge.shipir.ai.chat.dto.UpdateChatSessionRequest;
-import dev.bethge.shipir.auth.UserRepository;
+import dev.bethge.shipir.auth.UserLookupService;
 import dev.bethge.shipir.common.exception.ErrorResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -34,10 +34,10 @@ import java.util.UUID;
 class ChatSessionController {
 
     private final ChatSessionService service;
-    private final UserRepository users;
+    private final UserLookupService users;
     private final ChatOrchestrator orchestrator;
 
-    ChatSessionController(ChatSessionService service, UserRepository users, ChatOrchestrator orchestrator) {
+    ChatSessionController(ChatSessionService service, UserLookupService users, ChatOrchestrator orchestrator) {
         this.orchestrator = orchestrator;
         this.service = service;
         this.users = users;
@@ -100,7 +100,7 @@ class ChatSessionController {
     }
 
     private UUID userId(Authentication auth) {
-        return users.findByUsername(auth.getName()).orElseThrow().getId();
+        return users.idOf(auth.getName());
     }
 
     @ExceptionHandler(ChatSessionException.class)
