@@ -52,7 +52,7 @@ class PasswordResetService {
     @Transactional
     void requestReset(String username) {
         Optional<User> found = users.findByUsername(username);
-        if (found.isEmpty() || found.get().getExternalIssuer() != null) {
+        if (found.isEmpty() || found.get().isExternal()) {
             return;
         }
         User user = found.get();
@@ -70,7 +70,7 @@ class PasswordResetService {
     @Transactional(noRollbackFor = InvalidResetCodeException.class)
     void confirmReset(String username, String code, String newPassword) {
         User user = users.findByUsername(username).orElseThrow(InvalidResetCodeException::new);
-        if (user.getExternalIssuer() != null) {
+        if (user.isExternal()) {
             throw new InvalidResetCodeException();
         }
         Instant now = clock.instant();

@@ -96,6 +96,11 @@ public class User {
         return disabledAt != null;
     }
 
+    /** True for users signed in through single sign-on (an OIDC issuer is set); they have no local password. */
+    public boolean isExternal() {
+        return externalIssuer != null;
+    }
+
     /** Stores the new hash and stamps {@code passwordChangedAt}, which ends the first-start setup. */
     public void changePasswordHash(String newPasswordHash, Instant changedAt) {
         this.passwordHash = newPasswordHash;

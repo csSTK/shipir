@@ -18,6 +18,6 @@ public record UserResponse(UUID id, String username, Role role, boolean disabled
     public static UserResponse from(User u) {
         return new UserResponse(u.getId(), u.getUsername(), u.getRole(), u.isDisabled(), u.isSetupRequired(),
                 u.getCreatedAt(), u.getPasswordChangedAt(), u.getDisabledAt(),
-                u.isTwoFactorEnabled(), u.getExternalIssuer() != null);
+                u.isTwoFactorEnabled(), u.isExternal());
     }
 }
