@@ -99,11 +99,6 @@
   background: var(--color-surface-sunken);
   animation: sd-pulse 1.4s ease-in-out infinite;
 }
-@keyframes sd-in {
-  from {
-    opacity: 0;
-  }
-}
 @keyframes sd-pulse {
   50% {
     opacity: 0.5;
