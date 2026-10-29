@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Restores a backup made by scripts/backup.sh into an EMPTY database and an EMPTY stacks volume.
+# Restores a backup made by scripts/backup.sh into an EMPTY database, an EMPTY stacks volume and an EMPTY
+# volume-backups volume.
 # Usage: scripts/restore.sh <backup-dir>
 #
 # Refuses to run unless the database has no tables (so Flyway has not run yet) and the stacks volume is
-# empty. Stops the backend container; never removes volumes. Requires the SHIPIR_ENCRYPTION_KEY the backup
+# empty (the volume-backups volume only if the backup contains volume-backups.tar.gz;
+# backups made before that part existed restore without it). Stops the backend container; never removes volumes. Requires the SHIPIR_ENCRYPTION_KEY the backup
 # was made with (checked by fingerprint). See README "Backup & restore".
 #
 # This script restores only the pg_dump + tar backup written by scripts/backup.sh (database.dump,
-# stacks.tar.gz, MANIFEST). It does NOT restore the ADMIN encrypted UI export (Settings > Backup):
+# stacks.tar.gz, volume-backups.tar.gz, MANIFEST). It does NOT restore the ADMIN encrypted UI export (Settings > Backup):
 # that export holds JSONL tables and stacks, and Shipir has no importer for it. A database restore
 # always needs the pg_dump + tar backup.
 set -euo pipefail
@@ -44,6 +46,10 @@ done
 for tool in pg_restore psql docker openssl; do
   command -v "$tool" >/dev/null 2>&1 || die "$tool not found in PATH (needs the PostgreSQL 16 client tools)"
 done
+
+# volume-backups.tar.gz is optional: backups made before that part existed do not have it.
+HAS_VOLUME_BACKUPS=0
+[[ -f "$SRC/volume-backups.tar.gz" ]] && HAS_VOLUME_BACKUPS=1
 
 manifest_value() {
   local line
@@ -84,7 +90,14 @@ BACKEND="$(docker compose -f "$COMPOSE_FILE" ps -aq backend | head -n 1)"
 docker run --rm --volumes-from "$BACKEND" alpine:3 sh -c 'test -z "$(ls -A /data/stacks)"' \
   || die "the stacks volume is not empty; restore only into an empty volume"
 
-echo "restore: this writes database $PGDATABASE on $PGHOST:$PGPORT and the stacks volume of the backend."
+if [[ "$HAS_VOLUME_BACKUPS" == "1" ]]; then
+  docker run --rm --volumes-from "$BACKEND" alpine:3 sh -c 'test -z "$(ls -A /data/volume-backups)"' \
+    || die "the volume-backups volume is not empty; restore only into an empty volume"
+else
+  echo "restore: note: this backup has no volume-backups.tar.gz (made before that part existed); stored volume backups are not restored"
+fi
+
+echo "restore: this writes database $PGDATABASE on $PGHOST:$PGPORT and the stacks and volume-backups volumes of the backend."
 echo "restore: the backend container is stopped first. No volume is removed."
 printf 'restore: type RESTORE to continue: '
 read -r answer
@@ -98,6 +111,11 @@ pg_restore --no-owner --no-privileges --exit-on-error --dbname "$PGDATABASE" "$S
 
 echo "restore: restoring the stacks volume"
 docker run --rm -i --volumes-from "$BACKEND" alpine:3 tar -C /data/stacks -xzf - < "$SRC/stacks.tar.gz"
+
+if [[ "$HAS_VOLUME_BACKUPS" == "1" ]]; then
+  echo "restore: restoring the volume-backups volume"
+  docker run --rm -i --volumes-from "$BACKEND" alpine:3 tar -C /data/volume-backups -xzf - < "$SRC/volume-backups.tar.gz"
+fi
 
 echo "restore: done. Start the app with: docker compose -f docker-compose.yml up -d"
 echo "restore: Flyway checks the restored schema history on startup; the backend must not run before this restore."

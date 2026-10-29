@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Backs up a Shipir hosting installation (docker-compose.yml): the PostgreSQL database and the
-# Compose stacks volume. Usage: scripts/backup.sh [backup-root]   (default: ./backups)
+# Backs up a Shipir hosting installation (docker-compose.yml): the PostgreSQL database, the
+# Compose stacks volume and the stored volume backups. Usage: scripts/backup.sh [backup-root]   (default: ./backups)
 #
 # The database is external (docker-compose.yml has no PostgreSQL service), so pg_dump runs on this
 # machine with PostgreSQL 16 client tools and connects to DB_HOST like the backend does.
@@ -71,6 +71,9 @@ pg_dump --format=custom --no-owner --no-privileges --file "$OUT/database.dump"
 echo "backup: archiving the stacks volume (mounted at /data/stacks in the backend container)"
 docker run --rm --volumes-from "$BACKEND" alpine:3 tar -C /data/stacks -czf - . > "$OUT/stacks.tar.gz"
 
+echo "backup: archiving the stored volume backups (mounted at /data/volume-backups in the backend container)"
+docker run --rm --volumes-from "$BACKEND" alpine:3 tar -C /data/volume-backups -czf - . > "$OUT/volume-backups.tar.gz"
+
 cat > "$OUT/MANIFEST" <<MANIFEST
 format=shipir-backup-1
 created_at=$STAMP
@@ -78,7 +81,7 @@ database=$PGDATABASE
 encryption_key_sha256=$KEY_FINGERPRINT
 MANIFEST
 
-chmod 600 "$OUT/database.dump" "$OUT/stacks.tar.gz" "$OUT/MANIFEST"
+chmod 600 "$OUT/database.dump" "$OUT/stacks.tar.gz" "$OUT/volume-backups.tar.gz" "$OUT/MANIFEST"
 
 echo "backup: done: $OUT"
 if [[ "$KEY_FINGERPRINT" == "none" ]]; then
