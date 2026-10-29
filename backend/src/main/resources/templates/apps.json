@@ -587,7 +587,6 @@
     "id": "pihole",
     "name": "Pi-hole",
     "description": "Network-wide ad blocker and DNS server. Open port 8085 and sign in at /admin with the generated password, then point your devices or router at this host as DNS server. Port 53 must be free on the host.",
-    "logo": "pihole",
     "env": [
       {
         "key": "WEBPASSWORD",
@@ -665,7 +664,6 @@
     "id": "nginx-proxy-manager",
     "name": "Nginx Proxy Manager",
     "description": "Reverse proxy with a web UI and Let's Encrypt certificates. Open port 8086 after the first deploy and sign in with admin@example.com / changeme, then change both. Proxied traffic arrives on ports 8088 (HTTP) and 8443 (HTTPS).",
-    "logo": "nginx-proxy-manager",
     "env": [],
     "spec": {
       "services": [
@@ -720,7 +718,6 @@
     "id": "homepage",
     "name": "Homepage",
     "description": "Customizable start page for your services. Open port 3002 after the first deploy and edit the YAML files in the config volume to add your services.",
-    "logo": "homepage",
     "env": [],
     "spec": {
       "services": [
@@ -756,7 +753,6 @@
     "id": "filebrowser",
     "name": "File Browser",
     "description": "Web file manager for a storage volume. Open port 8089 after the first deploy and sign in with admin / admin, then change the password right away.",
-    "logo": "filebrowser",
     "env": [],
     "spec": {
       "services": [
@@ -801,7 +797,6 @@
     "id": "syncthing",
     "name": "Syncthing",
     "description": "Continuous peer-to-peer file synchronization. Open port 8384 after the first deploy and set a GUI password under Actions, Settings. Sync traffic uses port 22000, local discovery 21027.",
-    "logo": "syncthing",
     "env": [],
     "spec": {
       "services": [
@@ -852,7 +847,6 @@
     "id": "mysql",
     "name": "MySQL",
     "description": "MySQL 8.4 database with a named volume and an initial database. Connect to host port 3307 with the root user and the generated root password.",
-    "logo": "mysql",
     "env": [
       {
         "key": "MYSQL_ROOT_PASSWORD",
@@ -911,7 +905,6 @@
     "id": "mongodb",
     "name": "MongoDB",
     "description": "MongoDB 7 document database with authentication. Connect to host port 27018 with the admin user and the generated password.",
-    "logo": "mongodb",
     "env": [
       {
         "key": "MONGO_INITDB_ROOT_USERNAME",
@@ -970,7 +963,6 @@
     "id": "rabbitmq",
     "name": "RabbitMQ",
     "description": "Message broker with the management UI. Open port 15673 after the first deploy and sign in with the user and password below. Applications connect over AMQP on port 5673.",
-    "logo": "rabbitmq",
     "env": [
       {
         "key": "RABBITMQ_DEFAULT_USER",
@@ -1034,7 +1026,6 @@
     "id": "minio",
     "name": "MinIO",
     "description": "S3-compatible object storage. Open the console on port 9101 after the first deploy and sign in with the user and password below. The S3 API listens on port 9100.",
-    "logo": "minio",
     "env": [
       {
         "key": "MINIO_ROOT_USER",
@@ -1104,7 +1095,6 @@
     "id": "influxdb",
     "name": "InfluxDB",
     "description": "Time series database, version 2. Open port 8087 after the first deploy and sign in with the user and password below. The API token below is for clients.",
-    "logo": "influxdb",
     "env": [
       {
         "key": "DOCKER_INFLUXDB_INIT_USERNAME",
@@ -1206,7 +1196,6 @@
     "id": "ghost",
     "name": "Ghost",
     "description": "Publishing platform and blog with its own MySQL database. Open port 2368 after the first deploy; the admin setup is at /ghost.",
-    "logo": "ghost",
     "env": [
       {
         "key": "GHOST_URL",
@@ -1324,7 +1313,6 @@
     "id": "n8n",
     "name": "n8n",
     "description": "Workflow automation. Open port 5678 after the first deploy and create the owner account.",
-    "logo": "n8n",
     "env": [
       {
         "key": "N8N_ENCRYPTION_KEY",
@@ -1391,7 +1379,6 @@
     "id": "paperless-ngx",
     "name": "Paperless-ngx",
     "description": "Document management with OCR, backed by PostgreSQL and Redis. Open port 8010 after the first deploy and sign in with the admin user below. Drop files into the consume volume to import them.",
-    "logo": "paperless-ngx",
     "env": [
       {
         "key": "PAPERLESS_ADMIN_USER",
@@ -1554,7 +1541,6 @@
     "id": "bookstack",
     "name": "BookStack",
     "description": "Wiki and documentation platform with its own MariaDB database. Open port 6875 after the first deploy and sign in as admin@admin.com with the password 'password', then change both.",
-    "logo": "bookstack",
     "env": [
       {
         "key": "APP_URL",
@@ -1690,7 +1676,6 @@
     "id": "linkding",
     "name": "Linkding",
     "description": "Bookmark manager. Open port 9090 after the first deploy and sign in with the admin user below.",
-    "logo": "linkding",
     "env": [
       {
         "key": "LD_SUPERUSER_NAME",
@@ -1749,7 +1734,6 @@
     "id": "plex",
     "name": "Plex",
     "description": "Media server for movies, shows and music. Open port 32400/web after the first deploy. To claim the server, set PLEX_CLAIM (token from plex.tv/claim, valid 4 minutes) in the wizard, or finish setup from a browser on the same network as the host. Host networking is not available here, so local network discovery (GDM, DLNA) is limited; add the server by IP in your Plex apps. Media uses a named volume; replace it with a bind mount for an existing library.",
-    "logo": "plex",
     "env": [
       {
         "key": "TZ",
@@ -1816,7 +1800,6 @@
     "id": "sonarr",
     "name": "Sonarr",
     "description": "TV show manager that finds, downloads and organizes episodes. Open port 8989 after the first deploy. Config and media use named volumes; to use an existing library, replace the media volume with a bind mount in the wizard.",
-    "logo": "sonarr",
     "env": [
       {
         "key": "PUID",
@@ -1903,7 +1886,6 @@
     "id": "radarr",
     "name": "Radarr",
     "description": "Movie manager that finds, downloads and organizes films. Open port 7878 after the first deploy. Config and media use named volumes; to use an existing library, replace the media volume with a bind mount in the wizard.",
-    "logo": "radarr",
     "env": [
       {
         "key": "PUID",
@@ -1990,7 +1972,6 @@
     "id": "navidrome",
     "name": "Navidrome",
     "description": "Music streaming server compatible with Subsonic apps. Open port 4533 after the first deploy and create the admin user on first visit. Music uses a named volume; replace it with a bind mount for an existing library.",
-    "logo": "navidrome",
     "env": [
       {
         "key": "ND_LOGLEVEL",
@@ -2058,7 +2039,6 @@
     "id": "audiobookshelf",
     "name": "Audiobookshelf",
     "description": "Audiobook and podcast server. Open port 13378 after the first deploy and create the root user on first visit. Libraries use named volumes; replace them with bind mounts for existing files.",
-    "logo": "audiobookshelf",
     "env": [
       {
         "key": "TZ",

@@ -205,7 +205,7 @@ class TemplateCatalogTest {
 
     private static String withHint(String hint) {
         return """
-                [{"id":"hinted","name":"T","description":"d","logo":"x",
+                [{"id":"hinted","name":"T","description":"d",
                   "env":[%s],
                   "spec":{"services":[{"name":"web","image":"nginx","environment":[{"key":"A","ref":"A"}]}]}}]""".formatted(hint);
     }

@@ -22,7 +22,6 @@ const wordpress: AppTemplate = {
   id: 'wordpress',
   name: 'WordPress',
   description: 'Blog engine',
-  logo: 'wordpress',
   env: [
     { key: 'DB_PASSWORD', description: 'Database password', secret: true, generate: true },
     { key: 'DB_USER', description: 'Database user', secret: false, defaultValue: 'wp' },
