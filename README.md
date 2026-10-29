@@ -271,6 +271,13 @@ What the export contains:
 - one `db/<table>.jsonl` per table. Secrets stay encrypted, and password hashes are included.
 - the `stacks/` directory
 
+What the export can and cannot restore:
+- **It cannot restore the database.** Shipir has no import for the `db/*.jsonl` tables, and no script or UI reads them back. Users, environments, permissions, the audit log and deployment records come back only from the `database.dump` of `scripts/backup.sh`, restored with `scripts/restore.sh`.
+- **The `stacks/` directory is plain files.** You can copy it back by hand, but only into an empty `shipir-stacks` volume and with the backend stopped. The procedure above is the supported way to do that.
+- **Encrypted values need the original `SHIPIR_ENCRYPTION_KEY`.** The export does not include the key, and a restored secret is unreadable without it.
+
+Use the export for inspection, for moving stack files, or as a record. For a full restore, use the `scripts/backup.sh` / `scripts/restore.sh` pair.
+
 The file is an `openssl enc` stream: AES-256-CBC, with the key derived from the passphrase by PBKDF2-SHA256 at 600000 iterations. A 40-byte integrity trailer follows it. This is an 8-byte salt and then an HMAC-SHA256 over everything before the trailer.
 
 To open an export, check the trailer first, then decrypt. This needs OpenSSL 3 or newer. The `openssl` that ships with macOS (LibreSSL) can't do it, so install Homebrew OpenSSL there:
@@ -288,7 +295,7 @@ mkdir -p restore-dir
 head -c "$N" "$F" | openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -md sha256 -pass env:SHIPIR_BACKUP_PASSPHRASE | tar -xzf - -C restore-dir
 ```
 
-There is no import script for the JSONL tables yet. For a full restore, use `scripts/backup.sh` / `scripts/restore.sh`.
+There is no importer for the JSONL tables and none is planned for now (decision 2026-10-28: document only). For a full restore, use `scripts/backup.sh` / `scripts/restore.sh`.
 
 ### Backend (Java 25, Spring Boot 4.1.1)
 

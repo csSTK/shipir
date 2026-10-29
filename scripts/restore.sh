@@ -5,6 +5,11 @@
 # Refuses to run unless the database has no tables (so Flyway has not run yet) and the stacks volume is
 # empty. Stops the backend container; never removes volumes. Requires the SHIPIR_ENCRYPTION_KEY the backup
 # was made with (checked by fingerprint). See README "Backup & restore".
+#
+# This script restores only the pg_dump + tar backup written by scripts/backup.sh (database.dump,
+# stacks.tar.gz, MANIFEST). It does NOT restore the ADMIN encrypted UI export (Settings > Backup):
+# that export holds JSONL tables and stacks, and Shipir has no importer for it. A database restore
+# always needs the pg_dump + tar backup.
 set -euo pipefail
 umask 077
 
