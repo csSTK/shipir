@@ -133,6 +133,31 @@ class DockerEventStreamServiceTest {
     }
 
     @Test
+    void revalidateAsksOnlyForHostsTheUserIsSubscribedTo() {
+        UUID otherHost = UUID.randomUUID();
+        when(hosts.findById(otherHost)).thenReturn(Optional.of(DockerHost.local("o", UUID.randomUUID())));
+        service.subscribe(hostId, "alice", "s1", "a");
+        service.subscribe(otherHost, "bob", "s2", "b");
+        List<UUID> asked = new CopyOnWriteArrayList<>();
+
+        service.revalidate("alice", host -> {
+            asked.add(host);
+            return false;
+        });
+
+        assertThat(asked).containsExactly(hostId);
+        assertThat(service.subscriberCount(hostId)).isZero();
+        assertThat(service.subscriberCount(otherHost)).isEqualTo(1);
+    }
+
+    @Test
+    void revalidateKeepsTheSubscriptionWhenAccessIsStillGranted() {
+        service.subscribe(hostId, "alice", "s1", "a");
+        service.revalidate("alice", host -> true);
+        assertThat(service.subscriberCount(hostId)).isEqualTo(1);
+    }
+
+    @Test
     void dropHostEndsEverySubscriptionOfThatHostAndClosesTheStream() {
         service.subscribe(hostId, "alice", "s1", "a");
         service.subscribe(hostId, "bob", "s2", "b");

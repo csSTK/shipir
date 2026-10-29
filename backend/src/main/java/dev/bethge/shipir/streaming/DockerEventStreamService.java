@@ -182,12 +182,13 @@ public class DockerEventStreamService {
             all = new ArrayList<>(streams.values());
         }
         for (HostStream stream : all) {
-            if (hostStillAllowed.test(stream.hostId)) {
-                continue;
-            }
             List<Subscription> revoked;
             synchronized (stream) {
                 revoked = stream.subscribers.stream().filter(s -> username.equals(s.username)).toList();
+            }
+            // the predicate costs DB queries: only ask for hosts this user is subscribed to
+            if (revoked.isEmpty() || hostStillAllowed.test(stream.hostId)) {
+                continue;
             }
             revoked.forEach(s -> unsubscribe(s.sessionId, s.subscriptionId));
         }

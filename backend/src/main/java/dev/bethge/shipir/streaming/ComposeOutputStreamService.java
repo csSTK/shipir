@@ -175,7 +175,12 @@ public class ComposeOutputStreamService implements RunOutput {
             all = new HashMap<>(streams);
         }
         all.forEach((runId, stream) -> {
-            if (runStillAllowed.test(targetOf(runId))) {
+            boolean subscribed;
+            synchronized (stream) {
+                subscribed = stream.subscribers.stream().anyMatch(s -> username.equals(s.username));
+            }
+            // the predicate costs DB queries: only ask for runs this user is subscribed to
+            if (!subscribed || runStillAllowed.test(targetOf(runId))) {
                 return;
             }
             synchronized (stream) {
