@@ -52,6 +52,9 @@ class VolumeBackupStore {
         Files.createDirectories(base);
         Path dir = PathValidationUtil.resolve(base, hostId + "/" + volume);
         Files.createDirectories(dir);
+        if (!isRealVolumeDir(base, hostId, volume, dir)) {
+            throw new IOException("Backup directory of the volume is a symlink or leaves the store");
+        }
         Path target = dir.resolve(volume + "-" + STAMP.format(now) + ".tar");
         Path partial = Files.createTempFile(dir, ".backup-", ".part");
         try {
@@ -67,8 +70,8 @@ class VolumeBackupStore {
     /** The stored archives of one volume on one host, newest first. Empty when nothing was stored yet. */
     List<StoredVolumeBackup> list(UUID hostId, String volume) {
         Path dir = volumeDir(hostId, volume);
-        if (dir == null || !Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) {
-            return List.of();
+        if (dir == null || !isRealVolumeDir(properties.dir().toAbsolutePath().normalize(), hostId, volume, dir)) {
+            return List.of(); // missing, or a symlinked host/volume directory: not this host's data
         }
         Pattern name = namePattern(volume);
         try (Stream<Path> files = Files.list(dir)) {
@@ -116,6 +119,16 @@ class VolumeBackupStore {
         }
         Path dir = PathValidationUtil.resolve(base, hostId + "/" + volume);
         return Files.isDirectory(dir) ? dir : null;
+    }
+
+    /** True when {@code dir} is a real directory whose real path is exactly {@code <realBase>/<host>/<volume>}. */
+    private static boolean isRealVolumeDir(Path base, UUID hostId, String volume, Path dir) {
+        try {
+            return Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)
+                    && dir.toRealPath().equals(base.toRealPath().resolve(hostId.toString()).resolve(volume));
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     private static Pattern namePattern(String volume) {
@@ -218,6 +231,7 @@ class VolumeBackupStore {
         List<Path> archives;
         try (Stream<Path> files = Files.list(dir)) {
             archives = files.filter(p -> name.matcher(p.getFileName().toString()).matches())
+                    .filter(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS))
                     .sorted((a, b) -> b.getFileName().toString().compareTo(a.getFileName().toString()))
                     .toList();
         }

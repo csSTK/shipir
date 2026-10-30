@@ -126,4 +126,21 @@ class VolumeBackupStoreReadTest {
         assertThat(store.resolve(third, "data", "data-20260103T000000Z.tar")).isEmpty();
         assertThat(store.list(third, "data")).isEmpty();
     }
+
+    @Test
+    void listIsEmptyWhenTheHostDirectoryIsASymlinkToAnotherHost() throws Exception {
+        UUID third = UUID.randomUUID();
+        Files.createSymbolicLink(base.resolve(third.toString()), base.resolve(otherHost.toString()));
+
+        assertThat(store.list(third, "data")).isEmpty();
+    }
+
+    @Test
+    void listIsEmptyWhenTheVolumeDirectoryIsASymlinkToAnotherHostsVolume() throws Exception {
+        UUID third = UUID.randomUUID();
+        Files.createDirectories(base.resolve(third.toString()));
+        Files.createSymbolicLink(base.resolve(third.toString()).resolve("data"), base.resolve(otherHost.toString()).resolve("data"));
+
+        assertThat(store.list(third, "data")).isEmpty();
+    }
 }
