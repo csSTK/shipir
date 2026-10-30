@@ -294,7 +294,7 @@ public class GitRepositoryService {
         throw refNotFound();
     }
 
-    private static GitOperationException map(TransportException e, boolean byCommit) {
+    static GitOperationException map(TransportException e, boolean byCommit) {
         String outcome = GitRemoteChecker.classify(e);
         log.warn("Git transport failed: {}", outcome);
         return switch (outcome) {
@@ -302,7 +302,7 @@ public class GitRepositoryService {
                     "The repository rejected the credential or requires one");
             case GitRemoteChecker.NOT_FOUND -> new GitOperationException(HttpStatus.BAD_GATEWAY, "GIT_REPO_NOT_FOUND",
                     "The repository was not found");
-            default -> byCommit ? refNotFound()
+            default -> byCommit && GitRemoteChecker.isMissingFetchSpec(e) ? refNotFound()
                     : new GitOperationException(HttpStatus.BAD_GATEWAY, "GIT_UNREACHABLE", "The repository could not be reached");
         };
     }

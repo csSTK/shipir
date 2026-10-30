@@ -11,7 +11,6 @@ import org.springframework.stereotype.Component;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.Locale;
 
 /** Runs {@code ls-remote} through JGit (no git binary, no shell) and classifies the outcome. */
 @Component
@@ -76,24 +75,56 @@ class GitRemoteChecker {
         }
     }
 
+    /**
+     * Classifies by exception type, never by searching the message: JGit echoes the repository URL in its messages, so
+     * a URL like {@code https://h/401/not-found.git} must not decide the outcome. 404 surfaces as
+     * {@link NoRemoteRepositoryException}. JGit has no typed exception for 401/403, only a fixed reason after the
+     * URL ({@code "<uri>: <reason>"}); the URL contains no whitespace, so the reason is everything after the first one.
+     */
     static String classify(TransportException e) {
-        if (e.getCause() instanceof NoRemoteRepositoryException || hasMessage(e, "not found")) {
-            return NOT_FOUND;
+        boolean authRejected = false;
+        for (Throwable c = e; c != null; c = c.getCause()) {
+            if (c instanceof NoRemoteRepositoryException) {
+                return NOT_FOUND;
+            }
+            if (c instanceof org.eclipse.jgit.errors.TransportException && isAuthReason(reason(c.getMessage()))) {
+                authRejected = true;
+            }
         }
-        if (hasMessage(e, "not authorized") || hasMessage(e, "authentication") || hasMessage(e, "forbidden")
-                || hasMessage(e, "401") || hasMessage(e, "403")) {
-            return AUTH_FAILED;
-        }
-        return UNREACHABLE;
+        return authRejected ? AUTH_FAILED : UNREACHABLE;
     }
 
-    private static boolean hasMessage(Throwable t, String part) {
-        for (Throwable c = t; c != null; c = c.getCause()) {
-            if (c.getMessage() != null && c.getMessage().toLowerCase(Locale.ROOT).contains(part)) {
+    /** True if {@code message} is JGit's "Remote does not have &lt;sha&gt; available for fetch." (no URL in it). */
+    static boolean isMissingFetchSpec(TransportException e) {
+        for (Throwable c = e; c != null; c = c.getCause()) {
+            if (c instanceof org.eclipse.jgit.errors.TransportException
+                    && c.getMessage() != null && c.getMessage().startsWith("Remote does not have ")
+                    && c.getMessage().endsWith(" available for fetch.")) {
                 return true;
             }
         }
-        return false;
+        return e.getMessage() != null && e.getMessage().startsWith("Remote does not have ")
+                && e.getMessage().endsWith(" available for fetch.");
+    }
+
+    private static String reason(String message) {
+        if (message == null) {
+            return "";
+        }
+        int ws = -1;
+        for (int i = 0; i < message.length(); i++) {
+            if (Character.isWhitespace(message.charAt(i))) {
+                ws = i;
+                break;
+            }
+        }
+        return ws < 0 ? "" : message.substring(ws + 1);
+    }
+
+    // JGitText: notAuthorized (HTTP 401), authenticationNotSupported, serviceNotPermitted (HTTP 403)
+    private static boolean isAuthReason(String reason) {
+        return reason.equals("not authorized") || reason.equals("authentication not supported")
+                || reason.matches("(?s)[\\w-]+ not permitted on '.*");
     }
 
     private static GitException invalid() {
