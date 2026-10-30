@@ -7,8 +7,8 @@ import { Button, Dialog, IconButton, TextField } from '../../../shared/ui/index.
 import { useCreateDeployment, useDeployDeployment, useGenerateCompose, useManagedDeployments, type EnvEntry } from '../api.ts'
 import { describeDeploymentError } from '../deploymentErrors.ts'
 import { toPayload } from '../editor/index.ts'
-import { applyFreePorts, preferredHostPorts, specToState, type WizardState } from '../wizard/index.ts'
-import { buildSpec, validatePort } from '../wizard/model.ts'
+import { applyFreePorts, preferredHostPorts, specToState, syncPortValue, type WizardState } from '../wizard/index.ts'
+import { FIXED_HOST_PORTS, buildSpec, validatePort } from '../wizard/model.ts'
 import { fetchFreePorts, type AppTemplate } from './api.ts'
 import { generateSecret, initialEnv, suggestName } from './install.ts'
 import './templates.css'
@@ -79,6 +79,7 @@ export function InstallTemplateDialog({
   const nameTouched = useRef(false)
   const portsTouched = useRef(false)
   const [nameError, setNameError] = useState<string | null>(null)
+  const [keptPorts, setKeptPorts] = useState<number[]>([])
   const [portErrors, setPortErrors] = useState<Record<string, string>>({})
   const [problem, setProblem] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -97,7 +98,8 @@ export function InstallTemplateDialog({
     fetchFreePorts(hostId, preferred)
       .then((suggestions) => {
         if (cancelled || portsTouched.current) return
-        const next = applyFreePorts(baseState, suggestions).state
+        const { state: next, kept } = applyFreePorts(baseState, suggestions)
+        setKeptPorts(kept)
         setState(next)
         setPorts(portRows(next))
       })
@@ -112,7 +114,8 @@ export function InstallTemplateDialog({
 
   function setPort(row: PortRow, value: string) {
     portsTouched.current = true
-    setPorts((rows) => rows.map((r) => (r === row ? { ...r, value } : r)))
+    setPorts((rows) => syncPortValue(rows, row, value))
+    setKeptPorts((kept) => kept.filter((k) => String(k) !== row.value.trim()))
     setPortErrors({})
   }
 
@@ -150,7 +153,7 @@ export function InstallTemplateDialog({
         const suggestions = await fetchFreePorts(hostId, wanted)
         for (const r of ports) {
           const suggestion = suggestions.find((s) => s.preferred === Number(r.value))
-          if (suggestion && suggestion.free !== Number(r.value)) {
+          if (suggestion && suggestion.free !== Number(r.value) && !FIXED_HOST_PORTS.has(suggestion.preferred)) {
             errors[`${r.si}:${r.pi}`] =
               suggestion.free === null
                 ? tr('InstallTemplateDialog.portTakenNoFree', { port: r.value })
@@ -229,6 +232,7 @@ export function InstallTemplateDialog({
             value={r.value === '' ? '' : Number(r.value)}
             onChange={(e) => setPort(r, e.target.value)}
             error={portErrors[`${r.si}:${r.pi}`]}
+            help={keptPorts.some((k) => String(k) === r.value.trim()) ? tr('InstallTemplateDialog.fixedPortTaken', { port: r.value.trim() }) : undefined}
             disabled={locked}
           />
         ))}

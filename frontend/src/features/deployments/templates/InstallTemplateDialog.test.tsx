@@ -62,11 +62,11 @@ function Where() {
   return <p data-testid="where">{useLocation().pathname}</p>
 }
 
-function open(onAdvanced = vi.fn()) {
+function open(onAdvanced = vi.fn(), template: AppTemplate = wordpress) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter>
-        <InstallTemplateDialog hostId="h1" template={wordpress} onClose={() => {}} onAdvanced={onAdvanced} />
+        <InstallTemplateDialog hostId="h1" template={template} onClose={() => {}} onAdvanced={onAdvanced} />
         <Routes>
           <Route path="*" element={<Where />} />
         </Routes>
@@ -146,6 +146,27 @@ describe('InstallTemplateDialog', () => {
     open()
     await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('wordpress-2'))
     expect(await screen.findByLabelText('Host port for wp (container port 80)')).toHaveValue(8083)
+  })
+
+  it('keeps a taken DNS port 53 with a visible warning and edits tcp/udp together', async () => {
+    const pihole: AppTemplate = {
+      ...wordpress,
+      id: 'pihole',
+      env: [],
+      spec: { services: [{ name: 'dns', image: 'pihole/pihole', ports: [{ host: 53, container: 53, protocol: 'tcp' }, { host: 53, container: 53, protocol: 'udp' }] }], networks: [], volumes: [] },
+    }
+    apiFetch.mockImplementation((path: string) => {
+      if (path.startsWith('/hosts/h1/ports/free')) return Promise.resolve({ used: [{ port: 53, protocol: 'udp' }], suggestions: [{ preferred: 53, free: 5353 }] })
+      if (path === '/hosts/h1/managed-deployments') return Promise.resolve([])
+      return Promise.reject(new ApiError(404, 'x', 'NOT_FOUND'))
+    })
+    open(vi.fn(), pihole)
+    const ports = await screen.findAllByLabelText('Host port for dns (container port 53)')
+    await waitFor(() => expect(ports[0]).toHaveAccessibleDescription(/Port 53 is taken on this host and was kept/))
+    expect(ports.map((p) => (p as HTMLInputElement).value)).toEqual(['53', '53'])
+    fireEvent.change(ports[0], { target: { value: '5353' } })
+    expect(ports.map((p) => (p as HTMLInputElement).value)).toEqual(['5353', '5353'])
+    expect(ports[0]).not.toHaveAccessibleDescription(/was kept/)
   })
 
   it('shows a taken name inline on the name field and creates nothing', async () => {

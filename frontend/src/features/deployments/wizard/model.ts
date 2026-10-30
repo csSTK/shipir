@@ -364,11 +364,23 @@ export function preferredHostPorts(state: WizardState): number[] {
   return ports.filter((p, i): p is number => p !== null && ports.indexOf(p) === i)
 }
 
-/** Swaps each host port that has a different free suggestion; everything else stays. */
-export function applyFreePorts(state: WizardState, suggestions: FreePortSuggestion[]): { state: WizardState; replaced: { from: number; to: number }[] } {
+/** Host ports clients expect at a fixed number (DNS). They are never swapped for a free one; a clash is only reported. */
+export const FIXED_HOST_PORTS: ReadonlySet<number> = new Set([53])
+
+/** Swaps each host port that has a different free suggestion, except fixed ports (reported in `kept`); everything else stays. */
+export function applyFreePorts(
+  state: WizardState,
+  suggestions: FreePortSuggestion[],
+): { state: WizardState; replaced: { from: number; to: number }[]; kept: number[] } {
   const target = new Map<number, number>()
-  for (const s of suggestions) if (s.free !== null && s.free !== s.preferred) target.set(s.preferred, s.free)
-  const replaced = [...target].map(([from, to]) => ({ from, to }))
+  const clashing = new Set<number>()
+  for (const s of suggestions) {
+    if (s.free === s.preferred) continue
+    if (FIXED_HOST_PORTS.has(s.preferred)) clashing.add(s.preferred)
+    else if (s.free !== null) target.set(s.preferred, s.free)
+  }
+  const used = (n: number) => state.services.some((s) => s.ports.some((p) => p.host.trim() === String(n)))
+  const replaced = [...target].map(([from, to]) => ({ from, to })).filter((r) => used(r.from))
   const services = state.services.map((svc) => ({
     ...svc,
     ports: svc.ports.map((p) => {
@@ -376,5 +388,11 @@ export function applyFreePorts(state: WizardState, suggestions: FreePortSuggesti
       return to === undefined ? p : { ...p, host: String(to) }
     }),
   }))
-  return { state: { ...state, services }, replaced: replaced.filter((r) => state.services.some((s) => s.ports.some((p) => p.host.trim() === String(r.from)))) }
+  return { state: { ...state, services }, replaced, kept: [...clashing].filter(used) }
+}
+
+/** Sets a port row's value; rows of the same service that shared its old host number (tcp/udp pair) follow. */
+export function syncPortValue<R extends { si: number; value: string }>(rows: R[], row: R, value: string): R[] {
+  const old = row.value.trim()
+  return rows.map((r) => (r === row || (old !== '' && r.si === row.si && r.value.trim() === old) ? { ...r, value } : r))
 }

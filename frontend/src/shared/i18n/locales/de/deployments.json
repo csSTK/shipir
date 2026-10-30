@@ -560,6 +560,7 @@
   "InstallTemplateDialog.installName": "{{name}} installieren",
   "InstallTemplateDialog.hostPortFor": "Host-Port für {{service}} (Container-Port {{container}})",
   "InstallTemplateDialog.portTakenTry": "Port {{port}} ist belegt. Probiere {{free}}.",
+  "InstallTemplateDialog.fixedPortTaken": "Port {{port}} ist auf diesem Host belegt und wurde beibehalten, weil Clients diese Nummer erwarten. Gib ihn vor der Installation frei, sonst schlägt das Deploy fehl.",
   "InstallTemplateDialog.portTakenNoFree": "Port {{port}} ist belegt und es wurde kein freier Port gefunden.",
   "InstallTemplateDialog.couldNotBuildTheComposeFile": "Die Compose-Datei konnte nicht erstellt werden.",
   "InstallTemplateDialog.couldNotStartTheDeployment": "Das Deployment wurde erstellt, konnte aber nicht gestartet werden. Versuche es erneut.",

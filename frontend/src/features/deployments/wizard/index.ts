@@ -1,2 +1,2 @@
 export { ComposeWizard } from './ComposeWizard.tsx'
-export { applyFreePorts, preferredHostPorts, specToState, type FreePortSuggestion, referencedEnvKeys, type TemplateSpecInput, type WizardState } from './model.ts'
+export { applyFreePorts, preferredHostPorts, syncPortValue, specToState, type FreePortSuggestion, referencedEnvKeys, type TemplateSpecInput, type WizardState } from './model.ts'

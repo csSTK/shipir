@@ -560,6 +560,7 @@
   "InstallTemplateDialog.installName": "Install {{name}}",
   "InstallTemplateDialog.hostPortFor": "Host port for {{service}} (container port {{container}})",
   "InstallTemplateDialog.portTakenTry": "Port {{port}} is taken. Try {{free}}.",
+  "InstallTemplateDialog.fixedPortTaken": "Port {{port}} is taken on this host and was kept, because clients expect this number. Free it before installing or the deploy will fail.",
   "InstallTemplateDialog.portTakenNoFree": "Port {{port}} is taken and no free port was found.",
   "InstallTemplateDialog.couldNotBuildTheComposeFile": "Could not build the Compose file.",
   "InstallTemplateDialog.couldNotStartTheDeployment": "The deployment was created but could not be started. Try again.",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyFreePorts, buildSpec, preferredHostPorts, emptyDomain, emptyService, referencedEnvKeys, specToState, splitCommand, validatePort, validateWizard, type ServiceForm, type WizardState } from './model.ts'
+import { applyFreePorts, buildSpec, preferredHostPorts, emptyDomain, emptyService, referencedEnvKeys, specToState, splitCommand, syncPortValue, validatePort, validateWizard, type ServiceForm, type WizardState } from './model.ts'
 
 function service(patch: Partial<ServiceForm>): ServiceForm {
   return { ...emptyService(), name: 'web', image: 'nginx:1.27', ...patch }
@@ -270,6 +270,38 @@ describe('applyFreePorts', () => {
     const r = applyFreePorts(seeded, [{ preferred: 8080, free: null }])
     expect(r.state.services[0].ports[0].host).toBe('8080')
     expect(r.replaced).toEqual([])
+  })
+})
+
+describe('applyFreePorts with fixed-port services', () => {
+  const dns = specToState({
+    services: [{ name: 'pihole', image: 'x', ports: [{ host: 53, container: 53, protocol: 'tcp' }, { host: 53, container: 53, protocol: 'udp' }, { host: 8085, container: 80 }] }],
+    networks: [],
+    volumes: [],
+  })
+
+  it('does not swap a clashing DNS port but reports it as kept, still swapping other ports', () => {
+    const r = applyFreePorts(dns, [{ preferred: 53, free: 5353 }, { preferred: 8085, free: 8086 }])
+    expect(r.state.services[0].ports.map((p) => p.host)).toEqual(['53', '53', '8086'])
+    expect(r.replaced).toEqual([{ from: 8085, to: 8086 }])
+    expect(r.kept).toEqual([53])
+  })
+
+  it('reports nothing kept when the fixed port is free', () => {
+    expect(applyFreePorts(dns, [{ preferred: 53, free: 53 }]).kept).toEqual([])
+  })
+})
+
+describe('syncPortValue', () => {
+  it('moves tcp and udp of one service together and leaves other ports alone', () => {
+    const rows = [
+      { si: 0, pi: 0, value: '53' },
+      { si: 0, pi: 1, value: '53' },
+      { si: 0, pi: 2, value: '8085' },
+      { si: 1, pi: 0, value: '53' },
+    ]
+    const out = syncPortValue(rows, rows[0], '5353')
+    expect(out.map((r) => r.value)).toEqual(['5353', '5353', '8085', '53'])
   })
 })
 
