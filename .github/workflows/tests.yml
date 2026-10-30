@@ -109,3 +109,38 @@ jobs:
           path: frontend/playwright-report/
           if-no-files-found: ignore
           retention-days: 7
+
+  # Runs with the frontend tests (so on dev pushes too): CSP regressions must not wait for a release.
+  csp:
+    if: ${{ inputs.frontend }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+
+      # Builds the app and serves it with `vite preview` under the CSP from nginx/security-headers.inc.template.
+      - run: pnpm e2e:csp
+
+  nginx-headers:
+    if: ${{ inputs.frontend }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Starts the nginx image with the real templates; the runner has Docker.
+      - run: ./frontend/nginx/check-headers.sh
