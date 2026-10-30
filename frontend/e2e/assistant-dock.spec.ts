@@ -13,6 +13,7 @@ const stompFrame = (command: string, headers: Record<string, string>, body = '')
 async function mockBroker(page: Page) {
   let push: ((body: object) => void) | null = null
   const byTopic = new Map<string, (body: object) => void>()
+  const subscribes = new Map<string, number>()
   await page.routeWebSocket('**/ws', (ws) => {
     ws.onMessage((raw) => {
       const text = String(raw)
@@ -24,6 +25,7 @@ async function mockBroker(page: Page) {
         push = (body) =>
           ws.send(stompFrame('MESSAGE', { subscription: id, destination, 'message-id': String(Math.random()) }, JSON.stringify(body)))
         byTopic.set(destination, push)
+        subscribes.set(destination, (subscribes.get(destination) ?? 0) + 1)
       }
     })
   })
@@ -32,9 +34,13 @@ async function mockBroker(page: Page) {
       await expect.poll(() => push !== null).toBe(true)
       push?.(body)
     },
-    /** Pushes to one topic, e.g. a chat that is no longer the active one. */
-    emitTo: async (destination: string, body: object) => {
-      await expect.poll(() => byTopic.has(destination)).toBe(true)
+    /**
+     * Pushes to one topic, e.g. a chat that is no longer the active one. `subscription` is the SUBSCRIBE count to wait
+     * for. Every subscribeToTopic call opens its own socket, so after the dock switched chats the previous (closing)
+     * socket still looks live until the new one has subscribed, and a frame sent to it is lost.
+     */
+    emitTo: async (destination: string, body: object, subscription = 1) => {
+      await expect.poll(() => (subscribes.get(destination) ?? 0) >= subscription && byTopic.has(destination)).toBe(true)
       byTopic.get(destination)?.(body)
     },
   }
@@ -204,7 +210,7 @@ test('a run finishing in a chat the dock switched away from still shows the answ
   const icon = page.getByRole('button', { name: 'Open assistant' })
   await expect(icon).toHaveAttribute('data-status', 'running')
 
-  await broker.emitTo('/topic/chat/s1', { runId: RUN, type: 'DONE', outcome: 'COMPLETE' })
+  await broker.emitTo('/topic/chat/s1', { runId: RUN, type: 'DONE', outcome: 'COMPLETE' }, 2)
   await expect(icon).toHaveAttribute('data-status', 'ready')
 })
 
