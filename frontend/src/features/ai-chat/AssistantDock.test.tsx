@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Link, MemoryRouter } from 'react-router-dom'
@@ -297,5 +299,11 @@ describe('AssistantDock', () => {
       await ask('hi')
       await waitFor(() => expect(sentBodies()).toEqual([{ content: 'hi' }]))
     })
+  })
+
+  it('pads the phone sheet by the bottom safe-area inset', () => {
+    const css = readFileSync(join(process.cwd(), 'src/features/ai-chat/AssistantDock.css'), 'utf8')
+    const sheet = /\.assistant-dock__panel--sheet\s*\{[^}]*\}/.exec(css)?.[0] ?? ''
+    expect(sheet).toContain('env(safe-area-inset-bottom')
   })
 })

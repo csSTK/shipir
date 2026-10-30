@@ -61,11 +61,16 @@ export function ChatDockProvider({ children }: { children: ReactNode }) {
     return refresh()
     // `refresh` changes identity every render; useChatStream reads the latest onDone through doneRef.
   }, [sessionId, markUnread, refresh])
-  const stream = useChatStream(sessionId, onDone)
+  const { text, activity, running, rateLimitWait, connection, start, stop } = useChatStream(sessionId, onDone)
+  // `start` is a fresh closure each render (it only sets state), so the memo below keys on the data fields.
+  const startRef = useRef(start)
+  useEffect(() => {
+    startRef.current = start
+  })
 
   const runningRef = useRef(false)
   useEffect(() => {
-    runningRef.current = stream.running
+    runningRef.current = running
   })
 
   const onBackgroundDone = useCallback(
@@ -121,9 +126,17 @@ export function ChatDockProvider({ children }: { children: ReactNode }) {
   const pendingCount = pending.data ?? 0
 
   const value = useMemo<ChatDock>(
-    () => ({ sessionId, stream, unread, runningElsewhere, pendingCount, open, view, forget }),
-    // The `stream` object is fresh each render, so the memo depends on its fields instead.
-    [sessionId, stream.text, stream.activity, stream.running, stream.rateLimitWait, stream.connection, unread, runningElsewhere, pendingCount, open, view, forget],
+    () => ({
+      sessionId,
+      stream: { text, activity, running, rateLimitWait, connection, start: () => startRef.current(), stop },
+      unread,
+      runningElsewhere,
+      pendingCount,
+      open,
+      view,
+      forget,
+    }),
+    [sessionId, text, activity, running, rateLimitWait, connection, stop, unread, runningElsewhere, pendingCount, open, view, forget],
   )
   return (
     <ChatDockContext.Provider value={value}>

@@ -1,7 +1,7 @@
 .assistant-dock {
   position: fixed;
   right: var(--space-5);
-  bottom: var(--space-5);
+  bottom: calc(var(--space-5) + env(safe-area-inset-bottom));
   z-index: var(--z-dropdown);
   display: flex;
   flex-direction: column;
@@ -139,6 +139,7 @@
   left: 0;
   width: auto;
   height: 85dvh;
+  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
   border-bottom: 0;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   transform-origin: bottom center;
