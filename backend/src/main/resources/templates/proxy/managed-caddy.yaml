@@ -1,0 +1,26 @@
+# Managed Caddy reverse proxy (Shipir domains, shipr-m15h). Automatic HTTPS with Let's Encrypt.
+# Caddy reads its Caddyfile from the config volume at /etc/shipir-proxy/Caddyfile. The Caddyfile must
+# set the admin API to localhost (the default); this file never publishes the admin port.
+# No Docker socket. Ports 80 and 443 must be reachable (443/udp serves HTTP/3).
+# The network shipir-proxy is external: create it before deploying (docker network create shipir-proxy).
+services:
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    command: ["run", "--config", "/etc/shipir-proxy/Caddyfile", "--adapter", "caddyfile"]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - shipir-proxy-config:/etc/shipir-proxy:ro
+      - shipir-proxy-data:/data
+    networks:
+      - shipir-proxy
+volumes:
+  shipir-proxy-config: {}
+  shipir-proxy-data: {}
+networks:
+  shipir-proxy:
+    name: shipir-proxy
+    external: true

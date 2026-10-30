@@ -1,0 +1,39 @@
+# Managed Traefik reverse proxy (Shipir domains, shipr-m15h). Automatic HTTPS with Let's Encrypt.
+# Set ACME_EMAIL and DNS_PROVIDER in the .env of this deployment, plus the credentials of your DNS provider
+# (for the letsencrypt-dns resolver). Ports 80 and 443 must be reachable.
+# No Docker socket: routes come from the file provider directory /etc/shipir-proxy (the config volume).
+# The network shipir-proxy is external: create it before deploying (docker network create shipir-proxy).
+services:
+  traefik:
+    image: traefik:v3.5.3
+    restart: unless-stopped
+    command:
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --providers.file.directory=/etc/shipir-proxy
+      - --providers.file.watch=true
+      - --certificatesresolvers.letsencrypt-http.acme.email=${ACME_EMAIL:?set ACME_EMAIL in .env}
+      - --certificatesresolvers.letsencrypt-http.acme.storage=/letsencrypt/acme-http.json
+      - --certificatesresolvers.letsencrypt-http.acme.tlschallenge=true
+      - --certificatesresolvers.letsencrypt-dns.acme.email=${ACME_EMAIL:?set ACME_EMAIL in .env}
+      - --certificatesresolvers.letsencrypt-dns.acme.storage=/letsencrypt/acme-dns.json
+      - --certificatesresolvers.letsencrypt-dns.acme.dnschallenge=true
+      - --certificatesresolvers.letsencrypt-dns.acme.dnschallenge.provider=${DNS_PROVIDER:?set DNS_PROVIDER in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file:
+      # Provider credentials for the DNS challenge (e.g. CF_DNS_API_TOKEN for Cloudflare)
+      - .env
+    volumes:
+      - shipir-proxy-config:/etc/shipir-proxy:ro
+      - shipir-proxy-acme:/letsencrypt
+    networks:
+      - shipir-proxy
+volumes:
+  shipir-proxy-config: {}
+  shipir-proxy-acme: {}
+networks:
+  shipir-proxy:
+    name: shipir-proxy
+    external: true
