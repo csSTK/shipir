@@ -10,6 +10,7 @@ import { useManagedProxy, useRefreshProxy, useSetupProxy, type ProxyInstance, ty
 import { describeProxyError } from './domainErrors.ts'
 import { useAdvancedMode } from './advancedMode.ts'
 import { ProxySettingsPanel } from './ProxySettingsPanel.tsx'
+import { ProxyConfigEditor } from './config/ProxyConfigEditor.tsx'
 import { CERTIFICATES_ID } from './routes/PublishDialog.tsx'
 import { CertificatesSection } from './certificates/CertificatesSection.tsx'
 import { RoutesList } from './routes/RoutesList.tsx'
@@ -75,6 +76,7 @@ function Ready({ instance, hostId, isAdmin, canPublish }: { instance: ProxyInsta
       </Card>
       <RoutesList hostId={hostId} canPublish={canPublish} />
       {advanced && isAdmin && <ProxySettingsPanel hostId={hostId} instance={instance} />}
+      {isAdmin && <ProxyConfigEditor hostId={hostId} />}
       <div id={CERTIFICATES_ID} className="domains__anchor">
         <CertificatesSection hostId={hostId} isAdmin={isAdmin} />
       </div>

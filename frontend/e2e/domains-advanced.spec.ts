@@ -35,6 +35,9 @@ function setup(api: ApiMock, role: string, type = 'TRAEFIK') {
   api.mock('GET', ROUTES, { body: [] })
   api.mock('GET', `${ROUTES}/status`, { body: [] })
   api.mock('GET', `${ROUTES}/candidates`, { body: candidates })
+  // the raw configuration editor (ADMIN, advanced mode) loads these
+  api.mock('GET', '/api/hosts/a/proxy/config', { body: { type, managed: [], customFileName: 'custom.yml', custom: '', customUpdatedAt: null } })
+  api.mock('GET', '/api/hosts/a/proxy/config/custom/versions', { body: [] })
 }
 
 test('an operator publishes with advanced options; they are hidden again in simple mode', async ({ page, api }) => {
