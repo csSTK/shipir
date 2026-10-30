@@ -1,13 +1,21 @@
 package dev.bethge.shipir.ai.tools;
 
 import dev.bethge.shipir.auth.Role;
+import dev.bethge.shipir.common.exception.CodedException;
 import dev.bethge.shipir.compose.DeploymentException;
+import dev.bethge.shipir.config_editor.ConfigFileException;
+import dev.bethge.shipir.git.GitException;
+import dev.bethge.shipir.git.GitOperationException;
+import dev.bethge.shipir.notification.WebhookException;
+import dev.bethge.shipir.permission.PermissionException;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import dev.bethge.shipir.host.HostException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import tools.jackson.databind.JsonNode;
@@ -284,6 +292,35 @@ class AiToolRegistryTest {
         ToolResult boom = registry.execute("boom", args, ctx(Role.VIEWER));
         assertThat(boom.error()).isTrue();
         assertThat(boom.content()).contains("TOOL_FAILED").doesNotContain("hunter2").doesNotContain("secret-host");
+    }
+
+    static List<Class<? extends RuntimeException>> codedExceptions() {
+        return List.of(HostException.class, DeploymentException.class, GitOperationException.class,
+                ConfigFileException.class, PermissionException.class, GitException.class, WebhookException.class);
+    }
+
+    /**
+     * Each feature exception that carries a code must reach the model with its own code and message, not as TOOL_FAILED.
+     * The constructors are package-private in their feature packages, so each is built reflectively with the shared
+     * (HttpStatus, code, message) signature.
+     */
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("codedExceptions")
+    void everyCodedExceptionMapsToItsCodeAndMessage(Class<? extends RuntimeException> type) throws Exception {
+        assertThat(CodedException.class.isAssignableFrom(type)).as("%s must implement CodedException", type).isTrue();
+        String code = "MARKER_" + type.getSimpleName().toUpperCase();
+        String message = "marker message of " + type.getSimpleName();
+        var constructor = type.getDeclaredConstructor(HttpStatus.class, String.class, String.class);
+        constructor.setAccessible(true);
+        RuntimeException failure = constructor.newInstance(HttpStatus.BAD_REQUEST, code, message);
+        AiToolRegistry registry = registry(tool("t", Role.VIEWER, false, (a, c) -> {
+            throw failure;
+        }));
+
+        ToolResult result = registry.execute("t", args(), ctx(Role.VIEWER));
+
+        assertThat(result.error()).isTrue();
+        assertThat(result.content()).contains(code, message).doesNotContain("TOOL_FAILED");
     }
 
     @Test
