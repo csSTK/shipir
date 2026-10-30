@@ -97,6 +97,30 @@ class TemplateCatalogTest {
         }
     }
 
+    /**
+     * Format guard only; whether a tag exists in its registry needs the network and is checked by
+     * scripts/check-template-images.sh. Floating minor tags (mysql:8.4, mongo:7.0, rabbitmq:3.13-management,
+     * influxdb:2.7, ...) are deliberate: the official images move them along the maintained patch line, so
+     * deployments get security fixes; exact patch pins stay for app images where upstream breaks between releases.
+     */
+    @Test
+    void bundledImagesHaveAValidReferenceFormat() {
+        String reference = "([a-z0-9.-]+(:[0-9]+)?/)?[a-z0-9._-]+(/[a-z0-9._-]+)*:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}";
+        for (AppTemplate t : bundled().all()) {
+            for (ServiceSpec s : services(t)) {
+                assertThat(s.image()).as("image of %s/%s", t.id(), s.name()).matches(reference);
+            }
+        }
+    }
+
+    @Test
+    void minioIsNotPulledFromTheAbandonedUpstreamRepositories() {
+        // minio/minio (Docker Hub) and quay.io/minio/minio no longer serve the community server image.
+        ServiceSpec minio = services(bundled().all().stream().filter(t -> t.id().equals("minio")).findFirst().orElseThrow())
+                .get(0);
+        assertThat(minio.image()).startsWith("pgsty/minio:RELEASE.");
+    }
+
     @Test
     void bundledHostPortsAreUniqueAcrossTemplates() {
         assertThat(hostPortCollisions(bundled().all())).isEmpty();

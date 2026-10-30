@@ -1048,7 +1048,7 @@
       "services": [
         {
           "name": "minio",
-          "image": "minio/minio:RELEASE.2024-10-13T13-34-11Z",
+          "image": "pgsty/minio:RELEASE.2026-08-04T00-00-00Z",
           "command": [
             "server",
             "/data",
