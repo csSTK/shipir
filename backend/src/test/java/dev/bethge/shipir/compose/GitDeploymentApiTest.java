@@ -215,6 +215,20 @@ class GitDeploymentApiTest extends DeploymentTestBase {
     }
 
     @Test
+    void paddedRefIsStoredAndSyncedTrimmed() throws Exception {
+        Login admin = login("admin");
+        mvc.perform(admin.write(post(url())).contentType(APPLICATION_JSON)
+                        .content(gitJson("padded", base + "/public.git", " main ", "compose.yaml", null)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.git.ref").value("main"))
+                .andExpect(jsonPath("$.git.lastCommitSha").value(head()));
+
+        assertThat(jdbc.queryForObject("SELECT git_ref FROM deployments WHERE name = 'padded'", String.class))
+                .isEqualTo("main");
+        assertThat(files.readCompose(hostId, "padded").orElseThrow()).contains(YAML_A);
+    }
+
+    @Test
     void viewerIsForbiddenAndOperatorCannotUseMissingCredential() throws Exception {
         Login viewer = login("viewer");
         mvc.perform(viewer.write(post(url())).contentType(APPLICATION_JSON)
