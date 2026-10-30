@@ -30,9 +30,18 @@ const usage = {
   ],
 }
 
+/** The category legend list; the card's Largest items list is a separate list and is never searched here. */
+function legend(): HTMLElement {
+  const list = document.querySelector<HTMLElement>('.disk__legend')
+  if (!list) throw new Error('no legend list')
+  return list
+}
+
 /** The legend row whose text starts with the category label (list items have no name from content). */
 function row(label: string): HTMLElement {
-  const found = screen.getAllByRole('listitem').find((item) => item.textContent?.startsWith(label))
+  const found = within(legend())
+    .getAllByRole('listitem')
+    .find((item) => item.textContent?.startsWith(label))
   if (!found) throw new Error(`no legend row for ${label}`)
   return found
 }
@@ -82,7 +91,7 @@ describe('DiskUsageCard', () => {
     expect(items[1]).toHaveTextContent('postgres:16')
     expect(items[1]).toHaveTextContent('Image')
     expect(items[1]).toHaveTextContent('600 MiB')
-    expect(items[2]).toHaveTextContent('Build cache')
+    expect(items[2]).toHaveTextContent('Build cache abc123')
   })
 
   it('shows an empty state when there are no largest items', async () => {
