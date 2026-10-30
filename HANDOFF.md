@@ -51,6 +51,8 @@ Implemented in `backend/src/main/resources/db/migration/`: `V1__create_users`, `
 
 Also implemented: `V19__create_registry_credentials`, `V20__create_ai_provider_configs`, `V21__add_docker_hosts_single_local_index`, `V22__create_permissions`. No further migrations planned.
 
+Epic shipr-m15h (managed reverse proxy): `V39__create_proxy_tables` (`proxy_instances`, `proxy_certificates`, `proxy_routes`, all per host, CASCADE with the host) is implemented.
+
 ## Review notes (decided)
 
 - **Decided:** all timestamp columns use `TIMESTAMPTZ` (implemented in V1-V4). The drafts used `TIMESTAMP`; `TIMESTAMPTZ` is the usual recommendation in PostgreSQL to avoid time-zone ambiguity, and it maps cleanly to `Instant`/`OffsetDateTime` in Java.

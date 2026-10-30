@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V36 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V39 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -2570,6 +2570,208 @@ class SchemaMigrationTest {
                 + "WHERE table_name = 'deployments' AND column_name = 'profiles'", String.class)).isEqualTo("ARRAY");
         assertThatThrownBy(() -> jdbc.update("UPDATE deployments SET profiles = NULL WHERE id = ?", deployment))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void proxyInstanceAllowsOnlyOneProxyPerHost() {
+        UUID owner = insertUser("alice");
+        UUID host = insertHost(owner);
+        insertProxyInstance(host, "TRAEFIK", "ACME_HTTP", null);
+        assertThatThrownBy(() -> insertProxyInstance(host, "CADDY", "INTERNAL", null))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("uq_proxy_instances_host");
+    }
+
+    @Test
+    void proxyInstanceOnAnotherHostIsAllowed() {
+        UUID owner = insertUser("alice");
+        insertProxyInstance(insertHost(owner), "TRAEFIK", "ACME_HTTP", null);
+        insertProxyInstance(insertHost(owner), "CADDY", "INTERNAL", null);
+        assertThat(count("proxy_instances")).isEqualTo(2);
+    }
+
+    @Test
+    void proxyInstanceDefaultsCustomConfigToEmptyString() {
+        UUID host = insertHost(insertUser("alice"));
+        insertProxyInstance(host, "TRAEFIK", "ACME_HTTP", null);
+        assertThat(jdbc.queryForObject("SELECT custom_config FROM proxy_instances WHERE host_id = ?", String.class, host))
+                .isEmpty();
+        assertThat(jdbc.queryForObject("SELECT custom_config_updated_at FROM proxy_instances WHERE host_id = ?",
+                Timestamp.class, host)).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"NGINX", "traefik"})
+    void proxyInstanceRejectsUnknownType(String type) {
+        UUID host = insertHost(insertUser("alice"));
+        assertThatThrownBy(() -> insertProxyInstance(host, type, "ACME_HTTP", null))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("proxy_instances_type_check");
+    }
+
+    @Test
+    void proxyInstanceRejectsUnknownDefaultCertMode() {
+        UUID host = insertHost(insertUser("alice"));
+        assertThatThrownBy(() -> insertProxyInstance(host, "TRAEFIK", "CUSTOM_ONLY", null))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("proxy_instances_default_cert_mode_check");
+    }
+
+    @Test
+    void deletingDeploymentSetsProxyInstanceDeploymentNullAndKeepsProxy() {
+        UUID owner = insertUser("alice");
+        UUID host = insertHost(owner);
+        UUID deployment = insertDeployment(host, owner, "proxy");
+        insertProxyInstance(host, "TRAEFIK", "ACME_HTTP", deployment);
+        jdbc.update("DELETE FROM deployments WHERE id = ?", deployment);
+        assertThat(count("proxy_instances")).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT deployment_id FROM proxy_instances WHERE host_id = ?", UUID.class, host))
+                .isNull();
+    }
+
+    @Test
+    void proxyCertificateNameIsUniquePerHostButNotAcrossHosts() {
+        UUID owner = insertUser("alice");
+        UUID first = insertHost(owner);
+        UUID second = insertHost(owner);
+        insertProxyCertificate(first, "wildcard");
+        insertProxyCertificate(second, "wildcard");
+        assertThat(count("proxy_certificates")).isEqualTo(2);
+        assertThatThrownBy(() -> insertProxyCertificate(first, "wildcard"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("uq_proxy_certificates_host_name");
+    }
+
+    @Test
+    void proxyCertificateDefaultsDomainsToEmptyArrayAndIdToGeneratedUuid() {
+        UUID host = insertHost(insertUser("alice"));
+        insertProxyCertificate(host, "cert");
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT id, cardinality(domains) AS domain_count FROM proxy_certificates WHERE host_id = ?", host);
+        assertThat(row.get("id")).isNotNull();
+        assertThat(row.get("domain_count")).isEqualTo(0);
+    }
+
+    @Test
+    void proxyRouteHostnameIsUniquePerHostButNotAcrossHosts() {
+        UUID owner = insertUser("alice");
+        UUID first = insertHost(owner);
+        UUID second = insertHost(owner);
+        insertProxyRoute(first, "app.example.com", "ACME_HTTP", null, 8080);
+        insertProxyRoute(second, "app.example.com", "ACME_HTTP", null, 8080);
+        assertThat(count("proxy_routes")).isEqualTo(2);
+        assertThatThrownBy(() -> insertProxyRoute(first, "app.example.com", "ACME_HTTP", null, 8081))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("uq_proxy_routes_host_hostname");
+    }
+
+    @Test
+    void proxyRouteHostnameMustBeLowerCase() {
+        UUID host = insertHost(insertUser("alice"));
+        assertThatThrownBy(() -> insertProxyRoute(host, "App.Example.com", "ACME_HTTP", null, 8080))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("proxy_routes_hostname_check");
+    }
+
+    @Test
+    void proxyRouteCustomCertModeWithoutCertificateIsRejected() {
+        UUID host = insertHost(insertUser("alice"));
+        assertThatThrownBy(() -> insertProxyRoute(host, "app.example.com", "CUSTOM", null, 8080))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("proxy_routes_certificate_required_check");
+    }
+
+    @Test
+    void proxyRouteCustomCertModeWithCertificateIsAccepted() {
+        UUID host = insertHost(insertUser("alice"));
+        UUID certificate = insertProxyCertificate(host, "cert");
+        insertProxyRoute(host, "app.example.com", "CUSTOM", certificate, 8080);
+        assertThat(jdbc.queryForObject("SELECT certificate_id FROM proxy_routes WHERE host_id = ?", UUID.class, host))
+                .isEqualTo(certificate);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 65536})
+    void proxyRouteTargetPortOutsideRangeIsRejected(int port) {
+        UUID host = insertHost(insertUser("alice"));
+        assertThatThrownBy(() -> insertProxyRoute(host, "app.example.com", "ACME_HTTP", null, port))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("proxy_routes_target_port_check");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 65535})
+    void proxyRouteTargetPortBoundariesAreAccepted(int port) {
+        UUID host = insertHost(insertUser("alice"));
+        insertProxyRoute(host, "app.example.com", "ACME_HTTP", null, port);
+        assertThat(count("proxy_routes")).isEqualTo(1);
+    }
+
+    @Test
+    void proxyRouteBackendSchemeDefaultsToHttpAndRejectsOtherValues() {
+        UUID host = insertHost(insertUser("alice"));
+        UUID route = insertProxyRoute(host, "app.example.com", "ACME_HTTP", null, 8080);
+        assertThat(jdbc.queryForObject("SELECT backend_scheme FROM proxy_routes WHERE id = ?", String.class, route))
+                .isEqualTo("http");
+        assertThatThrownBy(() -> jdbc.update("UPDATE proxy_routes SET backend_scheme = 'ftp' WHERE id = ?", route))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("proxy_routes_backend_scheme_check");
+    }
+
+    @Test
+    void proxyRouteDefaultsRedirectHttpsToTrueAndAliasesToEmptyArray() {
+        UUID host = insertHost(insertUser("alice"));
+        UUID route = insertProxyRoute(host, "app.example.com", "ACME_HTTP", null, 8080);
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT redirect_https, cardinality(aliases) AS alias_count FROM proxy_routes WHERE id = ?", route);
+        assertThat(row.get("redirect_https")).isEqualTo(true);
+        assertThat(row.get("alias_count")).isEqualTo(0);
+    }
+
+    @Test
+    void deletingHostCascadesToProxyInstanceCertificatesAndRoutes() {
+        UUID owner = insertUser("alice");
+        UUID host = insertHost(owner);
+        UUID other = insertHost(owner);
+        UUID certificate = insertProxyCertificate(host, "cert");
+        insertProxyInstance(host, "TRAEFIK", "ACME_HTTP", null);
+        insertProxyRoute(host, "app.example.com", "CUSTOM", certificate, 8080);
+        insertProxyInstance(other, "CADDY", "INTERNAL", null);
+        jdbc.update("DELETE FROM docker_hosts WHERE id = ?", host);
+        assertThat(count("proxy_instances")).isEqualTo(1);
+        assertThat(count("proxy_certificates")).isZero();
+        assertThat(count("proxy_routes")).isZero();
+    }
+
+    @Test
+    void deletingReferencedCertificateIsRejected() {
+        UUID host = insertHost(insertUser("alice"));
+        UUID certificate = insertProxyCertificate(host, "cert");
+        insertProxyRoute(host, "app.example.com", "CUSTOM", certificate, 8080);
+        assertThatThrownBy(() -> jdbc.update("DELETE FROM proxy_certificates WHERE id = ?", certificate))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("proxy_routes_certificate_id_fkey");
+    }
+
+    private void insertProxyInstance(UUID host, String type, String certMode, UUID deployment) {
+        jdbc.update("""
+                INSERT INTO proxy_instances (host_id, type, default_cert_mode, deployment_id)
+                VALUES (?, ?, ?, ?)
+                """, host, type, certMode, deployment);
+    }
+
+    private UUID insertProxyCertificate(UUID host, String name) {
+        return jdbc.queryForObject("""
+                INSERT INTO proxy_certificates (host_id, name, cert_pem, key_encrypted, not_after)
+                VALUES (?, ?, 'PEM', ?, now() + interval '90 days') RETURNING id
+                """, UUID.class, host, name, new byte[]{1, 2, 3});
+    }
+
+    private UUID insertProxyRoute(UUID host, String hostname, String certMode, UUID certificate, int port) {
+        return jdbc.queryForObject("""
+                INSERT INTO proxy_routes (host_id, hostname, container_name, target_port, cert_mode, certificate_id)
+                VALUES (?, ?, 'web', ?, ?, ?) RETURNING id
+                """, UUID.class, host, hostname, port, certMode, certificate);
     }
 
     private void insertHostTag(UUID host, String tag) {
