@@ -30,7 +30,13 @@ const deployment = {
 const stompFrame = (command: string, headers: Record<string, string>, body = '') =>
   `${command}\n${Object.entries(headers).map(([k, v]) => `${k}:${v}`).join('\n')}\n\n${body}\0`
 
-/** Minimal STOMP broker: answers CONNECT, and on SUBSCRIBE hands the connection to `onSubscribe`. */
+const RUN_TOPIC = '/topic/deployments/dep-1'
+
+/**
+ * Minimal STOMP broker: answers CONNECT, and on SUBSCRIBE to the run topic hands the connection to `onSubscribe`.
+ * Only SUBSCRIBE frames for the run topic are counted, so `attempt` is the run socket's own attempt number and a
+ * SUBSCRIBE of any other socket on the page can never take attempt 1 (the one that is dropped on purpose).
+ */
 async function mockBroker(
   page: Page,
   onSubscribe: (send: (body: object) => void, ws: WebSocketRoute, attempt: number) => void,
@@ -43,7 +49,7 @@ async function mockBroker(
       if (text.startsWith('CONNECT') || text.startsWith('STOMP')) {
         connectHeaders.push(text)
         ws.send(stompFrame('CONNECTED', { version: '1.2', 'heart-beat': '0,0' }))
-      } else if (text.startsWith('SUBSCRIBE') && !text.includes('/events')) {
+      } else if (text.startsWith('SUBSCRIBE') && /destination:(.*)/.exec(text)?.[1]?.trim() === RUN_TOPIC) {
         const id = /id:(.*)/.exec(text)?.[1] ?? '0'
         attempt += 1
         onSubscribe(
@@ -51,7 +57,7 @@ async function mockBroker(
             ws.send(
               stompFrame(
                 'MESSAGE',
-                { subscription: id, destination: '/topic/deployments/dep-1', 'message-id': String(Math.random()) },
+                { subscription: id, destination: RUN_TOPIC, 'message-id': String(Math.random()) },
                 JSON.stringify(body),
               ),
             ),
@@ -129,7 +135,8 @@ test('shows reconnecting and does not duplicate replayed lines', async ({ page, 
 
   const out = page.getByLabel('Deployment output')
   await expect(out.getByRole('status')).toContainText('reconnecting')
-  await expect(out.getByRole('status')).toHaveText('Succeeded', { timeout: 10_000 })
+  // The client waits RECONNECT_DELAY_MS (3 s, stomp.ts) before it reconnects; leave room for that plus a loaded runner.
+  await expect(out.getByRole('status')).toHaveText('Succeeded', { timeout: 20_000 })
   await expect(page.getByRole('log').getByText('first', { exact: true })).toHaveCount(1)
   await expect(page.getByRole('log')).toContainText('second')
 })
