@@ -1,4 +1,4 @@
-import { expect, test, type ApiMock } from './fixtures/api.ts'
+import { expect, mockDeploymentCards, test, type ApiMock } from './fixtures/api.ts'
 
 const host = {
   id: 'a',
@@ -42,10 +42,7 @@ function mockCommon(api: ApiMock, proxy: unknown) {
   api.mock('POST', BASE, { status: 201, body: created })
   api.mock('POST', `${BASE}/s1/deploy`, { status: 202, body: { runId: 'r1', versionId: 'v1' } })
   api.mock('GET', `${BASE}/s1`, { body: created })
-  api.mock('GET', `${BASE}/s1/versions`, { body: [] })
-  api.mock('GET', `${BASE}/s1/files`, { body: [] })
-  api.mock('GET', `${BASE}/s1/webhook`, { body: { enabled: false, createdAt: null, rotatedAt: null } })
-  api.mock('GET', `${BASE}/s1/uptime-checks`, { body: [] })
+  mockDeploymentCards(api, `${BASE}/s1`)
   api.mock('GET', `${ROUTES}/candidates`, { body: [candidate] })
   api.mock('GET', ROUTES, { body: [] })
 }

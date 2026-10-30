@@ -1,4 +1,4 @@
-import { expect, test, type ApiMock } from './fixtures/api.ts'
+import { expect, mockDeploymentCards, test, type ApiMock } from './fixtures/api.ts'
 
 const host = {
   id: 'a',
@@ -44,10 +44,7 @@ function mockCommon(api: ApiMock) {
   api.mock('GET', '/api/hosts/a/ports/free', { body: { used: [], suggestions: [{ preferred: 8080, free: 8080 }] } })
   api.mock('POST', '/api/compose/generate', { body: { yaml } })
   api.mock('GET', `${BASE}/s1`, { body: created })
-  api.mock('GET', `${BASE}/s1/versions`, { body: [] })
-  api.mock('GET', `${BASE}/s1/files`, { body: [] })
-  api.mock('GET', `${BASE}/s1/webhook`, { body: { enabled: false, createdAt: null, rotatedAt: null } })
-  api.mock('GET', `${BASE}/s1/uptime-checks`, { body: [] })
+  mockDeploymentCards(api, `${BASE}/s1`)
 }
 
 async function openPicker(page: import('@playwright/test').Page) {
