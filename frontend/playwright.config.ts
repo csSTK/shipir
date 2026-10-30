@@ -1,6 +1,10 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const port = Number(process.env.E2E_PORT ?? 5173)
+import { e2ePort } from './e2e-config/port'
+
+// Default port is derived from this checkout's directory (see e2e-config/port.ts), so a Vite server of another
+// checkout or worktree on 5173 can never be reused. E2E_PORT overrides it.
+const port = e2ePort(process.cwd(), process.env.E2E_PORT)
 
 export default defineConfig({
   testDir: './e2e',
