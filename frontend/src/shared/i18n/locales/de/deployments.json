@@ -69,7 +69,7 @@
   "DeploymentDetailPage.pullRedeploy": "Pullen & neu deployen",
   "DeploymentDetailPage.pullNewerImagesAndRecreate": "Neuere Images pullen und die Container neu erstellen",
   "DeploymentDetailPage.deployOnceFirst": "Deploye zuerst einmal",
-  "DeploymentDetailPage.saveOrCancelEditsFirst": "Bearbeitung zuerst speichern oder abbrechen, Deploy würde den gespeicherten Entwurf verwenden.",
+  "DeploymentDetailPage.saveOrCancelEditsFirst": "Bearbeitung zuerst speichern oder abbrechen.",
   "DeploymentDetailPage.updating": "Wird aktualisiert…",
   "DeploymentDetailPage.pullUpdate": "Pullen & aktualisieren",
   "DeploymentDetailPage.stop": "Stoppen",

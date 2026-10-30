@@ -97,7 +97,7 @@ export function DeploymentContentPanel({
         </p>
       )}
       {editing && (
-        <p className="sd-muted">
+        <p role="status" className="sd-muted">
           {t('DeploymentContentPanel.actionsPausedWhileEditing')}
         </p>
       )}

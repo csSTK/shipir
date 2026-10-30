@@ -339,7 +339,8 @@ describe('DeploymentDetailPage', () => {
       await startEdit()
       fireEvent.change(await screen.findByLabelText('Compose file'), { target: { value: 'services: {}' } })
       fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-      expect(await screen.findByRole('status')).toHaveTextContent('Saved as a draft')
+      // The edit-pause hint is also a status region while the save is pending, so wait for the saved text itself.
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved as a draft'))
       expect(apiFetch).toHaveBeenCalledWith(BASE, { method: 'PUT', body: { yaml: 'services: {}', env: null } })
     })
 
@@ -348,7 +349,7 @@ describe('DeploymentDetailPage', () => {
       await startEdit()
       const deployBtn = screen.getByRole('button', { name: 'Deploy' })
       await waitFor(() => expect(deployBtn).toBeDisabled())
-      expect(deployBtn).toHaveAttribute('title', 'Save or cancel your edits first, Deploy would use the saved draft.')
+      expect(deployBtn).toHaveAttribute('title', 'Save or cancel your edits first.')
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
       await waitFor(() => expect(deployBtn).toBeEnabled())
     })
@@ -361,10 +362,19 @@ describe('DeploymentDetailPage', () => {
       await waitFor(() => expect(screen.queryByText(/Deploy and pull actions are paused/)).not.toBeInTheDocument())
     })
 
+    it('announces the edit-pause hint through a live status region', async () => {
+      serve('OPERATOR')
+      await startEdit()
+      expect(await screen.findByRole('status')).toHaveTextContent(/Deploy and pull actions are paused/)
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument())
+    })
+
     it('blocks Pull & update while editing', async () => {
       serve('OPERATOR')
       await startEdit()
       const btn = screen.getByRole('button', { name: 'Pull & update' })
+      expect(btn).toHaveAttribute('title', 'Save or cancel your edits first.')
       await waitFor(() => expect(btn).toBeDisabled())
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
       await waitFor(() => expect(btn).toBeEnabled())

@@ -69,7 +69,7 @@
   "DeploymentDetailPage.pullRedeploy": "Pull & redeploy",
   "DeploymentDetailPage.pullNewerImagesAndRecreate": "Pull newer images and recreate the containers",
   "DeploymentDetailPage.deployOnceFirst": "Deploy once first",
-  "DeploymentDetailPage.saveOrCancelEditsFirst": "Save or cancel your edits first, Deploy would use the saved draft.",
+  "DeploymentDetailPage.saveOrCancelEditsFirst": "Save or cancel your edits first.",
   "DeploymentDetailPage.updating": "Updating…",
   "DeploymentDetailPage.pullUpdate": "Pull & update",
   "DeploymentDetailPage.stop": "Stop",
