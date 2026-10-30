@@ -21,5 +21,8 @@ test('fails the test when an /api call has no mock', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { status: 401 })
   await page.goto('/')
 
-  await callApi(page, '/api/containers')
+  // The call itself does not throw (the fixture answers 501); the failure comes from the fixture's check at the end.
+  const result = await callApi(page, '/api/containers')
+
+  expect(result.status).toBe(501)
 })

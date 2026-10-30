@@ -83,6 +83,10 @@ export const test = base.extend<{ api: ApiMock }>({
         },
       })
 
+      // Requests the app fired just before the test ended may still be inside their route handler (or not yet
+      // routed): wait for those handlers to finish so a late unmocked call is counted instead of racing the check.
+      await page.unrouteAll({ behavior: 'wait' })
+
       expect(unmocked, 'API calls without a registered mock').toEqual([])
     },
     { auto: true },
