@@ -246,6 +246,25 @@ class TemplateCatalogTest {
     }
 
     @Test
+    void refWithoutEnvHintFailsCatalogLoad() {
+        assertThatThrownBy(() -> load(withHint("{\"key\":\"B\",\"description\":\"d\",\"secret\":false}")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("hinted")
+                .hasMessageContaining("references \"A\"");
+    }
+
+    @Test
+    void refWithNoEnvListAtAllFailsCatalogLoad() {
+        String json = """
+                [{"id":"nohints","name":"T","description":"d",
+                  "spec":{"services":[{"name":"web","image":"nginx","environment":[{"key":"A","ref":"A"}]}]}}]""";
+        assertThatThrownBy(() -> load(json))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("nohints")
+                .hasMessageContaining("no env hint");
+    }
+
+    @Test
     void unknownEnvHintPropertyFailsCatalogLoad() {
         assertThatThrownBy(() -> load(withHint("{\"key\":\"A\",\"description\":\"d\",\"secret\":false,\"colour\":\"x\"}")))
                 .isInstanceOf(IllegalStateException.class);

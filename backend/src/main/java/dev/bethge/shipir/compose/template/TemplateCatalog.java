@@ -76,9 +76,6 @@ public class TemplateCatalog {
     }
 
     private static void validateEnvHints(AppTemplate t) {
-        if (t.env() == null) {
-            return;
-        }
         Set<String> referenced = new HashSet<>();
         if (t.spec() != null && t.spec().services() != null) {
             for (ServiceSpec s : t.spec().services()) {
@@ -91,7 +88,8 @@ public class TemplateCatalog {
                 }
             }
         }
-        for (AppTemplate.EnvHint h : t.env()) {
+        List<AppTemplate.EnvHint> hints = t.env() == null ? List.of() : t.env();
+        for (AppTemplate.EnvHint h : hints) {
             String where = SOURCE + ": template \"" + t.id() + "\" env hint \"" + h.key() + "\" ";
             if (h.generate() && !h.secret()) {
                 throw new IllegalStateException(where + "sets generate but is not secret");
@@ -104,6 +102,14 @@ public class TemplateCatalog {
             }
             if (h.defaultValue() != null && !referenced.contains(h.key())) {
                 throw new IllegalStateException(where + "has a defaultValue but no service references it");
+            }
+        }
+        Set<String> hinted = new HashSet<>();
+        hints.forEach(h -> hinted.add(h.key()));
+        for (String ref : referenced) {
+            if (!hinted.contains(ref)) {
+                throw new IllegalStateException(SOURCE + ": template \"" + t.id() + "\" references \"" + ref
+                        + "\" but has no env hint for it");
             }
         }
     }
