@@ -10,9 +10,14 @@ vi.mock('../../../shared/api/client.ts', async (importActual) => ({
   apiFetch: (...args: unknown[]) => apiFetch(...args),
 }))
 
+// Some tests replace navigator.clipboard; put back whatever was there (or nothing) so no test sees another's override.
+const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+
 afterEach(() => {
   cleanup()
   apiFetch.mockReset()
+  if (originalClipboard) Object.defineProperty(navigator, 'clipboard', originalClipboard)
+  else delete (navigator as { clipboard?: unknown }).clipboard
 })
 
 function serve(proxy: unknown) {
