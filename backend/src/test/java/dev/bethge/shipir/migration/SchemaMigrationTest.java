@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To36Successfully() {
+    void flywayAppliedVersions1To38Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38");
     }
 
     @Test
@@ -209,7 +209,7 @@ class SchemaMigrationTest {
                 WHERE table_schema = 'public' AND data_type = 'timestamp with time zone'
                   AND table_name IN ('users','docker_hosts','deployments','deployment_versions')
                 """, Integer.class);
-        assertThat(count).isEqualTo(11); // 4 users (incl. totp_enabled_at) + 1 hosts + 4 deployments (incl. image_update_last_attempt_at) + 2 versions
+        assertThat(count).isEqualTo(12); // 4 users (incl. totp_enabled_at) + 1 hosts + 4 deployments (incl. image_update_last_attempt_at) + 3 versions (incl. deploy_succeeded_at)
     }
 
     @Test
@@ -2467,8 +2467,10 @@ class SchemaMigrationTest {
         UUID deployment = insertDeployment(insertHost(owner), owner, "web");
         jdbc.update("UPDATE deployments SET image_update_last_result = 'APPLIED' WHERE id = ?", deployment);
         jdbc.update("UPDATE deployments SET image_update_last_result = 'FAILED' WHERE id = ?", deployment);
+        jdbc.update("UPDATE deployments SET image_update_last_result = 'ROLLED_BACK' WHERE id = ?", deployment);
+        jdbc.update("UPDATE deployments SET image_update_last_result = 'FAILED_NOT_ROLLED_BACK' WHERE id = ?", deployment);
         assertThat(jdbc.queryForObject("SELECT image_update_last_result FROM deployments WHERE id = ?", String.class,
-                deployment)).isEqualTo("FAILED");
+                deployment)).isEqualTo("FAILED_NOT_ROLLED_BACK");
     }
 
     @Test

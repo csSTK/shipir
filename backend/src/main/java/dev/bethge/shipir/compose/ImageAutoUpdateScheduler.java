@@ -159,7 +159,7 @@ class ImageAutoUpdateScheduler {
         try {
             run = runs.autoPullUpdate(deployment.getId());
         } catch (DeploymentException e) {
-            finish(deployment, now, false, e.code(), false, 0, services);
+            finish(deployment, now, false, e.code(), false, 0, services, false);
             return;
         }
         try {
@@ -182,7 +182,7 @@ class ImageAutoUpdateScheduler {
             // would let a manual run start next to it. Report without rollback; the worker's end releases the lock.
             handOver(run, deployment.getId(), handedOver);
             if (outcome != null) {
-                finish(deployment, now, false, "TIMEOUT", false, previous.size(), services);
+                finish(deployment, now, false, "TIMEOUT", false, previous.size(), services, true);
             }
             return;
         }
@@ -196,7 +196,7 @@ class ImageAutoUpdateScheduler {
         UUID hostId = deployment.getHostId();
         DockerEndpoint endpoint = deploymentService.endpointOf(deploymentService.requireHost(hostId));
         if (outcome.success() && awaitHealthy(hostId, endpoint, deployment.getName())) {
-            finish(deployment, now, true, null, false, previous.size(), services);
+            finish(deployment, now, true, null, false, previous.size(), services, true);
             return;
         }
         String reason = outcome.success() ? "UNHEALTHY" : "PULL".equals(outcome.failedStep()) ? "PULL_FAILED" : "UP_FAILED";
@@ -204,7 +204,7 @@ class ImageAutoUpdateScheduler {
         // Only a rollback that pinned every service counts as rolled back.
         boolean rolledBack = !"PULL_FAILED".equals(reason) && runs.rollbackImages(deployment.getId(), previous)
                 && previous.size() >= services;
-        finish(deployment, now, false, reason, rolledBack, previous.size(), services);
+        finish(deployment, now, false, reason, rolledBack, previous.size(), services, true);
     }
 
     /** Releases the deployment lock when the still running worker ends, so the lock never outlives or precedes it. */
@@ -214,9 +214,25 @@ class ImageAutoUpdateScheduler {
         }
     }
 
+    /**
+     * Maps the outcome to the stored {@code lastResult}: no failure is APPLIED; PULL_FAILED is FAILED (the pull changed
+     * nothing, so no rollback was attempted); so is a start error ({@code started} false: the worker never existed, e.g. a
+     * lock conflict, so nothing was pulled or changed). Every other reason (UNHEALTHY, UP_FAILED, TIMEOUT, ERROR) is
+     * ROLLED_BACK when every service was pinned back, else FAILED_NOT_ROLLED_BACK.
+     */
+    static String resultOf(boolean applied, String reason, boolean rolledBack, boolean started) {
+        if (applied) {
+            return "APPLIED";
+        }
+        if (!started || "PULL_FAILED".equals(reason)) {
+            return "FAILED";
+        }
+        return rolledBack ? "ROLLED_BACK" : "FAILED_NOT_ROLLED_BACK";
+    }
+
     private void finish(Deployment deployment, Instant attemptAt, boolean applied, String reason, boolean rolledBack,
-                        int pinnedServices, long services) {
-        deployments.recordImageUpdateAttempt(deployment.getId(), attemptAt, applied ? "APPLIED" : "FAILED");
+                        int pinnedServices, long services, boolean started) {
+        deployments.recordImageUpdateAttempt(deployment.getId(), attemptAt, resultOf(applied, reason, rolledBack, started));
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("applied", applied);
         if (!applied) {

@@ -81,7 +81,7 @@ public class Deployment {
     @Column(name = "image_update_last_attempt_at")
     private Instant imageUpdateLastAttemptAt;
 
-    @Column(name = "image_update_last_result", length = 20)
+    @Column(name = "image_update_last_result", length = 30)
     private String imageUpdateLastResult;
 
     /** Compose profiles activated for every run, in the order given; empty = none. */

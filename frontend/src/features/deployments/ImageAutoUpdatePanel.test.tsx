@@ -83,7 +83,16 @@ describe('ImageAutoUpdatePanel', () => {
     expect(screen.getByText(/Last attempt/)).toBeInTheDocument()
     cleanup()
     renderPanel({ ...off, enabled: true, lastAttemptAt: '2026-10-02T03:00:00Z', lastResult: 'FAILED' })
-    expect(screen.getByText(/Failed/)).toBeInTheDocument()
+    expect(screen.getByText('Failed')).toBeInTheDocument() // also legacy rows: rollback state unknown
+  })
+
+  it('says whether a failed update was rolled back', () => {
+    const base = { ...off, enabled: true, lastAttemptAt: '2026-10-02T03:00:00Z' }
+    renderPanel({ ...base, lastResult: 'ROLLED_BACK' })
+    expect(screen.getByText('Failed, rolled back')).toBeInTheDocument()
+    cleanup()
+    renderPanel({ ...base, lastResult: 'FAILED_NOT_ROLLED_BACK' })
+    expect(screen.getByText('Failed, not rolled back')).toBeInTheDocument()
   })
 
   it('is read-only without write rights', () => {

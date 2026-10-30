@@ -273,8 +273,7 @@ class ImageAutoUpdateSchedulerTest extends DeploymentTestBase {
         assertThat(jdbc.queryForObject("SELECT details->>'rolledBack' FROM audit_log WHERE action = 'IMAGE_AUTO_UPDATE'",
                 String.class)).isEqualTo("true");
         assertThat(notificationTypes()).containsExactly("IMAGE_UPDATE_FAILED");
-        assertThat(jdbc.queryForObject("SELECT image_update_last_result FROM deployments WHERE id = ?", String.class, id))
-                .isEqualTo("FAILED");
+        assertThat(lastResult(id)).isEqualTo("ROLLED_BACK");
         assertThat(jdbc.queryForObject("SELECT status FROM deployments WHERE id = ?", String.class, id))
                 .isEqualTo("RUNNING");
     }
@@ -304,13 +303,15 @@ class ImageAutoUpdateSchedulerTest extends DeploymentTestBase {
 
     @Test
     void failedComposeUpIsRolledBackAndReported() throws Exception {
-        deployed("web", true);
+        UUID id = deployed("web", true);
         upFails = true;
 
         scheduler.tick();
 
         assertThat(notificationTypes()).contains("IMAGE_UPDATE_FAILED");
         assertThat(commands.getFirst()).isEqualTo(ComposeCommand.PULL);
+        // the stubbed compose up fails every time, so the rollback up fails as well
+        assertThat(lastResult(id)).isEqualTo("FAILED_NOT_ROLLED_BACK");
         assertThat(audit("IMAGE_AUTO_UPDATE")).containsExactly("system:FAILURE");
     }
 
@@ -325,6 +326,7 @@ class ImageAutoUpdateSchedulerTest extends DeploymentTestBase {
         assertThat(jdbc.queryForObject("SELECT status FROM deployments WHERE id = ?", String.class, id))
                 .isEqualTo("RUNNING"); // nothing was touched: a transient pull error must not mark it ERROR
         assertThat(overrideYamls).isEmpty();
+        assertThat(lastResult(id)).isEqualTo("FAILED"); // no rollback attempted: the pull changed nothing
         assertThat(notificationTypes()).contains("IMAGE_UPDATE_FAILED");
         assertThat(audit("IMAGE_AUTO_UPDATE")).containsExactly("system:FAILURE");
     }
@@ -370,6 +372,23 @@ class ImageAutoUpdateSchedulerTest extends DeploymentTestBase {
         assertThat(notificationTypes()).containsExactly("IMAGE_UPDATE_FAILED");
     }
 
+    @Test
+    void startErrorBeforeTheWorkerExistsIsRecordedAsPlainFailed() throws Exception {
+        UUID id = deployed("web", true);
+        DeploymentRunService failing = mock(DeploymentRunService.class);
+        when(failing.autoPullUpdate(any())).thenThrow(new DeploymentException(
+                org.springframework.http.HttpStatus.CONFLICT, "DEPLOYMENT_BUSY", "busy"));
+        ImageAutoUpdateScheduler broken = new ImageAutoUpdateScheduler(deploymentRepository, updates, containers, images,
+                deploymentService, failing, locks, clock, new ImageAutoUpdateProperties(true, Duration.ofSeconds(60),
+                Duration.ofMinutes(2), Duration.ofSeconds(30), Duration.ofSeconds(5), Duration.ofMillis(200)),
+                ms -> clock.advance(Duration.ofMillis(ms)));
+
+        broken.tick();
+
+        assertThat(commands).isEmpty(); // nothing was pulled or changed: no rollback is involved
+        assertThat(lastResult(id)).isEqualTo("FAILED");
+    }
+
     private ImageAutoUpdateScheduler impatientWith(DeploymentRepository repository) {
         return new ImageAutoUpdateScheduler(repository, updates, containers, images, deploymentService, runs, locks,
                 clock, new ImageAutoUpdateProperties(true, Duration.ofSeconds(60), Duration.ofMinutes(2),
@@ -407,7 +426,7 @@ class ImageAutoUpdateSchedulerTest extends DeploymentTestBase {
     void failureWhileTheWorkerRunsKeepsTheLockUntilTheWorkerEndsAndReleasesItExactlyOnce() throws Exception {
         UUID id = deployed("web", true);
         upGate = new java.util.concurrent.CountDownLatch(1);
-        ImageAutoUpdateScheduler broken = impatientWith(failingOn("FAILED"::equals)); // the timeout report fails
+        ImageAutoUpdateScheduler broken = impatientWith(failingOn("FAILED_NOT_ROLLED_BACK"::equals)); // the timeout report fails
 
         broken.tick();
 
@@ -450,6 +469,7 @@ class ImageAutoUpdateSchedulerTest extends DeploymentTestBase {
         assertThat(overrideYamls).isEmpty();
         // the workers are still running compose, so the deployments stay locked: no manual run may start meanwhile
         for (UUID id : List.of(one, two)) {
+            assertThat(lastResult(id)).isEqualTo("FAILED_NOT_ROLLED_BACK");
             assertThatThrownBy(() -> locks.acquire(id)).isInstanceOf(DeploymentException.class);
         }
         assertThat(jdbc.queryForList("SELECT details->>'rolledBack' FROM audit_log WHERE action = 'IMAGE_AUTO_UPDATE'",
@@ -549,7 +569,7 @@ class ImageAutoUpdateSchedulerTest extends DeploymentTestBase {
 
     @Test
     void rollbackWithoutKnownPreviousDigestIsReportedAsNotRolledBack() throws Exception {
-        deployed("web", true);
+        UUID id = deployed("web", true);
         when(images.list(any(), any())).thenReturn(List.of());
         health = "unhealthy";
 
@@ -558,6 +578,7 @@ class ImageAutoUpdateSchedulerTest extends DeploymentTestBase {
         assertThat(commands).containsExactly(ComposeCommand.PULL, ComposeCommand.UP);
         assertThat(jdbc.queryForObject("SELECT details->>'rolledBack' FROM audit_log WHERE action = 'IMAGE_AUTO_UPDATE'",
                 String.class)).isEqualTo("false");
+        assertThat(lastResult(id)).isEqualTo("FAILED_NOT_ROLLED_BACK");
         assertThat(notificationTypes()).containsExactly("IMAGE_UPDATE_FAILED");
     }
 
@@ -572,5 +593,9 @@ class ImageAutoUpdateSchedulerTest extends DeploymentTestBase {
                 String.class));
         String messages = String.join(" ", jdbc.queryForList("SELECT message FROM notifications", String.class));
         assertThat(audit + messages).doesNotContain("sha256:").doesNotContain("PASSWORD");
+    }
+
+    private String lastResult(UUID id) {
+        return jdbc.queryForObject("SELECT image_update_last_result FROM deployments WHERE id = ?", String.class, id);
     }
 }

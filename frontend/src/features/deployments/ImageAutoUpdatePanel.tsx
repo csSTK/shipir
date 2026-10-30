@@ -123,7 +123,11 @@ export function ImageAutoUpdatePanel({
           <p className="sd-muted ia-last">
             <span>{t('ImageAutoUpdatePanel.lastAttempt')} {formatDateTime(info.lastAttemptAt)}</span>
             {info.lastResult === 'APPLIED' && <Badge tone="ok">{t('ImageAutoUpdatePanel.applied')}</Badge>}
-            {info.lastResult === 'FAILED' && <Badge tone="bad">{t('ImageAutoUpdatePanel.failedRolledBackIfPossible')}</Badge>}
+            {info.lastResult === 'FAILED' && <Badge tone="bad">{t('ImageAutoUpdatePanel.failedPlain')}</Badge>}
+            {info.lastResult === 'ROLLED_BACK' && <Badge tone="bad">{t('ImageAutoUpdatePanel.failedRolledBack')}</Badge>}
+            {info.lastResult === 'FAILED_NOT_ROLLED_BACK' && (
+              <Badge tone="bad">{t('ImageAutoUpdatePanel.failedNotRolledBack')}</Badge>
+            )}
           </p>
         )}
       </div>

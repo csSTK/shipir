@@ -59,7 +59,10 @@ export interface ImageAutoUpdateInfo {
   windowStart: string | null
   windowEnd: string | null
   lastAttemptAt: string | null
-  /** `APPLIED` or `FAILED` (a failed update was rolled back when possible); null before the first attempt. */
+  /**
+   * `APPLIED`; `FAILED` (pull failed, nothing changed); `ROLLED_BACK`; `FAILED_NOT_ROLLED_BACK`; null before the
+   * first attempt.
+   */
   lastResult: string | null
 }
 
