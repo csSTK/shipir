@@ -8,15 +8,22 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.exception.NotFoundException;
 import org.testcontainers.DockerClientFactory;
 
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Read-only against the local daemon: lists candidates for labelled throwaway resources, removes nothing it did not create. */
+/**
+ * Runs against the local daemon but touches only its own throwaway resources: it creates uniquely named volumes,
+ * networks and containers, removes them again, and asserts only on those. Other containers, images, volumes and
+ * networks on the daemon (other tests, other sessions, compose stacks) must not change the result.
+ */
 class PruneCandidatesIntegrationTest {
 
     private final UUID hostId = UUID.randomUUID();
@@ -60,24 +67,28 @@ class PruneCandidatesIntegrationTest {
     }
 
     /**
-     * Asserts only on resources this test creates, so containers or images that other tests or sessions create and
-     * remove on the shared daemon cannot make it fail.
+     * Asserts only on resources this test creates. Unrelated containers are created alongside them, so a test that
+     * asserted over every container on the daemon would fail here.
      */
     @Test
     void candidatesAreStoppedContainersAndUnusedImagesOnly() throws Exception {
         String image = "alpine:3.20";
         var docker = DockerClientFactory.instance().client();
-        try {
-            docker.inspectImageCmd(image).exec();
-        } catch (Exception notPresent) {
-            docker.pullImageCmd(image).start().awaitCompletion(2, java.util.concurrent.TimeUnit.MINUTES);
-        }
-        String imageId = docker.inspectImageCmd(image).exec().getId();
+        String imageId = ensureImage(docker, image);
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         // created but never started = not running = a prune candidate
         String stopped = null;
         String running = null;
+        String foreignStopped = null;
+        String foreignRunning = null;
         try {
+            // unrelated containers, as other tests or sessions leave on a shared daemon; never asserted on
+            foreignStopped = docker.createContainerCmd(image).withName("shipir-it-foreign-stopped-" + suffix)
+                    .withLabels(Map.of("dev.bethge.shipir.test", "foreign")).withCmd("sleep", "300").exec().getId();
+            foreignRunning = docker.createContainerCmd(image).withName("shipir-it-foreign-running-" + suffix)
+                    .withLabels(Map.of("dev.bethge.shipir.test", "foreign")).withCmd("sleep", "300").exec().getId();
+            docker.startContainerCmd(foreignRunning).exec();
+
             stopped = docker.createContainerCmd(image).withName("shipir-it-prune-stopped-" + suffix)
                     .withCmd("sleep", "300").exec().getId();
             running = docker.createContainerCmd(image).withName("shipir-it-prune-running-" + suffix)
@@ -94,10 +105,11 @@ class PruneCandidatesIntegrationTest {
             var images = new ImageServiceImpl(manager);
             assertThat(images.listPrunable(hostId, endpoint, true)).noneMatch(c -> imageId.equals(c.id()));
             assertThat(images.listPrunable(hostId, endpoint, false)).noneMatch(c -> imageId.equals(c.id()));
-            assertThat(images.list(hostId, endpoint)).filteredOn(i -> imageId.equals(i.id()))
+            // isNotEmpty first: allSatisfy alone passes vacuously when the image is missing from the list
+            assertThat(images.list(hostId, endpoint)).filteredOn(i -> imageId.equals(i.id())).isNotEmpty()
                     .allSatisfy(i -> assertThat(i.inUse()).isTrue());
         } finally {
-            for (String id : new String[]{running, stopped}) {
+            for (String id : new String[]{running, stopped, foreignRunning, foreignStopped}) {
                 if (id == null) continue;
                 try {
                     docker.removeContainerCmd(id).withForce(true).exec();
@@ -105,6 +117,25 @@ class PruneCandidatesIntegrationTest {
                     // cleanup must not mask the real failure
                 }
             }
+        }
+    }
+
+    /**
+     * Returns the local image id, pulling the image once if needed. Skips the test (rather than failing it) when the
+     * image is neither local nor pullable, e.g. offline.
+     */
+    private static String ensureImage(DockerClient docker, String image) {
+        try {
+            return docker.inspectImageCmd(image).exec().getId();
+        } catch (NotFoundException notLocal) {
+            // not local yet, pulled below
+        }
+        try {
+            docker.pullImageCmd(image).start().awaitCompletion(2, TimeUnit.MINUTES);
+            return docker.inspectImageCmd(image).exec().getId();
+        } catch (Exception cannotPull) {
+            Assumptions.assumeTrue(false, "Image " + image + " is not local and cannot be pulled: " + cannotPull.getMessage());
+            return null;
         }
     }
 }
