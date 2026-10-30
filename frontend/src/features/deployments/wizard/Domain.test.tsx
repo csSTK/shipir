@@ -164,4 +164,28 @@ describe('wizard domain section', () => {
     )
     expect(apiFetch).not.toHaveBeenCalledWith('/hosts/h1/proxy')
   })
+
+  it('gives every field an accessible name that contains its visible label, with no repeated visible labels', async () => {
+    serve({ visible: true, proxy: 'TRAEFIK', container: 'traefik', network: 'proxy' })
+    open()
+    await within(group()).findByText(/Traefik detected/)
+    fireEvent.click(screen.getByRole('button', { name: 'Add service' }))
+    for (const name of ['Add port to service 1', 'Add env var to service 1', 'Add volume to service 1', 'Add port to service 2', 'Add env var to service 2', 'Add volume to service 2', 'Add network', 'Add volume']) {
+      const buttons = screen.getAllByRole('button', { name })
+      fireEvent.click(buttons[buttons.length - 1])
+    }
+    const visible: string[] = []
+    const controls = document.querySelectorAll('input:not([type="checkbox"]), select')
+    expect(controls.length).toBeGreaterThan(30)
+    for (const control of controls) {
+      const label = document.querySelector(`label[for="${control.id}"]`)!
+      const bare = label.closest('.ui-field--bare') !== null
+      const accessibleName = control.getAttribute('aria-label') ?? label.textContent!
+      if (!bare) {
+        visible.push(label.textContent!)
+        expect(accessibleName.toLowerCase(), `field "${label.textContent}"`).toContain(label.textContent!.toLowerCase())
+      }
+    }
+    expect(visible.filter((v, i) => visible.indexOf(v) !== i), 'repeated visible labels').toEqual([])
+  })
 })
