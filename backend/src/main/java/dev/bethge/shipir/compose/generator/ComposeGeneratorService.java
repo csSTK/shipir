@@ -1,5 +1,6 @@
 package dev.bethge.shipir.compose.generator;
 
+import dev.bethge.shipir.common.util.DnsNames;
 import dev.bethge.shipir.common.util.PathValidationException;
 import dev.bethge.shipir.common.util.PathValidationUtil;
 import dev.bethge.shipir.compose.generator.model.ComposeSpec;
@@ -38,9 +39,6 @@ public class ComposeGeneratorService {
     private static final Pattern DRIVER = Pattern.compile("[a-z0-9][a-z0-9_.-]{0,62}");
     private static final Pattern LABEL_KEY = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.\\-/]{0,254}");
     private static final Pattern IMAGE = Pattern.compile("[^\\s'\"\\\\]+");
-    /** Lower-case DNS name with at least two labels (no localhost, no IP-less single labels), max 253 chars. */
-    private static final Pattern DOMAIN_HOST = Pattern.compile(
-            "(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+");
     /** Traefik entrypoint and cert resolver names; they end up in labels, so a strict charset. */
     private static final Pattern TRAEFIK_NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.-]{0,62}");
     /** Docker's own network name rule (uppercase and dots allowed); no quotes, whitespace, slashes or colons. */
@@ -113,7 +111,7 @@ public class ComposeGeneratorService {
         Map<String, String> routerIds = new LinkedHashMap<>();
         for (ServiceSpec s : services) {
             if (s == null || s.name() == null || s.domain() == null || s.domain().host() == null
-                    || !DOMAIN_HOST.matcher(s.domain().host()).matches()) {
+                    || !DnsNames.isValidHostname(s.domain().host())) {
                 continue;
             }
             String host = s.domain().host();
@@ -217,7 +215,7 @@ public class ComposeGeneratorService {
 
     private void validateDomain(String at, ServiceSpec s, List<String> errors) {
         DomainSpec d = s.domain();
-        if (d.host() == null || !DOMAIN_HOST.matcher(d.host()).matches()) {
+        if (d.host() == null || !DnsNames.isValidHostname(d.host())) {
             errors.add(at + ".domain.host: must be a lower-case domain name such as app.example.com");
         }
         if (d.port() == null || !validPort(d.port())) {
@@ -234,7 +232,7 @@ public class ComposeGeneratorService {
         }
         validateTraefikName(at + ".domain.entrypoint", d.entrypoint(), d.proxy(), errors);
         validateTraefikName(at + ".domain.certResolver", d.certResolver(), d.proxy(), errors);
-        if (d.host() != null && d.port() != null && d.proxy() != null && DOMAIN_HOST.matcher(d.host()).matches()) {
+        if (d.host() != null && d.port() != null && d.proxy() != null && DnsNames.isValidHostname(d.host())) {
             for (String key : proxyLabels(s.name(), d).keySet()) {
                 if (orEmpty(s.labels()).containsKey(key)) {
                     errors.add(at + ".labels: label " + key + " is set by the domain and cannot be set manually");
