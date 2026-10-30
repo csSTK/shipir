@@ -3,6 +3,7 @@ package dev.bethge.shipir.host;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -33,10 +34,23 @@ class VolumeBackupSchedulerResilienceTest {
         doThrow(new IllegalStateException("db down")).when(scheduleService).recordRun(any(), anyBoolean());
         VolumeBackupService backups = mock(VolumeBackupService.class);
 
-        new VolumeBackupScheduler(repo, scheduleService, backups, Clock.fixed(now, ZoneOffset.UTC)).runDue();
+        new VolumeBackupScheduler(repo, scheduleService, backups, mock(VolumeBackupStore.class), Clock.fixed(now, ZoneOffset.UTC)).runDue();
 
         verify(backups).storeScheduledBackup(eq(host), eq("one"), anyInt());
         verify(backups).storeScheduledBackup(eq(host), eq("two"), anyInt());
         verify(scheduleService, times(2)).recordRun(any(), anyBoolean());
+    }
+
+    @Test
+    void startupPrunesStalePartialFilesAndSurvivesFailure() {
+        VolumeBackupStore store = mock(VolumeBackupStore.class);
+        when(store.pruneStalePartials(any())).thenThrow(new IllegalStateException("disk gone"));
+        VolumeBackupScheduler scheduler = new VolumeBackupScheduler(mock(VolumeBackupScheduleRepository.class),
+                mock(VolumeBackupScheduleService.class), mock(VolumeBackupService.class), store,
+                Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC));
+
+        scheduler.pruneStalePartialsOnStart();
+
+        verify(store).pruneStalePartials(Duration.ZERO);
     }
 }

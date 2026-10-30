@@ -72,6 +72,12 @@ public class VolumeArchiveServiceImpl implements VolumeArchiveService {
         }
     }
 
+    /**
+     * Known race: the in-use check below is advisory. A container can start between the check and the restore
+     * (Docker has no lock that would prevent it); the helper then writes into a volume that is in use. Closing it would
+     * need to stop the containers, which this service deliberately never does. The check only protects against the
+     * common mistake; callers that must restore into a running volume pass {@code allowInUse} explicitly.
+     */
     @Override
     public void restore(UUID hostId, DockerEndpoint endpoint, String volumeName, String helperImage, ArchiveSource tar,
                         long maxBytes, boolean allowInUse) {

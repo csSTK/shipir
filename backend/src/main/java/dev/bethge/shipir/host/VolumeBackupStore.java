@@ -13,7 +13,9 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.FileTime;
 import java.time.DateTimeException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -28,12 +30,15 @@ import java.util.stream.Stream;
 /**
  * Archives of scheduled backups: {@code <dir>/<hostId>/<volume>/<volume>-<yyyyMMdd'T'HHmmss'Z'>.tar}. Written to a
  * temporary file first and moved into place, so a failed run leaves no partial archive. Retention deletes only
- * files of exactly that name pattern.
+ * files of exactly that name pattern. A crash between the temp file and the move leaves a {@code .backup-*.part}
+ * file; {@link #pruneStalePartials} removes those (the scheduler calls it once at start).
  */
 @Component
 class VolumeBackupStore {
 
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
+
+    private static final Pattern PARTIAL = Pattern.compile("\\.backup-.*\\.part");
 
     private final VolumeBackupProperties properties;
 
@@ -165,6 +170,46 @@ class VolumeBackupStore {
             return 0;
         } catch (IOException e) {
             throw new HostException(HttpStatus.INTERNAL_SERVER_ERROR, "BACKUP_STORE_FAILED", "The stored backups could not be deleted");
+        }
+    }
+
+    /**
+     * Deletes leftover {@code .backup-*.part} files (a crash between the temp file and the atomic move in
+     * {@link #write}) at depth {@code <dir>/<hostId>/<volume>/} that were last modified at least {@code minAge} ago.
+     * Symlinked host/volume directories and symlinked files are never followed or touched. Returns the number of
+     * deleted files; 0 when the store directory does not exist.
+     */
+    int pruneStalePartials(Duration minAge) {
+        Path base = properties.dir().toAbsolutePath().normalize();
+        if (!Files.isDirectory(base, LinkOption.NOFOLLOW_LINKS)) {
+            return 0;
+        }
+        FileTime cutoff = FileTime.from(Instant.now().minus(minAge));
+        int deleted = 0;
+        try {
+            for (Path hostDir : realDirectories(base)) {
+                for (Path volumeDir : realDirectories(hostDir)) {
+                    try (Stream<Path> files = Files.list(volumeDir)) {
+                        for (Path file : files.filter(p -> PARTIAL.matcher(p.getFileName().toString()).matches())
+                                .filter(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS)).toList()) {
+                            if (Files.getLastModifiedTime(file, LinkOption.NOFOLLOW_LINKS).compareTo(cutoff) <= 0
+                                    && Files.deleteIfExists(file)) {
+                                deleted++;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throw new HostException(HttpStatus.INTERNAL_SERVER_ERROR, "BACKUP_STORE_FAILED", "The stored backups could not be cleaned up");
+        }
+        return deleted;
+    }
+
+    /** Direct subdirectories of {@code parent} that are real directories, not symlinks. */
+    private static List<Path> realDirectories(Path parent) throws IOException {
+        try (Stream<Path> children = Files.list(parent)) {
+            return children.filter(p -> Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS)).toList();
         }
     }
 

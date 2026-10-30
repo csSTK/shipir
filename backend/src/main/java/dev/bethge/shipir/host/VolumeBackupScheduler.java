@@ -4,10 +4,13 @@ import dev.bethge.shipir.common.security.SystemScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
+import java.time.Duration;
 
 /**
  * Every {@code shipir.volume-backup.tick} looks up the schedules that are due and runs their backups one after the
@@ -23,14 +26,32 @@ class VolumeBackupScheduler {
     private final VolumeBackupScheduleRepository schedules;
     private final VolumeBackupScheduleService scheduleService;
     private final VolumeBackupService backups;
+    private final VolumeBackupStore store;
     private final Clock clock;
 
     VolumeBackupScheduler(VolumeBackupScheduleRepository schedules, VolumeBackupScheduleService scheduleService,
-                          VolumeBackupService backups, Clock clock) {
+                          VolumeBackupService backups, VolumeBackupStore store, Clock clock) {
         this.schedules = schedules;
         this.scheduleService = scheduleService;
         this.backups = backups;
+        this.store = store;
         this.clock = clock;
+    }
+
+    /**
+     * Removes {@code .backup-*.part} files a crash left behind. At application start no backup of this single
+     * instance is running, so every partial file is stale (minimum age zero).
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    void pruneStalePartialsOnStart() {
+        try {
+            int removed = store.pruneStalePartials(Duration.ZERO);
+            if (removed > 0) {
+                log.info("Removed {} stale partial volume backup file(s)", removed);
+            }
+        } catch (RuntimeException e) {
+            log.warn("Could not clean up stale partial volume backup files: {}", e.getClass().getSimpleName());
+        }
     }
 
     @Scheduled(fixedDelayString = "${shipir.volume-backup.tick:1m}", initialDelayString = "${shipir.volume-backup.tick:1m}")
