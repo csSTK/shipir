@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { queryClient } from '../../app/queryClient.ts'
@@ -62,6 +62,19 @@ describe('password reset', () => {
     expect(screen.getByText('If the account exists, a code has been issued.')).toBeInTheDocument()
     expect(screen.getByLabelText(/6-digit code/i)).toHaveAttribute('autocomplete', 'one-time-code')
     expect(screen.getByLabelText(/6-digit code/i)).toHaveAttribute('inputmode', 'numeric')
+  })
+
+  it('marks each password rule with a 16px icon hidden from assistive tech and states it as text', async () => {
+    await openStepTwo()
+    const li = screen.getByText(/uppercase/i).closest('li') as HTMLElement
+    const icon = li.querySelector('svg')
+    expect(icon).toHaveAttribute('aria-hidden', 'true')
+    expect(icon).toHaveAttribute('width', '16')
+    expect(within(li).getByText('Not met')).toBeInTheDocument()
+    expect(li.textContent).not.toMatch(/[\u2713\u25CB]/)
+
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: GOOD } })
+    expect(within(li).getByText('Met')).toBeInTheDocument()
   })
 
   it('disables the request button while pending', async () => {

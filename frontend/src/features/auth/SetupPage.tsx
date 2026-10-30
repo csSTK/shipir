@@ -9,6 +9,7 @@ import { CURRENT_USER_KEY, useChangePassword, type SetupStep } from './api.ts'
 import { fieldError } from './fieldError.ts'
 import { checkPassword, isPasswordValid, violationMessage } from './passwordPolicy.ts'
 import { useTranslation } from 'react-i18next'
+import { Check, Circle } from 'lucide-react'
 import i18n from 'i18next'
 import './LoginPage.css'
 import './SetupPage.css'
@@ -48,9 +49,10 @@ function StepIndicator({ step }: { step: SetupStep }) {
             aria-current={index === current ? 'step' : undefined}
           >
             <span aria-hidden="true" className="setup__step-number">
-              {index < current ? '✓' : index + 1}
+              {index < current ? <Check size={16} aria-hidden="true" /> : index + 1}
             </span>
             {label}
+            {index < current && <span className="setup__sr">{t('common:Checklist.completed')}</span>}
           </li>
         )
       })}
@@ -199,8 +201,9 @@ function PasswordStep({ username }: { username: string }) {
           {rules.map((rule) => (
             <li key={rule.id} className="setup__rule" data-met={rule.met}>
               <span aria-hidden="true" className="setup__mark">
-                {rule.met ? '✓' : '○'}
+                {rule.met ? <Check size={16} aria-hidden="true" /> : <Circle size={16} aria-hidden="true" />}
               </span>
+              <span className="setup__sr">{rule.met ? t('common:Checklist.met') : t('common:Checklist.notMet')}</span>
               {rule.label}
             </li>
           ))}

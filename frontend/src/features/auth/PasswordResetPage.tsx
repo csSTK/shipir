@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { Check, Circle } from 'lucide-react'
 import { Button, Card } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { AuthBrand } from './AuthBrand.tsx'
@@ -190,8 +191,9 @@ function ConfirmStep({
           {rules.map((rule) => (
             <li key={rule.id} className="reset__rule" data-met={rule.met}>
               <span aria-hidden="true" className="reset__mark">
-                {rule.met ? '✓' : '○'}
+                {rule.met ? <Check size={16} aria-hidden="true" /> : <Circle size={16} aria-hidden="true" />}
               </span>
+              <span className="reset__sr">{rule.met ? t('common:Checklist.met') : t('common:Checklist.notMet')}</span>
               {rule.label}
             </li>
           ))}

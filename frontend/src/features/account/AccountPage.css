@@ -27,7 +27,7 @@
 }
 .account__info {
   display: grid;
-  grid-template-columns: max-content 1fr;
+  grid-template-columns: max-content minmax(0, 1fr);
   gap: var(--space-2) var(--space-5);
   margin: 0;
 }
@@ -36,6 +36,8 @@
 }
 .account__info dd {
   margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .account__field {
   display: flex;
@@ -70,6 +72,19 @@
 }
 .account__rules li[data-met='true'] {
   color: var(--color-ok);
+}
+.account__mark {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-inline-end: var(--space-1);
+}
+.account__sr {
+  position: absolute;
+  width: var(--border-width);
+  height: var(--border-width);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .account__error {
   min-height: 1.25em;

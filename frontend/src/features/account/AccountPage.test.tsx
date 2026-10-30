@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { queryClient } from '../../app/queryClient.ts'
@@ -70,6 +70,20 @@ describe('AccountPage', () => {
     renderPage()
     expect(screen.getByText('pat')).toBeInTheDocument()
     expect(screen.getByText('OPERATOR')).toBeInTheDocument()
+  })
+
+  it('marks each password rule with a 16px icon hidden from assistive tech and states it as text', () => {
+    route()
+    renderPage()
+    const li = screen.getByText(/uppercase/i).closest('li') as HTMLElement
+    const icon = li.querySelector('svg')
+    expect(icon).toHaveAttribute('aria-hidden', 'true')
+    expect(icon).toHaveAttribute('width', '16')
+    expect(within(li).getByText('Not met')).toBeInTheDocument()
+    expect(li.textContent).not.toMatch(/[\u2713\u25CB]/)
+
+    type('New password', GOOD)
+    expect(within(li).getByText('Met')).toBeInTheDocument()
   })
 
   it('changes the password and shows a success notice', async () => {
