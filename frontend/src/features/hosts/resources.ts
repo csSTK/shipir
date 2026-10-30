@@ -1,4 +1,4 @@
-import { Boxes, Container, HardDrive, Layers, Network, type LucideIcon } from 'lucide-react'
+import { Boxes, Container, Globe, HardDrive, Layers, Network, type LucideIcon } from 'lucide-react'
 import i18n from 'i18next'
 
 /** Resource sections of an environment: one entry per sidebar link, dashboard tile and route. */
@@ -8,6 +8,7 @@ export const ENV_RESOURCES = [
   { slug: 'images', get label() { return i18n.t('hosts:resources.images') }, icon: Boxes, tone: 'info' },
   { slug: 'networks', get label() { return i18n.t('hosts:resources.networks') }, icon: Network, tone: 'warn' },
   { slug: 'volumes', get label() { return i18n.t('hosts:resources.volumes') }, icon: HardDrive, tone: 'muted' },
+  { slug: 'domains', get label() { return i18n.t('hosts:resources.domains') }, icon: Globe, tone: 'accent' },
 ] as const satisfies readonly { slug: string; label: string; icon: LucideIcon; tone: string }[]
 
 export type EnvResourceSlug = (typeof ENV_RESOURCES)[number]['slug']

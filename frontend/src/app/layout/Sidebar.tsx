@@ -5,6 +5,7 @@ import {
   Clock,
   Disc3,
   GitBranch,
+  Globe,
   HardDrive,
   KeyRound,
   LogIn,
@@ -41,6 +42,7 @@ const RESOURCE_ICONS: Record<string, LucideIcon> = {
   images: Disc3,
   networks: Network,
   volumes: HardDrive,
+  domains: Globe,
 }
 
 const link = ({ isActive }: { isActive: boolean }) =>

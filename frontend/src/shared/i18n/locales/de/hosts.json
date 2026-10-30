@@ -155,6 +155,7 @@
   "resources.images": "Images",
   "resources.networks": "Netzwerke",
   "resources.volumes": "Volumes",
+  "resources.domains": "Domains",
   "tags.use1To24Lowercase": "Verwende 1 bis 24 Kleinbuchstaben, Ziffern oder Bindestriche und beginne mit einem Buchstaben oder einer Ziffer.",
   "tags.anEnvironmentCanHaveAt": "Eine Umgebung kann höchstens {{TAG_MAX}} Tags haben.",
   "tags.theTagsChangedMeanwhileTry": "Die Tags haben sich in der Zwischenzeit geändert. Versuche es erneut.",

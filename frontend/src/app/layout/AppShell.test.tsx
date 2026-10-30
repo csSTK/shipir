@@ -110,7 +110,7 @@ describe('AppShell', () => {
     cleanup()
     renderShell('VIEWER', vi.fn(), '/environments/h1/images')
     const group = await screen.findByRole('group', { name: 'Prod' })
-    for (const name of ['Dashboard', 'Deployments', 'Containers', 'Images', 'Networks', 'Volumes']) {
+    for (const name of ['Dashboard', 'Deployments', 'Containers', 'Images', 'Networks', 'Volumes', 'Domains']) {
       expect(within(group).getByRole('link', { name })).toBeInTheDocument()
     }
     expect(within(group).getByRole('link', { name: 'Images' })).toHaveAttribute('aria-current', 'page')

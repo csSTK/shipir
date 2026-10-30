@@ -155,6 +155,7 @@
   "resources.images": "Images",
   "resources.networks": "Networks",
   "resources.volumes": "Volumes",
+  "resources.domains": "Domains",
   "tags.use1To24Lowercase": "Use 1 to 24 lowercase letters, digits or hyphens, starting with a letter or digit.",
   "tags.anEnvironmentCanHaveAt": "An environment can have at most {{TAG_MAX}} tags.",
   "tags.theTagsChangedMeanwhileTry": "The tags changed meanwhile. Try again.",

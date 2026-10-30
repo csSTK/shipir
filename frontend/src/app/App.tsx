@@ -6,6 +6,7 @@ import { ChatPage } from '../features/ai-chat/index.ts'
 import { ContainersPage, ContainerLogsPage, ContainerConsolePage, ContainerDetailsPage, useConsoleAccess } from '../features/containers/index.ts'
 import { ImagesPage } from '../features/images/index.ts'
 import { NetworksPage } from '../features/networks/index.ts'
+import { DomainsPage } from '../features/domains/index.ts'
 import { VolumesPage } from '../features/volumes/index.ts'
 import { DeploymentDetailPage, DeploymentsPage } from '../features/deployments/index.ts'
 import { NotificationsPage } from '../features/notifications/index.ts'
@@ -77,6 +78,7 @@ function AuthGate() {
         <Route path="/environments/:id/images" element={<ImagesPage />} />
         <Route path="/environments/:id/networks" element={<NetworksPage />} />
         <Route path="/environments/:id/volumes" element={<VolumesPage />} />
+        <Route path="/environments/:id/domains" element={<DomainsPage />} />
         <Route path="/assistant" element={<ChatPage role={user.role} />} />
         <Route path="/assistant/:sessionId" element={<ChatPage role={user.role} />} />
         <Route path="/notifications" element={<NotificationsPage />} />
