@@ -12,6 +12,9 @@
   gap: var(--space-1);
   font-size: var(--text-small-size);
 }
+.cf-tree > li {
+  padding-inline-start: calc(var(--depth, 0) * var(--size-tree-indent));
+}
 .cf-dir {
   opacity: var(--opacity-dimmed);
 }
@@ -29,7 +32,7 @@
   background: var(--color-surface-hover);
 }
 .cf-file:active {
-  transform: scale(0.98);
+  transform: scale(var(--press-scale-soft));
 }
 .cf-file[aria-current='true'] {
   background: var(--color-surface-hover);

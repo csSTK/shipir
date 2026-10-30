@@ -17,7 +17,7 @@
 }
 .sd-back:focus-visible {
   outline: var(--border-width-thick) solid var(--color-focus);
-  outline-offset: 2px;
+  outline-offset: var(--focus-offset);
 }
 .sd-meta {
   display: flex;
@@ -97,7 +97,7 @@
   height: 12rem;
   border-radius: var(--radius-md);
   background: var(--color-surface-sunken);
-  animation: sd-pulse 1.4s ease-in-out infinite;
+  animation: sd-pulse var(--duration-pulse) ease-in-out infinite;
 }
 @keyframes sd-pulse {
   50% {

@@ -94,7 +94,7 @@
 }
 
 .chat-thinking {
-  animation: chat-pulse 1.4s ease-in-out infinite;
+  animation: chat-pulse var(--duration-pulse) ease-in-out infinite;
 }
 
 /* Waiting out a rate limit is a calm, steady state: no pulsing, tinted as a notice. */

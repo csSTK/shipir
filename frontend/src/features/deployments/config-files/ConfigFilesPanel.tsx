@@ -1,4 +1,4 @@
-import { lazy, Suspense, useId, useState } from 'react'
+import { lazy, Suspense, useId, useState, type CSSProperties } from 'react'
 import '../editor/editor.css'
 import {
   describeConfigError,
@@ -146,7 +146,7 @@ export function ConfigFilesPanel({ hostId, deploymentId, canWrite }: Props) {
               const depth = e.path.split('/').length - 1
               const name = e.path.split('/').pop()
               return (
-                <li key={e.path} style={{ paddingInlineStart: `${depth * 14}px` }}>
+                <li key={e.path} style={{ '--depth': depth } as CSSProperties}>
                   {e.directory ? (
                     <span className="cf-dir">{name}/</span>
                   ) : (

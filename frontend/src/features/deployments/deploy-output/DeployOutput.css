@@ -65,7 +65,7 @@
   transition: transform var(--duration-press) ease-out;
 }
 .do__jump:active {
-  transform: scale(0.96);
+  transform: scale(var(--press-scale-strong));
 }
 .do__jump:focus-visible {
   outline: none;

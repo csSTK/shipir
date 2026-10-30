@@ -61,7 +61,30 @@ const countsFor = (rule: Rule): Record<string, number> =>
 // Raw-literal rules (shipr-ycvc.44): border/outline widths, width/height/min-* sizes, grid tracks, translate offsets,
 // decimal opacity, numeric font-weight and stroke-width must come from tokens. Key: `<rule> <file>` -> offending lines.
 // Allowlist entries are legitimate literals only; a stale entry (count no longer matches) fails the test.
-type LiteralRule = 'border-width' | 'size' | 'grid-track' | 'translate' | 'opacity' | 'font-weight' | 'stroke-width'
+// shipr-ycvc.54 adds outline-offset, line-height, flex-basis, scale, var() fallbacks, custom properties, percentage
+// opacity and raw durations. Gaps consciously left open (each with its reason):
+//  - rem/em widths and flex-basis (non-square): font-relative layout measures that scale with the user's font size;
+//    only square rem/em icon boxes are tokenized (iconBox rule below) and flex-basis is checked for px only.
+//  - letter-spacing em: typographic tracking is relative to the font size by design.
+//  - bare easing keywords (ease-out, ease): out of this bead's scope; the wizard stylesheet already forbids them.
+//  - inline style values in TSX driven by data (DiskUsageCard % segment widths, ResourceTable column sizes,
+//    Skeleton/YamlEditor width/height props, chart colors): computed at runtime, no token can express them.
+type LiteralRule =
+  | 'border-width'
+  | 'size'
+  | 'grid-track'
+  | 'translate'
+  | 'opacity'
+  | 'font-weight'
+  | 'stroke-width'
+  | 'outline-offset'
+  | 'line-height'
+  | 'flex-basis'
+  | 'scale'
+  | 'var-fallback'
+  | 'custom-property'
+  | 'opacity-percent'
+  | 'duration'
 
 const decl = (names: string, value: string) => new RegExp(`(?:^|[;{\\s])(?:${names})\\s*:[^;{}]*?${value}[^;{}]*`, 'gim')
 const literalPatterns: Record<LiteralRule, RegExp> = {
@@ -72,6 +95,14 @@ const literalPatterns: Record<LiteralRule, RegExp> = {
   opacity: decl('opacity', '\\s*0?\\.\\d+'),
   'font-weight': decl('font-weight', '(?<![\\w-])(?:\\d{3}|bold|bolder|lighter)\\b'),
   'stroke-width': decl('stroke-width', '\\s*\\d'),
+  'outline-offset': decl('outline-offset', '(?<![\\w.-])\\d*\\.?\\d+px'),
+  'line-height': decl('line-height', '(?<![\\w.-])\\d*\\.?\\d+(?:px|rem|em)\\b'),
+  'flex-basis': decl('flex(?:-basis)?', '(?<![\\w.-])\\d*\\.?\\d+px'),
+  scale: /(?<![\w-])scale[XYZ]?\(\s*-?\.?\d[^)]*\)/gim,
+  'var-fallback': /var\(\s*--[\w-]+\s*,[^)]*?(?:(?<![\w.-])\d*\.?\d+(?:px|rem|em|vh|vw|dvh|ms|s)\b|#[0-9a-fA-F]{3,8}\b)[^)]*\)/gim,
+  'custom-property': /(?:^|[;{\s])--[\w-]+\s*:[^;{}]*?(?:(?<![\w.-])\d*\.?\d+(?:px|rem|em|ms|s)\b|#[0-9a-fA-F]{3,8}\b)[^;{}]*/gim,
+  'opacity-percent': decl('opacity', '\\s*\\d+(?:\\.\\d+)?%'),
+  duration: decl('transition(?:-duration|-delay)?|animation(?:-duration|-delay)?', '(?<![\\w.-])\\d*\\.?\\d+m?s\\b'),
 }
 const literalHits = (rule: LiteralRule, css: string): string[] =>
   [...strip(css).matchAll(literalPatterns[rule])].map((m) => m[0].replace(/^[;{\s]+/, '').trim())
@@ -92,9 +123,9 @@ const iconBoxAllowlist: Record<string, number> = {
 }
 
 const literalAllowlist: Record<string, number> = {
-  'size /features/ai-chat/AssistantDock.css': 2, // visually-hidden live region
-  'size /features/ai-chat/ChatPage.css': 2, // visually-hidden composer label
+  'size /features/ai-chat/ChatPane.css': 2, // visually-hidden composer label
   'size /shared/ui/FormField.css': 2, // visually-hidden bare label
+  'var-fallback /shared/ui/ResourceTable.css': 1, // --rtable-max-height is the table's public API; 70vh is its viewport-relative default
   'size /shared/ui/ResourceTable.css': 3, // visually-hidden .rtable__sr (2) + shrink-to-fit actions cell width (1)
 }
 
@@ -276,6 +307,51 @@ describe('design token usage', () => {
       expect(actual).toEqual(allowed)
     })
   }
+
+  it('new literal scanners (shipr-ycvc.54) catch raw values and ignore tokens', () => {
+    const h = literalHits
+    expect(h('outline-offset', '.a { outline-offset: 2px; }')).toHaveLength(1)
+    expect(h('outline-offset', '.a { outline-offset: var(--focus-offset); outline-offset: 0; }')).toEqual([])
+    expect(h('line-height', '.a { line-height: 20px; }\n.b { line-height: 1.25rem; }\n.c { line-height: 2em; }')).toHaveLength(3)
+    expect(h('line-height', '.a { line-height: 1.4; line-height: var(--text-small-leading); line-height: 1; }')).toEqual([])
+    expect(h('flex-basis', '.a { flex-basis: 120px; }\n.b { flex: 1 1 120px; }')).toHaveLength(2)
+    expect(h('flex-basis', '.a { flex: 1 1 8rem; flex-basis: 100%; flex: 1; }')).toEqual([])
+    expect(h('scale', '.a { transform: scale(0.97); }\n.b { transform: translateY(1px) scale(.9); scale: 1.2; }')).toHaveLength(2)
+    expect(h('scale', '.a { transform: scale(var(--press-scale)); }')).toEqual([])
+    expect(h('var-fallback', '.a { max-height: var(--x, 70vh); color: var(--y, #fff); gap: var(--z, 8px); }')).toHaveLength(3)
+    expect(h('var-fallback', '.a { color: var(--y, var(--color-text)); gap: var(--z, 0); border: 2px solid var(--b, var(--c)); }')).toEqual([])
+    expect(h('custom-property', '.a { --w: 3.5rem; --c: #abc; --d: 200ms; --p: 4px; }')).toHaveLength(4)
+    expect(h('custom-property', '.a { --w: var(--size-icon-lg); --n: 3; --pad: calc(var(--space-2) * 2); width: 3rem; }')).toEqual([])
+    expect(h('opacity-percent', '.a { opacity: 50%; }')).toHaveLength(1)
+    expect(h('opacity-percent', '.a { opacity: var(--opacity-dimmed); opacity: 0; width: 50%; }')).toEqual([])
+    expect(h('duration', '.a { animation: pulse 1.4s ease infinite; transition: x 150ms; animation-duration: 2s; }')).toHaveLength(3)
+    expect(h('duration', '.a { animation: pulse var(--duration-pulse) ease infinite; transition: x var(--duration-fast); animation: none; }')).toEqual([])
+  })
+
+  // Inline style={{...}} in TSX: size literals (px/rem/em, incl. template strings like `${n}px`) must come from CSS tokens.
+  const tsxFiles = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? tsxFiles(join(dir, e.name)) : /\.tsx$/.test(e.name) && !/\.test\.tsx$/.test(e.name) ? [join(dir, e.name)] : [],
+    )
+  const inlineStyleLiterals = (tsx: string): string[] =>
+    [...tsx.matchAll(/style=\{\{[^\n]*?(?:(?<![\w.-])\d*\.?\d+(?:px|rem|em)\b|\}(?:px|rem|em)\b)[^\n]*/g)].map((m) => m[0].trim())
+
+  it('inline style scanner catches size literals and ignores runtime values', () => {
+    expect(inlineStyleLiterals('<li style={{ paddingInlineStart: `${depth * 14}px` }}>')).toHaveLength(1)
+    expect(inlineStyleLiterals("<div style={{ height: '12rem' }} />")).toHaveLength(1)
+    expect(inlineStyleLiterals('<div style={{ width, height }} />')).toEqual([])
+    expect(inlineStyleLiterals("<li style={{ '--depth': depth } as CSSProperties}>")).toEqual([])
+  })
+
+  it('has no px/rem/em literals in inline styles of any component', () => {
+    const offenders = Object.fromEntries(
+      tsxFiles(srcRoot).flatMap((f) => {
+        const hits = inlineStyleLiterals(readFileSync(f, 'utf8'))
+        return hits.length > 0 ? [[relative(srcRoot, f), hits] as const] : []
+      }),
+    )
+    expect(offenders).toEqual({})
+  })
 
   it('icon box scanner flags square rem/em boxes only', () => {
     expect(iconBoxHits('.a { width: 1.5rem; height: 1.5rem; }')).toHaveLength(1)

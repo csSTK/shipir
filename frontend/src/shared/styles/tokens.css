@@ -76,6 +76,14 @@
   --dock-panel-height: 40rem;
   --dock-sheet-height: 85dvh;
   --size-qr: 12rem;
+  /* App shell top bar; the sidebar offsets itself by it */
+  --shell-bar-height: 3.5rem;
+  /* Indent per level of the config file tree */
+  --size-tree-indent: 0.875rem;
+  /* Line box of the sidebar count badge */
+  --line-height-badge: 1.25rem;
+  /* Gap between a focused element and its outline */
+  --focus-offset: 2px;
   /* Square icon and avatar boxes */
   --size-icon-xs: 0.875rem;
   --size-icon-sm: 1rem;
@@ -101,12 +109,18 @@
   --duration-base: 220ms;
   /* Continuous spinner rotation (one turn) */
   --duration-spin: 700ms;
+  /* Skeleton and thinking-indicator pulse */
+  --duration-pulse: 1400ms;
+  /* Spinner under prefers-reduced-motion: slow and calm */
+  --duration-spin-calm: 2000ms;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring-css: cubic-bezier(0.3, 1.4, 0.5, 1);
   --spring-snappy: 'stiffness 520, damping 38, mass 1';
   --spring-smooth: 'stiffness 300, damping 30, mass 1';
   --spring-gentle: 'stiffness 180, damping 24, mass 1';
   --press-scale: 0.97;
+  --press-scale-soft: 0.98;
+  --press-scale-strong: 0.96;
 
   /* Opacity steps: faint area fill, ghost, disabled, dimmed (stills, pressed links), quiet, muted secondary text */
   --opacity-faint: 0.1;

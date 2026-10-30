@@ -108,7 +108,7 @@
   color: var(--color-on-accent);
   font-size: var(--text-caption-size);
   font-weight: var(--weight-semibold);
-  line-height: 1.25rem;
+  line-height: var(--line-height-badge);
   font-variant-numeric: tabular-nums;
 }
 @media (max-width: 720px) {
