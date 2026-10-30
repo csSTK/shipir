@@ -736,7 +736,9 @@ public class DeploymentRunService {
         } catch (RuntimeException e) {
             log.warn("Could not write audit entry for deployment {}: {}", runId, e.toString());
         }
-        if (!success) {
+        // The scheduled image update reports its own, richer IMAGE_UPDATE_FAILED (incl. rollback result) once per
+        // attempt, so the run failure is not announced a second time for it.
+        if (!success && !automatic) {
             publishRunFailed(deployment, failedStep, failedExit, timedOut, runError);
         }
         // Release before announcing the end so a client reacting to DONE/FAILED can start the next deployment.

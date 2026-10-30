@@ -42,11 +42,35 @@ record NotificationDraft(NotificationType type, UUID hostId, String hostName, UU
     static NotificationDraft of(ImageAutoUpdateEvent e) {
         String message = e.applied()
                 ? "Images of deployment \"%s\" on \"%s\" were updated".formatted(e.deploymentName(), e.hostName())
-                : "Image update of deployment \"%s\" on \"%s\" failed (%s)".formatted(e.deploymentName(),
-                        e.hostName(), e.errorCode());
+                : "Image update of deployment \"%s\" on \"%s\" failed: %s".formatted(e.deploymentName(),
+                        e.hostName(), imageUpdateFailure(e.errorCode()));
         return new NotificationDraft(e.applied() ? NotificationType.IMAGE_UPDATE_APPLIED
                 : NotificationType.IMAGE_UPDATE_FAILED, e.hostId(), e.hostName(), e.deploymentId(), e.deploymentName(),
                 null, null, cap(message), null, e.errorCode(), e.occurredAt());
+    }
+
+    /**
+     * Readable text for the scheduler's failure code ({@code PULL_FAILED}, or {@code <reason>_ROLLED_BACK} /
+     * {@code <reason>_NOT_ROLLED_BACK}); the raw code stays in {@code errorCode} for webhook consumers.
+     */
+    private static String imageUpdateFailure(String code) {
+        if (code == null) {
+            return "the update did not succeed.";
+        }
+        if ("PULL_FAILED".equals(code)) {
+            return "the new images could not be pulled. Nothing was changed.";
+        }
+        boolean notRolledBack = code.endsWith("_NOT_ROLLED_BACK");
+        boolean rolledBack = !notRolledBack && code.endsWith("_ROLLED_BACK");
+        String reason = switch (code.replaceFirst("_(NOT_)?ROLLED_BACK$", "")) {
+            case "UNHEALTHY" -> "the updated containers did not become healthy";
+            case "UP_FAILED" -> "the updated containers could not be started";
+            case "TIMEOUT" -> "the update took too long";
+            case "ERROR" -> "an unexpected error occurred";
+            default -> "the update could not be completed";
+        };
+        return reason + (rolledBack ? ". The previous images were restored."
+                : notRolledBack ? ". The previous images could not be restored." : ".");
     }
 
     static NotificationDraft of(UptimeStateChangedEvent e) {

@@ -308,7 +308,7 @@ class ImageAutoUpdateSchedulerTest extends DeploymentTestBase {
 
         scheduler.tick();
 
-        assertThat(notificationTypes()).contains("IMAGE_UPDATE_FAILED");
+        assertThat(notificationTypes()).containsExactly("IMAGE_UPDATE_FAILED");
         assertThat(commands.getFirst()).isEqualTo(ComposeCommand.PULL);
         // the stubbed compose up fails every time, so the rollback up fails as well
         assertThat(lastResult(id)).isEqualTo("FAILED_NOT_ROLLED_BACK");
@@ -327,7 +327,7 @@ class ImageAutoUpdateSchedulerTest extends DeploymentTestBase {
                 .isEqualTo("RUNNING"); // nothing was touched: a transient pull error must not mark it ERROR
         assertThat(overrideYamls).isEmpty();
         assertThat(lastResult(id)).isEqualTo("FAILED"); // no rollback attempted: the pull changed nothing
-        assertThat(notificationTypes()).contains("IMAGE_UPDATE_FAILED");
+        assertThat(notificationTypes()).containsExactly("IMAGE_UPDATE_FAILED");
         assertThat(audit("IMAGE_AUTO_UPDATE")).containsExactly("system:FAILURE");
     }
 

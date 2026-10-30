@@ -2,6 +2,7 @@ package dev.bethge.shipir.notification;
 
 import dev.bethge.shipir.compose.DeploymentRunFailedEvent;
 import dev.bethge.shipir.compose.GitAutoUpdateFailedEvent;
+import dev.bethge.shipir.compose.ImageAutoUpdateEvent;
 import dev.bethge.shipir.host.ContainerProblemEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,32 @@ class NotificationNewTypesTest extends NotificationTestBase {
                 .containsEntry("host_id", visibleHost).containsEntry("deployment_id", deployment)
                 .containsEntry("deployment_name", "web").containsEntry("container_id", null)
                 .containsEntry("message", "Deployment \"web\" on \"notif-host\" failed (step UP, exit code 1)");
+    }
+
+    private String imageUpdateFailedMessage(String errorCode) {
+        jdbc.update("DELETE FROM notifications");
+        publisher.publishEvent(new ImageAutoUpdateEvent(visibleHost, "notif-host", deployment, "web", false, errorCode,
+                Instant.parse("2026-10-24T10:00:00Z")));
+        return jdbc.queryForObject("SELECT message FROM notifications WHERE type = 'IMAGE_UPDATE_FAILED' LIMIT 1",
+                String.class);
+    }
+
+    @Test
+    void imageUpdateFailedMessageIsReadableAndHasNoRawReasonCode() {
+        assertThat(imageUpdateFailedMessage("UNHEALTHY_ROLLED_BACK")).isEqualTo(
+                "Image update of deployment \"web\" on \"notif-host\" failed: the updated containers did not become "
+                        + "healthy. The previous images were restored.");
+        assertThat(imageUpdateFailedMessage("UP_FAILED_NOT_ROLLED_BACK")).isEqualTo(
+                "Image update of deployment \"web\" on \"notif-host\" failed: the updated containers could not be "
+                        + "started. The previous images could not be restored.");
+        assertThat(imageUpdateFailedMessage("PULL_FAILED")).isEqualTo(
+                "Image update of deployment \"web\" on \"notif-host\" failed: the new images could not be pulled. "
+                        + "Nothing was changed.");
+        assertThat(imageUpdateFailedMessage("TIMEOUT_NOT_ROLLED_BACK")).doesNotContain("TIMEOUT_NOT_ROLLED_BACK");
+        assertThat(imageUpdateFailedMessage("SOMETHING_NEW")).doesNotContain("SOMETHING_NEW");
+        // the raw code stays available for webhook consumers
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notifications WHERE type = 'IMAGE_UPDATE_FAILED'",
+                Integer.class)).isPositive();
     }
 
     @Test
