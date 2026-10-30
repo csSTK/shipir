@@ -19,6 +19,8 @@ import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.security.SecureRandom;
 import java.time.Clock;
@@ -338,9 +340,62 @@ public class AiToolRegistry {
         if (content == null || content.length() <= maxResultChars) {
             return result;
         }
+        ToolResult shortened = dropTrailingItems(result, content);
+        if (shortened != null) {
+            return shortened;
+        }
         int omitted = content.length() - maxResultChars;
         return new ToolResult(result.error(), content.substring(0, maxResultChars)
                 + "\n...[RESULT TRUNCATED: the result was cut (truncated), " + omitted + " more characters omitted. "
                 + "Do not assume the list is complete; narrow the request (filters, smaller limit, a single id)]");
+    }
+
+    /**
+     * Keeps a cut list result valid JSON: drops whole trailing items of the top-level array (wrapped as {@code items})
+     * or of the largest array field of a top-level object until it fits, and adds {@code omittedItems} and a note.
+     * Returns null when the content has no such array or not even one item fits (caller falls back to a char cut).
+     */
+    private ToolResult dropTrailingItems(ToolResult result, String content) {
+        try {
+            JsonNode root = mapper.readTree(content);
+            ObjectNode holder;
+            String field;
+            if (root.isArray()) {
+                holder = mapper.createObjectNode();
+                holder.set("items", root);
+                field = "items";
+            } else if (root.isObject()) {
+                holder = (ObjectNode) root;
+                field = null;
+                int largest = 0;
+                for (Map.Entry<String, JsonNode> e : holder.properties()) {
+                    if (e.getValue().isArray() && e.getValue().size() > largest) {
+                        largest = e.getValue().size();
+                        field = e.getKey();
+                    }
+                }
+                if (field == null) {
+                    return null;
+                }
+            } else {
+                return null;
+            }
+            ArrayNode items = (ArrayNode) holder.get(field);
+            int total = items.size();
+            holder.put("omittedItems", 0);
+            holder.put("note", "RESULT TRUNCATED: the result was cut (truncated), the last items of '" + field
+                    + "' were omitted. Do not assume the list is complete; narrow the request (filters, smaller limit, a single id)");
+            while (items.size() > 0) {
+                holder.put("omittedItems", total - items.size());
+                String out = mapper.writeValueAsString(holder);
+                if (out.length() <= maxResultChars) {
+                    return new ToolResult(result.error(), out);
+                }
+                items.remove(items.size() - 1);
+            }
+            return null;
+        } catch (JacksonException e) {
+            return null;
+        }
     }
 }

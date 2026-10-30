@@ -299,6 +299,44 @@ class AiToolRegistryTest {
     }
 
     @Test
+    void oversizedListResultsStayValidJsonAndSayHowManyItemsWereOmitted() throws Exception {
+        List<Map<String, String>> containers = new java.util.ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+            containers.add(Map.of("id", "c" + i, "name", "container-" + i, "image", "x".repeat(100)));
+        }
+        AiToolRegistry registry = new AiToolRegistry(List.of(
+                tool("list", Role.VIEWER, false, (a, c) -> containers)), MAPPER, 1000);
+
+        String content = registry.execute("list", "{\"hostId\":\"" + UUID.randomUUID() + "\"}", ctx(Role.VIEWER)).content();
+
+        tools.jackson.databind.JsonNode node = MAPPER.readTree(content);
+        int kept = node.get("items").size();
+        assertThat(content.length()).isLessThanOrEqualTo(1000);
+        assertThat(kept).isBetween(1, 29);
+        assertThat(node.get("omittedItems").asInt()).isEqualTo(30 - kept);
+        assertThat(node.get("note").asString()).contains("truncated");
+        assertThat(node.get("items").get(0).get("id").asString()).isEqualTo("c0");
+    }
+
+    @Test
+    void oversizedPageObjectKeepsItsFieldsAndShortensTheItemsArray() throws Exception {
+        List<Map<String, String>> entries = new java.util.ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+            entries.add(Map.of("action", "A" + i, "details", "d".repeat(100)));
+        }
+        AiToolRegistry registry = new AiToolRegistry(List.of(
+                tool("audit", Role.VIEWER, false, (a, c) -> Map.of("totalElements", 30, "content", entries))), MAPPER, 1000);
+
+        String content = registry.execute("audit", "{\"hostId\":\"" + UUID.randomUUID() + "\"}", ctx(Role.VIEWER)).content();
+
+        tools.jackson.databind.JsonNode node = MAPPER.readTree(content);
+        assertThat(content.length()).isLessThanOrEqualTo(1000);
+        assertThat(node.get("totalElements").asInt()).isEqualTo(30);
+        assertThat(node.get("content").size()).isBetween(1, 29);
+        assertThat(node.get("omittedItems").asInt()).isEqualTo(30 - node.get("content").size());
+    }
+
+    @Test
     void truncationNoteTellsTheModelTheResultWasCutAndHowManyCharsAreMissing() {
         AiToolRegistry registry = new AiToolRegistry(List.of(
                 tool("big", Role.VIEWER, false, (a, c) -> "x".repeat(500))), MAPPER, new AiToolProperties(100), Clock.systemUTC());
