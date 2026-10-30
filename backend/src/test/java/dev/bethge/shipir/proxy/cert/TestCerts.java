@@ -18,10 +18,10 @@ import java.util.concurrent.TimeUnit;
  * Real certificates for tests, generated with the JDK's own {@code keytool} (no certificate builder library is a
  * dependency). Results are cached per parameter set because every call starts a JVM.
  */
-final class TestCerts {
+public final class TestCerts {
 
     /** PEM encoded certificate and PKCS#8 private key. */
-    record Pair(String certPem, String keyPem) {
+    public record Pair(String certPem, String keyPem) {
     }
 
     private static final Map<String, Pair> CACHE = new ConcurrentHashMap<>();
@@ -30,20 +30,20 @@ final class TestCerts {
     }
 
     /** Valid for 30 days. {@code san} like {@code "dns:a.example.com,dns:*.b.example.com"} or null for none (CN only). */
-    static Pair valid(String keyAlg, String cn, String san) {
+    public static Pair valid(String keyAlg, String cn, String san) {
         return generate(keyAlg, cn, san, "30", null, "2048");
     }
 
-    static Pair rsa(int bits, String cn, String san) {
+    public static Pair rsa(int bits, String cn, String san) {
         return generate("RSA", cn, san, "30", null, String.valueOf(bits));
     }
 
     /** Expired a few days ago. */
-    static Pair expired(String cn, String san) {
+    public static Pair expired(String cn, String san) {
         return generate("RSA", cn, san, "1", "-10d", "2048");
     }
 
-    static Pair notYetValid(String cn, String san) {
+    public static Pair notYetValid(String cn, String san) {
         return generate("RSA", cn, san, "30", "+5d", "2048");
     }
 
