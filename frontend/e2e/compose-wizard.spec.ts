@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures/api.ts'
+import { expect, mockDeploymentCards, test } from './fixtures/api.ts'
 
 const host = {
   id: 'a',
@@ -30,10 +30,7 @@ test('operator builds a two-service deployment in the wizard, previews it and cr
   api.mock('POST', '/api/compose/generate', { body: { yaml } })
   api.mock('POST', BASE, { status: 201, body: created })
   api.mock('GET', `${BASE}/s1`, { body: created })
-  api.mock('GET', `${BASE}/s1/versions`, { body: [] })
-  api.mock('GET', `${BASE}/s1/files`, { body: [] })
-  api.mock('GET', `${BASE}/s1/webhook`, { body: { enabled: false, createdAt: null, rotatedAt: null } })
-  api.mock('GET', `${BASE}/s1/uptime-checks`, { body: [] })
+  mockDeploymentCards(api, `${BASE}/s1`)
 
   await page.goto('/environments/a/deployments')
   await page.getByRole('button', { name: 'Add deployment' }).click()
