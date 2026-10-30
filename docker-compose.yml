@@ -23,6 +23,11 @@ services:
       # Proxies (comma-separated IPs or CIDRs) whose X-Forwarded-For is believed, for per-client login throttling.
       # Default: the dedicated stack network below, which only holds the nginx and backend containers.
       SHIPIR_SECURITY_TRUSTED_PROXIES: ${SHIPIR_SECURITY_TRUSTED_PROXIES:-${SHIPIR_SUBNET:-172.28.77.0/24}}
+      # true lets OPERATORs with an OPERATE grant open container consoles (ADMIN always can; see README, "Live streaming").
+      SHIPIR_STREAMING_EXEC_OPERATOR_ENABLED: ${SHIPIR_STREAMING_EXEC_OPERATOR_ENABLED:-false}
+      # Public origin behind a reverse proxy (e.g. https://shipir.example.com) for the OIDC redirect URI.
+      # Empty: derived from the incoming request (see README, "Single sign-on").
+      SHIPIR_OIDC_PUBLIC_BASE_URL: ${SHIPIR_OIDC_PUBLIC_BASE_URL:-}
     networks:
       - shipir
     # Access to the local Docker daemon. Grants root-equivalent control of the host; keep the stack private.
