@@ -97,6 +97,14 @@ class ManagedProxyTemplatesTest {
     }
 
     @Test
+    void configVolumeIsWritableBecauseTheArchiveApiRefusesReadOnlyMounts() {
+        for (ProxyType type : ProxyType.values()) {
+            assertThat(templates.yaml(type)).contains("- shipir-proxy-config:/etc/shipir-proxy\n")
+                    .doesNotContain("/etc/shipir-proxy:ro");
+        }
+    }
+
+    @Test
     void publishesHttpHttpsAndHttp3Ports() {
         assertThat(ports(parse(ProxyType.TRAEFIK))).containsExactlyInAnyOrder("80:80", "443:443");
         assertThat(ports(parse(ProxyType.CADDY))).containsExactlyInAnyOrder("80:80", "443:443", "443:443/udp");
@@ -129,7 +137,7 @@ class ManagedProxyTemplatesTest {
     @Test
     void caddyReadsItsCaddyfileFromTheConfigVolume() {
         JsonNode service = service(parse(ProxyType.CADDY), "caddy");
-        assertThat(names(service.path("command"))).containsSubsequence("run", "--config", "/etc/shipir-proxy/Caddyfile");
+        assertThat(names(service.path("command"))).startsWith("caddy", "run").containsSubsequence("run", "--config", "/etc/shipir-proxy/Caddyfile");
         assertThat(mounts(parse(ProxyType.CADDY))).anyMatch(mount -> mount.startsWith("shipir-proxy-config:/etc/shipir-proxy"));
         assertThat(mounts(parse(ProxyType.CADDY))).anyMatch(mount -> mount.endsWith(":/data"));
     }

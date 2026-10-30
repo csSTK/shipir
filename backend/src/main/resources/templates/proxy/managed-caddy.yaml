@@ -7,13 +7,14 @@ services:
   caddy:
     image: caddy:2.10.2-alpine
     restart: unless-stopped
-    command: ["run", "--config", "/etc/shipir-proxy/Caddyfile", "--adapter", "caddyfile"]
+    command: ["caddy", "run", "--config", "/etc/shipir-proxy/Caddyfile", "--adapter", "caddyfile"]
     ports:
       - "80:80"
       - "443:443"
       - "443:443/udp"
     volumes:
-      - shipir-proxy-config:/etc/shipir-proxy:ro
+      # writable on purpose: Shipir pushes the generated config in through the Docker archive API, which refuses read-only mounts
+      - shipir-proxy-config:/etc/shipir-proxy
       - shipir-proxy-data:/data
     networks:
       - shipir-proxy

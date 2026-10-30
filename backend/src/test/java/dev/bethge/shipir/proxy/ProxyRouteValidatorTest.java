@@ -213,6 +213,23 @@ class ProxyRouteValidatorTest {
                 route().responseHeaders(Map.of("X-Frame-Options", "SAMEORIGIN")).build(), Set.of(), null)).doesNotThrowAnyException();
     }
 
+    @Test
+    void capsAliasesBasicAuthUsersAndHeaders() {
+        List<String> aliases = new java.util.ArrayList<>();
+        Map<String, String> users = new java.util.LinkedHashMap<>();
+        Map<String, String> headers = new java.util.LinkedHashMap<>();
+        for (int i = 0; i <= ProxyRouteValidator.MAX_ENTRIES; i++) {
+            aliases.add("a" + i + ".example.com");
+            users.put("user" + i, BCRYPT);
+            headers.put("X-H" + i, "v");
+        }
+        expect(route().aliases(aliases).build(), "TOO_MANY_ALIASES");
+        expect(route().basicAuthUsers(users).build(), "TOO_MANY_USERS");
+        expect(route().responseHeaders(headers).build(), "TOO_MANY_HEADERS");
+        assertThatCode(() -> validator.validate(HOST, ProxyType.TRAEFIK,
+                route().aliases(aliases.subList(0, ProxyRouteValidator.MAX_ENTRIES)).build(), Set.of(), null)).doesNotThrowAnyException();
+    }
+
     private static ProxyCertificate cert(UUID host, String... domains) {
         return ProxyCertificate.create(host, "c", "PEM", new byte[]{1}, List.of(domains), java.time.Instant.now().plusSeconds(60));
     }

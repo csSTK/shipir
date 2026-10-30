@@ -26,7 +26,8 @@ services:
       # Provider credentials for the DNS challenge (e.g. CF_DNS_API_TOKEN for Cloudflare)
       - .env
     volumes:
-      - shipir-proxy-config:/etc/shipir-proxy:ro
+      # writable on purpose: Shipir pushes the generated config in through the Docker archive API, which refuses read-only mounts
+      - shipir-proxy-config:/etc/shipir-proxy
       - shipir-proxy-acme:/letsencrypt
     networks:
       - shipir-proxy

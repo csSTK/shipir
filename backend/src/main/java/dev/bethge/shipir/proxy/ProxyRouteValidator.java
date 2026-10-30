@@ -20,6 +20,9 @@ import java.util.regex.Pattern;
 @Component
 public class ProxyRouteValidator {
 
+    /** Upper bound for aliases, basic auth users and response headers of one route. */
+    static final int MAX_ENTRIES = 20;
+
     private static final Pattern CONTAINER = Pattern.compile("[a-zA-Z0-9][a-zA-Z0-9_.-]{0,254}");
     private static final Pattern ENTRYPOINT = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.-]{0,49}");
     /** Absolute path, no query, no quotes, no percent-escapes (so no encoded dot segments), no empty segments. */
@@ -71,6 +74,9 @@ public class ProxyRouteValidator {
 
     private void validateNames(RouteInput in, Set<String> takenNames, ProxyCertificate cert, UUID hostId) {
         List<String> aliases = in.aliases() == null ? List.of() : in.aliases();
+        if (aliases.size() > MAX_ENTRIES) {
+            throw bad("TOO_MANY_ALIASES", "A route can have at most " + MAX_ENTRIES + " aliases");
+        }
         List<String> all = new java.util.ArrayList<>();
         all.add(in.hostname());
         all.addAll(aliases);
@@ -146,6 +152,9 @@ public class ProxyRouteValidator {
         if (users == null) {
             return;
         }
+        if (users.size() > MAX_ENTRIES) {
+            throw bad("TOO_MANY_USERS", "A route can have at most " + MAX_ENTRIES + " basic auth users");
+        }
         for (Map.Entry<String, String> e : users.entrySet()) {
             if (e.getKey() == null || !USER.matcher(e.getKey()).matches()
                     || e.getValue() == null || !BCRYPT.matcher(e.getValue()).matches()) {
@@ -157,6 +166,9 @@ public class ProxyRouteValidator {
     private void validateHeaders(Map<String, String> headers) {
         if (headers == null) {
             return;
+        }
+        if (headers.size() > MAX_ENTRIES) {
+            throw bad("TOO_MANY_HEADERS", "A route can have at most " + MAX_ENTRIES + " response headers");
         }
         for (Map.Entry<String, String> e : headers.entrySet()) {
             if (e.getKey() == null || !HEADER_NAME.matcher(e.getKey()).matches()
