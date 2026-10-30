@@ -164,6 +164,10 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/hosts/*/containers", "/api/hosts/*/networks",
                                 "/api/hosts/*/volumes").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/hosts/*/images/pull").hasAnyRole("ADMIN", "OPERATOR")
+                        // publishing a container: the service checks OPERATE on the host or on the container's deployment
+                        .requestMatchers(HttpMethod.POST, "/api/hosts/*/proxy/routes").hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.PUT, "/api/hosts/*/proxy/routes/*").hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.DELETE, "/api/hosts/*/proxy/routes/*").hasAnyRole("ADMIN", "OPERATOR")
                         // a Dockerfile build runs arbitrary RUN steps on the daemon (root-equivalent): ADMIN only
                         .requestMatchers(HttpMethod.POST, "/api/hosts/*/images/build").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/hosts/*/images/push", "/api/hosts/*/images/*/tag")
