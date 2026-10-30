@@ -322,6 +322,8 @@ class TwoFactorApiTest {
         // a fresh password login does not reset the counter
         Session again = login("admin", ADMIN_PASSWORD);
         assertThat(status(again, "POST", "/api/auth/2fa/verify", codeJson(Totp.code(e.secret, now() + 1)))).isEqualTo(429);
+        // the five wrong codes (the last one starts the lockout) are audited; the blocked 429s write no rows
+        assertThat(auditCount("MFA_VERIFY", "FAILURE")).isEqualTo(5);
     }
 
     @Test

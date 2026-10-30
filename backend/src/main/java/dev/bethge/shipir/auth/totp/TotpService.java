@@ -201,8 +201,7 @@ public class TotpService {
 
     private void requireNotLocked(String username) {
         if (limiter.isLocked(username)) {
-            throw new TwoFactorException(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_ATTEMPTS",
-                    "Too many wrong codes, try again later");
+            throw new TwoFactorLockedException();
         }
     }
 

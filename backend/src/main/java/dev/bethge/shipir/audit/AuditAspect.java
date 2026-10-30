@@ -1,6 +1,7 @@
 package dev.bethge.shipir.audit;
 
 import dev.bethge.shipir.auth.UserRepository;
+import dev.bethge.shipir.common.exception.RequestThrottled;
 import dev.bethge.shipir.common.security.AiInvocationContext;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -26,7 +27,8 @@ import java.util.UUID;
 
 /**
  * Writes one audit entry per {@link Auditable} call: SUCCESS after a normal return (a ResponseEntity with an
- * error status counts as FAILURE, except 429 which is not recorded), FAILURE when an exception is thrown, which
+ * error status counts as FAILURE, except 429 which is not recorded), FAILURE when an exception is thrown (except a
+ * {@link RequestThrottled} one, not recorded), which
  * is rethrown unchanged.
  * Recording problems are logged and swallowed so auditing can never break the audited action.
  */
@@ -54,6 +56,10 @@ class AuditAspect {
         try {
             result = pjp.proceed();
         } catch (Throwable t) {
+            if (t instanceof RequestThrottled) {
+                // Throttled (e.g. 2FA lockout): no per-request row; the attempt that started the lockout was audited.
+                throw t;
+            }
             record(pjp, auditable, before, null, beforeState, AuditLogEntry.Outcome.FAILURE);
             throw t;
         }

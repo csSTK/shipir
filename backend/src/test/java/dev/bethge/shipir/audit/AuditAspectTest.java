@@ -5,6 +5,7 @@ import dev.bethge.shipir.auth.PasswordResetCodeSender;
 import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
+import dev.bethge.shipir.common.exception.RequestThrottled;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -107,6 +108,14 @@ class AuditAspectTest {
         @Auditable(action = "NO_DETAILS_PROBE")
         public void plain() {
         }
+
+        @Auditable(action = "THROTTLED_PROBE", targetType = "PROBE")
+        public void throttled() {
+            throw new ThrottledProbeException();
+        }
+    }
+
+    static class ThrottledProbeException extends RuntimeException implements RequestThrottled {
     }
 
     @TestConfiguration
@@ -337,6 +346,14 @@ class AuditAspectTest {
         assertThatThrownBy(detailsProbe::failing).isInstanceOf(IllegalStateException.class);
 
         assertThat(detailsOf("DETAILS_FAIL_PROBE")).isNull();
+    }
+
+    @Test
+    void throttledExceptionWritesNoAuditRowButIsRethrown() {
+        assertThatThrownBy(detailsProbe::throttled).isInstanceOf(ThrottledProbeException.class);
+
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM audit_log WHERE action = 'THROTTLED_PROBE'", Integer.class)).isZero();
     }
 
     @Test
