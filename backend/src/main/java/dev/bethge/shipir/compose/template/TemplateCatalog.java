@@ -100,6 +100,12 @@ public class TemplateCatalog {
             if (h.generate() && h.defaultValue() != null) {
                 throw new IllegalStateException(where + "cannot have both generate and defaultValue");
             }
+            if (h.length() != null && !h.generate()) {
+                throw new IllegalStateException(where + "sets length but is not generated");
+            }
+            if (h.length() != null && h.length() < 1) {
+                throw new IllegalStateException(where + "needs a length of at least 1");
+            }
             if (h.defaultValue() != null && !referenced.contains(h.key())) {
                 throw new IllegalStateException(where + "has a defaultValue but no service references it");
             }

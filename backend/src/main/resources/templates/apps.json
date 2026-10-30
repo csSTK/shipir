@@ -1556,7 +1556,8 @@
         "key": "APP_KEY",
         "description": "Application encryption key, exactly 32 characters",
         "secret": true,
-        "generate": true
+        "generate": true,
+        "length": 32
       },
       {
         "key": "DB_ROOT_PASSWORD",
@@ -1737,7 +1738,7 @@
   {
     "id": "plex",
     "name": "Plex",
-    "description": "Media server for movies, shows and music. Open port 32400/web after the first deploy. To claim the server, set PLEX_CLAIM (token from plex.tv/claim, valid 4 minutes) in the wizard, or finish setup from a browser on the same network as the host. Host networking is not available here, so local network discovery (GDM, DLNA) is limited; add the server by IP in your Plex apps. Media uses a named volume; replace it with a bind mount for an existing library.",
+    "description": "Media server for movies, shows and music. Open port 32400/web after the first deploy. To claim the server, open http://localhost:32400/web on the host itself, or from another machine through an SSH tunnel (ssh -L 32400:localhost:32400 user@host) and open http://localhost:32400/web; a plain LAN address is not treated as local and cannot claim. A PLEX_CLAIM token is not offered here because it expires after 4 minutes, too short for a deploy. For remote access set ADVERTISE_IP (e.g. http://HOST-IP:32400) in the .env file. Host networking is not available here, so local network discovery (GDM, DLNA) is limited; add the server by IP in your Plex apps. Media uses a named volume; replace it with a bind mount for an existing library.",
     "env": [
       {
         "key": "TZ",

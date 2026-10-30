@@ -10,6 +10,8 @@ export interface TemplateEnvHint {
   defaultValue?: string | null
   /** True when the installer fills in a random value (passwords, keys). */
   generate?: boolean
+  /** Exact length of the generated value (apps that reject other sizes); absent = installer default. */
+  length?: number | null
 }
 
 /** A bundled app template (`GET /api/templates`); `spec` is the bare Compose spec the wizard sends. */

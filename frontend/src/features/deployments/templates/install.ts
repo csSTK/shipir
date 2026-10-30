@@ -26,7 +26,7 @@ export function suggestName(base: string, taken: string[]): string {
 
 /** Initial variables: hinted keys first (generated, default or empty), then any other key the spec references. */
 export function initialEnv(template: AppTemplate, state: WizardState): EnvEntry[] {
-  const hinted = template.env.map((h) => ({ key: h.key, value: h.generate ? generateSecret() : (h.defaultValue ?? '') }))
+  const hinted = template.env.map((h) => ({ key: h.key, value: h.generate ? generateSecret(h.length ?? undefined) : (h.defaultValue ?? '') }))
   const extra = referencedEnvKeys(state)
     .filter((k) => !hinted.some((h) => h.key === k))
     .map((key) => ({ key, value: '' }))

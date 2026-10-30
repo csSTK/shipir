@@ -319,4 +319,41 @@ class TemplateCatalogTest {
             }
         }
     }
+
+    @Test
+    void bookStackAppKeyPinsItsExactLengthOf32() {
+        // BookStack (Laravel AES-256) rejects an APP_KEY that is not exactly 32 characters.
+        AppTemplate bookstack = bundled().all().stream().filter(t -> t.id().equals("bookstack")).findFirst().orElseThrow();
+        assertThat(bookstack.env()).filteredOn(h -> h.key().equals("APP_KEY"))
+                .singleElement().satisfies(h -> assertThat(h.length()).isEqualTo(32));
+    }
+
+    @Test
+    void parsesLengthOnGeneratedEnvHints() {
+        var t = load(withHint("{\"key\":\"A\",\"description\":\"d\",\"secret\":true,\"generate\":true,\"length\":24}")).all().get(0);
+        assertThat(t.env().get(0).length()).isEqualTo(24);
+    }
+
+    @Test
+    void lengthWithoutGenerateFailsCatalogLoad() {
+        assertThatThrownBy(() -> load(withHint("{\"key\":\"A\",\"description\":\"d\",\"secret\":false,\"defaultValue\":\"x\",\"length\":8}")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("hinted")
+                .hasMessageContaining("length");
+    }
+
+    @Test
+    void nonPositiveLengthFailsCatalogLoad() {
+        assertThatThrownBy(() -> load(withHint("{\"key\":\"A\",\"description\":\"d\",\"secret\":true,\"generate\":true,\"length\":0}")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("length");
+    }
+
+    @Test
+    void plexDescriptionExplainsClaimViaLocalhostAndAdvertiseIpWithoutAPhantomClaimEnv() {
+        AppTemplate plex = bundled().all().stream().filter(t -> t.id().equals("plex")).findFirst().orElseThrow();
+        assertThat(plex.description()).contains("localhost:32400", "SSH tunnel", "ADVERTISE_IP")
+                .doesNotContain("set PLEX_CLAIM", "same network as the host");
+        assertThat(plex.env()).extracting(AppTemplate.EnvHint::key).doesNotContain("PLEX_CLAIM");
+    }
 }
