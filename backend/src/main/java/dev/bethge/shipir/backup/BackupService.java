@@ -58,7 +58,8 @@ import java.util.zip.GZIPOutputStream;
  * the trailer)}. {@code macKey} is a second PBKDF2-HMAC-SHA256 derivation (same iterations) with the random
  * {@code macSalt}, so the passphrase is never used as HMAC key directly. A hex-key {@code openssl enc -P} run
  * reproduces that derivation without putting the passphrase into argv (only derived keys appear in argv).
- * Verify first, then decrypt (passphrase in {@code SHIPIR_BACKUP_PASSPHRASE}, OpenSSL 3+, F = the file):
+ * Verify first, then decrypt (passphrase in {@code SHIPIR_BACKUP_PASSPHRASE}, OpenSSL 3+, F = the file; macOS ships
+ * LibreSSL, so use Homebrew's {@code openssl@3} there, see README "Backup & restore"):
  * <pre>
  * N=$(( $(wc -c &lt; "$F") - 40 ))
  * MACSALT=$(tail -c 40 "$F" | head -c 8 | od -An -tx1 | tr -d ' \n')

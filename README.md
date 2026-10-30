@@ -284,9 +284,11 @@ Use the export for inspection, for moving stack files, or as a record. For a ful
 
 The file is an `openssl enc` stream: AES-256-CBC, with the key derived from the passphrase by PBKDF2-SHA256 at 600000 iterations. A 40-byte integrity trailer follows it. This is an 8-byte salt and then an HMAC-SHA256 over everything before the trailer.
 
-To open an export, check the trailer first, then decrypt. This needs OpenSSL 3 or newer. The `openssl` that ships with macOS (LibreSSL) can't do it, so install Homebrew OpenSSL there:
+To open an export, check the trailer first, then decrypt. This needs OpenSSL 3 or newer. The `openssl` that ships with macOS is LibreSSL, whose `dgst -mac` support varies by version, so use Homebrew's OpenSSL 3 for this:
 
 ```bash
+brew install openssl@3
+export PATH="$(brew --prefix openssl@3)/bin:$PATH"
 export SHIPIR_BACKUP_PASSPHRASE='...'
 F=shipir-backup-<ts>.tar.gz.enc
 N=$(( $(wc -c < "$F") - 40 ))
@@ -357,6 +359,16 @@ pnpm e2e
 # Run the e2e tests in Playwright's UI mode
 pnpm e2e:ui
 ```
+
+### App template images
+
+Every image tag in `backend/src/main/resources/templates/apps.json` must exist, otherwise Install fails at deploy. Check them (read-only, no pull, needs Docker and network):
+
+```bash
+scripts/check-template-images.sh
+```
+
+Exit code 1 lists the missing tags. Run it whenever you add or bump a template. Pinning policy: app images use exact tags; official database/broker images (`mysql:8.4`, `mongo:7.0`, `rabbitmq:3.13-management`, `influxdb:2.7`, ...) deliberately float on the maintained minor line to receive patch fixes. MinIO no longer publishes community images on Docker Hub or Quay, so the template uses the community fork `pgsty/minio`.
 
 ### Repository layout
 
