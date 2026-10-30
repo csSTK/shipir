@@ -157,7 +157,7 @@ public class AiToolRegistry {
         byte[] raw = new byte[32];
         random.nextBytes(raw);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
-        PendingAction view = new PendingAction(token, name, p.tool.description(), display(p.args), now.plus(PENDING_TTL));
+        PendingAction view = new PendingAction(token, name, headline(p.tool, display(p.args)), display(p.args), now.plus(PENDING_TTL));
         pending.put(token, new Pending(view, p.tool, p.args, ctx.userId(), chatSessionId));
         return ProposalResult.accepted(view);
     }
@@ -207,6 +207,20 @@ public class AiToolRegistry {
             return new Prepared(null, null, ToolResult.error("INVALID_ARGUMENTS", String.join("; ", violations)));
         }
         return new Prepared(tool, args, null);
+    }
+
+    /** The tool's description plus the effective arguments, so the Confirm card says what this very call will do. */
+    private static String headline(AiTool tool, Map<String, Object> shown) {
+        if (shown.isEmpty()) {
+            return tool.description();
+        }
+        StringBuilder sb = new StringBuilder(tool.description()).append(" (");
+        shown.forEach((k, v) -> {
+            String value = String.valueOf(v);
+            sb.append(k).append('=').append(value.length() > 80 ? value.substring(0, 80) + "..." : value).append(", ");
+        });
+        sb.setLength(sb.length() - 2);
+        return sb.append(')').toString();
     }
 
     private static Map<String, Object> display(Map<String, Object> args) {

@@ -60,6 +60,13 @@ class ConfirmationGateTest {
     }
 
     @Test
+    void pendingHeadlineReflectsTheEffectiveArgumentsAndHidesEnv() {
+        String host = UUID.randomUUID().toString();
+        PendingAction pending = propose("{\"hostId\":\"" + host + "\",\"env\":\"SECRET=hunter2\"}");
+        assertThat(pending.description()).startsWith("does it").contains(host).doesNotContain("hunter2");
+    }
+
+    @Test
     void executeRefusesWriteToolsWithoutConfirmation() {
         ToolResult result = registry.execute("do_it", ARGS, ctx(USER, Role.OPERATOR));
 

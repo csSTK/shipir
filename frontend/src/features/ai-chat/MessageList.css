@@ -131,6 +131,14 @@
   font-family: var(--font-mono);
 }
 
+.chat-card__raw {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: var(--text-small-size);
+}
+
 .chat-card__actions {
   display: flex;
   justify-content: flex-end;

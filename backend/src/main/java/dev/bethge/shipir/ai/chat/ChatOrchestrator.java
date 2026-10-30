@@ -86,6 +86,7 @@ public class ChatOrchestrator {
     static final String ENV_CIPHERTEXT = "envCiphertext";
     static final String OMITTED_TOOL_RESULT = "[older tool result omitted]";
     static final String REJECTED_OUTCOME = "The user rejected this action. It was not executed.";
+    static final int MAX_TOOL_CALLS_PER_RESPONSE = 8;
     private static final String MAX_STEPS_TEXT =
             "I stopped after %d steps without reaching an answer. Ask me to continue if you want me to go on.";
     private static final Logger log = LoggerFactory.getLogger(ChatOrchestrator.class);
@@ -362,8 +363,15 @@ public class ChatOrchestrator {
                         text.isBlank() ? "The model returned no answer." : text, null, null, null);
                 return null;
             }
-            sessions.appendMessage(sessionId, ChatRole.ASSISTANT, text, callsJson(response.toolCalls()), null, null);
-            if (handleToolCalls(ctx, sessionId, runId, response.toolCalls())) {
+            // A call that is dropped here is neither stored nor run, so no write beyond the cap can reach Confirm.
+            List<LlmToolCall> calls = response.toolCalls().size() > MAX_TOOL_CALLS_PER_RESPONSE
+                    ? response.toolCalls().subList(0, MAX_TOOL_CALLS_PER_RESPONSE) : response.toolCalls();
+            if (calls.size() < response.toolCalls().size()) {
+                log.warn("Model returned {} tool calls in one response, keeping the first {}",
+                        response.toolCalls().size(), MAX_TOOL_CALLS_PER_RESPONSE);
+            }
+            sessions.appendMessage(sessionId, ChatRole.ASSISTANT, text, callsJson(calls), null, null);
+            if (handleToolCalls(ctx, sessionId, runId, calls)) {
                 return null;
             }
         }

@@ -39,8 +39,10 @@ class ChatRateLimiter {
     /** Counts one message for the user. @throws ChatSessionException 429 RATE_LIMITED when over the limit */
     void checkMessage(UUID userId) {
         Instant now = clock.instant();
-        Deque<Instant> window = sent.computeIfAbsent(userId, id -> new ArrayDeque<>());
-        synchronized (window) {
+        evictIdle(now);
+        // compute and computeIfPresent are atomic per key, so eviction cannot drop a count that is being added
+        sent.compute(userId, (id, existing) -> {
+            Deque<Instant> window = existing == null ? new ArrayDeque<>() : existing;
             while (!window.isEmpty() && !window.peekFirst().isAfter(now.minus(WINDOW))) {
                 window.pollFirst();
             }
@@ -49,6 +51,20 @@ class ChatRateLimiter {
                         "Too many messages, try again in a minute");
             }
             window.addLast(now);
+            return window;
+        });
+    }
+
+    /** Drops users whose newest message left the window, so the map does not grow with every user ever seen. */
+    private void evictIdle(Instant now) {
+        Instant cutoff = now.minus(WINDOW);
+        // the idle check runs inside computeIfPresent, i.e. under the same per-key lock as checkMessage's compute
+        for (UUID id : sent.keySet()) {
+            sent.computeIfPresent(id, (k, w) -> w.isEmpty() || !w.peekLast().isAfter(cutoff) ? null : w);
         }
+    }
+
+    int trackedUsers() {
+        return sent.size();
     }
 }

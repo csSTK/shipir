@@ -469,6 +469,45 @@ class ChatOrchestratorTest {
     }
 
     @Test
+    void toolCallsBeyondTheCapInOneResponseAreDroppedAndNeverRun() throws Exception {
+        Login l = login("viewer");
+        String id = newSession(l);
+        List<LlmToolCall> many = new java.util.ArrayList<>();
+        for (int i = 0; i < 12; i++) {
+            many.add(new LlmToolCall("call-" + i, "list_hosts", "{}"));
+        }
+        llm.script.add(m -> new LlmResponse("", many));
+        llm.answer("ok");
+        say(l, id, "Call everything");
+
+        List<LlmMessage> second = llm.conversations.get(1);
+        long toolResults = second.stream().filter(m -> m.role() == LlmMessage.Role.TOOL).count();
+        assertThat(toolResults).isEqualTo(ChatOrchestrator.MAX_TOOL_CALLS_PER_RESPONSE);
+        LlmMessage assistant = second.stream().filter(m -> m.role() == LlmMessage.Role.ASSISTANT).findFirst().orElseThrow();
+        assertThat(assistant.toolCalls()).hasSize(ChatOrchestrator.MAX_TOOL_CALLS_PER_RESPONSE);
+    }
+
+    @Test
+    void writeToolBeyondTheCapIsNotProposed() throws Exception {
+        Login l = login("admin");
+        String id = newSession(l);
+        List<LlmToolCall> many = new java.util.ArrayList<>();
+        for (int i = 0; i < ChatOrchestrator.MAX_TOOL_CALLS_PER_RESPONSE; i++) {
+            many.add(new LlmToolCall("call-" + i, "list_hosts", "{}"));
+        }
+        many.add(new LlmToolCall("call-w", "rename_host", renameArgs()));
+        llm.script.add(m -> new LlmResponse("", many));
+        llm.answer("ok");
+        say(l, id, "Rename late");
+
+        assertThat(hostName()).isEqualTo("Chat host");
+        JsonNode msgs = messages(l, id);
+        for (JsonNode m : msgs) {
+            assertThat(m.path("status").asString("")).isNotEqualTo("PENDING");
+        }
+    }
+
+    @Test
     void iterationCapEndsTheLoop() throws Exception {
         Login l = login("viewer");
         String id = newSession(l);

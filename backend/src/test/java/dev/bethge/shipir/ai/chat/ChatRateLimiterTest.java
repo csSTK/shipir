@@ -55,4 +55,56 @@ class ChatRateLimiterTest {
         }
         limiter.checkMessage(b);
     }
+
+    @Test
+    void evictsIdleUsersSoTheMapDoesNotGrowForever() {
+        for (int i = 0; i < 50; i++) {
+            limiter.checkMessage(UUID.randomUUID());
+        }
+        assertThat(limiter.trackedUsers()).isEqualTo(50);
+        clock.now = clock.now.plus(Duration.ofSeconds(61));
+        limiter.checkMessage(UUID.randomUUID());
+        assertThat(limiter.trackedUsers()).isEqualTo(1);
+    }
+
+    @Test
+    void activeUsersKeepTheirCountWhenOthersAreEvicted() {
+        UUID busy = UUID.randomUUID();
+        for (int i = 0; i < 3; i++) {
+            limiter.checkMessage(busy);
+        }
+        clock.now = clock.now.plus(Duration.ofSeconds(30));
+        for (int i = 0; i < 50; i++) {
+            limiter.checkMessage(UUID.randomUUID());
+        }
+        assertThatThrownBy(() -> limiter.checkMessage(busy)).isInstanceOf(ChatSessionException.class);
+    }
+
+    @Test
+    void concurrentChecksNeverLoseACountWhileOtherUsersAreEvicted() throws Exception {
+        ChatRateLimiter big = new ChatRateLimiter(new ChatProperties(8, 2, java.time.Duration.ofSeconds(30), 2, 400, 3, 40, 60000), clock);
+        UUID busy = UUID.randomUUID();
+        java.util.concurrent.atomic.AtomicInteger accepted = new java.util.concurrent.atomic.AtomicInteger();
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(8);
+        java.util.List<java.util.concurrent.Future<?>> fs = new java.util.ArrayList<>();
+        for (int t = 0; t < 8; t++) {
+            fs.add(pool.submit(() -> {
+                for (int i = 0; i < 100; i++) {
+                    big.checkMessage(UUID.randomUUID());
+                    try {
+                        big.checkMessage(busy);
+                        accepted.incrementAndGet();
+                    } catch (ChatSessionException ignored) {
+                        // over the limit
+                    }
+                }
+            }));
+        }
+        for (var f : fs) {
+            f.get();
+        }
+        pool.shutdown();
+        assertThat(accepted.get()).isEqualTo(400);
+        assertThatThrownBy(() -> big.checkMessage(busy)).isInstanceOf(ChatSessionException.class);
+    }
 }

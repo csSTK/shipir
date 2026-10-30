@@ -23,23 +23,27 @@ const STATUS_LABEL: Record<ActionStatus, string> = {
   get REJECTED() { return i18n.t('ai-chat:ActionConfirmCard.rejected') },
 }
 
-function argumentEntries(raw: unknown): [string, string][] {
+/** Parsed key/value pairs, or the raw text when the arguments are a string that is not a JSON object. */
+function argumentEntries(raw: unknown): { entries: [string, string][]; rawText: string | null } {
   let value = raw
-  if (typeof value === 'string') {
+  if (typeof raw === 'string') {
     try {
-      value = JSON.parse(value)
+      value = JSON.parse(raw)
     } catch {
-      return []
+      return { entries: [], rawText: raw.trim() === '' ? null : raw }
     }
   }
-  if (!value || typeof value !== 'object') return []
-  return Object.entries(value).map(([k, v]) => [k, typeof v === 'string' ? v : JSON.stringify(v)])
+  if (!value || typeof value !== 'object') {
+    return { entries: [], rawText: typeof raw === 'string' && raw.trim() !== '' ? raw : null }
+  }
+  const entries = Object.entries(value).map(([k, v]): [string, string] => [k, typeof v === 'string' ? v : JSON.stringify(v)])
+  return { entries, rawText: null }
 }
 
 /** A write the assistant wants to run: shows what will happen and asks the user to confirm. */
 export function ActionConfirmCard({ call, status, readOnly = false, busy = false, error = null, onConfirm, onReject }: Props) {
   const { t } = useTranslation('ai-chat')
-  const args = argumentEntries(call.arguments)
+  const { entries: args, rawText } = argumentEntries(call.arguments)
   return (
     <section className={`chat-card chat-card--${status.toLowerCase()}`} aria-label={t('ActionConfirmCard.actionToollabel', { toolLabel: toolLabel(call.name) })}>
       <div className="chat-card__head">
@@ -62,6 +66,7 @@ export function ActionConfirmCard({ call, status, readOnly = false, busy = false
           ))}
         </dl>
       )}
+      {rawText !== null && <pre className="chat-card__raw">{rawText}</pre>}
       {error && (
         <p role="alert" className="ui-error">
           {error}
