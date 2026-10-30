@@ -330,3 +330,11 @@ Applies to all Shipir UI. Tokens live in `frontend/src/shared/styles/tokens.css`
 **Tables**: no heavy grid lines, only a `--color-border` row separator; header in caption size, `--color-text-muted`, medium weight; row hover `--color-surface-hover`; numbers right-aligned and tabular; IDs in mono; status as badge; row actions grouped on the right, secondary ones in a menu; empty, loading (skeleton) and error (with Retry) states are always designed.
 
 **Checks before done**: light and dark both looked at; text tokens keep contrast AA (4.5:1) on the surface they sit on; `prefers-reduced-motion` and `prefers-reduced-transparency` handled; visible `:focus-visible` ring.
+
+**Hard floor** (adapted from the Hallmark design skill; the rules above cover colors, fonts, focus and reduced motion, these are the additions):
+- Never `transition: all`; list the properties. Never animate `width`, `height`, `top` or `left`; use `transform` and `opacity`.
+- No `100vw` for layout (it includes the scrollbar and causes horizontal scroll). Grid tracks that hold images, tables or long text use `minmax(0, 1fr)`; long headings and names carry `overflow-wrap: break-word; min-width: 0`.
+- No card inside a card; nest with spacing or a `--color-surface-sunken` area instead.
+- No emoji as icons; use the icon set. No purple-to-blue gradients.
+- Never invent numbers, testimonials or sample data that looks real in shipped UI; empty states say what is missing.
+- Focus rings appear instantly (no transition on `:focus-visible`).
