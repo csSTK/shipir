@@ -1,5 +1,6 @@
 package dev.bethge.shipir.docker.client;
 
+import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.exception.ConflictException;
 import com.github.dockerjava.api.exception.DockerException;
 import com.github.dockerjava.api.model.Container;
@@ -108,5 +109,45 @@ public class NetworkServiceImpl implements NetworkService {
                 .filter(n -> n.containerCount() == 0 && !BUILTIN.contains(n.name()))
                 .map(n -> new PruneCandidateDto(n.id(), n.name(), null, null))
                 .toList();
+    }
+
+    @Override
+    public void connectContainer(UUID hostId, DockerEndpoint endpoint, String networkId, String containerId) {
+        calls.call(hostId, endpoint, client -> {
+            Network network = client.inspectNetworkCmd().withNetworkId(networkId).exec();
+            if (!isAttached(client, containerId, network.getName())) {
+                try {
+                    client.connectToNetworkCmd().withNetworkId(network.getId()).withContainerId(containerId).exec();
+                } catch (DockerException e) {
+                    // lost a race with another connect: the end state is what the caller asked for
+                    if (!isAttached(client, containerId, network.getName())) throw e;
+                }
+            }
+            return null;
+        });
+    }
+
+    @Override
+    public void disconnectContainer(UUID hostId, DockerEndpoint endpoint, String networkId, String containerId) {
+        calls.call(hostId, endpoint, client -> {
+            Network network = client.inspectNetworkCmd().withNetworkId(networkId).exec();
+            if (isAttached(client, containerId, network.getName())) {
+                try {
+                    client.disconnectFromNetworkCmd().withNetworkId(network.getId()).withContainerId(containerId).exec();
+                } catch (DockerException e) {
+                    if (isAttached(client, containerId, network.getName())) throw e;
+                }
+            }
+            return null;
+        });
+    }
+
+    /**
+     * Decided from the container's own inspect (keyed by network name), not from the network's container list,
+     * which only shows running containers.
+     */
+    private static boolean isAttached(DockerClient client, String containerId, String networkName) {
+        var settings = client.inspectContainerCmd(containerId).exec().getNetworkSettings();
+        return settings != null && settings.getNetworks() != null && settings.getNetworks().containsKey(networkName);
     }
 }

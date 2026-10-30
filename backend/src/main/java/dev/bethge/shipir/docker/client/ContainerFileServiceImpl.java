@@ -5,25 +5,34 @@ import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
 import dev.bethge.shipir.docker.dto.ContainerFileEntry;
+import dev.bethge.shipir.docker.dto.ContainerFileWrite;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 public class ContainerFileServiceImpl implements ContainerFileService {
 
     private static final int MAX_PATH_LENGTH = 4096;
+    /** Headroom for tar headers and padding when capping the raw archive of a single file read. */
+    private static final long TAR_OVERHEAD = 64 * 1024;
     /** Transfers are bigger than the usual API call; the read timeout alone would cut them off. */
     private static final Duration TRANSFER_EXTRA = Duration.ofMinutes(10);
 
@@ -126,6 +135,86 @@ public class ContainerFileServiceImpl implements ContainerFileService {
         } catch (DockerConnectionException e) {
             if (limited.exceeded()) throw sizeLimit();
             throw e;
+        }
+    }
+
+    @Override
+    public void writeFiles(UUID hostId, DockerEndpoint endpoint, String containerId, String directory,
+                           List<ContainerFileWrite> files, long maxBytes) {
+        String dir = normalizePath(directory);
+        byte[] tar = buildTar(files, maxBytes);
+        upload(hostId, endpoint, containerId, dir, new ByteArrayInputStream(tar), Long.MAX_VALUE);
+    }
+
+    /** Validates every path and the total size before anything is built or sent. */
+    private static byte[] buildTar(List<ContainerFileWrite> files, long maxBytes) {
+        Set<String> seen = new HashSet<>();
+        long total = 0;
+        for (ContainerFileWrite f : files) {
+            requireRelativeArchivePath(f.path());
+            if (!seen.add(f.path())) {
+                throw new DockerConnectionException(DockerErrorCode.INVALID_PATH, "Duplicate file path.", null);
+            }
+            total += f.content().length;
+            if (total > maxBytes) throw sizeLimit();
+        }
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (TarArchiveOutputStream tar = new TarArchiveOutputStream(out)) {
+            tar.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX);
+            for (ContainerFileWrite f : files) {
+                TarArchiveEntry entry = new TarArchiveEntry(f.path());
+                entry.setSize(f.content().length);
+                entry.setMode(f.mode() & 07777);
+                tar.putArchiveEntry(entry);
+                tar.write(f.content());
+                tar.closeArchiveEntry();
+            }
+            tar.finish();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e); // in-memory stream, cannot happen
+        }
+        return out.toByteArray();
+    }
+
+    /** Relative path of plain segments: no leading/trailing slash, no empty, {@code .} or {@code ..} segment, no NUL or backslash. */
+    private static void requireRelativeArchivePath(String path) {
+        boolean bad = path == null || path.isEmpty() || path.length() > MAX_PATH_LENGTH
+                || path.indexOf('\0') >= 0 || path.indexOf('\\') >= 0;
+        if (!bad) {
+            for (String part : path.split("/", -1)) {
+                if (part.isEmpty() || part.equals(".") || part.equals("..")) {
+                    bad = true;
+                    break;
+                }
+            }
+        }
+        if (bad) {
+            throw new DockerConnectionException(DockerErrorCode.INVALID_PATH,
+                    "File paths must be relative, without '..', empty segments or NUL.", null);
+        }
+    }
+
+    @Override
+    public byte[] readFile(UUID hostId, DockerEndpoint endpoint, String containerId, String path, long maxBytes) {
+        String normalized = normalizePath(path);
+        LimitedInputStream raw = new LimitedInputStream(openArchive(hostId, endpoint, containerId, normalized),
+                maxBytes + TAR_OVERHEAD);
+        try (TarArchiveInputStream tar = new TarArchiveInputStream(raw)) {
+            TarArchiveEntry first = tar.getNextEntry();
+            if (first == null || !first.isFile()) {
+                throw new DockerConnectionException(DockerErrorCode.INVALID_PATH, "The path is not a regular file.", null);
+            }
+            if (first.getSize() > maxBytes) throw sizeLimit();
+            long size = first.getSize();
+            if (size > Integer.MAX_VALUE - 8) throw sizeLimit(); // a byte[] cannot hold it
+            byte[] content = tar.readNBytes((int) size);
+            if (content.length != size) {
+                throw new DockerConnectionException(DockerErrorCode.UNREACHABLE,
+                        "The archive from the container was truncated.", null);
+            }
+            return content;
+        } catch (IOException e) {
+            throw ioFailure(e, raw);
         }
     }
 

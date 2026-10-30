@@ -25,4 +25,13 @@ public interface NetworkService {
 
     /** Networks a prune removes: user-defined (not bridge, host, none) with no attached container. */
     List<PruneCandidateDto> listPrunable(UUID hostId, DockerEndpoint endpoint);
+
+    /**
+     * Connects the container to the network (id or name). Idempotent: already connected is a no-op.
+     * Throws {@code DockerConnectionException} with NOT_FOUND for an unknown network or container.
+     */
+    void connectContainer(UUID hostId, DockerEndpoint endpoint, String networkId, String containerId);
+
+    /** Disconnects the container from the network. Idempotent: not connected is a no-op. NOT_FOUND as above. */
+    void disconnectContainer(UUID hostId, DockerEndpoint endpoint, String networkId, String containerId);
 }

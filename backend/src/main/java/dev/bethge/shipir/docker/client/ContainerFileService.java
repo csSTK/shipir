@@ -2,6 +2,7 @@ package dev.bethge.shipir.docker.client;
 
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.dto.ContainerFileEntry;
+import dev.bethge.shipir.docker.dto.ContainerFileWrite;
 
 import java.io.InputStream;
 import java.util.List;
@@ -34,4 +35,20 @@ public interface ContainerFileService {
      * aborts the upload with SIZE_LIMIT_EXCEEDED; the daemon extracts while receiving, so files before the cut may remain. Does not close {@code tar}.
      */
     void upload(UUID hostId, DockerEndpoint endpoint, String containerId, String directory, InputStream tar, long maxBytes);
+
+    /**
+     * Writes {@code files} below the existing directory {@code directory} (one tar through the archive API,
+     * so it works on stopped containers; missing sub-directories are created). Each path is validated first:
+     * relative, no {@code ..}, no NUL, no empty segment, no duplicates, else INVALID_PATH and nothing is sent;
+     * more than {@code maxBytes} of content is SIZE_LIMIT_EXCEEDED. A file is replaced by the daemon extractor
+     * (unlink then create), not renamed, so a reader may see a missing file for a moment.
+     */
+    void writeFiles(UUID hostId, DockerEndpoint endpoint, String containerId, String directory,
+                    List<ContainerFileWrite> files, long maxBytes);
+
+    /**
+     * Content of the regular file at {@code path}. NOT_FOUND if it does not exist, INVALID_PATH if it is not a
+     * regular file, SIZE_LIMIT_EXCEEDED if it is larger than {@code maxBytes}.
+     */
+    byte[] readFile(UUID hostId, DockerEndpoint endpoint, String containerId, String path, long maxBytes);
 }
