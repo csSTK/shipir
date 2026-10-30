@@ -62,11 +62,11 @@ function Where() {
   return <p data-testid="where">{useLocation().pathname}</p>
 }
 
-function open(onAdvanced = vi.fn(), template: AppTemplate = wordpress) {
+function open(onAdvanced = vi.fn(), template: AppTemplate = wordpress, onClose: () => void = () => {}) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter>
-        <InstallTemplateDialog hostId="h1" template={template} onClose={() => {}} onAdvanced={onAdvanced} />
+        <InstallTemplateDialog hostId="h1" template={template} onClose={onClose} onAdvanced={onAdvanced} />
         <Routes>
           <Route path="*" element={<Where />} />
         </Routes>
@@ -227,5 +227,33 @@ describe('InstallTemplateDialog', () => {
     expect(seed.env).toContainEqual({ key: 'DB_USER', value: 'wp' })
     expect(seed.env.find((e: { key: string }) => e.key === 'DB_PASSWORD').value).not.toBe('')
     expect(calls('/hosts/h1/managed-deployments', 'POST')).toHaveLength(0)
+  })
+
+  it('cannot be closed (Cancel, Esc) while create/deploy is in flight, and can be afterwards', async () => {
+    serve()
+    let release: (v: unknown) => void = () => {}
+    const base = apiFetch.getMockImplementation()!
+    apiFetch.mockImplementation((path: string, init?: { method?: string }) =>
+      path === '/hosts/h1/managed-deployments' && init?.method === 'POST' ? new Promise((r) => (release = r)) : base(path, init),
+    )
+    const onClose = vi.fn()
+    open(vi.fn(), wordpress, onClose)
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('wordpress'))
+    fireEvent.click(screen.getByRole('button', { name: 'Install' }))
+    await waitFor(() => expect(calls('/hosts/h1/managed-deployments', 'POST')).toHaveLength(1))
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(onClose).not.toHaveBeenCalled()
+    release({ id: 's1' })
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/environments/h1/deployments/s1'))
+  })
+
+  it('can be cancelled when idle', async () => {
+    serve()
+    const onClose = vi.fn()
+    open(vi.fn(), wordpress, onClose)
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 })

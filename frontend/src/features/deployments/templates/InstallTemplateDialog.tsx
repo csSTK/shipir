@@ -208,7 +208,7 @@ export function InstallTemplateDialog({
   }
 
   return (
-    <Dialog size="lg" open onOpenChange={(open) => !open && onClose()} title={tr('InstallTemplateDialog.installName', { name: template.name })} description={template.description}>
+    <Dialog size="lg" open onOpenChange={(open) => !open && !busy && onClose()} title={tr('InstallTemplateDialog.installName', { name: template.name })} description={template.description}>
       <form onSubmit={(e) => void install(e)} className="ui-form">
         <TextField
           label={tr('AddDeploymentDialog.name')}
@@ -274,7 +274,7 @@ export function InstallTemplateDialog({
           </p>
         )}
         <div className="ui-dialog-actions">
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
             {tr('AddDeploymentDialog.cancel')}
           </Button>
           <Button variant="secondary" onClick={advanced} disabled={locked}>
