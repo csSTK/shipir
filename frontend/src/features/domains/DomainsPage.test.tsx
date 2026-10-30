@@ -44,6 +44,7 @@ function mockApi(role: string, managed: unknown, post?: unknown) {
     }
     if (path === '/hosts/h1/proxy/managed') return Promise.resolve(managed)
     if (path === '/hosts/h1/proxy/certificates') return Promise.resolve([])
+      if (path === '/hosts/h1/proxy/routes' || path === '/hosts/h1/proxy/routes/status') return Promise.resolve([])
     return Promise.reject(new Error(`unexpected ${path}`))
   })
 }
@@ -156,6 +157,7 @@ describe('DomainsPage', () => {
         return Promise.reject(new ApiError(409, 'x', 'PROXY_EXISTS'))
       }
       if (path === '/hosts/h1/proxy/certificates') return Promise.resolve([])
+      if (path === '/hosts/h1/proxy/routes' || path === '/hosts/h1/proxy/routes/status') return Promise.resolve([])
       return Promise.resolve(conflict ? { instance, setupBlockedReason: null } : { instance: null, setupBlockedReason: null })
     })
     renderPage()
@@ -173,6 +175,7 @@ describe('DomainsPage', () => {
         return Promise.resolve({ instance, runId: 'run-3' })
       }
       if (path === '/hosts/h1/proxy/certificates') return Promise.resolve([])
+      if (path === '/hosts/h1/proxy/routes' || path === '/hosts/h1/proxy/routes/status') return Promise.resolve([])
       return Promise.resolve(done ? { instance: { ...instance, deploymentStatus: 'ERROR' }, setupBlockedReason: null } : { instance: null, setupBlockedReason: null })
     })
     renderPage()
@@ -196,8 +199,19 @@ describe('DomainsPage', () => {
     renderPage()
     expect(await screen.findByRole('heading', { name: 'Traefik' })).toBeInTheDocument()
     expect(screen.getByText('Running')).toBeInTheDocument()
-    expect(screen.getByText(/No domains published yet/)).toBeInTheDocument()
+    expect(await screen.findByText(/No domains published yet/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open proxy deployment' })).toHaveAttribute('href', '/environments/h1/deployments/d1')
+  })
+
+  it.each([
+    ['ADMIN', true],
+    ['OPERATOR', true],
+    ['VIEWER', false],
+  ])('offers publishing on the ready state for %s: %s', async (role, canPublish) => {
+    mockApi(role, { instance, setupBlockedReason: null })
+    renderPage()
+    expect(await screen.findByText(/No domains published yet/)).toBeInTheDocument()
+    expect(!!screen.queryByRole('button', { name: 'Publish a container' })).toBe(canPublish)
   })
 
   it.each([
@@ -220,6 +234,7 @@ describe('DomainsPage', () => {
         return Promise.resolve({ instance, runId: 'run-9' })
       }
       if (path === '/hosts/h1/proxy/certificates') return Promise.resolve([])
+      if (path === '/hosts/h1/proxy/routes' || path === '/hosts/h1/proxy/routes/status') return Promise.resolve([])
       return Promise.resolve(done ? { instance, setupBlockedReason: null } : { instance: null, setupBlockedReason: null })
     })
     renderPage()

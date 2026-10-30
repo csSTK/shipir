@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, Globe, Lock } from 'lucide-react'
-import { Badge, Button, Card, EmptyState, PageHeader, Skeleton, type BadgeTone } from '../../shared/ui/index.ts'
+import { AlertTriangle, Lock } from 'lucide-react'
+import { Badge, Button, Card, PageHeader, Skeleton, type BadgeTone } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { useCurrentUser } from '../auth/index.ts'
 import { DeployOutput } from '../deployments/deploy-output/DeployOutput.tsx'
 import { useManagedProxy, useRefreshProxy, useSetupProxy, type ProxyInstance, type SetupBlockedReason } from './api.ts'
 import { describeProxyError } from './domainErrors.ts'
 import { CertificatesSection } from './certificates/CertificatesSection.tsx'
+import { RoutesList } from './routes/RoutesList.tsx'
 import { ProxySetupCard } from './ProxySetupCard.tsx'
 import './DomainsPage.css'
 
@@ -45,7 +46,7 @@ function ReadOnlyNotice() {
   )
 }
 
-function Ready({ instance, hostId, isAdmin }: { instance: ProxyInstance; hostId: string; isAdmin: boolean }) {
+function Ready({ instance, hostId, isAdmin, canPublish }: { instance: ProxyInstance; hostId: string; isAdmin: boolean; canPublish: boolean }) {
   const { t } = useTranslation('domains')
   const status = instance.deploymentStatus
   return (
@@ -64,9 +65,7 @@ function Ready({ instance, hostId, isAdmin }: { instance: ProxyInstance; hostId:
           </div>
         )}
       </Card>
-      <Card className="domains__panel">
-        <EmptyState icon={Globe} title={t('DomainsPage.noDomains')} description={t('DomainsPage.noDomainsHint')} />
-      </Card>
+      <RoutesList hostId={hostId} canPublish={canPublish} />
       <CertificatesSection hostId={hostId} isAdmin={isAdmin} />
     </>
   )
@@ -84,6 +83,7 @@ export function DomainsPage() {
   const [runFinished, setRunFinished] = useState(false)
   const [runFailed, setRunFailed] = useState(false)
   const isAdmin = user?.role === 'ADMIN'
+  const canPublish = isAdmin || user?.role === 'OPERATOR'
 
   let body
   if (isPending) {
@@ -120,11 +120,11 @@ export function DomainsPage() {
             {t('DomainsPage.setupFailed')}
           </p>
         )}
-        {runFinished && data.instance && <Ready instance={data.instance} hostId={id} isAdmin={isAdmin} />}
+        {runFinished && data.instance && <Ready instance={data.instance} hostId={id} isAdmin={isAdmin} canPublish={canPublish} />}
       </>
     )
   } else if (data.instance) {
-    body = <Ready instance={data.instance} hostId={id} isAdmin={isAdmin} />
+    body = <Ready instance={data.instance} hostId={id} isAdmin={isAdmin} canPublish={canPublish} />
   } else if (data.setupBlockedReason) {
     body = <Blocked reason={data.setupBlockedReason} hostId={id} />
   } else if (!isAdmin) {

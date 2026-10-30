@@ -37,6 +37,8 @@ function setup(api: import('./fixtures/api.ts').ApiMock, role: string, certs: un
   api.mock('GET', '/api/hosts/overview', { body: [host] })
   api.mock('GET', MANAGED, { body: { instance, setupBlockedReason: null } })
   api.mock('GET', CERTS, { body: certs })
+  api.mock('GET', '/api/hosts/a/proxy/routes', { body: [] })
+  api.mock('GET', '/api/hosts/a/proxy/routes/status', { body: [] })
 }
 
 const PEM = (kind: string) => `-----BEGIN ${kind}-----\nMIIB\n-----END ${kind}-----`

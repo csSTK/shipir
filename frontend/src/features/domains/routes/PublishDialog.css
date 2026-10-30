@@ -1,0 +1,109 @@
+.publish {
+  gap: var(--space-5);
+}
+.publish__group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.publish__legend {
+  padding: 0;
+  font-size: var(--text-small-size);
+  letter-spacing: var(--text-small-tracking);
+  font-weight: var(--weight-medium);
+}
+.publish__group > .publish__legend {
+  margin-bottom: var(--space-1);
+}
+.publish__options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: var(--space-1);
+}
+.publish__none {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+.publish__option {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name badges'
+    'meta badges';
+  column-gap: var(--space-4);
+  row-gap: var(--space-1);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition:
+    transform var(--duration-press) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+.publish__option:hover {
+  background: var(--color-surface-hover);
+}
+.publish__option:active {
+  transform: scale(var(--press-scale));
+}
+.publish__option:has(.publish__radio:checked) {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+.publish__option:has(.publish__radio:focus-visible) {
+  box-shadow: var(--shadow-focus);
+}
+.publish__radio {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.publish__option-name {
+  grid-area: name;
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+.publish__option-meta {
+  grid-area: meta;
+  color: var(--color-text-muted);
+  font-size: var(--text-small-size);
+  overflow-wrap: anywhere;
+}
+.publish__option-badges {
+  grid-area: badges;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.publish__locked,
+.publish__port {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+.publish__locked-name,
+.publish__port-value {
+  overflow-wrap: anywhere;
+}
+.publish__hint {
+  color: var(--color-text-muted);
+  font-size: var(--text-small-size);
+}

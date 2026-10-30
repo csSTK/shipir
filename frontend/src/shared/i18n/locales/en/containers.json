@@ -266,5 +266,7 @@
   "ContainerDetailsPage.restartPolicyMax": "{{policy}} (max {{max}})",
   "CreateContainerDialog.thisContainerIsConnectedTo_other": "This container is connected to {{count}} networks. Only one is kept; reconnect the others afterwards.",
   "CreateContainerDialog.thisContainerIsConnectedTo_one": "This container is connected to {{count}} network. Only one is kept; reconnect the others afterwards.",
-  "ContainersPage.actionFailed": "{{action}} {{name}}: {{error}}"
+  "ContainersPage.actionFailed": "{{action}} {{name}}: {{error}}",
+  "ContainersPage.publish": "Publish with a domain",
+  "ContainerDetailsPage.publish": "Publish with a domain"
 }

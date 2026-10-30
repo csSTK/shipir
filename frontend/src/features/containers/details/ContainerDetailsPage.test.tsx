@@ -116,6 +116,18 @@ describe('ContainerDetailsPage', () => {
     expect(screen.getByText('Hidden for your role')).toBeInTheDocument()
   })
 
+  it('offers Publish with a domain to operators and not to viewers', async () => {
+    role = 'OPERATOR'
+    renderPage(() => details)
+    fireEvent.click(await screen.findByRole('button', { name: 'Publish with a domain' }))
+    expect(await screen.findByRole('dialog', { name: 'Publish a container' })).toBeInTheDocument()
+    cleanup()
+    role = 'VIEWER'
+    renderPage(() => details)
+    await screen.findByRole('link', { name: 'Logs' })
+    expect(screen.queryByRole('button', { name: 'Publish with a domain' })).not.toBeInTheDocument()
+  })
+
   it('links to logs and offers console only to admins', async () => {
     role = 'OPERATOR'
     renderPage(() => details)

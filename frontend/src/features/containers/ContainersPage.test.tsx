@@ -48,6 +48,12 @@ function mockContainers(extra: { deployments?: unknown[]; images?: unknown[] } =
   )
 }
 
+function mockWithRole(role: string) {
+  apiFetch.mockImplementation((path: string) =>
+    Promise.resolve(path === '/auth/me' ? { username: 'u', role, setupRequired: false } : path.endsWith('/containers') ? containers : []),
+  )
+}
+
 function renderAt(url: string, role = 'OPERATOR') {
   apiFetchRole = role
   return render(
@@ -71,6 +77,23 @@ async function openMenu(name: string) {
 }
 
 describe('ContainersPage', () => {
+  it('opens the publish dialog for a container from the row menu (operators), locked to that container', async () => {
+    mockWithRole('OPERATOR')
+    renderAt('/environments/h1/containers')
+    const menu = await openMenu('web')
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Publish with a domain' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Publish a container' })
+    expect(within(dialog).getByText('web')).toBeInTheDocument()
+    expect(within(dialog).queryByRole('radio')).not.toBeInTheDocument()
+  })
+
+  it('does not offer publishing to viewers', async () => {
+    mockWithRole('VIEWER')
+    renderAt('/environments/h1/containers', 'VIEWER')
+    const menu = await openMenu('web')
+    expect(within(menu).queryByRole('menuitem', { name: 'Publish with a domain' })).not.toBeInTheDocument()
+  })
+
   it('loads the containers of the environment and lists name with image, state with health, deployment, ports', async () => {
     mockContainers()
     renderAt('/environments/h1/containers')
@@ -160,11 +183,11 @@ describe('ContainersPage', () => {
       expect(rowButtons('api')).toEqual(['Start api', 'Logs api', 'More actions for api'])
       expect(rowButtons('frozen')).toEqual(['Unpause frozen', 'Logs frozen', 'More actions for frozen'])
       await openMenu('web')
-      expect(menuItems()).toEqual(['Restart', 'Pause', 'Details', 'Kill', 'Delete'])
+      expect(menuItems()).toEqual(['Restart', 'Pause', 'Details', 'Publish with a domain', 'Kill', 'Delete'])
       fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
       await vi.waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
       await openMenu('api')
-      expect(menuItems()).toEqual(['Details', 'Delete'])
+      expect(menuItems()).toEqual(['Details', 'Publish with a domain', 'Delete'])
     })
 
     describe('console action', () => {

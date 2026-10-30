@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams, useParams } from 'react-router-dom'
-import { Info, Pause, Play, RotateCw, ScrollText, Square, SquareTerminal, Trash2, X, Zap } from 'lucide-react'
+import { Globe, Info, Pause, Play, RotateCw, ScrollText, Square, SquareTerminal, Trash2, X, Zap } from 'lucide-react'
 import { useCurrentUser } from '../auth/index.ts'
 import { useDeployments, type DeploymentSummary } from '../deployments/api.ts'
 import { useImages, withTag, type Image } from '../images/api.ts'
@@ -11,6 +11,7 @@ import { Badge, Button, ConfirmDialog, PageHeader, ResourceTable, Sparkline, Sta
 import { useCanOpenConsole } from './exec/api.ts'
 import { actionsFor, describeActionError, useContainerAction, useContainers, useDeleteContainer, type Container, type ContainerAction } from './api.ts'
 import { CreateContainerDialog } from './CreateContainerDialog.tsx'
+import { PublishDialog } from '../domains/index.ts'
 import { useTranslation } from 'react-i18next'
 import i18n from 'i18next'
 import { dateTimeFormat, formatNumber, ONE_DECIMAL } from '../../shared/i18n/format.ts'
@@ -207,6 +208,7 @@ export function ContainersPage() {
   const [target, setTarget] = useState<Container | null>(null)
   const [creating, setCreating] = useState(false)
   const act = useContainerAction(id)
+  const [publishTarget, setPublishTarget] = useState<Container | null>(null)
   const [killTarget, setKillTarget] = useState<Container | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const pending = act.isPending ? act.variables : null
@@ -263,6 +265,9 @@ export function ContainersPage() {
       }
     }
     menu.push({ label: t('ContainersPage.details'), icon: <Info {...ICON_PROPS} />, onSelect: () => navigate(c.id) })
+    if (canWrite) {
+      menu.push({ label: t('ContainersPage.publish'), icon: <Globe {...ICON_PROPS} />, onSelect: () => setPublishTarget(c) })
+    }
     if (canWrite) {
       menu.push({ type: 'separator' })
       if (available.includes('kill')) {
@@ -326,6 +331,7 @@ export function ContainersPage() {
         </ConfirmDialog>
       )}
       {creating && <CreateContainerDialog hostId={id} isAdmin={isAdmin} onClose={() => setCreating(false)} />}
+      {publishTarget && <PublishDialog hostId={id} containerName={publishTarget.name} onClose={() => setPublishTarget(null)} />}
       {target && <DeleteContainerDialog hostId={id} container={target} onClose={() => setTarget(null)} />}
     </section>
   )

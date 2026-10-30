@@ -8,6 +8,7 @@ import { useCurrentUser } from '../../auth/index.ts'
 import { ContainerUsageHistory } from '../../usage-history/UsageHistory.tsx'
 import { ContainerResourcesDialog } from '../ContainerResourcesDialog.tsx'
 import { CreateContainerDialog } from '../CreateContainerDialog.tsx'
+import { PublishDialog } from '../../domains/index.ts'
 import { ContainerFilesPanel } from '../files/ContainerFilesPanel.tsx'
 import { describeDetailsError, isNotFound, useContainerDetails, type ContainerDetails, type ContainerPort } from './api.ts'
 import { useCanOpenConsole } from '../exec/api.ts'
@@ -284,7 +285,7 @@ export function ContainerDetailsPage() {
   const canOpenConsole = useCanOpenConsole(hostId)
   const { data: c, isPending, error, refetch } = useContainerDetails(hostId, cid)
   const navigate = useNavigate()
-  const [dialog, setDialog] = useState<'edit' | 'duplicate' | 'limits' | null>(null)
+  const [dialog, setDialog] = useState<'edit' | 'duplicate' | 'limits' | 'publish' | null>(null)
   const base = `/environments/${hostId}/containers`
   const canEdit = user?.role === 'ADMIN' || user?.role === 'OPERATOR'
   const needsAdmin = !!c && (c.privileged || c.hostNetwork) && user?.role !== 'ADMIN'
@@ -378,6 +379,7 @@ export function ContainerDetailsPage() {
                 <Button disabled={!!c.composeProject} onClick={() => setDialog('limits')}>
                   {t('ContainerDetailsPage.resourceLimits')}
                 </Button>
+                <Button onClick={() => setDialog('publish')}>{t('ContainerDetailsPage.publish')}</Button>
               </div>
               {!c.composeProject && needsAdmin && (
                 <p className="cdetails__muted">{t('ContainerDetailsPage.thisContainerIsPrivilegedOr')}</p>
@@ -398,6 +400,7 @@ export function ContainerDetailsPage() {
               onDone={(newId) => void navigate(`${base}/${newId}`)}
             />
           )}
+          {dialog === 'publish' && <PublishDialog hostId={hostId} containerName={c.name} onClose={() => setDialog(null)} />}
           {dialog === 'limits' && <ContainerResourcesDialog hostId={hostId} container={c} onClose={() => setDialog(null)} />}
         </>
       )}
