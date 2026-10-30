@@ -19,6 +19,7 @@ import { toolLabel } from './toolLabel.ts'
 import { IDLE_STREAM, useChatDock } from './useChatDock.ts'
 import { useTranslation } from 'react-i18next'
 import i18n from 'i18next'
+import './ChatPane.css'
 
 const SEND_ERRORS: Record<string, string> = {
   get CHAT_RUN_IN_PROGRESS() { return i18n.t('ai-chat:ChatPane.theAssistantIsStillReplying') },
