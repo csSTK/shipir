@@ -55,6 +55,14 @@ class GitRemoteCheckerTest {
         assertThat(GitRemoteChecker.classify(wrap(cause))).isEqualTo(GitRemoteChecker.AUTH_FAILED);
     }
 
+    /** Real JGit shape for a 401 without a usable credential (probed against an HTTP stub). */
+    @Test
+    void authenticationRequiredWithoutCredentialIsAuthFailed() throws Exception {
+        var cause = new org.eclipse.jgit.errors.TransportException(new URIish(NASTY),
+                "Authentication is required but no CredentialsProvider has been registered");
+        assertThat(GitRemoteChecker.classify(wrap(cause))).isEqualTo(GitRemoteChecker.AUTH_FAILED);
+    }
+
     @Test
     void fetchBySha_unreachableWithMisleadingUrlIsNotRefNotFound() throws Exception {
         assertThat(GitRepositoryService.map(unreachable(), true).code()).isEqualTo("GIT_UNREACHABLE");

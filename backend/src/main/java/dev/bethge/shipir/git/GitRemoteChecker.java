@@ -121,9 +121,10 @@ class GitRemoteChecker {
         return ws < 0 ? "" : message.substring(ws + 1);
     }
 
-    // JGitText: notAuthorized (HTTP 401), authenticationNotSupported, serviceNotPermitted (HTTP 403)
+    // JGitText: notAuthorized (401 with credential), authMissing (401 without), authenticationNotSupported, serviceNotPermitted (403)
     private static boolean isAuthReason(String reason) {
         return reason.equals("not authorized") || reason.equals("authentication not supported")
+                || reason.equals("Authentication is required but no CredentialsProvider has been registered")
                 || reason.matches("(?s)[\\w-]+ not permitted on '.*");
     }
 
