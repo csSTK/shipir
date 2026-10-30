@@ -111,3 +111,24 @@
 .tp__actions > * {
   flex: 1;
 }
+
+/* Install dialog: optional publish step after a successful install. */
+.tp-publish {
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+.tp-publish__icon {
+  display: inline-flex;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+.tp-publish__title {
+  margin: 0;
+  font-size: var(--text-body-size);
+  font-weight: var(--weight-semibold);
+}
+.tp-publish > .ui-dialog-actions {
+  align-self: stretch;
+}

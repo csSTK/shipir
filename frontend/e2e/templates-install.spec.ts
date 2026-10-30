@@ -40,6 +40,7 @@ function mockCommon(api: ApiMock) {
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   api.mock('GET', BASE, { body: [] })
   api.mock('GET', '/api/templates', { body: templates })
+  api.mock('GET', '/api/hosts/a/proxy/managed', { body: { instance: null, setupBlockedReason: null } })
   api.mock('GET', '/api/hosts/a/ports/free', { body: { used: [], suggestions: [{ preferred: 8080, free: 8080 }] } })
   api.mock('POST', '/api/compose/generate', { body: { yaml } })
   api.mock('GET', `${BASE}/s1`, { body: created })
@@ -82,6 +83,8 @@ test('one click installs a template with its defaults and opens the deployment',
     { key: 'DB_USER', value: 'wp' },
   ])
   await deploy
+  // No managed proxy on this environment: the install ends with the Domains hint before the deployment opens.
+  await page.getByRole('dialog', { name: 'WordPress is installing' }).getByRole('button', { name: 'Open deployment' }).click()
   await expect(page).toHaveURL(/\/environments\/a\/deployments\/s1$/)
 })
 

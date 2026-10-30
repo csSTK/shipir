@@ -568,5 +568,17 @@
   "InstallTemplateDialog.hideKey": "Hide {{key}}",
   "InstallTemplateDialog.generateNewKey": "Generate a new {{key}}",
   "InstallTemplateDialog.advanced": "Advanced",
-  "InstallTemplateDialog.install": "Install"
+  "InstallTemplateDialog.install": "Install",
+  "InstallPublishStep.title": "{{name}} is installing",
+  "InstallPublishStep.installed": "The install has started.",
+  "InstallPublishStep.offer": "Want to reach it under your own domain? Publish it now, or do it later on the Domains page.",
+  "InstallPublishStep.waiting": "Waiting for the app to start so it can be published.",
+  "InstallPublishStep.publish": "Publish with domain",
+  "InstallPublishStep.skip": "Skip",
+  "InstallPublishStep.noProxy": "To reach this app under your own domain, set up the reverse proxy on the Domains page first.",
+  "InstallPublishStep.setUpDomains": "Set up Domains",
+  "InstallPublishStep.openDeployment": "Open deployment",
+  "InstallPublishStep.slow": "This is taking longer than expected. You can skip this and publish the app later from the Domains page.",
+  "InstallPublishStep.proxyNotRunning": "The reverse proxy is not running yet. Once it is, you can publish this app from the Domains page.",
+  "InstallPublishStep.openDomains": "Open Domains"
 }

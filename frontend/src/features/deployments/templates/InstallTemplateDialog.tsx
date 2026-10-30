@@ -10,7 +10,10 @@ import { toPayload } from '../editor/index.ts'
 import { applyFreePorts, preferredHostPorts, specToState, syncPortValue, type WizardState } from '../wizard/index.ts'
 import { FIXED_HOST_PORTS, buildSpec, validatePort } from '../wizard/model.ts'
 import { fetchFreePorts, type AppTemplate } from './api.ts'
-import { generateSecret, initialEnv, suggestName } from './install.ts'
+import { generateSecret, initialEnv, suggestName, webTarget } from './install.ts'
+import { InstallPublishStep } from './InstallPublishStep.tsx'
+import { useCurrentUser } from '../../auth/index.ts'
+import { useManagedProxy } from '../../domains/api.ts'
 import './templates.css'
 
 const NAME_PATTERN = /^[a-z0-9][a-z0-9_-]*$/
@@ -84,6 +87,11 @@ export function InstallTemplateDialog({
   const [problem, setProblem] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [createdId, setCreatedId] = useState<string | null>(null)
+  const [deployedId, setDeployedId] = useState<string | null>(null)
+  const userQuery = useCurrentUser()
+  const user = userQuery.data
+  const proxy = useManagedProxy(hostId)
+  const web = useMemo(() => webTarget(template), [template])
 
   // Suggest a name that is not taken yet, until the user types one.
   useEffect(() => {
@@ -111,6 +119,23 @@ export function InstallTemplateDialog({
 
   // Once the deployment exists, the inputs are frozen; only the deploy is retried.
   const locked = busy || createdId !== null
+
+  // After a successful deploy: offer publishing to operators once the proxy state is known, else continue to the deployment.
+  const operator = user?.role === 'ADMIN' || user?.role === 'OPERATOR'
+  type After = 'go' | { proxy: 'ready' | 'notRunning' | 'missing' }
+  const [decided, setDecided] = useState<After | null>(null)
+  let live: 'wait' | After | null = null
+  if (deployedId !== null) {
+    if (userQuery.isPending || (operator && web && proxy.isFetching && !proxy.data)) live = 'wait'
+    else if (!operator || !web || !proxy.data) live = 'go'
+    else live = { proxy: !proxy.data.instance ? 'missing' : proxy.data.instance.deploymentStatus === 'RUNNING' ? 'ready' : 'notRunning' }
+  }
+  // Latch the first resolved outcome: later refetches (tab focus, failures) must not tear down the step or an open publish dialog.
+  if (live !== null && live !== 'wait' && decided === null) setDecided(live)
+  const after = decided ?? live
+  useEffect(() => {
+    if (deployedId !== null && after === 'go') navigate(`/environments/${hostId}/deployments/${deployedId}`)
+  }, [deployedId, after, hostId, navigate])
 
   function setPort(row: PortRow, value: string) {
     portsTouched.current = true
@@ -201,10 +226,28 @@ export function InstallTemplateDialog({
         setProblem(describeDeploymentError(err, tr('InstallTemplateDialog.couldNotStartTheDeployment')))
         return
       }
-      navigate(`/environments/${hostId}/deployments/${id}`)
+      // What happens next is decided in render, once the user and proxy state are known (they may still be loading here).
+      // Fresh proxy state for the decision (a cached result may predate the deploy); a failed refetch just falls back to the cache.
+      await proxy.refetch()
+      setDeployedId(id)
     } finally {
       setBusy(false)
     }
+  }
+
+  if (deployedId !== null && after !== null && typeof after === 'object' && web) {
+    return (
+      <Dialog size="lg" open onOpenChange={(open) => !open && navigate(`/environments/${hostId}/deployments/${deployedId}`)} title={tr('InstallPublishStep.title', { name: template.name })}>
+        <InstallPublishStep
+          hostId={hostId}
+          proxy={after.proxy}
+          project={name.trim()}
+          service={web.service}
+          port={web.port}
+          onContinue={() => navigate(`/environments/${hostId}/deployments/${deployedId}`)}
+        />
+      </Dialog>
+    )
   }
 
   return (
@@ -280,7 +323,7 @@ export function InstallTemplateDialog({
           <Button variant="secondary" onClick={advanced} disabled={locked}>
             {tr('InstallTemplateDialog.advanced')}
           </Button>
-          <Button variant="primary" type="submit" loading={busy}>
+          <Button variant="primary" type="submit" loading={busy || after === 'wait'}>
             {tr('InstallTemplateDialog.install')}
           </Button>
         </div>

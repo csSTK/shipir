@@ -32,3 +32,22 @@ export function initialEnv(template: AppTemplate, state: WizardState): EnvEntry[
     .map((key) => ({ key, value: '' }))
   return [...hinted, ...extra]
 }
+
+/** The service and container port the app is reached on: the first published TCP port of the first service that has one. */
+export function webTarget(template: AppTemplate): { service: string; port: number } | null {
+  for (const s of template.spec.services ?? []) {
+    const port = (s.ports ?? []).find((p) => p.host != null && p.protocol !== 'udp')
+    if (port) return { service: s.name, port: port.container }
+  }
+  return null
+}
+
+/**
+ * The Compose container of `service` in `project` (a deployment's project is its name): `<project>-<service>-<n>`, or the
+ * legacy `<project>_<service>_<n>`. Null while the container does not exist yet.
+ */
+export function matchContainer(candidates: { containerName: string }[], project: string, service: string): string | null {
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pattern = new RegExp(`^${escape(project)}[-_]${escape(service)}[-_]\\d+$`)
+  return candidates.find((c) => pattern.test(c.containerName))?.containerName ?? null
+}
