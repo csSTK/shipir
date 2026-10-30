@@ -1,0 +1,26 @@
+# Managed by Shipir - changes are overwritten; use the custom file (custom.yml)
+http:
+  routers:
+    "wildcard-example-com":
+      rule: "HostRegexp(`^[a-z0-9-]+\\.example\\.com$`)"
+      entryPoints: ["websecure"]
+      service: "wildcard-example-com"
+      tls:
+        certResolver: "letsencrypt-dns"
+        domains:
+          - main: "*.example.com"
+    "wildcard-example-com--http":
+      rule: "HostRegexp(`^[a-z0-9-]+\\.example\\.com$`)"
+      entryPoints: ["web"]
+      middlewares: ["redirect-https"]
+      service: "noop@internal"
+  services:
+    "wildcard-example-com":
+      loadBalancer:
+        servers:
+          - url: "http://app:80"
+  middlewares:
+    "redirect-https":
+      redirectScheme:
+        scheme: "https"
+        permanent: true

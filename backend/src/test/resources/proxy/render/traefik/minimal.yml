@@ -1,0 +1,24 @@
+# Managed by Shipir - changes are overwritten; use the custom file (custom.yml)
+http:
+  routers:
+    "app-example-com":
+      rule: "Host(`app.example.com`)"
+      entryPoints: ["websecure"]
+      service: "app-example-com"
+      tls:
+        certResolver: "letsencrypt-http"
+    "app-example-com--http":
+      rule: "Host(`app.example.com`)"
+      entryPoints: ["web"]
+      middlewares: ["redirect-https"]
+      service: "noop@internal"
+  services:
+    "app-example-com":
+      loadBalancer:
+        servers:
+          - url: "http://app:8080"
+  middlewares:
+    "redirect-https":
+      redirectScheme:
+        scheme: "https"
+        permanent: true

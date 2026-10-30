@@ -1,0 +1,30 @@
+# Managed by Shipir - changes are overwritten; use the custom file (custom.yml)
+http:
+  routers:
+    "api-example-com":
+      rule: "(Host(`api.example.com`) || Host(`www.example.com`)) && PathPrefix(`/v1`)"
+      entryPoints: ["custom"]
+      middlewares: ["api-example-com--auth", "api-example-com--headers"]
+      service: "api-example-com"
+      tls:
+        certResolver: "letsencrypt-http"
+    "api-example-com--http":
+      rule: "(Host(`api.example.com`) || Host(`www.example.com`)) && PathPrefix(`/v1`)"
+      entryPoints: ["web"]
+      middlewares: ["api-example-com--auth", "api-example-com--headers"]
+      service: "api-example-com"
+  services:
+    "api-example-com":
+      loadBalancer:
+        servers:
+          - url: "https://api-1:8443"
+  middlewares:
+    "api-example-com--auth":
+      basicAuth:
+        users:
+          - "alice:@HASH@"
+    "api-example-com--headers":
+      headers:
+        customResponseHeaders:
+          "X-Frame-Options": "DENY"
+          "X-Test": "a;b # c: 'd' %"

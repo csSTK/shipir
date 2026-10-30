@@ -1,0 +1,11 @@
+# Managed by Shipir - changes are overwritten; use the custom file (custom.caddy)
+{
+	admin localhost:2019
+	email "admin@example.com"
+}
+
+app.example.com {
+	reverse_proxy app:8080
+}
+
+import custom.caddy

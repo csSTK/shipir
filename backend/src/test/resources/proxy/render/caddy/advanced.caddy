@@ -1,0 +1,18 @@
+# Managed by Shipir - changes are overwritten; use the custom file (custom.caddy)
+{
+	admin localhost:2019
+	email "admin@example.com"
+}
+
+http://api.example.com, https://api.example.com, http://www.example.com, https://www.example.com {
+	header "X-Frame-Options" "DENY"
+	header "X-Test" "a;b # c: 'd' %"
+	basic_auth {
+		"alice" "@HASH@"
+	}
+	handle_path /v1/* {
+		reverse_proxy https://api-1:8443
+	}
+}
+
+import custom.caddy

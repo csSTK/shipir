@@ -1,0 +1,11 @@
+# Managed by Shipir - changes are overwritten; use the custom file (custom.caddy)
+{
+	admin localhost:2019
+}
+
+*.example.com {
+	tls /etc/shipir-proxy/certs/11111111-2222-3333-4444-555555555555.crt /etc/shipir-proxy/certs/11111111-2222-3333-4444-555555555555.key
+	reverse_proxy h2c://app:80
+}
+
+import custom.caddy

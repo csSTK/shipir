@@ -1,0 +1,39 @@
+# Managed by Shipir - changes are overwritten; use the custom file (custom.yml)
+http:
+  routers:
+    "a-example-com":
+      rule: "Host(`a.example.com`)"
+      entryPoints: ["websecure"]
+      service: "a-example-com"
+      tls:
+        certResolver: "letsencrypt-http"
+    "a-example-com--http":
+      rule: "Host(`a.example.com`)"
+      entryPoints: ["web"]
+      middlewares: ["redirect-https"]
+      service: "noop@internal"
+    "b-example-com":
+      rule: "Host(`b.example.com`)"
+      entryPoints: ["websecure"]
+      service: "b-example-com"
+      tls:
+        certResolver: "letsencrypt-http"
+    "b-example-com--http":
+      rule: "Host(`b.example.com`)"
+      entryPoints: ["web"]
+      middlewares: ["redirect-https"]
+      service: "noop@internal"
+  services:
+    "a-example-com":
+      loadBalancer:
+        servers:
+          - url: "http://a:80"
+    "b-example-com":
+      loadBalancer:
+        servers:
+          - url: "http://b:80"
+  middlewares:
+    "redirect-https":
+      redirectScheme:
+        scheme: "https"
+        permanent: true
