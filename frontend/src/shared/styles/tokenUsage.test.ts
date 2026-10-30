@@ -365,6 +365,56 @@ describe('design token usage', () => {
     expect(actual).toEqual(iconBoxAllowlist)
   })
 
+  // Every token defined in tokens.css must be referenced by a stylesheet or component (css/ts/tsx under src,
+  // tests excluded), or be on unusedTokenAllowlist with a reason. A stale entry (token gone or now used) fails.
+  describe('every defined token is used (shipr-ycvc.57)', () => {
+    const tokenNames = [
+      ...new Set([...strip(readFileSync(join(srcRoot, 'shared/styles/tokens.css'), 'utf8')).matchAll(/^\s*(--[\w-]+)\s*:/gm)].map((m) => m[1])),
+    ]
+    const usageSources = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory()
+          ? usageSources(join(dir, e.name))
+          : /\.(?:css|tsx?)$/.test(e.name) && !/\.test\.tsx?$/.test(e.name) && e.name !== 'tokens.css'
+            ? [readFileSync(join(dir, e.name), 'utf8')]
+            : [],
+      )
+    const sources = usageSources(srcRoot)
+    // Names are matched whole: --size-icon-s does not count as a use of --size-icon-sm.
+    const unusedTokens = (names: string[], corpus: string[]): string[] =>
+      names.filter((n) => !corpus.some((src) => new RegExp(`${n}(?![\\w-])`).test(src)))
+
+    // Documented mirrors of the JS spring presets in shared/ui/motion.ts (values match) that the apple-design skill
+    // names. Kept as design reference; CSS does not use them.
+    const unusedTokenAllowlist: Record<string, string> = {
+      '--spring-snappy': 'documented mirror of springSnappy in shared/ui/motion.ts (stiffness 520, damping 38, mass 1)',
+      '--spring-smooth': 'documented mirror of springSmooth in shared/ui/motion.ts (stiffness 300, damping 30, mass 1)',
+      '--spring-gentle': 'documented mirror of springGentle in shared/ui/motion.ts (stiffness 180, damping 24, mass 1)',
+    }
+
+    it('scans enough tokens and sources (never vacuous)', () => {
+      expect(tokenNames.length).toBeGreaterThan(50)
+      expect(sources.length).toBeGreaterThan(MIN_SHEETS)
+    })
+
+    it('unusedTokens catches an unused name and ignores prefixes of longer names', () => {
+      expect(unusedTokens(['--size-icon-sm', '--size-checkbox'], ['width: var(--size-icon-s);', 'x: var(--size-icon-sm)'])).toEqual([
+        '--size-checkbox',
+      ])
+      expect(unusedTokens(['--a'], ['var(--a-b)'])).toEqual(['--a'])
+    })
+
+    it('every token is used by a source file or allowlisted with a reason', () => {
+      const offenders = unusedTokens(tokenNames, sources).filter((n) => !(n in unusedTokenAllowlist))
+      expect(offenders).toEqual([])
+    })
+
+    it('unused-token allowlist has no stale entries', () => {
+      const stale = Object.keys(unusedTokenAllowlist).filter((n) => !tokenNames.includes(n) || unusedTokens([n], sources).length === 0)
+      expect(stale).toEqual([])
+    })
+  })
+
   describe('one categorical palette (shipr-anxl.3)', () => {
     const tokens = allSheets.find((s) => s.path === '/shared/styles/tokens.css')?.css ?? ''
     const countOf = (name: string) => (strip(tokens).match(new RegExp(`${name}\\s*:`, 'g')) ?? []).length

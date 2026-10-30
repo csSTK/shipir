@@ -94,8 +94,6 @@
   --size-icon-3xl: 2.25rem;
   /* Status dot */
   --size-dot: 0.5rem;
-  /* Native checkbox box in dialogs */
-  --size-checkbox: 16px;
   /* Upload progress bar minimum width */
   --size-progress-min: 120px;
   /* File list columns: size and modified date */
@@ -114,7 +112,6 @@
   /* Spinner under prefers-reduced-motion: slow and calm */
   --duration-spin-calm: 2000ms;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-spring-css: cubic-bezier(0.3, 1.4, 0.5, 1);
   --spring-snappy: 'stiffness 520, damping 38, mass 1';
   --spring-smooth: 'stiffness 300, damping 30, mass 1';
   --spring-gentle: 'stiffness 180, damping 24, mass 1';
