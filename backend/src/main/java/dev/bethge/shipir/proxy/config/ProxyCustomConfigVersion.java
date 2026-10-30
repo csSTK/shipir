@@ -10,7 +10,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 
-/** A backup of the custom proxy config: the content that a later write replaced (see V40). */
+/** A backup of the custom proxy config: the content that a later write replaced (see V41). */
 @Entity
 @Table(name = "proxy_custom_config_versions")
 class ProxyCustomConfigVersion {

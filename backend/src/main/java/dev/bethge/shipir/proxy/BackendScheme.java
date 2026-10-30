@@ -1,6 +1,6 @@
 package dev.bethge.shipir.proxy;
 
-/** Protocol the proxy speaks to the container. Stored lower-case (V39 CHECK). */
+/** Protocol the proxy speaks to the container. Stored lower-case (V40 CHECK). */
 public enum BackendScheme {
     HTTP("http"),
     HTTPS("https"),

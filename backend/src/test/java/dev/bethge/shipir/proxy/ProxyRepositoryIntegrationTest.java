@@ -59,7 +59,7 @@ class ProxyRepositoryIntegrationTest {
                 Map.of("alice", "$2a$10$" + "a".repeat(53)), Map.of("X-Frame-Options", "DENY"));
         routes.saveAndFlush(r);
         UUID id = r.getId();
-        // Plain JDBC proves the stored values; the lower-case scheme matches the V39 check.
+        // Plain JDBC proves the stored values; the lower-case scheme matches the V40 check.
         assertThat(jdbc.queryForObject("SELECT backend_scheme FROM proxy_routes WHERE id = ?", String.class, id)).isEqualTo("h2c");
 
         evict();
