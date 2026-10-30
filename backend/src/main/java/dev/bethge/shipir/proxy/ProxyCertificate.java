@@ -60,6 +60,14 @@ public class ProxyCertificate {
         return c;
     }
 
+    /** Renewal: new chain, key and the values read from it; name and host stay. */
+    public void replace(String certPem, byte[] keyEncrypted, List<String> domains, Instant notAfter) {
+        this.certPem = certPem;
+        this.keyEncrypted = keyEncrypted;
+        this.domains = List.copyOf(domains);
+        this.notAfter = notAfter;
+    }
+
     public UUID getId() { return id; }
     public UUID getHostId() { return hostId; }
     public String getName() { return name; }

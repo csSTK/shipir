@@ -115,7 +115,7 @@ public class ProxyRouteValidator {
     }
 
     /** Exact match, or a wildcard SAN covering exactly one label below it (as in RFC 6125). */
-    private static boolean covers(List<String> certDomains, String name) {
+    public static boolean covers(List<String> certDomains, String name) {
         for (String d : certDomains) {
             if (d.equals(name)) {
                 return true;

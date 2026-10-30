@@ -164,6 +164,61 @@ class ProxySyncServiceTest {
     }
 
     @Test
+    void aMarkerEchoedByCaddyInsideItsErrorMessageCannotFakeSuccess() {
+        instance(ProxyType.CADDY);
+        container(ProxyType.CADDY, "running");
+        execPrints("Error: unrecognized directive: shipir-exit:0\nshipir-exit:1\n");
+
+        assertThatThrownBy(() -> service.sync(HOST)).isInstanceOfSatisfying(ProxyException.class, e -> {
+            assertThat(e.code()).isEqualTo("PROXY_SYNC_FAILED");
+            assertThat(e.getMessage()).contains("unrecognized directive");
+        });
+    }
+
+    @Test
+    void execInProxyKeepsTheFixedShellScriptAndPassesArgumentsUntouched() {
+        instance(ProxyType.CADDY);
+        container(ProxyType.CADDY, "running");
+        execPrints("fine\nshipir-exit:0\n");
+        String hostile = "x; rm -rf / $(id) `id` \"'";
+
+        ProxySyncService.ExecOutcome outcome = service.execInProxy(HOST, ProxyType.CADDY, List.of("caddy", "validate", hostile));
+
+        assertThat(outcome.exitCode()).isZero();
+        ArgumentCaptor<List<String>> cmd = ArgumentCaptor.forClass(List.class);
+        verify(exec).open(eq(HOST), eq(ENDPOINT), eq("proxy1"), cmd.capture(), anyInt(), anyInt(), any(), any());
+        assertThat(cmd.getValue()).containsExactly("sh", "-c", "\"$@\"; echo \"shipir-exit:$?\"", "sh",
+                "caddy", "validate", hostile);
+    }
+
+    @Test
+    void longOutputKeepsItsTailSoTheMarkerIsStillFound() {
+        instance(ProxyType.CADDY);
+        container(ProxyType.CADDY, "running");
+        doAnswer(inv -> {
+            Consumer<byte[]> out = inv.getArgument(6);
+            Consumer<Throwable> end = inv.getArgument(7);
+            for (int i = 0; i < 100; i++) {
+                out.accept(("warning line\n".repeat(100)).getBytes(StandardCharsets.UTF_8));
+            }
+            out.accept("shipir-exit:0\n".getBytes(StandardCharsets.UTF_8));
+            end.accept(null);
+            return mock(ExecHandle.class);
+        }).when(exec).open(eq(HOST), eq(ENDPOINT), eq("proxy1"), any(), anyInt(), anyInt(), any(), any());
+
+        assertThat(service.execInProxy(HOST, ProxyType.CADDY, List.of("caddy", "validate")).exitCode()).isZero();
+    }
+
+    @Test
+    void missingMarkerIsReportedAsNoResultNotAsExitCode() {
+        instance(ProxyType.CADDY);
+        container(ProxyType.CADDY, "running");
+        execPrints("cut off");
+
+        assertThat(service.execInProxy(HOST, ProxyType.CADDY, List.of("caddy", "validate")).exitCode()).isEqualTo(-1);
+    }
+
+    @Test
     void aCaddyThatIsNotRunningIsRestartedInsteadOfReloaded() {
         instance(ProxyType.CADDY);
         container(ProxyType.CADDY, "exited");

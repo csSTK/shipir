@@ -19,7 +19,7 @@ import java.util.UUID;
  * the ADMIN role and OPERATE on the host.
  */
 @Component
-class ProxyHostAccess {
+public class ProxyHostAccess {
 
     private final DockerHostRepository hosts;
     private final HostEndpointResolver endpoints;
@@ -31,13 +31,13 @@ class ProxyHostAccess {
         this.access = access;
     }
 
-    void requireView(UUID hostId) {
+    public void requireView(UUID hostId) {
         if (!hosts.existsById(hostId) || !access.canView(hostId)) {
             throw new ProxyException(HttpStatus.NOT_FOUND, "HOST_NOT_FOUND", "Environment not found");
         }
     }
 
-    void requireAdminOperate(UUID hostId) {
+    public void requireAdminOperate(UUID hostId) {
         requireView(hostId);
         if (!access.isAdmin() || !access.canOperate(hostId)) {
             throw new ProxyException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied");
@@ -45,7 +45,7 @@ class ProxyHostAccess {
     }
 
     /** Endpoint of the host; no permission check (the callers did that, or run as the system). */
-    DockerEndpoint endpoint(UUID hostId) {
+    public DockerEndpoint endpoint(UUID hostId) {
         DockerHost host = hosts.findById(hostId).orElseThrow(
                 () -> new ProxyException(HttpStatus.NOT_FOUND, "HOST_NOT_FOUND", "Environment not found"));
         try {
