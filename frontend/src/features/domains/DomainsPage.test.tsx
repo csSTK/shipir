@@ -43,6 +43,7 @@ function mockApi(role: string, managed: unknown, post?: unknown) {
       return post instanceof Error ? Promise.reject(post) : Promise.resolve(post)
     }
     if (path === '/hosts/h1/proxy/managed') return Promise.resolve(managed)
+    if (path === '/hosts/h1/proxy/certificates') return Promise.resolve([])
     return Promise.reject(new Error(`unexpected ${path}`))
   })
 }
@@ -154,6 +155,7 @@ describe('DomainsPage', () => {
         conflict = true
         return Promise.reject(new ApiError(409, 'x', 'PROXY_EXISTS'))
       }
+      if (path === '/hosts/h1/proxy/certificates') return Promise.resolve([])
       return Promise.resolve(conflict ? { instance, setupBlockedReason: null } : { instance: null, setupBlockedReason: null })
     })
     renderPage()
@@ -170,6 +172,7 @@ describe('DomainsPage', () => {
         done = true
         return Promise.resolve({ instance, runId: 'run-3' })
       }
+      if (path === '/hosts/h1/proxy/certificates') return Promise.resolve([])
       return Promise.resolve(done ? { instance: { ...instance, deploymentStatus: 'ERROR' }, setupBlockedReason: null } : { instance: null, setupBlockedReason: null })
     })
     renderPage()
@@ -197,6 +200,17 @@ describe('DomainsPage', () => {
     expect(screen.getByRole('link', { name: 'Open proxy deployment' })).toHaveAttribute('href', '/environments/h1/deployments/d1')
   })
 
+  it.each([
+    ['ADMIN', true],
+    ['VIEWER', false],
+  ])('shows the certificates section on the ready state for %s (upload button: %s)', async (role, canUpload) => {
+    mockApi(role, { instance, setupBlockedReason: null })
+    renderPage()
+    expect(await screen.findByRole('heading', { name: 'Your certificates' })).toBeInTheDocument()
+    expect(await screen.findByText('No certificates yet')).toBeInTheDocument()
+    expect(!!screen.queryByRole('button', { name: 'Upload certificate' })).toBe(canUpload)
+  })
+
   it('refreshes to the ready state after the setup run finishes', async () => {
     let done = false
     apiFetch.mockImplementation((path: string, options?: { method?: string }) => {
@@ -205,6 +219,7 @@ describe('DomainsPage', () => {
         done = true
         return Promise.resolve({ instance, runId: 'run-9' })
       }
+      if (path === '/hosts/h1/proxy/certificates') return Promise.resolve([])
       return Promise.resolve(done ? { instance, setupBlockedReason: null } : { instance: null, setupBlockedReason: null })
     })
     renderPage()

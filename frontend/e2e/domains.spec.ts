@@ -52,6 +52,7 @@ test('an admin sets up the proxy from empty to ready', async ({ page, api }) => 
   signIn(api, 'ADMIN')
   api.mock('GET', PATH, { body: { instance: null, setupBlockedReason: null } })
   api.mock('POST', PATH, { status: 201, body: { instance, runId: 'dep-1' } })
+  api.mock('GET', `${PATH.replace('managed', 'certificates')}`, { body: [] })
   await mockBroker(page, (send) => {
     send({ seq: 1, type: 'LINE', line: 'Container traefik Started' })
     api.mock('GET', PATH, { body: { instance, setupBlockedReason: null } })

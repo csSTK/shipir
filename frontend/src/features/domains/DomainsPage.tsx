@@ -8,6 +8,7 @@ import { useCurrentUser } from '../auth/index.ts'
 import { DeployOutput } from '../deployments/deploy-output/DeployOutput.tsx'
 import { useManagedProxy, useRefreshProxy, useSetupProxy, type ProxyInstance, type SetupBlockedReason } from './api.ts'
 import { describeProxyError } from './domainErrors.ts'
+import { CertificatesSection } from './certificates/CertificatesSection.tsx'
 import { ProxySetupCard } from './ProxySetupCard.tsx'
 import './DomainsPage.css'
 
@@ -44,7 +45,7 @@ function ReadOnlyNotice() {
   )
 }
 
-function Ready({ instance, hostId }: { instance: ProxyInstance; hostId: string }) {
+function Ready({ instance, hostId, isAdmin }: { instance: ProxyInstance; hostId: string; isAdmin: boolean }) {
   const { t } = useTranslation('domains')
   const status = instance.deploymentStatus
   return (
@@ -66,6 +67,7 @@ function Ready({ instance, hostId }: { instance: ProxyInstance; hostId: string }
       <Card className="domains__panel">
         <EmptyState icon={Globe} title={t('DomainsPage.noDomains')} description={t('DomainsPage.noDomainsHint')} />
       </Card>
+      <CertificatesSection hostId={hostId} isAdmin={isAdmin} />
     </>
   )
 }
@@ -118,11 +120,11 @@ export function DomainsPage() {
             {t('DomainsPage.setupFailed')}
           </p>
         )}
-        {runFinished && data.instance && <Ready instance={data.instance} hostId={id} />}
+        {runFinished && data.instance && <Ready instance={data.instance} hostId={id} isAdmin={isAdmin} />}
       </>
     )
   } else if (data.instance) {
-    body = <Ready instance={data.instance} hostId={id} />
+    body = <Ready instance={data.instance} hostId={id} isAdmin={isAdmin} />
   } else if (data.setupBlockedReason) {
     body = <Blocked reason={data.setupBlockedReason} hostId={id} />
   } else if (!isAdmin) {
