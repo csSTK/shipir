@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -28,6 +29,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.TimeoutException;
 import java.util.function.LongConsumer;
+import java.util.stream.Collectors;
 
 /**
  * Applies pending image updates to FILE deployments that opted in ({@code image_auto_update}), inside their daily UTC
@@ -150,6 +152,9 @@ class ImageAutoUpdateScheduler {
         if (own.stream().noneMatch(c -> hasUpdate(hostId, c.image()))) {
             return;
         }
+        Set<String> updatedKeys = own.stream().map(c -> ImageReference.parse(c.image()))
+                .filter(ref -> ref != null && updates.hasUpdate(hostId, ref.key()))
+                .map(ImageReference::key).collect(Collectors.toSet());
         Map<String, String> previous = previousDigests(hostId, endpoint, own);
         long services = own.stream().map(ContainerDto::composeService).filter(java.util.Objects::nonNull).distinct().count();
 
@@ -163,7 +168,7 @@ class ImageAutoUpdateScheduler {
             return;
         }
         try {
-            afterStart(deployment, now, run, previous, services, handedOver);
+            afterStart(deployment, now, run, previous, services, updatedKeys, handedOver);
         } catch (RuntimeException | Error e) {
             // The worker may still run compose: the lock must not be released before it ends.
             if (!run.isDone()) {
@@ -175,7 +180,8 @@ class ImageAutoUpdateScheduler {
 
     /** Everything after the worker started: wait, health check, rollback decision, report. */
     private void afterStart(Deployment deployment, Instant now, CompletableFuture<DeploymentRunService.PullUpdateOutcome> run,
-                            Map<String, String> previous, long services, AtomicBoolean handedOver) {
+                            Map<String, String> previous, long services, Set<String> updatedKeys,
+                            AtomicBoolean handedOver) {
         DeploymentRunService.PullUpdateOutcome outcome = await(run);
         if (!run.isDone()) {
             // The worker still runs compose: a rollback now would be a second concurrent `up`, and releasing the lock
@@ -196,6 +202,7 @@ class ImageAutoUpdateScheduler {
         UUID hostId = deployment.getHostId();
         DockerEndpoint endpoint = deploymentService.endpointOf(deploymentService.requireHost(hostId));
         if (outcome.success() && awaitHealthy(hostId, endpoint, deployment.getName())) {
+            updates.markApplied(hostId, updatedKeys); // the flag would stay stale until the next check otherwise
             finish(deployment, now, true, null, false, previous.size(), services, true);
             return;
         }

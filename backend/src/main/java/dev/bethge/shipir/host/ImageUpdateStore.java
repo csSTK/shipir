@@ -3,6 +3,7 @@ package dev.bethge.shipir.host;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -19,6 +20,15 @@ class ImageUpdateStore implements ImageUpdates {
 
     void replace(UUID hostId, Set<String> updatableKeys, Instant checkedAt) {
         results.put(hostId, new Result(Set.copyOf(updatableKeys), checkedAt));
+    }
+
+    @Override
+    public void markApplied(UUID hostId, Collection<String> keys) {
+        results.computeIfPresent(hostId, (id, r) -> {
+            Set<String> remaining = new java.util.HashSet<>(r.updatable());
+            remaining.removeAll(keys);
+            return new Result(Set.copyOf(remaining), r.checkedAt());
+        });
     }
 
     boolean isEmpty(UUID hostId) {

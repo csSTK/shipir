@@ -84,6 +84,11 @@ class ImageAutoUpdateSchedulerTest extends DeploymentTestBase {
         public Instant checkedAt(UUID hostId) {
             return checkedAt;
         }
+
+        @Override
+        public void markApplied(UUID hostId, java.util.Collection<String> applied) {
+            keys.removeAll(applied);
+        }
     }
 
     static final class MutableClock extends Clock {
@@ -203,6 +208,47 @@ class ImageAutoUpdateSchedulerTest extends DeploymentTestBase {
                 .isEqualTo("RUNNING");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM deployment_versions WHERE deployment_id = ?", Integer.class, id))
                 .isEqualTo(versionsBefore); // pull-update records no new version
+    }
+
+    @Test
+    void updateFlagIsClearedAfterASuccessfulApplyButKeptAfterAFailure() throws Exception {
+        deployed("web", true);
+        health = "unhealthy";
+        scheduler.tick();
+        assertThat(updates.keys).containsExactly(KEY); // rolled back: the update is still pending
+
+        jdbc.update("DELETE FROM notifications");
+        health = "healthy";
+        updates.checkedAt = clock.instant().plusSeconds(1);
+        scheduler.tick();
+
+        assertThat(notificationTypes()).containsExactly("IMAGE_UPDATE_APPLIED");
+        assertThat(updates.keys).isEmpty();
+    }
+
+    @Test
+    void partiallyPinnedDeploymentIsReportedAsNotFullyRolledBack() throws Exception {
+        UUID id = deployed("web", true);
+        health = "unhealthy";
+        // two services, but only nginx has a local digest to pin back
+        when(containers.listContainers(any(), any())).thenReturn(List.of(
+                new ContainerDto("c-web", "/web-web-1", "nginx:latest", "running", "Up", "unhealthy", clock.instant(),
+                        List.of(), "web", "web"),
+                new ContainerDto("c-db", "/web-db-1", "postgres:16", "running", "Up", "unhealthy", clock.instant(),
+                        List.of(), "web", "db")));
+
+        scheduler.tick();
+
+        assertThat(lastResult(id)).isEqualTo("FAILED_NOT_ROLLED_BACK");
+        assertThat(jdbc.queryForObject("SELECT details->>'rolledBack' FROM audit_log WHERE action = 'IMAGE_AUTO_UPDATE'",
+                String.class)).isEqualTo("false");
+        assertThat(jdbc.queryForObject("SELECT details->>'pinnedServices' FROM audit_log WHERE action = 'IMAGE_AUTO_UPDATE'",
+                String.class)).isEqualTo("1");
+        assertThat(jdbc.queryForObject("SELECT details->>'services' FROM audit_log WHERE action = 'IMAGE_AUTO_UPDATE'",
+                String.class)).isEqualTo("2");
+        assertThat(overrideYamls).singleElement().satisfies(yaml ->
+                assertThat(yaml).contains("\"web\":").contains(OLD_DIGEST).doesNotContain("postgres"));
+        assertThat(notificationTypes()).containsExactly("IMAGE_UPDATE_FAILED");
     }
 
     @Test
