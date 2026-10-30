@@ -101,8 +101,8 @@
 
 .assistant-dock__live {
   position: absolute;
-  width: 1px;
-  height: 1px;
+  width: var(--border-width);
+  height: var(--border-width);
   margin: calc(var(--border-width) * -1);
   padding: 0;
   overflow: hidden;
@@ -117,8 +117,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  width: min(26rem, calc(100dvw - var(--space-6)));
-  height: min(40rem, calc(100dvh - var(--space-8) - var(--space-7)));
+  width: min(var(--dock-panel-width), calc(100dvw - var(--space-6)));
+  height: min(var(--dock-panel-height), calc(100dvh - var(--space-8) - var(--space-7)));
   padding: var(--space-4);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -138,7 +138,7 @@
   bottom: 0;
   left: 0;
   width: auto;
-  height: 85dvh;
+  height: var(--dock-sheet-height);
   padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
   border-bottom: 0;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;

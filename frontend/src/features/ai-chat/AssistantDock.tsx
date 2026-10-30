@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import { Maximize2, Plus, Sparkles, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Button, EmptyState, IconButton, springSmooth } from '../../shared/ui/index.ts'
+import { Button, EmptyState, IconButton, springSmooth, useSheetMotion } from '../../shared/ui/index.ts'
 import { useChatSessions, useCreateChatSession } from './api.ts'
 import { ChatPane } from './ChatPane.tsx'
 import { useChatDock } from './useChatDock.ts'
@@ -11,20 +11,15 @@ import './AssistantDock.css'
 
 type DockStatus = 'idle' | 'running' | 'pending' | 'ready'
 
-const fade = { type: 'tween', duration: 0.12, ease: 'linear' } as const
-
 function DockPanel({ isAdmin, narrow, onClose }: { isAdmin: boolean; narrow: boolean; onClose: () => void }) {
   const { t } = useTranslation('ai-chat')
   const dock = useChatDock()
-  const reduced = useReducedMotion()
+  const sheetMotion = useSheetMotion(narrow, springSmooth)
   const sessions = useChatSessions()
   const create = useCreateChatSession()
   const panel = useRef<HTMLDivElement>(null)
   // Focus moves into the panel when it opens, so keyboard users land in the conversation.
   useEffect(() => panel.current?.focus(), [])
-
-  const hidden = reduced ? { opacity: 0 } : narrow ? { opacity: 0, y: '100%' } : { opacity: 0, scale: 0.92, y: 12 }
-  const shown = reduced ? { opacity: 1 } : narrow ? { opacity: 1, y: 0 } : { opacity: 1, scale: 1, y: 0 }
 
   // Document level: sending disables the composer and drops focus to the body, where a panel listener would miss Escape.
   // Something inside that already handled the key (a dialog, an open popup) calls preventDefault and keeps it.
@@ -49,10 +44,7 @@ function DockPanel({ isAdmin, narrow, onClose }: { isAdmin: boolean; narrow: boo
       aria-label={t('AssistantDock.assistant')}
       tabIndex={-1}
       className={`assistant-dock__panel${narrow ? ' assistant-dock__panel--sheet' : ''}`}
-      initial={hidden}
-      animate={shown}
-      exit={hidden}
-      transition={reduced ? fade : springSmooth}
+      {...sheetMotion}
     >
       <header className="assistant-dock__header">
         <select
