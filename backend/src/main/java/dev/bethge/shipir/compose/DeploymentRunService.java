@@ -136,7 +136,7 @@ public class DeploymentRunService {
     }
 
     /**
-     * "Pull &amp; update": {@code docker compose pull} then {@code up -d} on the latest deployed version, so tags like
+     * "Pull &amp; update": {@code docker compose pull} then {@code up -d} on the latest successfully deployed version, so tags like
      * {@code latest} pick up new images. Creates no new version. 400 NOT_DEPLOYED if the deployment was never deployed.
      */
     @Auditable(action = "DEPLOYMENT_PULL_UPDATE", targetType = "DEPLOYMENT", targetId = "#id")
@@ -169,7 +169,7 @@ public class DeploymentRunService {
     }
 
     /**
-     * "Start": {@code docker compose up -d} (with the stored profiles) on the latest deployed version, e.g. after a stop.
+     * "Start": {@code docker compose up -d} (with the stored profiles) on the latest successfully deployed version, e.g. after a stop.
      * Creates no new version. 400 NOT_DEPLOYED if the deployment was never deployed.
      */
     @Auditable(action = "DEPLOYMENT_START", targetType = "DEPLOYMENT", targetId = "#id")
@@ -194,7 +194,7 @@ public class DeploymentRunService {
         return serviceAction(hostId, id, service, username, ComposeCommand.UP_SERVICE, "DEPLOYMENT_SERVICE_UP_RESULT");
     }
 
-    /** One compose command for one service of the latest deployed version; 400 INVALID_SERVICE / UNKNOWN_SERVICE / NOT_DEPLOYED. */
+    /** One compose command for one service of the latest successfully deployed version; 400 INVALID_SERVICE / UNKNOWN_SERVICE / NOT_DEPLOYED. */
     private DeploymentRunResponse serviceAction(UUID hostId, UUID id, String service, String username,
                                                 ComposeCommand command, String resultAction) {
         deploymentService.requireOperate(hostId, id);
@@ -212,7 +212,7 @@ public class DeploymentRunService {
     }
 
     /**
-     * Runs {@code steps} on the latest deployed version without creating a version; with {@code service} every step is
+     * Runs {@code steps} on the latest successfully deployed version without creating a version; with {@code service} every step is
      * restricted to that service, which must exist in the compose file (checked after the policy gate, on the file that
      * will run).
      */
@@ -228,7 +228,7 @@ public class DeploymentRunService {
         boolean started = false;
         try {
             DeploymentVersion version = versions.findByDeploymentIdOrderByCreatedAtDesc(deployment.getId()).stream()
-                    .filter(DeploymentVersion::isDeployed).findFirst().orElseThrow(
+                    .filter(DeploymentVersion::isDeploySucceeded).findFirst().orElseThrow(
                             () -> new DeploymentException(HttpStatus.BAD_REQUEST, "NOT_DEPLOYED",
                                     "The deployment has not been deployed yet"));
             String envText = decryptEnv(version);
@@ -321,9 +321,9 @@ public class DeploymentRunService {
         deploymentService.requireHost(hostId);
         Deployment deployment = deploymentService.requireDeployment(hostId, id);
         DeploymentVersion version = versionOf(deployment, versionId);
-        // current_version_id may point at a newer draft; the baseline is the latest version that was actually deployed
+        // current_version_id may point at a newer draft; the baseline is the latest version whose deploy succeeded
         List<DeploymentVersion> history = versions.findByDeploymentIdOrderByCreatedAtDesc(deployment.getId());
-        DeploymentVersion baseline = history.stream().filter(DeploymentVersion::isDeployed).findFirst().orElse(null);
+        DeploymentVersion baseline = history.stream().filter(DeploymentVersion::isDeploySucceeded).findFirst().orElse(null);
         UUID currentId = currentVersionId(history);
 
         Map<String, String> values = envMap(version);
@@ -411,7 +411,7 @@ public class DeploymentRunService {
                 DockerEndpoint endpoint = deploymentService.endpointOf(deploymentService.requireHost(deployment.getHostId()));
                 // same gate as every other system run: the compose file on disk must pass the policy for the author's trust
                 List<DeploymentVersion> history = versions.findByDeploymentIdOrderByCreatedAtDesc(deployment.getId());
-                DeploymentVersion current = history.stream().filter(DeploymentVersion::isDeployed).findFirst()
+                DeploymentVersion current = history.stream().filter(DeploymentVersion::isDeploySucceeded).findFirst()
                         .or(() -> history.stream().findFirst()).orElse(null);
                 enforceRunPolicy(deployment, endpoint, SYSTEM_USER, current != null ? current.getCreatedBy() : null, current);
                 Path override = files.writeRollbackOverride(deployment.getHostId(), deployment.getName(), yaml);

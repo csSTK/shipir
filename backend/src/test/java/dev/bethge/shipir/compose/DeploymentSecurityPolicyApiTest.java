@@ -147,14 +147,14 @@ class DeploymentSecurityPolicyApiTest extends DeploymentTestBase {
     @Test
     void systemRunOfContentAuthoredByAdminIsAllowed() throws Exception {
         UUID id = create(login("admin"), "sysok", PRIVILEGED);
-        jdbc.update("UPDATE deployment_versions SET deployed_at = now() WHERE deployment_id = ?", id);
+        jdbc.update("UPDATE deployment_versions SET deployed_at = now(), deploy_succeeded_at = now() WHERE deployment_id = ?", id);
         assertThat(runs.webhookTrigger(id).runId()).isNotBlank();
     }
 
     @Test
     void systemRunOfContentAuthoredByOperatorIsDenied() throws Exception {
         UUID id = create(login("admin"), "sysdeny", PRIVILEGED);
-        jdbc.update("UPDATE deployment_versions SET deployed_at = now(), created_by = (SELECT id FROM users WHERE username = 'operator') "
+        jdbc.update("UPDATE deployment_versions SET deployed_at = now(), deploy_succeeded_at = now(), created_by = (SELECT id FROM users WHERE username = 'operator') "
                 + "WHERE deployment_id = ?", id);
         assertThatThrownBy(() -> runs.webhookTrigger(id))
                 .isInstanceOfSatisfying(DeploymentException.class, e -> assertThat(e.code()).isEqualTo("ADMIN_REQUIRED"));
@@ -163,7 +163,7 @@ class DeploymentSecurityPolicyApiTest extends DeploymentTestBase {
 
     private UUID deployedAdminPrivileged(String name) throws Exception {
         UUID id = create(login("admin"), name, PRIVILEGED);
-        jdbc.update("UPDATE deployment_versions SET deployed_at = now() WHERE deployment_id = ?", id);
+        jdbc.update("UPDATE deployment_versions SET deployed_at = now(), deploy_succeeded_at = now() WHERE deployment_id = ?", id);
         return id;
     }
 
@@ -184,7 +184,7 @@ class DeploymentSecurityPolicyApiTest extends DeploymentTestBase {
     @Test
     void systemRunWithAuxFileStillRunsWhenTheComposeNeedsNoAdminPower() throws Exception {
         UUID id = create(login("admin"), "sysauxok", YAML);
-        jdbc.update("UPDATE deployment_versions SET deployed_at = now() WHERE deployment_id = ?", id);
+        jdbc.update("UPDATE deployment_versions SET deployed_at = now(), deploy_succeeded_at = now() WHERE deployment_id = ?", id);
         addAuxFile("sysauxok");
         assertThat(runs.webhookTrigger(id).runId()).isNotBlank();
     }
@@ -201,7 +201,7 @@ class DeploymentSecurityPolicyApiTest extends DeploymentTestBase {
     @Test
     void rollbackImagesIsRefusedForOperatorAuthoredViolatingCompose() throws Exception {
         UUID id = create(login("admin"), "rbop", PRIVILEGED);
-        jdbc.update("UPDATE deployment_versions SET deployed_at = now(), created_by = (SELECT id FROM users WHERE username = 'operator') "
+        jdbc.update("UPDATE deployment_versions SET deployed_at = now(), deploy_succeeded_at = now(), created_by = (SELECT id FROM users WHERE username = 'operator') "
                 + "WHERE deployment_id = ?", id);
         commands.clear();
         assertThat(runs.rollbackImages(id, Map.of("x", "alpine@sha256:" + "a".repeat(64)))).isFalse();
@@ -214,6 +214,32 @@ class DeploymentSecurityPolicyApiTest extends DeploymentTestBase {
         commands.clear();
         assertThat(runs.rollbackImages(id, Map.of("x", "alpine@sha256:" + "a".repeat(64)))).isTrue();
         assertThat(commands).containsExactly(ComposeCommand.UP);
+    }
+
+    /**
+     * An ADMIN-authored version deployed successfully, then a newer OPERATOR-authored one was started but failed
+     * (deployed_at set, deploy_succeeded_at null). System runs must follow the succeeded version's author.
+     */
+    private UUID adminSucceededThenOperatorFailed(String name) throws Exception {
+        UUID id = deployedAdminPrivileged(name);
+        jdbc.update("INSERT INTO deployment_versions (deployment_id, yaml_content, created_by, created_at, deployed_at) "
+                + "SELECT ?, yaml_content, (SELECT id FROM users WHERE username = 'operator'), now() + interval '1 minute', "
+                + "now() FROM deployment_versions WHERE deployment_id = ?", id, id);
+        commands.clear();
+        return id;
+    }
+
+    @Test
+    void rollbackImagesGatesOnTheSucceededVersionNotALaterFailedOne() throws Exception {
+        UUID id = adminSucceededThenOperatorFailed("rbfail");
+        assertThat(runs.rollbackImages(id, Map.of("x", "alpine@sha256:" + "a".repeat(64)))).isTrue();
+        assertThat(commands).containsExactly(ComposeCommand.UP);
+    }
+
+    @Test
+    void webhookSystemRunGatesOnTheSucceededVersionNotALaterFailedOne() throws Exception {
+        UUID id = adminSucceededThenOperatorFailed("whfail");
+        assertThat(runs.webhookTrigger(id).runId()).isNotBlank();
     }
 
     @Test
