@@ -55,3 +55,23 @@ export function useRefreshProxy(hostId: string) {
   const queryClient = useQueryClient()
   return () => queryClient.invalidateQueries({ queryKey: proxyKey(hostId) })
 }
+
+export interface ProxyUpdateRequest {
+  acmeEmail?: string
+  defaultCertMode?: CertMode
+  dnsProvider?: string
+  /** Variable name -> secret value. Non-empty replaces all stored credentials; omitted keeps them. */
+  dnsCredentials?: Record<string, string>
+  removeDnsCredentials?: boolean
+}
+
+/** `PUT /hosts/{id}/proxy/managed`: changes the proxy settings; `runId` is set when the proxy was redeployed. */
+export function useUpdateProxy(hostId: string) {
+  const queryClient = useQueryClient()
+  // gcTime 0: the request can hold DNS credentials and must not linger in the mutation cache.
+  return useMutation({
+    gcTime: 0,
+    mutationFn: (request: ProxyUpdateRequest) => apiFetch<ProxySetupResult>(`/hosts/${hostId}/proxy/managed`, { method: 'PUT', body: request }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: proxyKey(hostId) }),
+  })
+}

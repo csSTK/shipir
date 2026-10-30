@@ -57,6 +57,8 @@ export interface RouteRequest {
   certMode?: CertMode
   certificateId?: string | null
   redirectHttps?: boolean
+  /** Username -> plain password, sent once and stored as a hash. Omit to keep the stored users; an empty password keeps that user's hash. */
+  basicAuth?: Record<string, string>
   responseHeaders?: Record<string, string>
 }
 
@@ -93,7 +95,9 @@ function useInvalidateRoutes(hostId: string) {
 
 export function usePublishRoute(hostId: string) {
   const invalidate = useInvalidateRoutes(hostId)
+  // gcTime 0: the request can hold basic auth passwords and must not linger in the mutation cache.
   return useMutation({
+    gcTime: 0,
     mutationFn: (request: RouteRequest) => apiFetch<ProxyRoute>(base(hostId), { method: 'POST', body: request }),
     onSuccess: invalidate,
   })
@@ -101,7 +105,9 @@ export function usePublishRoute(hostId: string) {
 
 export function useUpdateRoute(hostId: string) {
   const invalidate = useInvalidateRoutes(hostId)
+  // gcTime 0: the request can hold basic auth passwords and must not linger in the mutation cache.
   return useMutation({
+    gcTime: 0,
     mutationFn: ({ id, ...request }: RouteRequest & { id: string }) => apiFetch<ProxyRoute>(`${base(hostId)}/${id}`, { method: 'PUT', body: request }),
     onSuccess: invalidate,
   })

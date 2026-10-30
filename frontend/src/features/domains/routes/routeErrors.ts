@@ -39,6 +39,19 @@ export function describeRouteError(error: unknown): RouteError {
         return { field: 'form', message: i18n.t('domains:routeErrors.routeNotFound') }
       case 'PROXY_ATTACH_FAILED':
         return { field: 'form', message: i18n.t('domains:routeErrors.attachFailed') }
+      case 'TOO_MANY_ALIASES':
+      case 'INVALID_PATH_PREFIX':
+      case 'INVALID_ENTRYPOINT':
+      case 'CERT_REQUIRED':
+      case 'CERT_NOT_FOUND':
+      case 'CERT_DOES_NOT_COVER_HOST':
+      case 'UNSUPPORTED_FOR_PROXY':
+      case 'INVALID_BASIC_AUTH':
+      case 'TOO_MANY_USERS':
+      case 'TOO_MANY_HEADERS':
+      case 'INVALID_HEADER':
+      case 'INVALID_ROUTE':
+        return { field: 'form', message: i18n.t(`domains:routeErrors.advanced.${error.code}`) }
       case 'PROXY_SYNC_FAILED':
         return { field: 'form', message: i18n.t('domains:routeErrors.syncFailed') }
     }

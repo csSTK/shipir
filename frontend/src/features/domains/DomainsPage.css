@@ -59,3 +59,6 @@
   background: var(--color-bad-soft);
   color: var(--color-bad);
 }
+.domains__anchor {
+  scroll-margin-top: var(--space-5);
+}

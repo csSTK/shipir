@@ -1,13 +1,16 @@
-import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, Lock } from 'lucide-react'
-import { Badge, Button, Card, PageHeader, Skeleton, type BadgeTone } from '../../shared/ui/index.ts'
+import { Badge, Button, Card, PageHeader, Skeleton, Switch, type BadgeTone } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { useCurrentUser } from '../auth/index.ts'
 import { DeployOutput } from '../deployments/deploy-output/DeployOutput.tsx'
 import { useManagedProxy, useRefreshProxy, useSetupProxy, type ProxyInstance, type SetupBlockedReason } from './api.ts'
 import { describeProxyError } from './domainErrors.ts'
+import { useAdvancedMode } from './advancedMode.ts'
+import { ProxySettingsPanel } from './ProxySettingsPanel.tsx'
+import { CERTIFICATES_ID } from './routes/PublishDialog.tsx'
 import { CertificatesSection } from './certificates/CertificatesSection.tsx'
 import { RoutesList } from './routes/RoutesList.tsx'
 import { ProxySetupCard } from './ProxySetupCard.tsx'
@@ -48,6 +51,11 @@ function ReadOnlyNotice() {
 
 function Ready({ instance, hostId, isAdmin, canPublish }: { instance: ProxyInstance; hostId: string; isAdmin: boolean; canPublish: boolean }) {
   const { t } = useTranslation('domains')
+  const [advanced] = useAdvancedMode()
+  const { hash } = useLocation()
+  useEffect(() => {
+    if (hash === `#${CERTIFICATES_ID}`) document.getElementById(CERTIFICATES_ID)?.scrollIntoView({ block: 'start' })
+  }, [hash])
   const status = instance.deploymentStatus
   return (
     <>
@@ -66,7 +74,10 @@ function Ready({ instance, hostId, isAdmin, canPublish }: { instance: ProxyInsta
         )}
       </Card>
       <RoutesList hostId={hostId} canPublish={canPublish} />
-      <CertificatesSection hostId={hostId} isAdmin={isAdmin} />
+      {advanced && isAdmin && <ProxySettingsPanel hostId={hostId} instance={instance} />}
+      <div id={CERTIFICATES_ID} className="domains__anchor">
+        <CertificatesSection hostId={hostId} isAdmin={isAdmin} />
+      </div>
     </>
   )
 }
@@ -82,6 +93,7 @@ export function DomainsPage() {
   const [runId, setRunId] = useState<string | null>(null)
   const [runFinished, setRunFinished] = useState(false)
   const [runFailed, setRunFailed] = useState(false)
+  const [advanced, setAdvanced, advancedReady] = useAdvancedMode()
   const isAdmin = user?.role === 'ADMIN'
   const canPublish = isAdmin || user?.role === 'OPERATOR'
 
@@ -149,7 +161,11 @@ export function DomainsPage() {
 
   return (
     <section className="domains">
-      <PageHeader title={t('DomainsPage.title')} subtitle={t('DomainsPage.subtitle')} />
+      <PageHeader
+        title={t('DomainsPage.title')}
+        subtitle={t('DomainsPage.subtitle')}
+        actions={data?.instance && advancedReady ? <Switch label={t('DomainsPage.advancedMode')} checked={advanced} onChange={(e) => setAdvanced(e.target.checked)} /> : undefined}
+      />
       {body}
     </section>
   )

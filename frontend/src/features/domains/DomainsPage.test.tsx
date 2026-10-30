@@ -22,6 +22,7 @@ vi.mock('../deployments/deploy-output/DeployOutput.tsx', () => ({
 }))
 
 afterEach(() => {
+  localStorage.clear()
   cleanup()
   apiFetch.mockReset()
 })
@@ -253,5 +254,45 @@ describe('DomainsPage', () => {
     renderPage()
     expect(await screen.findByRole('alert')).toHaveTextContent(/Could not load/)
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+  })
+
+  describe('advanced mode', () => {
+    it('offers the switch once a proxy exists and reveals the proxy settings to admins only', async () => {
+      mockApi('ADMIN', { instance, setupBlockedReason: null })
+      renderPage()
+      const toggle = await screen.findByRole('switch', { name: 'Advanced mode' })
+      expect(toggle).not.toBeChecked()
+      expect(screen.queryByRole('heading', { name: 'Proxy settings' })).not.toBeInTheDocument()
+      fireEvent.click(toggle)
+      expect(await screen.findByRole('heading', { name: 'Proxy settings' })).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('switch', { name: 'Advanced mode' }))
+      await waitFor(() => expect(screen.queryByRole('heading', { name: 'Proxy settings' })).not.toBeInTheDocument())
+      // the always visible Certificates section is not part of the toggle
+      expect(screen.getByRole('heading', { name: 'Your certificates' })).toBeInTheDocument()
+    })
+
+    it('remembers the choice after a reload', async () => {
+      mockApi('ADMIN', { instance, setupBlockedReason: null })
+      renderPage()
+      fireEvent.click(await screen.findByRole('switch', { name: 'Advanced mode' }))
+      cleanup()
+      renderPage()
+      await waitFor(() => expect(screen.getByRole('switch', { name: 'Advanced mode' })).toBeChecked())
+    })
+
+    it('does not show the proxy settings to an operator', async () => {
+      mockApi('OPERATOR', { instance, setupBlockedReason: null })
+      renderPage()
+      fireEvent.click(await screen.findByRole('switch', { name: 'Advanced mode' }))
+      await screen.findByText(/No domains published yet/)
+      expect(screen.queryByRole('heading', { name: 'Proxy settings' })).not.toBeInTheDocument()
+    })
+
+    it('has no switch before a proxy is set up', async () => {
+      mockApi('ADMIN', { instance: null, setupBlockedReason: null })
+      renderPage()
+      await screen.findByText('Set up the reverse proxy')
+      expect(screen.queryByRole('switch', { name: 'Advanced mode' })).not.toBeInTheDocument()
+    })
   })
 })

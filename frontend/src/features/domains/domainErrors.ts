@@ -14,6 +14,16 @@ export function describeProxyError(error: unknown): string {
         return i18n.t('domains:errors.unsupported')
       case 'INVALID_EMAIL':
         return i18n.t('domains:errors.invalidEmail')
+      case 'DNS_CREDENTIALS_REQUIRED':
+        return i18n.t('domains:errors.dnsCredentialsRequired')
+      case 'INVALID_DNS_PROVIDER':
+        return i18n.t('domains:ProxySettingsPanel.providerInvalid')
+      case 'INVALID_DNS_CREDENTIALS':
+        return i18n.t('domains:ProxySettingsPanel.variableInvalid')
+      case 'PROXY_DEPLOYMENT_MISSING':
+        return i18n.t('domains:errors.deploymentMissing')
+      case 'DNS_IN_USE':
+        return i18n.t('domains:errors.dnsInUse')
       case 'ENCRYPTION_KEY_MISSING':
         return i18n.t('domains:errors.noEncryptionKey')
     }

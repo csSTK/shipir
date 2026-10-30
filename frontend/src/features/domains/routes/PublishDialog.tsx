@@ -1,8 +1,11 @@
 import { useId, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Badge, Button, Dialog, SearchField, Select, TextField } from '../../../shared/ui/index.ts'
 import { useManagedProxy } from '../api.ts'
+import { useAdvancedMode } from '../advancedMode.ts'
+import { AdvancedFields } from './AdvancedFields.tsx'
+import { advancedPayload, checkAdvanced, initialAdvanced, type AdvancedState } from './advancedState.ts'
 import { describeRouteError, type RouteError } from './routeErrors.ts'
 import { checkHostname } from './hostname.ts'
 import { usePublishRoute, useRouteCandidates, useUpdateRoute, type ProxyRoute, type RouteCandidate } from './api.ts'
@@ -22,6 +25,8 @@ export interface PublishDialogProps {
 }
 
 const MAX_PORT = 65535
+/** Anchor of the Certificates section on the Domains page. */
+export const CERTIFICATES_ID = 'domains-certificates'
 
 function parsePort(value: string): number | null {
   const n = Number(value)
@@ -74,6 +79,11 @@ export function PublishDialog({ hostId, containerName, port, route, onClose, onD
   const update = useUpdateRoute(hostId)
   const candidatesQuery = useRouteCandidates(hostId)
   const proxy = useManagedProxy(hostId)
+  const [advanced] = useAdvancedMode()
+  const navigate = useNavigate()
+  const [initialAdv] = useState(() => initialAdvanced(route))
+  const [adv, setAdv] = useState<AdvancedState>(initialAdv)
+  const [advErrors, setAdvErrors] = useState<ReturnType<typeof checkAdvanced>>({})
   const formId = useId()
   const lockedContainer = route?.containerName ?? containerName
 
@@ -89,7 +99,7 @@ export function PublishDialog({ hostId, containerName, port, route, onClose, onD
 
   const candidates = candidatesQuery.data
   const chosen = candidates?.find((c) => c.containerName === container)
-  const defaultMode = editing ? route.certMode : proxy.data?.instance?.defaultCertMode
+  const defaultMode = adv.certMode || proxy.data?.instance?.defaultCertMode
   const allowWildcard = defaultMode === 'ACME_DNS' || defaultMode === 'CUSTOM'
 
   const options = useMemo(() => {
@@ -136,6 +146,16 @@ export function PublishDialog({ hostId, containerName, port, route, onClose, onD
     }
   }
 
+  /** Closes the dialog and brings the Certificates section of the Domains page into view. */
+  function manageCertificates() {
+    onClose()
+    if (document.getElementById(CERTIFICATES_ID)) {
+      requestAnimationFrame(() => document.getElementById(CERTIFICATES_ID)?.scrollIntoView({ block: 'start' }))
+    } else {
+      navigate(`/environments/${hostId}/domains#${CERTIFICATES_ID}`)
+    }
+  }
+
   function submit() {
     setSubmitted(true)
     setServerError(null)
@@ -156,35 +176,38 @@ export function PublishDialog({ hostId, containerName, port, route, onClose, onD
         sentPort = parsed
       }
     }
+    const found = checkAdvanced(adv, { allowWildcard })
+    setAdvErrors(found)
+    if (Object.keys(found).length > 0) {
+      valid = false
+      // The problem sits in a hidden section: say so, otherwise the dialog would just refuse to save.
+      if (!advanced) setServerError({ field: 'form', message: t('PublishDialog.advanced.hiddenProblem') })
+    }
     if (!valid) return
+    const extra = advancedPayload(adv, initialAdv, editing)
     const callbacks = {
       onSuccess: () => {
+        // Drop the request (it may hold basic auth passwords) before anything else happens.
+        publish.reset()
+        update.reset()
         onDone?.()
         onClose()
       },
-      onError: fail,
+      onError: (error: unknown) => {
+        // The request may hold basic auth passwords; the form keeps the input for a retry.
+        publish.reset()
+        update.reset()
+        fail(error)
+      },
     }
     const name = hostname.trim()
     if (route) {
       update.mutate(
-        {
-          id: route.id,
-          hostname: name,
-          containerName: route.containerName,
-          port: sentPort,
-          aliases: route.aliases,
-          backendScheme: route.backendScheme,
-          pathPrefix: route.pathPrefix,
-          entrypoint: route.entrypoint,
-          certMode: route.certMode,
-          certificateId: route.certificateId,
-          redirectHttps: route.redirectHttps,
-          responseHeaders: route.responseHeaders,
-        },
+        { id: route.id, hostname: name, containerName: route.containerName, port: sentPort, ...extra },
         callbacks,
       )
     } else {
-      publish.mutate({ containerName: container, hostname: name, ...(sentPort !== undefined && { port: sentPort }) }, callbacks)
+      publish.mutate({ containerName: container, hostname: name, ...(sentPort !== undefined && { port: sentPort }), ...extra }, callbacks)
     }
   }
 
@@ -196,7 +219,7 @@ export function PublishDialog({ hostId, containerName, port, route, onClose, onD
       onOpenChange={(open) => !open && !busy && onClose()}
       size="lg"
       title={editing ? t('PublishDialog.editTitle') : t('PublishDialog.title')}
-      description={editing ? t('PublishDialog.editIntro') : t('PublishDialog.intro')}
+      description={editing ? (advanced ? t('PublishDialog.editIntroAdvanced') : t('PublishDialog.editIntro')) : t('PublishDialog.intro')}
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>
@@ -271,6 +294,18 @@ export function PublishDialog({ hostId, containerName, port, route, onClose, onD
         )}
         {portMode === 'input' && (
           <TextField label={t('PublishDialog.port')} help={t('PublishDialog.portNone')} error={portError} value={portValue} onChange={(e) => setPortValue(e.target.value)} inputMode="numeric" />
+        )}
+
+        {advanced && (
+          <AdvancedFields
+            hostId={hostId}
+            state={adv}
+            onChange={(patch) => setAdv((current) => ({ ...current, ...patch }))}
+            errors={advErrors}
+            proxyType={proxy.data?.instance?.type ?? null}
+            allowDefaultMode={initialAdv.certMode === ''}
+            onManageCertificates={manageCertificates}
+          />
         )}
 
         {formError && (
