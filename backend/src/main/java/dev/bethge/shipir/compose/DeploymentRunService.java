@@ -233,12 +233,18 @@ public class DeploymentRunService {
                                     "The deployment has not been deployed yet"));
             String envText = decryptEnv(version);
             alignCheckout(deployment, version);
+            DiskState before = DiskState.of(files, deployment);
             files.write(hostId, deployment.getName(), version.getYamlContent(), envText);
-            enforceRunPolicy(deployment, endpoint, username, userId != null ? userId : version.getCreatedBy(), version);
             List<String> services = null;
-            if (service != null) {
-                deploymentService.requireService(deployment, endpoint, service);
-                services = List.of(service);
+            try {
+                enforceRunPolicy(deployment, endpoint, username, userId != null ? userId : version.getCreatedBy(), version);
+                if (service != null) {
+                    deploymentService.requireService(deployment, endpoint, service);
+                    services = List.of(service);
+                }
+            } catch (RuntimeException e) {
+                restoreDisk(deployment, before, userId, username);
+                throw e;
             }
             String runId = UUID.randomUUID().toString();
             Map<String, Object> aiMarker = AiInvocationContext.active() ? aiMarker() : Map.of();
@@ -558,6 +564,7 @@ public class DeploymentRunService {
         boolean started = false;
         DeploymentVersion restoreSource = null;
         String restoreEnv = null;
+        DiskState diskBefore = DiskState.of(files, deployment);
         try {
             DeploymentVersion source = rollbackTo == null ? deploymentService.currentVersion(deployment) : versionOf(deployment, rollbackTo);
             String envText = decryptEnv(source);
@@ -604,8 +611,11 @@ public class DeploymentRunService {
             started = true;
             return new DeploymentRunResponse(runId, version.getId());
         } catch (RuntimeException e) {
+            UUID actor = SYSTEM_USER.equals(username) ? null : userId;
             if (pullGit && restoreSource != null) {
-                restoreAfterFailedPull(deployment, restoreSource, restoreEnv);
+                restoreAfterFailedPull(deployment, restoreSource, restoreEnv, actor, username);
+            } else if (!pullGit) {
+                restoreDisk(deployment, diskBefore, actor, username);
             }
             throw e;
         } finally {
@@ -618,16 +628,65 @@ public class DeploymentRunService {
     /**
      * A git redeploy that failed after the pull (policy denial, invalid compose, anything else) must not leave the
      * violating commit checked out: later runs and the config editor read the working tree. Puts the checkout and the
-     * compose file back to the deployment's current version. Best effort: a failure here is logged, the original
-     * exception still reaches the caller.
+     * compose file back to the deployment's current version. Best effort: a failure here is logged and audited
+     * ({@code DEPLOYMENT_RESTORE_FAILED}, the checkout may stay on the violating commit until the next run realigns it);
+     * the original exception still reaches the caller.
      */
-    private void restoreAfterFailedPull(Deployment deployment, DeploymentVersion source, String envText) {
+    private void restoreAfterFailedPull(Deployment deployment, DeploymentVersion source, String envText, UUID userId,
+                                        String username) {
         try {
             alignCheckout(deployment, source);
             files.write(deployment.getHostId(), deployment.getName(), source.getYamlContent(), envText);
         } catch (RuntimeException e) {
-            log.error("Restoring the checkout of deployment {} after a failed git redeploy failed: {}",
-                    deployment.getId(), e.toString());
+            reportRestoreFailure(deployment, userId, username, "GIT_REDEPLOY", e);
+        }
+    }
+
+    /** compose.yaml and .env as they were on disk before a run wrote the files of the version it is about to gate. */
+    record DiskState(String yaml, String env) {
+        /** The .env holds secrets: the generated toString would print it. */
+        @Override
+        public String toString() {
+            return "DiskState[yaml=" + (yaml != null) + ", env=" + (env != null ? "<redacted>" : "absent") + "]";
+        }
+
+        static DiskState of(ComposeFileRepository files, Deployment deployment) {
+            try {
+                return new DiskState(files.readCompose(deployment.getHostId(), deployment.getName()).orElse(null),
+                        files.readEnv(deployment.getHostId(), deployment.getName()).orElse(null));
+            } catch (RuntimeException e) {
+                return new DiskState(null, null); // unreadable: nothing to put back
+            }
+        }
+    }
+
+    /**
+     * A run that was refused (policy gate, invalid file) must not leave the refused compose file or .env on disk: the
+     * files are written before the gate because the gate reads them from disk. Best effort like
+     * {@link #restoreAfterFailedPull}; a failure is audited. Nothing to restore when there was no compose file before.
+     */
+    private void restoreDisk(Deployment deployment, DiskState before, UUID userId, String username) {
+        if (before.yaml() == null) {
+            log.warn("Deployment {} was not restored after a refused run: no readable compose file was captured before it",
+                    deployment.getId());
+            return;
+        }
+        try {
+            files.write(deployment.getHostId(), deployment.getName(), before.yaml(), before.env());
+        } catch (RuntimeException e) {
+            reportRestoreFailure(deployment, userId, username, "DISK_RESTORE", e);
+        }
+    }
+
+    private void reportRestoreFailure(Deployment deployment, UUID userId, String username, String phase, RuntimeException e) {
+        log.error("Restoring deployment {} after a refused run failed ({}): {}", deployment.getId(), phase, e.toString());
+        try {
+            audit.record(new AuditRecord(userId, username, "DEPLOYMENT_RESTORE_FAILED", AuditLogEntry.Outcome.FAILURE,
+                    "DEPLOYMENT", deployment.getId().toString(),
+                    Map.of("phase", phase, "error", e.getClass().getSimpleName())));
+        } catch (RuntimeException auditError) {
+            log.warn("Could not write audit entry DEPLOYMENT_RESTORE_FAILED for deployment {}: {}", deployment.getId(),
+                    auditError.toString());
         }
     }
 
