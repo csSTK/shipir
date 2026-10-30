@@ -7,6 +7,7 @@ import { ChatDockProvider } from '../../features/ai-chat/ChatDockProvider.tsx'
 import type { CurrentUser } from '../../features/auth/index.ts'
 import { IconButton, springSmooth } from '../../shared/ui/index.ts'
 import { CommandPalette } from './CommandPalette.tsx'
+import { ErrorBoundary } from './ErrorBoundary.tsx'
 import { EnvironmentSwitcher } from './EnvironmentSwitcher.tsx'
 import { Sidebar } from './Sidebar.tsx'
 import { UserMenu } from './UserMenu.tsx'
@@ -75,7 +76,9 @@ export function AppShell({ user, onSignOut, signingOut, children }: Props) {
         <div className="shell__body">
           {!narrow && <Sidebar role={user.role} onNavigate={() => setNavOpen(false)} />}
           <main className="shell__content">
-            <div className="shell__page">{children}</div>
+            <div className="shell__page">
+              <ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary>
+            </div>
           </main>
         </div>
         <AnimatePresence>

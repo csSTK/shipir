@@ -24,5 +24,9 @@
   "series.last24Hours": "last 24 hours",
   "series.last7Days": "last 7 days",
   "series.last30Days": "last 30 days",
-  "TimeSeriesChart.summary": "{{title}}, {{range}}: min {{min}}, avg {{avg}}, max {{max}}"
+  "TimeSeriesChart.summary": "{{title}}, {{range}}: min {{min}}, avg {{avg}}, max {{max}}",
+  "ErrorBoundary.title": "Something went wrong",
+  "ErrorBoundary.description": "This page could not be displayed. Your data is safe. Try again or go back to the start page.",
+  "ErrorBoundary.retry": "Try again",
+  "ErrorBoundary.home": "Back to start"
 }

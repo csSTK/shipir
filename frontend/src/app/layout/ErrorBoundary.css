@@ -1,0 +1,14 @@
+.error-boundary {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-8) var(--space-4);
+}
+.error-boundary__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+}
+.error-boundary__content {
+  display: contents;
+}

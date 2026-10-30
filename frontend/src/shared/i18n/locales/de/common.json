@@ -24,5 +24,9 @@
   "series.last24Hours": "letzte 24 Stunden",
   "series.last7Days": "letzte 7 Tage",
   "series.last30Days": "letzte 30 Tage",
-  "TimeSeriesChart.summary": "{{title}}, {{range}}: min. {{min}}, Ø {{avg}}, max. {{max}}"
+  "TimeSeriesChart.summary": "{{title}}, {{range}}: min. {{min}}, Ø {{avg}}, max. {{max}}",
+  "ErrorBoundary.title": "Etwas ist schiefgelaufen",
+  "ErrorBoundary.description": "Diese Seite konnte nicht angezeigt werden. Deine Daten sind sicher. Versuche es erneut oder geh zurück zur Startseite.",
+  "ErrorBoundary.retry": "Erneut versuchen",
+  "ErrorBoundary.home": "Zurück zum Start"
 }
