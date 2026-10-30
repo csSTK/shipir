@@ -1,6 +1,6 @@
 .cf-body {
   display: grid;
-  grid-template-columns: minmax(10rem, 14rem) 1fr;
+  grid-template-columns: minmax(10rem, 14rem) minmax(0, 1fr);
   gap: var(--space-4);
 }
 .cf-tree {
@@ -102,7 +102,7 @@
 }
 @media (max-width: 700px) {
   .cf-body {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (prefers-reduced-motion: reduce) {

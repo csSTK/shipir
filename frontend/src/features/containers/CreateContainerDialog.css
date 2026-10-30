@@ -18,12 +18,12 @@
 }
 .ccd__row {
   display: grid;
-  grid-template-columns: 1fr 1fr auto auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
   gap: var(--space-2);
   align-items: center;
 }
 .ccd__row--mount {
-  grid-template-columns: auto 1fr 1fr auto auto;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto auto;
 }
 .ccd__row-error {
   grid-column: 1 / -1;
@@ -32,6 +32,6 @@
 @media (max-width: 600px) {
   .ccd__row,
   .ccd__row--mount {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
