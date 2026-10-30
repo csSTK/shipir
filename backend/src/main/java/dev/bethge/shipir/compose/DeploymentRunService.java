@@ -22,6 +22,7 @@ import dev.bethge.shipir.compose.execution.ComposeExecutionService;
 import dev.bethge.shipir.compose.execution.ComposeOptions;
 import dev.bethge.shipir.compose.execution.ComposeProcessResult;
 import dev.bethge.shipir.compose.file.ComposeFileRepository;
+import dev.bethge.shipir.compose.file.ComposeGraphHasher;
 import dev.bethge.shipir.compose.validation.ComposeValidationService;
 import dev.bethge.shipir.compose.validation.ValidationResult;
 import dev.bethge.shipir.git.GitCheckout;
@@ -233,8 +234,7 @@ public class DeploymentRunService {
             String envText = decryptEnv(version);
             alignCheckout(deployment, version);
             files.write(hostId, deployment.getName(), version.getYamlContent(), envText);
-            deploymentService.enforcePolicy(hostId, deployment.getName(), endpoint, deploymentService.composeFileOf(deployment),
-                    unrestricted(username, userId != null ? userId : version.getCreatedBy(), deployment));
+            enforceRunPolicy(deployment, endpoint, username, userId != null ? userId : version.getCreatedBy(), version);
             List<String> services = null;
             if (service != null) {
                 deploymentService.requireService(deployment, endpoint, service);
@@ -413,9 +413,7 @@ public class DeploymentRunService {
                 List<DeploymentVersion> history = versions.findByDeploymentIdOrderByCreatedAtDesc(deployment.getId());
                 DeploymentVersion current = history.stream().filter(DeploymentVersion::isDeployed).findFirst()
                         .or(() -> history.stream().findFirst()).orElse(null);
-                deploymentService.enforcePolicy(deployment.getHostId(), deployment.getName(), endpoint,
-                        deploymentService.composeFileOf(deployment),
-                        unrestricted(SYSTEM_USER, current != null ? current.getCreatedBy() : null, deployment));
+                enforceRunPolicy(deployment, endpoint, SYSTEM_USER, current != null ? current.getCreatedBy() : null, current);
                 Path override = files.writeRollbackOverride(deployment.getHostId(), deployment.getName(), yaml);
                 ComposeProcessResult result = deploymentService.runCompose(deployment, ComposeCommand.UP, endpoint,
                         line -> { }, override, null);
@@ -478,11 +476,15 @@ public class DeploymentRunService {
      * deployed version's author, or the deployment's creator for freshly pulled Git content. Unknown or disabled user: no.
      *
      * <p>A system run additionally needs the whole compose graph to be what that ADMIN approved. Shipir stores only
-     * {@code compose.yaml} and {@code .env} of a version; any other file in the deployment directory (an
-     * {@code include}/{@code extends}/{@code env_file} target an OPERATOR can edit with the config editor, or a Git
-     * checkout) is not covered by the ADMIN's approval, so the run is evaluated with the restricted profile.
+     * {@code compose.yaml} and {@code .env} of a version, so an ADMIN's deploy also records a hash of the deployment directory
+     * ({@link ComposeGraphHasher}: include/extends/env_file targets, Git checkout). The system run stays unrestricted only
+     * while the directory still hashes to it; an edited aux file or a new commit (an OPERATOR can change both) makes it use
+     * the restricted profile. Versions without a hash (older, or not deployed by an ADMIN) keep the earlier rule: only a FILE
+     * deployment whose directory holds nothing but Shipir's own files.
+     *
+     * @param approved the version whose graph the run executes (its hash is the ADMIN's approval); may be null
      */
-    private boolean unrestricted(String username, UUID authorId, Deployment deployment) {
+    private boolean unrestricted(String username, UUID authorId, Deployment deployment, DeploymentVersion approved) {
         if (!SYSTEM_USER.equals(username)) {
             var caller = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
             // an API token never carries ADMIN power, whatever role its user has
@@ -491,7 +493,40 @@ public class DeploymentRunService {
                     .orElse(false);
         }
         return authorId != null && users.findById(authorId).filter(u -> !u.isDisabled()).map(u -> u.getRole() == Role.ADMIN)
-                .orElse(false) && graphIsOnlyApprovedFiles(deployment);
+                .orElse(false) && graphIsApproved(deployment, approved);
+    }
+
+    private boolean graphIsApproved(Deployment deployment, DeploymentVersion approved) {
+        if (approved != null && approved.getGraphHash() != null) {
+            return ComposeGraphHasher.hash(files.deploymentDir(deployment.getHostId(), deployment.getName()))
+                    .filter(approved.getGraphHash()::equals).isPresent();
+        }
+        return graphIsOnlyApprovedFiles(deployment);
+    }
+
+    private String graphHashOf(Deployment deployment) {
+        return ComposeGraphHasher.hash(files.deploymentDir(deployment.getHostId(), deployment.getName())).orElse(null);
+    }
+
+    /**
+     * Policy gate for a run on the compose file on disk; returns whether the run was unrestricted (ADMIN-approved). A refused
+     * system run says why: nobody is signed in to be asked, the notification text is all the ADMIN sees.
+     */
+    private boolean enforceRunPolicy(Deployment deployment, DockerEndpoint endpoint, String username, UUID authorId,
+                                     DeploymentVersion approved) {
+        boolean unrestricted = unrestricted(username, authorId, deployment, approved);
+        try {
+            deploymentService.enforcePolicy(deployment.getHostId(), deployment.getName(), endpoint,
+                    deploymentService.composeFileOf(deployment), unrestricted);
+        } catch (DeploymentException e) {
+            if (SYSTEM_USER.equals(username) && "ADMIN_REQUIRED".equals(e.code())) {
+                throw new DeploymentException(e.status(), e.code(), e.getMessage()
+                        + ". Automatic runs keep ADMIN privileges only while the compose files are unchanged since an ADMIN "
+                        + "deployed them; an ADMIN must deploy again to approve the current files", e.details());
+            }
+            throw e;
+        }
+        return unrestricted;
     }
 
     /** True when the deployment directory holds nothing but the files written from a stored version (FILE deployments only). */
@@ -528,7 +563,8 @@ public class DeploymentRunService {
             String envText = decryptEnv(source);
             restoreSource = source;
             restoreEnv = envText;
-            GitCheckout checkout = pullGit ? pull(deployment, endpoint, envText, unrestricted(username, userId, deployment)) : null;
+            GitCheckout checkout = pullGit ? pull(deployment, endpoint, envText,
+                    () -> unrestricted(username, userId, deployment, source)) : null;
             if (!pullGit) {
                 alignCheckout(deployment, source);
             }
@@ -537,12 +573,15 @@ public class DeploymentRunService {
                     : pullGit ? VersionSource.GIT : source.getSource();
             String commitSha = checkout == null ? source.getCommitSha() : checkout.commitSha();
             files.write(hostId, deployment.getName(), yaml, envText);
-            deploymentService.enforcePolicy(hostId, deployment.getName(), endpoint, deploymentService.composeFileOf(deployment),
-                    unrestricted(username, userId, deployment));
+            // hashed before the (slow) policy check, so an edit made meanwhile leaves a stale hash that fails safe next run
+            String graphHashBeforeGate = graphHashOf(deployment);
+            boolean approved = enforceRunPolicy(deployment, endpoint, username, userId, source);
+            String graphHash = approved ? graphHashBeforeGate : null;
             DeploymentVersion version = tx.execute(status -> {
                 DeploymentVersion v = new DeploymentVersion(deployment.getId(), yaml, source.getEnvCiphertext(), versionSource,
                         userId, clock.instant());
                 v.setCommitSha(commitSha);
+                v.setGraphHash(graphHash);
                 v = versions.save(v);
                 v.markDeployed(clock.instant());
                 versions.save(v);
@@ -605,7 +644,8 @@ public class DeploymentRunService {
     }
 
     /** Fetches the ref into the checkout and validates the compose file; the previous file is restored when invalid. */
-    private GitCheckout pull(Deployment deployment, DockerEndpoint endpoint, String envText, boolean unrestricted) {
+    private GitCheckout pull(Deployment deployment, DockerEndpoint endpoint, String envText,
+                             java.util.function.BooleanSupplier unrestricted) {
         if (deployment.getSourceType() != DeploymentSource.GIT) {
             throw new DeploymentException(HttpStatus.BAD_REQUEST, "NOT_A_GIT_DEPLOYMENT", "This deployment is not sourced from Git");
         }
@@ -617,7 +657,8 @@ public class DeploymentRunService {
         files.write(hostId, name, checkout.composeYaml(), envText);
         ValidationResult result;
         try {
-            deploymentService.enforceFileAccess(hostId, name, deploymentService.composeFileOf(deployment), unrestricted);
+            deploymentService.enforceFileAccess(hostId, name, deploymentService.composeFileOf(deployment),
+                    unrestricted.getAsBoolean());
         } catch (RuntimeException e) {
             restore(hostId, name, previousYaml, envText);
             throw e;

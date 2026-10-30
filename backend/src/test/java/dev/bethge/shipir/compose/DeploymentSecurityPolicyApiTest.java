@@ -1,5 +1,6 @@
 package dev.bethge.shipir.compose;
 
+import dev.bethge.shipir.compose.file.ComposeGraphHasher;
 import com.jayway.jsonpath.JsonPath;
 import dev.bethge.shipir.compose.execution.ComposeCommand;
 import org.junit.jupiter.api.Test;
@@ -227,5 +228,116 @@ class DeploymentSecurityPolicyApiTest extends DeploymentTestBase {
         assertThatThrownBy(() -> runs.autoPullUpdate(id))
                 .isInstanceOfSatisfying(DeploymentException.class, e -> assertThat(e.code()).isEqualTo("ADMIN_REQUIRED"));
         assertThat(commands).doesNotContain(ComposeCommand.PULL, ComposeCommand.UP);
+    }
+
+    /** Deploys as ADMIN (records the graph hash) and waits for the worker to finish, so the lock is free again. */
+    private UUID adminDeployed(String name, String yaml) throws Exception {
+        Login admin = login("admin");
+        UUID id = create(admin, name, yaml);
+        mvc.perform(admin.write(post(url() + "/" + id + "/deploy"))).andExpect(status().isAccepted());
+        await().atMost(10, java.util.concurrent.TimeUnit.SECONDS).untilAsserted(() -> assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM audit_log WHERE action = 'DEPLOYMENT_DEPLOY_RESULT' AND target_id = ?",
+                Integer.class, id.toString())).isEqualTo(1));
+        commands.clear();
+        return id;
+    }
+
+    @Test
+    void adminDeployRecordsTheGraphHashOfTheDirectory() throws Exception {
+        UUID id = adminDeployed("hashed", PRIVILEGED);
+        String stored = jdbc.queryForObject("SELECT graph_hash FROM deployment_versions WHERE deployment_id = ? AND deployed_at IS NOT NULL", String.class, id);
+        assertThat(stored).matches("[0-9a-f]{64}")
+                .isEqualTo(ComposeGraphHasher.hash(files.deploymentDir(hostId, "hashed")).orElseThrow());
+    }
+
+    @Test
+    void operatorDeployDoesNotRecordAGraphHash() throws Exception {
+        Login op = login("operator");
+        UUID id = create(op, "ophash", YAML);
+        mvc.perform(op.write(post(url() + "/" + id + "/deploy"))).andExpect(status().isAccepted());
+        await().atMost(10, java.util.concurrent.TimeUnit.SECONDS).untilAsserted(() -> assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM audit_log WHERE action = 'DEPLOYMENT_DEPLOY_RESULT'", Integer.class)).isEqualTo(1));
+        assertThat(jdbc.queryForObject("SELECT graph_hash FROM deployment_versions WHERE deployment_id = ? AND deployed_at IS NOT NULL", String.class, id)).isNull();
+    }
+
+    @Test
+    void systemRunStaysUnrestrictedForAnAuxFileThatTheAdminDeployedWith() throws Exception {
+        Login admin = login("admin");
+        UUID id = create(admin, "sysapproved", PRIVILEGED);
+        addAuxFile("sysapproved"); // present when the ADMIN deploys, so it is part of what they approved
+        mvc.perform(admin.write(post(url() + "/" + id + "/deploy"))).andExpect(status().isAccepted());
+        await().atMost(10, java.util.concurrent.TimeUnit.SECONDS).untilAsserted(() -> assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM audit_log WHERE action = 'DEPLOYMENT_DEPLOY_RESULT'", Integer.class)).isEqualTo(1));
+        assertThat(runs.webhookTrigger(id).runId()).isNotBlank();
+    }
+
+    @Test
+    void systemRunBecomesRestrictedWhenAnOperatorEditsAnApprovedAuxFile() throws Exception {
+        Login admin = login("admin");
+        UUID id = create(admin, "sysedit", PRIVILEGED);
+        addAuxFile("sysedit");
+        mvc.perform(admin.write(post(url() + "/" + id + "/deploy"))).andExpect(status().isAccepted());
+        await().atMost(10, java.util.concurrent.TimeUnit.SECONDS).untilAsserted(() -> assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM audit_log WHERE action = 'DEPLOYMENT_DEPLOY_RESULT'", Integer.class)).isEqualTo(1));
+        commands.clear();
+        // what the config editor does for an OPERATOR: change the content of an included file
+        Files.writeString(files.deploymentDir(hostId, "sysedit").resolve("extra.yaml"), "services: {y: {image: evil}}\n");
+        assertThatThrownBy(() -> runs.webhookTrigger(id))
+                .isInstanceOfSatisfying(DeploymentException.class, e -> {
+                    assertThat(e.code()).isEqualTo("ADMIN_REQUIRED");
+                    assertThat(e.getMessage()).contains("ADMIN must deploy again");
+                });
+        assertThat(commands).doesNotContain(ComposeCommand.PULL, ComposeCommand.UP);
+    }
+
+    @Test
+    void systemRunBecomesRestrictedWhenAnAuxFileIsAddedAfterTheAdminDeploy() throws Exception {
+        UUID id = adminDeployed("sysnew", PRIVILEGED);
+        assertThat(runs.webhookTrigger(id).runId()).isNotBlank(); // unchanged graph: still allowed
+        await().atMost(10, java.util.concurrent.TimeUnit.SECONDS).untilAsserted(() -> assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM audit_log WHERE action = 'DEPLOYMENT_PULL_UPDATE_RESULT'", Integer.class)).isEqualTo(1));
+        commands.clear();
+        addAuxFile("sysnew");
+        assertThatThrownBy(() -> runs.webhookTrigger(id))
+                .isInstanceOfSatisfying(DeploymentException.class, e -> assertThat(e.code()).isEqualTo("ADMIN_REQUIRED"));
+        assertThat(commands).doesNotContain(ComposeCommand.PULL, ComposeCommand.UP);
+    }
+
+    private UUID approvedGitCheckout(String name) throws Exception {
+        UUID id = deployedAdminPrivileged(name);
+        jdbc.update("UPDATE deployments SET source_type = 'GIT', git_repo_url = 'https://example.com/r.git', "
+                + "git_ref = 'main', git_compose_path = 'compose.yaml' WHERE id = ?", id);
+        Files.createDirectories(files.repoDir(hostId, name));
+        Files.writeString(files.repoDir(hostId, name).resolve("compose.yaml"), PRIVILEGED);
+        jdbc.update("UPDATE deployment_versions SET graph_hash = ? WHERE deployment_id = ?",
+                ComposeGraphHasher.hash(files.deploymentDir(hostId, name)).orElseThrow(), id);
+        commands.clear();
+        return id;
+    }
+
+    @Test
+    void gitCheckoutApprovedByHashStaysUnrestrictedUntilItChanges() throws Exception {
+        UUID id = approvedGitCheckout("gitok");
+        Map<String, String> pins = Map.of("x", "alpine@sha256:" + "a".repeat(64));
+        assertThat(runs.rollbackImages(id, pins)).isTrue();
+        // a new commit lands in the checkout
+        Files.writeString(files.repoDir(hostId, "gitok").resolve("compose.yaml"), PRIVILEGED + "# new commit\n");
+        commands.clear();
+        assertThat(runs.rollbackImages(id, pins)).isFalse();
+        assertThat(commands).doesNotContain(ComposeCommand.UP);
+    }
+
+    @Test
+    void gitCheckoutWithoutAHashStaysRestricted() throws Exception {
+        UUID id = approvedGitCheckout("gitnohash");
+        jdbc.update("UPDATE deployment_versions SET graph_hash = NULL WHERE deployment_id = ?", id);
+        assertThat(runs.rollbackImages(id, Map.of("x", "alpine@sha256:" + "a".repeat(64)))).isFalse();
+    }
+
+    @Test
+    void aHashOfAnotherTreeDoesNotApproveThisOne() throws Exception {
+        UUID id = approvedGitCheckout("gitwrong");
+        jdbc.update("UPDATE deployment_versions SET graph_hash = ? WHERE deployment_id = ?", "0".repeat(64), id);
+        assertThat(runs.rollbackImages(id, Map.of("x", "alpine@sha256:" + "a".repeat(64)))).isFalse();
     }
 }

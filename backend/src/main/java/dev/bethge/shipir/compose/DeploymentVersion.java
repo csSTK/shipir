@@ -43,6 +43,10 @@ public class DeploymentVersion {
     @Column(name = "deploy_succeeded_at")
     private Instant deploySucceededAt;
 
+    /** SHA-256 of the compose graph on disk when an ADMIN deployed this version; null = not ADMIN-approved. */
+    @Column(name = "graph_hash", length = 64)
+    private String graphHash;
+
     @Column(name = "created_by", nullable = false, updatable = false)
     private UUID createdBy;
 
@@ -78,6 +82,10 @@ public class DeploymentVersion {
 
     /** True once a deploy or rollback used this version; its content must not change any more. */
     public boolean isDeployed() { return deployedAt != null; }
+
+    public String getGraphHash() { return graphHash; }
+
+    public void setGraphHash(String graphHash) { this.graphHash = graphHash; }
 
     public void setCommitSha(String commitSha) { this.commitSha = commitSha; }
 

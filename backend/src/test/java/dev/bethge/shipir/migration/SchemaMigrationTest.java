@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To38Successfully() {
+    void flywayAppliedVersions1To39Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39");
     }
 
     @Test
@@ -1501,6 +1501,20 @@ class SchemaMigrationTest {
                 """, deployment, user))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("deployment_versions_source_check");
+    }
+
+    @Test
+    void deploymentVersionGraphHashIsNullByDefaultAndMustBeSha256Hex() {
+        UUID user = insertUser("alice");
+        UUID deployment = insertDeployment(insertHost(user), user, "web");
+        insertVersion(deployment, user);
+        assertThat(jdbc.queryForObject("SELECT graph_hash FROM deployment_versions WHERE deployment_id = ?", String.class,
+                deployment)).isNull();
+        jdbc.update("UPDATE deployment_versions SET graph_hash = ? WHERE deployment_id = ?", "a".repeat(64), deployment);
+        assertThatThrownBy(() -> jdbc.update("UPDATE deployment_versions SET graph_hash = 'nothex' WHERE deployment_id = ?",
+                deployment))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("deployment_versions_graph_hash_check");
     }
 
     @Test
