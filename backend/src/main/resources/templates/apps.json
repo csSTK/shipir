@@ -759,6 +759,10 @@
         {
           "name": "filebrowser",
           "image": "filebrowser/filebrowser:v2.31.2",
+          "command": [
+            "--database",
+            "/database/filebrowser.db"
+          ],
           "ports": [
             {
               "host": 8089,

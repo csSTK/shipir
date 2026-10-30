@@ -74,6 +74,18 @@ class TemplateCatalogTest {
     }
 
     @Test
+    void fileBrowserDatabaseLivesInsideThePersistedVolume() {
+        // The image default is /database.db (verified with `config cat` on v2.31.2), which is outside any mount.
+        ServiceSpec fb = services(bundled().all().stream().filter(t -> t.id().equals("filebrowser")).findFirst().orElseThrow())
+                .get(0);
+        assertThat(fb.command()).containsExactly("--database", "/database/filebrowser.db");
+        assertThat(fb.volumes()).anySatisfy(v -> {
+            assertThat(v.source()).isEqualTo("filebrowser-db");
+            assertThat(v.target()).isEqualTo("/database");
+        });
+    }
+
+    @Test
     void bundledImagesArePinnedAndNeverLatest() {
         for (AppTemplate t : bundled().all()) {
             for (ServiceSpec s : services(t)) {
