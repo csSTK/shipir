@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V39 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V40 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,10 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To39Successfully() {
+    void flywayAppliedVersions1To40Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40");
     }
 
     @Test
@@ -2751,6 +2751,36 @@ class SchemaMigrationTest {
         assertThatThrownBy(() -> jdbc.update("DELETE FROM proxy_certificates WHERE id = ?", certificate))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("proxy_routes_certificate_id_fkey");
+    }
+
+    @Test
+    void proxyCustomConfigVersionsStoreContentAndDefaultTimestamp() {
+        UUID host = insertHost(insertUser("alice"));
+        insertProxyInstance(host, "TRAEFIK", "ACME_HTTP", null);
+        UUID instance = jdbc.queryForObject("SELECT id FROM proxy_instances WHERE host_id = ?", UUID.class, host);
+        jdbc.update("INSERT INTO proxy_custom_config_versions (proxy_instance_id, content, created_by) VALUES (?, 'http: {}', 'alice')",
+                instance);
+        assertThat(jdbc.queryForObject("SELECT content FROM proxy_custom_config_versions", String.class)).isEqualTo("http: {}");
+        assertThat(jdbc.queryForObject("SELECT created_at FROM proxy_custom_config_versions", Timestamp.class)).isNotNull();
+    }
+
+    @Test
+    void proxyCustomConfigVersionsRequireAnExistingProxy() {
+        assertThatThrownBy(() -> jdbc.update(
+                "INSERT INTO proxy_custom_config_versions (proxy_instance_id, content) VALUES (gen_random_uuid(), '')"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("proxy_custom_config_versions_proxy_instance_id_fkey");
+    }
+
+    @Test
+    void deletingAProxyDeletesItsCustomConfigVersions() {
+        UUID host = insertHost(insertUser("alice"));
+        insertProxyInstance(host, "CADDY", "INTERNAL", null);
+        UUID instance = jdbc.queryForObject("SELECT id FROM proxy_instances WHERE host_id = ?", UUID.class, host);
+        jdbc.update("INSERT INTO proxy_custom_config_versions (proxy_instance_id, content) VALUES (?, 'a'), (?, 'b')",
+                instance, instance);
+        jdbc.update("DELETE FROM docker_hosts WHERE id = ?", host);
+        assertThat(count("proxy_custom_config_versions")).isZero();
     }
 
     private void insertProxyInstance(UUID host, String type, String certMode, UUID deployment) {

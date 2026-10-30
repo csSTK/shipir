@@ -99,6 +99,13 @@ public class ProxyInstance {
         touch();
     }
 
+    /** Puts back a custom config (and its timestamp) after a change that could not be applied. */
+    public void revertCustomConfig(String customConfig, Instant updatedAt) {
+        this.customConfig = customConfig == null ? "" : customConfig;
+        this.customConfigUpdatedAt = updatedAt;
+        touch();
+    }
+
     private void touch() {
         this.updatedAt = Instant.now();
     }
