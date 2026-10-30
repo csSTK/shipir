@@ -227,6 +227,7 @@
   "routeErrors.advanced.CERT_REQUIRED": "Wähle das Zertifikat aus.",
   "routeErrors.advanced.CERT_NOT_FOUND": "Dieses Zertifikat gibt es nicht mehr. Lade die Seite neu.",
   "routeErrors.advanced.CERT_DOES_NOT_COVER_HOST": "Das gewählte Zertifikat deckt nicht alle Domainnamen dieser Route ab.",
+  "routeErrors.advanced.DNS_CREDENTIALS_REQUIRED": "Hinterlege zuerst DNS-Zugangsdaten am Proxy, um die DNS-Challenge zu nutzen. Öffne dazu die Proxy-Einstellungen auf der Domains-Seite.",
   "routeErrors.advanced.UNSUPPORTED_FOR_PROXY": "Eine gewählte Option wird von diesem Proxy nicht unterstützt. Schalte den erweiterten Modus ein und prüfe Entrypoint und Zertifikatstyp.",
   "routeErrors.advanced.INVALID_BASIC_AUTH": "Die Benutzer für den Passwortschutz sind ungültig.",
   "routeErrors.advanced.TOO_MANY_USERS": "Eine Domain kann höchstens 20 Benutzer haben.",

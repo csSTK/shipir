@@ -16,6 +16,8 @@ interface Props {
   proxyType: ProxyType | null
   /** Offer "proxy default" as certificate choice (new routes). */
   allowDefaultMode: boolean
+  /** The proxy has a DNS provider and stored credentials, so the DNS challenge can issue certificates. */
+  dnsReady: boolean
   onManageCertificates: () => void
 }
 
@@ -46,11 +48,13 @@ function Problem({ id, text }: { id?: string; text: string | null | undefined })
  * Controlled by the dialog, so hiding it (Advanced mode off) never loses what was typed. Passwords are write-only:
  * stored users come with an empty password field.
  */
-export function AdvancedFields({ hostId, state, onChange, errors, proxyType, allowDefaultMode, onManageCertificates }: Props) {
+export function AdvancedFields({ hostId, state, onChange, errors, proxyType, allowDefaultMode, dnsReady, onManageCertificates }: Props) {
   const { t } = useTranslation('domains')
   const certificates = useCertificates(hostId)
   const problem = (field: keyof AdvancedErrors) => (errors[field] ? t(`PublishDialog.advanced.problem.${errors[field]}`) : null)
-  const modes: CertMode[] = proxyType === 'TRAEFIK' ? ['ACME_HTTP', 'ACME_DNS', 'INTERNAL', 'CUSTOM'] : ['ACME_HTTP', 'INTERNAL', 'CUSTOM']
+  // Without DNS credentials the server rejects the DNS challenge; a route that already uses it keeps the option visible.
+  const offerDns = proxyType === 'TRAEFIK' && (dnsReady || state.certMode === 'ACME_DNS')
+  const modes: CertMode[] = offerDns ? ['ACME_HTTP', 'ACME_DNS', 'INTERNAL', 'CUSTOM'] : ['ACME_HTTP', 'INTERNAL', 'CUSTOM']
 
   return (
     <div className="advanced" aria-label={t('PublishDialog.advanced.title')} role="group">

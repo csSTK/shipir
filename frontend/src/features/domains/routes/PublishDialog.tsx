@@ -304,6 +304,7 @@ export function PublishDialog({ hostId, containerName, port, route, onClose, onD
             errors={advErrors}
             proxyType={proxy.data?.instance?.type ?? null}
             allowDefaultMode={initialAdv.certMode === ''}
+            dnsReady={!!proxy.data?.instance?.dnsProvider && proxy.data.instance.dnsCredentialsHint !== null}
             onManageCertificates={manageCertificates}
           />
         )}

@@ -317,6 +317,11 @@ public class ProxyRouteService {
                 .aliases(r.aliases() == null ? List.of() : r.aliases()).containerName(container).targetPort(port)
                 .backendScheme(scheme(r)).pathPrefix(r.pathPrefix()).entrypoint(r.entrypoint()).certMode(mode)
                 .basicAuthUsers(hashes).responseHeaders(r.responseHeaders()).build(), takenNames, certificate);
+        if (mode == CertMode.ACME_DNS && (instance.getDnsProvider() == null
+                || instance.getDnsCredentialsEncrypted() == null)) {
+            throw new ProxyException(HttpStatus.BAD_REQUEST, "DNS_CREDENTIALS_REQUIRED",
+                    "Set DNS credentials on the proxy first to use the DNS challenge");
+        }
     }
 
     private Set<String> otherNames(UUID hostId, UUID excludeRouteId) {

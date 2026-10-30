@@ -386,7 +386,7 @@ class ProxyApiTest {
         assertThat(output.getAll()).doesNotContain(SECRET);
         assertThat(jdbc.queryForObject("SELECT string_agg(coalesce(details::text, ''), ' ') FROM audit_log", String.class))
                 .doesNotContain(SECRET);
-        assertThat(jdbc.queryForObject("SELECT convert_from(dns_credentials_encrypted, 'LATIN1') FROM proxy_instances",
+        assertThat(jdbc.queryForObject("SELECT encode(dns_credentials_encrypted, 'escape') FROM proxy_instances",
                 String.class)).doesNotContain(SECRET);
         assertThat(jdbc.queryForObject("SELECT dns_credentials_hint FROM proxy_instances", String.class))
                 .doesNotContain(SECRET);

@@ -43,6 +43,7 @@ export function describeRouteError(error: unknown): RouteError {
       case 'INVALID_PATH_PREFIX':
       case 'INVALID_ENTRYPOINT':
       case 'CERT_REQUIRED':
+      case 'DNS_CREDENTIALS_REQUIRED':
       case 'CERT_NOT_FOUND':
       case 'CERT_DOES_NOT_COVER_HOST':
       case 'UNSUPPORTED_FOR_PROXY':

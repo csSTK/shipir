@@ -315,6 +315,42 @@ class ProxyRouteApiTest {
     }
 
     @Test
+    void anAcmeDnsRouteNeedsDnsCredentialsOnTheProxyForPublishAndUpdate() throws Exception {
+        Login admin = login("admin");
+        mvc.perform(admin.write(post(url())).contentType(APPLICATION_JSON)
+                        .content(body("dns.example.com", "shop-web-1", ",\"certMode\":\"ACME_DNS\"")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("DNS_CREDENTIALS_REQUIRED"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM proxy_routes", Integer.class)).isZero();
+        verify(sync, never()).sync(any());
+
+        UUID id = routeFor(admin);
+        mvc.perform(admin.write(put(url() + "/" + id)).contentType(APPLICATION_JSON)
+                        .content(body("shop.example.com", "shop-web-1", ",\"certMode\":\"ACME_DNS\"")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("DNS_CREDENTIALS_REQUIRED"));
+    }
+
+    @Test
+    void anInheritedAcmeDnsDefaultWithoutCredentialsIsRejectedToo() throws Exception {
+        jdbc.update("UPDATE proxy_instances SET default_cert_mode = 'ACME_DNS'");
+        mvc.perform(login("admin").write(post(url())).contentType(APPLICATION_JSON)
+                        .content(body("dns.example.com", "shop-web-1", "")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("DNS_CREDENTIALS_REQUIRED"));
+    }
+
+    @Test
+    void anAcmeDnsRouteIsAcceptedWhenTheProxyHasDnsCredentials() throws Exception {
+        jdbc.update("UPDATE proxy_instances SET dns_provider = 'cloudflare', dns_credentials_encrypted = '\\x0102', "
+                + "dns_credentials_hint = 'xx'");
+        mvc.perform(login("admin").write(post(url())).contentType(APPLICATION_JSON)
+                        .content(body("dns.example.com", "shop-web-1", ",\"certMode\":\"ACME_DNS\"")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.certMode").value("ACME_DNS"));
+    }
+
+    @Test
     void updateChangesTheRouteSyncsAndAudits() throws Exception {
         Login admin = login("admin");
         UUID id = routeFor(admin);

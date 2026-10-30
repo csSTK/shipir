@@ -31,16 +31,18 @@ const route = {
 const candidates = [{ containerName: 'web', image: 'nginx', state: 'running', ports: [8080], suggestedPort: 8080, published: false }]
 const R = '/hosts/h1/proxy/routes'
 let proxyType = 'TRAEFIK'
+let dns: { dnsProvider: string | null; dnsCredentialsHint: string | null } = { dnsProvider: null, dnsCredentialsHint: null }
 let queryClient: QueryClient
 
 beforeEach(() => {
   localStorage.clear()
   proxyType = 'TRAEFIK'
+  dns = { dnsProvider: null, dnsCredentialsHint: null }
   apiFetch.mockImplementation((path: string, options?: { method?: string }) => {
     if (path === '/auth/me') return Promise.resolve({ username: 'u', role: 'OPERATOR', setupRequired: false })
     if (options?.method) return Promise.resolve(null)
     if (path === `${R}/candidates`) return Promise.resolve(candidates)
-    if (path === '/hosts/h1/proxy/managed') return Promise.resolve({ instance: { type: proxyType, defaultCertMode: 'ACME_HTTP' }, setupBlockedReason: null })
+    if (path === '/hosts/h1/proxy/managed') return Promise.resolve({ instance: { type: proxyType, defaultCertMode: 'ACME_HTTP', ...dns }, setupBlockedReason: null })
     if (path === '/hosts/h1/proxy/certificates')
       return Promise.resolve([{ id: 'c1', name: 'Wildcard 2027', domains: ['*.example.com'], notAfter: '2027-01-01T00:00:00Z', usedByRoutes: [] }])
     return Promise.resolve(null)
@@ -90,6 +92,23 @@ describe('PublishDialog advanced mode', () => {
     await within(dialog).findByLabelText('HTTPS certificate')
     await waitFor(() => expect(within(dialog).queryByLabelText('Entrypoint')).not.toBeInTheDocument())
     expect(within(dialog).queryByRole('option', { name: /DNS challenge/ })).not.toBeInTheDocument()
+  })
+
+  it('offers the DNS challenge only when the Traefik proxy has a DNS provider with stored credentials', async () => {
+    const dialog = await renderDialog()
+    await within(dialog).findByLabelText('HTTPS certificate')
+    expect(within(dialog).queryByRole('option', { name: /DNS challenge/ })).not.toBeInTheDocument()
+  })
+
+  it('offers the DNS challenge when the proxy has DNS credentials', async () => {
+    dns = { dnsProvider: 'cloudflare', dnsCredentialsHint: '…abcd' }
+    const dialog = await renderDialog()
+    expect(await within(dialog).findByRole('option', { name: /DNS challenge/ })).toBeInTheDocument()
+  })
+
+  it('keeps the DNS challenge visible when the route already uses it', async () => {
+    const dialog = await renderDialog({ route: { ...route, certMode: 'ACME_DNS' } as never, containerName: undefined })
+    expect(await within(dialog).findByRole('option', { name: /DNS challenge/ })).toBeInTheDocument()
   })
 
   it('sends only the touched advanced fields when publishing', async () => {
@@ -196,5 +215,14 @@ describe('PublishDialog advanced mode', () => {
     apiFetch.mockImplementation((_p: string, o?: { method?: string }) => (o?.method ? Promise.reject(new ApiError(400, 'x', 'CERT_DOES_NOT_COVER_HOST')) : Promise.resolve([])))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Publish' }))
     expect(await within(dialog).findByText(/does not cover/i)).toBeInTheDocument()
+  })
+
+  it('explains a rejected DNS challenge in plain language', async () => {
+    const { ApiError } = await import('../../../shared/api/client.ts')
+    const dialog = await renderDialog()
+    type(within(dialog).getByLabelText('Domain'), 'blog.example.com')
+    apiFetch.mockImplementation((_p: string, o?: { method?: string }) => (o?.method ? Promise.reject(new ApiError(400, 'x', 'DNS_CREDENTIALS_REQUIRED')) : Promise.resolve([])))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Publish' }))
+    expect(await within(dialog).findByText(/DNS credentials on the proxy/i)).toBeInTheDocument()
   })
 })

@@ -227,6 +227,7 @@
   "routeErrors.advanced.CERT_REQUIRED": "Choose the certificate to use.",
   "routeErrors.advanced.CERT_NOT_FOUND": "This certificate no longer exists. Reload the page.",
   "routeErrors.advanced.CERT_DOES_NOT_COVER_HOST": "The chosen certificate does not cover every domain name of this route.",
+  "routeErrors.advanced.DNS_CREDENTIALS_REQUIRED": "Set DNS credentials on the proxy first to use the DNS challenge. Open the proxy settings on the Domains page.",
   "routeErrors.advanced.UNSUPPORTED_FOR_PROXY": "An option you chose is not supported by this proxy. Turn on Advanced mode and check the entrypoint and the certificate type.",
   "routeErrors.advanced.INVALID_BASIC_AUTH": "The password-protected users are not valid.",
   "routeErrors.advanced.TOO_MANY_USERS": "A domain can have at most 20 users.",
