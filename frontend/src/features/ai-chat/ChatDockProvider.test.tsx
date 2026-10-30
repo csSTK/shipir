@@ -27,6 +27,8 @@ let byTopic: Record<string, { handlers: TopicHandlers; unsubscribe: ReturnType<t
 let unsubscribe: ReturnType<typeof vi.fn>
 let messages: object[]
 let pendingTotal: number
+const userMsg = { id: 'm0', seq: 1, role: 'USER', content: 'hello', toolCalls: null, toolCallId: null, status: null, createdAt: '2026-10-23T10:00:00Z' }
+const answerMsg = { id: 'm1', seq: 2, role: 'ASSISTANT', content: 'Done!', toolCalls: null, toolCallId: null, status: null, createdAt: '2026-10-23T10:00:00Z' }
 const frame = (body: object) => act(() => handlers.onMessage(JSON.stringify(body)))
 const frameOn = (topic: string, body: object) => act(() => byTopic[topic].handlers.onMessage(JSON.stringify(body)))
 
@@ -148,6 +150,7 @@ describe('ChatDockProvider', () => {
 
   it('keeps following a run after switching to another chat and flags it unread when it finishes there', async () => {
     await startRunAndLeave()
+    messages = [userMsg]
     fireEvent.click(screen.getByText('switch'))
     await waitFor(() => expect(subscribe).toHaveBeenCalledWith('/topic/chat/s2', expect.anything()))
     // The active subscription ends with the switch; a background one on the same chat takes over.
@@ -161,6 +164,37 @@ describe('ChatDockProvider', () => {
     await waitFor(() => expect(screen.getByTestId('pending')).toHaveTextContent('1'))
     expect(screen.getByTestId('elsewhere')).toHaveTextContent('false')
     await waitFor(() => expect(unsubscribe).toHaveBeenCalledTimes(2))
+  })
+
+  it('drops a background run whose DONE frame was missed during the switch', async () => {
+    await startRunAndLeave()
+    // The run ended between leaving the active subscription and the background one; no frame will ever replay.
+    messages = [userMsg, answerMsg]
+    fireEvent.click(screen.getByText('switch'))
+    await waitFor(() => expect(screen.getByTestId('unread')).toHaveTextContent('true'))
+    expect(screen.getByTestId('elsewhere')).toHaveTextContent('false')
+    await waitFor(() => expect(unsubscribe).toHaveBeenCalledTimes(2))
+  })
+
+  it('keeps following a background run whose last message is a confirmed tool result', async () => {
+    await startRunAndLeave()
+    // Resolving an action starts a new run, so a CONFIRMED tool message does not mean the chat is idle.
+    messages = [userMsg, { ...pendingTool, status: 'CONFIRMED' }]
+    fireEvent.click(screen.getByText('switch'))
+    await waitFor(() => expect(subscribe).toHaveBeenCalledWith('/topic/chat/s2', expect.anything()))
+    await waitFor(() => expect(vi.mocked(apiFetch).mock.calls.filter(([p]) => p === '/ai/sessions/s1').length).toBeGreaterThan(1))
+    await act(() => Promise.resolve())
+    expect(screen.getByTestId('elsewhere')).toHaveTextContent('true')
+    expect(screen.getByTestId('unread')).toHaveTextContent('false')
+  })
+
+  it('stops following a background run when the websocket is lost', async () => {
+    await startRunAndLeave()
+    messages = [userMsg]
+    fireEvent.click(screen.getByText('switch'))
+    await waitFor(() => expect(screen.getByTestId('elsewhere')).toHaveTextContent('true'))
+    act(() => byTopic['/topic/chat/s1'].handlers.onState('reconnecting'))
+    await waitFor(() => expect(screen.getByTestId('elsewhere')).toHaveTextContent('false'))
   })
 
   it('unsubscribes when the session is deleted', async () => {

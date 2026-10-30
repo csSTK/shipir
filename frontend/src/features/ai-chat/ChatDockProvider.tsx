@@ -1,31 +1,65 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { subscribeToTopic } from '../../shared/realtime/stomp.ts'
-import { usePendingActionCount, useRefreshSession } from './api.ts'
+import { fetchChatSession, usePendingActionCount, useRefreshSession, type ChatMessage } from './api.ts'
 import { ChatDockContext, type ChatDock } from './useChatDock.ts'
 import { useChatStream } from './useChatStream.ts'
 
-/** Follows a run in a chat that is no longer the active one, only to learn when it ends. Renders nothing. */
-function BackgroundRun({ sessionId, onDone }: { sessionId: string; onDone: (id: string) => void }) {
+/**
+ * A run is still going when the stored transcript does not end in a finished answer: the user's message has no
+ * reply yet, the assistant asked for tools whose results are still coming, or an action was just resolved (which
+ * starts a new run). Only a pending Confirm, which waits for the user, is not a run.
+ */
+function runLooksActive(messages: readonly ChatMessage[]): boolean {
+  const last = messages.at(-1)
+  if (!last) return false
+  if (last.role === 'USER') return true
+  if (last.role === 'ASSISTANT') return !!last.toolCalls?.length
+  return last.status !== 'PENDING'
+}
+
+/**
+ * Follows a run in a chat that is no longer the active one, only to learn when it ends. Renders nothing.
+ * STOMP topics are not replayed, so a DONE sent before the subscription exists is lost: after subscribing it
+ * refetches the session and ends itself when no run is active. Losing the websocket ends it too, since the
+ * end of the run can no longer be observed.
+ */
+function BackgroundRun({ sessionId, onDone, onLost }: { sessionId: string; onDone: (id: string) => void; onLost: (id: string) => void }) {
+  const client = useQueryClient()
   const doneRef = useRef(onDone)
+  const lostRef = useRef(onLost)
   useEffect(() => {
     doneRef.current = onDone
+    lostRef.current = onLost
   })
-  useEffect(
-    () =>
-      subscribeToTopic(`/topic/chat/${sessionId}`, {
-        onState: () => {},
-        onMessage: (body) => {
-          try {
-            const f: unknown = JSON.parse(body)
-            if (f && typeof f === 'object' && 'type' in f && f.type === 'DONE') doneRef.current(sessionId)
-          } catch {
-            // ignore malformed frames
-          }
-        },
-      }),
-    [sessionId],
-  )
+  useEffect(() => {
+    let alive = true
+    const unsubscribe = subscribeToTopic(`/topic/chat/${sessionId}`, {
+      onState: (state) => {
+        if (state === 'reconnecting') lostRef.current(sessionId)
+      },
+      onMessage: (body) => {
+        try {
+          const f: unknown = JSON.parse(body)
+          if (f && typeof f === 'object' && 'type' in f && f.type === 'DONE') doneRef.current(sessionId)
+        } catch {
+          // ignore malformed frames
+        }
+      },
+    })
+    // Subscribe first, then look: a run ending after this fetch still delivers its DONE frame.
+    fetchChatSession(client, sessionId)
+      .then((detail) => {
+        if (alive && !runLooksActive(detail.messages)) doneRef.current(sessionId)
+      })
+      .catch(() => {
+        // the session is gone or unreachable; the next DONE or a lost connection still ends the run
+      })
+    return () => {
+      alive = false
+      unsubscribe()
+    }
+  }, [sessionId, client])
   return null
 }
 
@@ -81,6 +115,15 @@ export function ChatDockProvider({ children }: { children: ReactNode }) {
       void client.invalidateQueries({ queryKey: ['ai', 'sessions'] })
     },
     [client, markUnread],
+  )
+
+  const onBackgroundLost = useCallback(
+    (id: string) => {
+      setBackground((prev) => prev.filter((b) => b !== id))
+      void client.invalidateQueries({ queryKey: ['ai', 'session', id] })
+      void client.invalidateQueries({ queryKey: ['ai', 'sessions'] })
+    },
+    [client],
   )
 
   const activeRef = useRef<string | null>(null)
@@ -141,7 +184,7 @@ export function ChatDockProvider({ children }: { children: ReactNode }) {
   return (
     <ChatDockContext.Provider value={value}>
       {background.map((id) => (
-        <BackgroundRun key={id} sessionId={id} onDone={onBackgroundDone} />
+        <BackgroundRun key={id} sessionId={id} onDone={onBackgroundDone} onLost={onBackgroundLost} />
       ))}
       {children}
     </ChatDockContext.Provider>

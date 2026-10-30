@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../shared/api/client.ts'
 
 export interface ChatSession {
@@ -66,6 +66,11 @@ export function useChatSessions() {
     queryKey: SESSIONS_KEY,
     queryFn: () => apiFetch<{ items: ChatSession[] }>('/ai/sessions?page=0&size=100'),
   })
+}
+
+/** Always fetches a session from the server (never serves the cache) and stores it under the session's query key. */
+export function fetchChatSession(client: QueryClient, id: string) {
+  return client.fetchQuery({ queryKey: sessionKey(id), queryFn: () => apiFetch<ChatSessionDetail>(`/ai/sessions/${id}`), staleTime: 0 })
 }
 
 /** Write actions waiting for Confirm/Reject across all of the user's chats; refreshed with the session list. */
