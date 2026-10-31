@@ -222,7 +222,8 @@ class ContainerFileServiceTest {
 
     @Test
     void nonZeroOrMissingExitCodeIsDirectoryTooLarge() {
-        for (Long bad : new Long[]{1L, 127L, null}) {
+        // 127 (no find) is exec-unavailable, covered in ContainerDirectoryExecListerTest
+        for (Long bad : new Long[]{1L, null}) {
             assertThatThrownBy(() -> ContainerDirectoryExecLister.checkExit(bad)).isInstanceOfSatisfying(
                     DockerConnectionException.class, e -> assertThat(e.getCode()).isEqualTo(DockerErrorCode.DIRECTORY_TOO_LARGE));
         }

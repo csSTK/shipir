@@ -251,6 +251,8 @@ public class ContainerFilesService {
             case SIZE_LIMIT_EXCEEDED -> sizeLimit();
             case DIRECTORY_TOO_LARGE -> new HostException(HttpStatus.PAYLOAD_TOO_LARGE, "DIRECTORY_TOO_LARGE",
                     "The directory is too large to list");
+            case DIRECTORY_EXEC_UNAVAILABLE -> new HostException(HttpStatus.CONFLICT, "DIRECTORY_NOT_LISTABLE",
+                    "Listing a directory this large needs a running container with find in its image");
             case INVALID_STATE -> new HostException(HttpStatus.CONFLICT, "INVALID_CONTAINER_STATE",
                     "The container is not in a state that allows this action");
             default -> new HostException(HttpStatus.BAD_GATEWAY, e.getCode().name(), "Environment could not be reached");

@@ -125,10 +125,10 @@ class ContainerFileServiceIntegrationTest {
     }
 
     @Test
-    void execFailureOnImageWithoutFindStaysDirectoryTooLarge() throws Exception {
+    void execFailureOnImageWithoutFindIsExecUnavailable() throws Exception {
         exec("rm", "/usr/bin/find");
         assertThatThrownBy(() -> service.list(hostId, endpoint, id, "/data", 3000))
-                .isInstanceOfSatisfying(DockerConnectionException.class, e -> assertThat(e.getCode()).isEqualTo(DockerErrorCode.DIRECTORY_TOO_LARGE));
+                .isInstanceOfSatisfying(DockerConnectionException.class, e -> assertThat(e.getCode()).isEqualTo(DockerErrorCode.DIRECTORY_EXEC_UNAVAILABLE));
     }
 
     @Test

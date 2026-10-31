@@ -43,14 +43,41 @@ class ContainerDirectoryExecListerTest {
     }
 
     @Test
-    void onlyNoExecStatesAreMappedToTooLarge() {
-        assertThat(ContainerDirectoryExecLister.mapFailure(
-                new DockerConnectionException(DockerErrorCode.INVALID_STATE, "x", null)).getCode())
-                .isEqualTo(DockerErrorCode.DIRECTORY_TOO_LARGE);
+    void noExecStatesMapToExecUnavailable() {
+        for (DockerErrorCode noExec : List.of(DockerErrorCode.INVALID_STATE, DockerErrorCode.IN_USE,
+                DockerErrorCode.INVALID_RESPONSE)) {
+            assertThat(ContainerDirectoryExecLister.mapFailure(new DockerConnectionException(noExec, "x", null)).getCode())
+                    .isEqualTo(DockerErrorCode.DIRECTORY_EXEC_UNAVAILABLE);
+        }
+    }
+
+    @Test
+    void connectionErrorsKeepTheirOwnCodeInMapFailure() {
         for (DockerErrorCode keep : List.of(DockerErrorCode.UNREACHABLE, DockerErrorCode.TLS_ERROR,
                 DockerErrorCode.NOT_FOUND, DockerErrorCode.TIMEOUT, DockerErrorCode.DIRECTORY_TOO_LARGE)) {
             assertThat(ContainerDirectoryExecLister.mapFailure(new DockerConnectionException(keep, "x", null)).getCode())
                     .isEqualTo(keep);
         }
+    }
+
+    @Test
+    void findMissingOrNotExecutableExitIsExecUnavailable() {
+        for (long exit : List.of(126L, 127L)) {
+            assertThatThrownBy(() -> ContainerDirectoryExecLister.checkExit(exit))
+                    .isInstanceOfSatisfying(DockerConnectionException.class,
+                            e -> assertThat(e.getCode()).isEqualTo(DockerErrorCode.DIRECTORY_EXEC_UNAVAILABLE));
+        }
+    }
+
+    @Test
+    void otherNonZeroExitIsStillTooLarge() {
+        assertThatThrownBy(() -> ContainerDirectoryExecLister.checkExit(1L))
+                .isInstanceOfSatisfying(DockerConnectionException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(DockerErrorCode.DIRECTORY_TOO_LARGE));
+    }
+
+    @Test
+    void zeroExitPassesTheCheck() {
+        ContainerDirectoryExecLister.checkExit(0L);
     }
 }

@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -157,6 +158,18 @@ class ContainerFilesApiTest extends HostApiTestBase {
                 .when(files).list(any(), any(), any(), eq("/down"), anyLong());
         mvc.perform(get("/api/hosts/{h}/containers/c1/files?path=/down", host).session(l.session()))
                 .andExpect(status().isBadGateway()).andExpect(jsonPath("$.code").value("UNREACHABLE"));
+    }
+
+    @Test
+    void largeDirectoryThatCannotBeExecListedIsNotListable409() throws Exception {
+        Login l = login("admin");
+        // exec fallback cannot run (stopped container, no find in the image)
+        doThrow(new DockerConnectionException(DockerErrorCode.DIRECTORY_EXEC_UNAVAILABLE, "x", null))
+                .when(files).list(any(), any(), any(), eq("/stopped"), anyLong());
+        mvc.perform(get("/api/hosts/{h}/containers/c1/files?path=/stopped", host).session(l.session()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DIRECTORY_NOT_LISTABLE"))
+                .andExpect(jsonPath("$.message").value(containsString("running container with find")));
     }
 
     @Test

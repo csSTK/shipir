@@ -28,9 +28,9 @@ import java.util.concurrent.TimeUnit;
  * {@code find <dir>/ -mindepth 1 -maxdepth 1 ...} via docker exec with an argument list (no shell). {@code dir}
  * is a normalised absolute path, so it can never be read as an option. Container output is untrusted: names
  * are NUL-separated (newlines in names are legal), anything with a {@code /} is dropped, and both the output
- * size and the entry count are capped. Exec problems (no {@code find} in the image, container not running,
- * non-zero exit, caps hit) throw {@link DockerErrorCode#DIRECTORY_TOO_LARGE}; connection errors keep their
- * own code. Entries carry name and type only (no size/mtime/mode: busybox {@code find} has no -printf). This is the only exec use in file access;
+ * size and the entry count are capped. Exec not possible (container not running, exec refused, no {@code find}
+ * in the image: exit 126/127) throws {@link DockerErrorCode#DIRECTORY_EXEC_UNAVAILABLE}; caps hit or another
+ * non-zero exit throw {@link DockerErrorCode#DIRECTORY_TOO_LARGE}; connection errors keep their own code. Entries carry name and type only (no size/mtime/mode: busybox {@code find} has no -printf). This is the only exec use in file access;
  * download and upload stay on the archive API.
  */
 @Component
@@ -67,7 +67,7 @@ class ContainerDirectoryExecLister {
      */
     static DockerConnectionException mapFailure(DockerConnectionException e) {
         return switch (e.getCode()) {
-            case INVALID_STATE, IN_USE, INVALID_RESPONSE -> tooLarge(e);
+            case INVALID_STATE, IN_USE, INVALID_RESPONSE -> execUnavailable(e);
             default -> e;
         };
     }
@@ -148,7 +148,9 @@ class ContainerDirectoryExecLister {
         return callback.bytes();
     }
 
+    /** 126 (found but not executable) and 127 (command not found, i.e. no find in the image) mean exec cannot list. */
     static void checkExit(Long exitCode) {
+        if (exitCode != null && (exitCode == 126 || exitCode == 127)) throw execUnavailable(null);
         if (exitCode == null || exitCode != 0) throw tooLarge(null);
     }
 
@@ -196,6 +198,11 @@ class ContainerDirectoryExecLister {
         byte[] bytes() {
             return stdout.toByteArray();
         }
+    }
+
+    private static DockerConnectionException execUnavailable(Throwable cause) {
+        return new DockerConnectionException(DockerErrorCode.DIRECTORY_EXEC_UNAVAILABLE,
+                "The directory can only be listed with a running container that has find.", cause);
     }
 
     private static DockerConnectionException tooLarge(Throwable cause) {

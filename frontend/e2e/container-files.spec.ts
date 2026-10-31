@@ -54,6 +54,17 @@ test('too large directory shows an inline hint', async ({ page, api }) => {
   await expect(page.getByText(/too large to list/)).toBeVisible()
 })
 
+test('large directory that exec cannot list says a running container with find is needed', async ({ page, api }) => {
+  await setup(api, 'ADMIN')
+  await page.route(filesUrl, (route) =>
+    route.fulfill({ status: 409, json: { code: 'DIRECTORY_NOT_LISTABLE', message: 'Listing a directory this large needs a running container with find in its image', details: [] } }),
+  )
+  await page.goto('/environments/a/containers/c1')
+  await page.getByRole('tab', { name: 'Files' }).click()
+  await expect(page.getByText(/running container with find/)).toBeVisible()
+  await expect(page.getByText(/Open a subdirectory/)).toHaveCount(0)
+})
+
 test('operator does not see the files panel', async ({ page, api }) => {
   await setup(api, 'OPERATOR')
   await page.goto('/environments/a/containers/c1')

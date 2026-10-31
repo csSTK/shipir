@@ -50,6 +50,7 @@ export function uploadFile(
 
 const LIST_ERRORS: Record<string, string> = {
   get DIRECTORY_TOO_LARGE() { return i18n.t('containers:api.thisDirectoryIsTooLarge') },
+  get DIRECTORY_NOT_LISTABLE() { return i18n.t('containers:api.thisDirectoryCanOnlyBeListed') },
   get INVALID_PATH() { return i18n.t('containers:api.thisPathIsNotValid') },
   get RESOURCE_NOT_FOUND() { return i18n.t('containers:api.thisPathDoesNotExist') },
   get UNREACHABLE() { return i18n.t('containers:api.couldNotReachTheDocker') },

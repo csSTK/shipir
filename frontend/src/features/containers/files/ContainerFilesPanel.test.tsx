@@ -61,6 +61,13 @@ describe('ContainerFilesPanel', () => {
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
   })
 
+  it('explains that a large directory needs a running container with find when exec listing is not possible', async () => {
+    apiFetch.mockRejectedValue(new ApiError(409, 'x', 'DIRECTORY_NOT_LISTABLE'))
+    renderPanel()
+    expect(await screen.findByText(/running container with find/)).toBeInTheDocument()
+    expect(screen.queryByText(/Open a subdirectory/)).not.toBeInTheDocument()
+  })
+
   it('uploads with progress into the current directory and refreshes', async () => {
     apiFetch.mockResolvedValue([])
     const xhr = {

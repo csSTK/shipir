@@ -206,6 +206,7 @@
   "api.networkError": "Network error",
   "api.uploadCancelled": "Upload cancelled",
   "api.thisDirectoryIsTooLarge": "This directory is too large to list. Open a subdirectory instead.",
+  "api.thisDirectoryCanOnlyBeListed": "This directory is too large to list here. Listing it needs a running container with find in its image.",
   "api.thisPathIsNotValid": "This path is not valid.",
   "api.thisPathDoesNotExist": "This path does not exist in the container.",
   "api.theFileIsTooLarge": "The file is too large to upload.",

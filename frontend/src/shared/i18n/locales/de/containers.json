@@ -206,6 +206,7 @@
   "api.networkError": "Netzwerkfehler",
   "api.uploadCancelled": "Upload abgebrochen",
   "api.thisDirectoryIsTooLarge": "Dieses Verzeichnis ist zu groß, um aufgelistet zu werden. Öffne stattdessen ein Unterverzeichnis.",
+  "api.thisDirectoryCanOnlyBeListed": "Dieses Verzeichnis ist zu groß, um es hier aufzulisten. Dafür muss der Container laufen und in seinem Image muss find enthalten sein.",
   "api.thisPathIsNotValid": "Dieser Pfad ist ungültig.",
   "api.thisPathDoesNotExist": "Dieser Pfad existiert im Container nicht.",
   "api.theFileIsTooLarge": "Die Datei ist zu groß zum Hochladen.",

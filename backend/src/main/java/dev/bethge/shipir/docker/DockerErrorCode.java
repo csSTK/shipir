@@ -26,8 +26,10 @@ public enum DockerErrorCode {
     INVALID_PATH,
     /** A file transfer or directory scan exceeded the allowed number of bytes; aborted while streaming. */
     SIZE_LIMIT_EXCEEDED,
-    /** Listing a directory is not possible: the archive scan exceeded the byte limit and the exec fallback failed (no find, container not running) or hit its entry/output cap; distinct from a transfer limit. */
+    /** Listing a directory is too large: the archive scan exceeded the byte limit and the exec fallback hit its entry/output cap (or exited non-zero); distinct from a transfer limit. Opening a subdirectory helps. */
     DIRECTORY_TOO_LARGE,
+    /** Listing a large directory needs exec, which is not possible now: container not running, exec refused, no {@code find} in the image. Only a running container with find helps. */
+    DIRECTORY_EXEC_UNAVAILABLE,
     /** Recreate failed after the new container was created; it has been removed and the old one restored (or restoring failed, see log). */
     RECREATE_FAILED,
     /** The daemon refused new resource limits (e.g. memory below current usage or below the minimum). */
