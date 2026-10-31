@@ -194,7 +194,7 @@ class ContainerFileServiceTest {
     @Test
     void entriesGetTypesFromTheDirectoryAndSymlinkSets() {
         Set<String> all = new LinkedHashSet<>(List.of("d", "l", "f"));
-        var entries = ContainerDirectoryExecLister.toEntries("/p", all, Set.of("d"), Set.of("l"));
+        var entries = ContainerDirectoryExecLister.toEntries("/p", all, Set.of("d"), Set.of("l"), Set.of("f"));
         assertThat(entries).extracting(ContainerFileEntry::type).containsExactly(
                 ContainerFileEntry.Type.DIRECTORY, ContainerFileEntry.Type.SYMLINK, ContainerFileEntry.Type.FILE);
         assertThat(entries.get(2).path()).isEqualTo("/p/f");

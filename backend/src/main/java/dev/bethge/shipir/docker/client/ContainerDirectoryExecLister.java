@@ -1,5 +1,6 @@
 package dev.bethge.shipir.docker.client;
 
+import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.async.ResultCallback;
 import com.github.dockerjava.api.model.Frame;
 import com.github.dockerjava.api.model.StreamType;
@@ -27,8 +28,9 @@ import java.util.concurrent.TimeUnit;
  * {@code find <dir>/ -mindepth 1 -maxdepth 1 ...} via docker exec with an argument list (no shell). {@code dir}
  * is a normalised absolute path, so it can never be read as an option. Container output is untrusted: names
  * are NUL-separated (newlines in names are legal), anything with a {@code /} is dropped, and both the output
- * size and the entry count are capped. Any failure (no {@code find} in the image, container not running,
- * non-zero exit) throws {@link DockerErrorCode#DIRECTORY_TOO_LARGE}. This is the only exec use in file access;
+ * size and the entry count are capped. Exec problems (no {@code find} in the image, container not running,
+ * non-zero exit, caps hit) throw {@link DockerErrorCode#DIRECTORY_TOO_LARGE}; connection errors keep their
+ * own code. Entries carry name and type only (no size/mtime/mode: busybox {@code find} has no -printf). This is the only exec use in file access;
  * download and upload stay on the archive API.
  */
 @Component
@@ -45,20 +47,39 @@ class ContainerDirectoryExecLister {
 
     List<ContainerFileEntry> list(UUID hostId, DockerEndpoint endpoint, String containerId, String dir) {
         try {
-            Set<String> all = names(hostId, endpoint, containerId, dir, List.of());
-            Set<String> dirs = names(hostId, endpoint, containerId, dir, List.of("-type", "d"));
-            Set<String> links = names(hostId, endpoint, containerId, dir, List.of("-type", "l"));
-            return toEntries(dir, all, dirs, links);
+            // one client call = one shared deadline for all four execs
+            return calls.call(hostId, endpoint, client -> {
+                long deadline = System.nanoTime() + calls.manager().readTimeout().toNanos();
+                Set<String> all = names(client, containerId, dir, List.of(), deadline);
+                Set<String> dirs = names(client, containerId, dir, List.of("-type", "d"), deadline);
+                Set<String> links = names(client, containerId, dir, List.of("-type", "l"), deadline);
+                Set<String> files = names(client, containerId, dir, List.of("-type", "f"), deadline);
+                return toEntries(dir, all, dirs, links, files);
+            });
         } catch (DockerConnectionException e) {
-            throw tooLarge(e);
+            throw mapFailure(e);
         }
     }
 
-    static List<ContainerFileEntry> toEntries(String dir, Set<String> all, Set<String> dirs, Set<String> links) {
+    /**
+     * Only "exec not possible" states (container not running, exec refused) mean the directory cannot be
+     * listed; connection problems (unreachable, TLS, timeout, container gone) keep their own code.
+     */
+    static DockerConnectionException mapFailure(DockerConnectionException e) {
+        return switch (e.getCode()) {
+            case INVALID_STATE, IN_USE, INVALID_RESPONSE -> tooLarge(e);
+            default -> e;
+        };
+    }
+
+    /** Entries not in {@code dirs}, {@code links} or {@code files} (sockets, FIFOs, devices) are typed OTHER. */
+    static List<ContainerFileEntry> toEntries(String dir, Set<String> all, Set<String> dirs, Set<String> links,
+                                              Set<String> files) {
         List<ContainerFileEntry> result = new ArrayList<>();
         for (String name : all) {
             ContainerFileEntry.Type type = dirs.contains(name) ? ContainerFileEntry.Type.DIRECTORY
-                    : links.contains(name) ? ContainerFileEntry.Type.SYMLINK : ContainerFileEntry.Type.FILE;
+                    : links.contains(name) ? ContainerFileEntry.Type.SYMLINK
+                    : files.contains(name) ? ContainerFileEntry.Type.FILE : ContainerFileEntry.Type.OTHER;
             String path = dir.equals("/") ? "/" + name : dir + "/" + name;
             result.add(new ContainerFileEntry(name, path, type, 0, (Instant) null, 0, null));
         }
@@ -93,40 +114,38 @@ class ContainerDirectoryExecLister {
         return names;
     }
 
-    private Set<String> names(UUID hostId, DockerEndpoint endpoint, String containerId, String dir, List<String> filter) {
-        byte[] out = exec(hostId, endpoint, containerId, command(dir, filter));
+    private Set<String> names(DockerClient client, String containerId, String dir, List<String> filter, long deadline) {
+        byte[] out = exec(client, containerId, command(dir, filter), deadline);
         return out.length == 0 ? new HashSet<>() : parse(dir, out);
     }
 
-    private byte[] exec(UUID hostId, DockerEndpoint endpoint, String containerId, List<String> cmd) {
-        return calls.call(hostId, endpoint, client -> {
-            String id = client.execCreateCmd(containerId).withAttachStdout(true).withAttachStderr(true)
-                    .withCmd(cmd.toArray(String[]::new)).exec().getId();
-            OutputCollector callback = new OutputCollector(MAX_OUTPUT_BYTES);
-            try {
-                client.execStartCmd(id).exec(callback);
-                if (!callback.awaitCompletion(calls.manager().readTimeout().toMillis(), TimeUnit.MILLISECONDS)
-                        && !callback.overflowed()) {
-                    throw new DockerConnectionException(DockerErrorCode.TIMEOUT, "The listing timed out.", null);
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw tooLarge(e);
-            } catch (RuntimeException e) {
-                throw e;
-            } catch (Exception e) {
-                throw tooLarge(e);
-            } finally {
-                try {
-                    callback.close();
-                } catch (IOException ignored) {
-                    // already ending
-                }
+    private byte[] exec(DockerClient client, String containerId, List<String> cmd, long deadline) {
+        String id = client.execCreateCmd(containerId).withAttachStdout(true).withAttachStderr(true)
+                .withCmd(cmd.toArray(String[]::new)).exec().getId();
+        OutputCollector callback = new OutputCollector(MAX_OUTPUT_BYTES);
+        try {
+            client.execStartCmd(id).exec(callback);
+            long remaining = Math.max(0, deadline - System.nanoTime());
+            if (!callback.awaitCompletion(remaining, TimeUnit.NANOSECONDS) && !callback.overflowed()) {
+                throw new DockerConnectionException(DockerErrorCode.TIMEOUT, "The listing timed out.", null);
             }
-            if (callback.overflowed()) throw tooLarge(null);
-            checkExit(client.inspectExecCmd(id).exec().getExitCodeLong());
-            return callback.bytes();
-        });
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw tooLarge(e);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw tooLarge(e);
+        } finally {
+            try {
+                callback.close();
+            } catch (IOException ignored) {
+                // already ending
+            }
+        }
+        if (callback.overflowed()) throw tooLarge(null);
+        checkExit(client.inspectExecCmd(id).exec().getExitCodeLong());
+        return callback.bytes();
     }
 
     static void checkExit(Long exitCode) {
@@ -137,8 +156,8 @@ class ContainerDirectoryExecLister {
     static class OutputCollector extends ResultCallback.Adapter<Frame> {
         private final ByteArrayOutputStream stdout = new ByteArrayOutputStream();
         private final int max;
-        private boolean overflow;
-        private boolean closed;
+        private volatile boolean overflow;
+        private volatile boolean closed;
 
         OutputCollector(int max) {
             this.max = max;
