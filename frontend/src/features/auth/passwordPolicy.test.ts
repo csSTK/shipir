@@ -64,4 +64,11 @@ describe('passwordPolicy', () => {
     }
     expect(violationMessage('SOMETHING_NEW')).toMatch(/password/i)
   })
+
+  it('shows the fallback message for codes that name Object.prototype members', () => {
+    const fallback = violationMessage('SOMETHING_NEW')
+    expect(violationMessage('constructor')).toBe(fallback)
+    expect(violationMessage('toString')).toBe(fallback)
+    expect(violationMessage('__proto__')).toBe(fallback)
+  })
 })

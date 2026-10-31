@@ -63,5 +63,7 @@ const VIOLATION_MESSAGES: Record<string, string> = {
 
 /** Readable text for a backend `PASSWORD_POLICY` violation code. */
 export function violationMessage(code: string): string {
-  return VIOLATION_MESSAGES[code] ?? i18n.t('auth:passwordPolicy.thePasswordDoesNotMeet')
+  return Object.hasOwn(VIOLATION_MESSAGES, code)
+    ? VIOLATION_MESSAGES[code]
+    : i18n.t('auth:passwordPolicy.thePasswordDoesNotMeet')
 }
