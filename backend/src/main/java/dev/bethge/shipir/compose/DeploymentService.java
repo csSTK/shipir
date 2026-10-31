@@ -206,8 +206,7 @@ public class DeploymentService {
         requireText(r.composePath(), "composePath");
         git.validateUrl(r.repoUrl());
         // validate and store the same trimmed ref, so a padded input can never pass validation and then be used unchecked
-        String ref = r.ref().trim();
-        GitRepositoryService.validateRef(ref);
+        String ref = GitRepositoryService.validateRef(r.ref());
         // before the row exists: a credential for another host is a 400, the token is never read for it
         git.requireCredentialForUrl(r.credentialId(), r.repoUrl());
         String envText = renderEnv(r.env());

@@ -223,7 +223,12 @@ class GitSyncLimitsTest {
     @Test
     void validRefsPass() {
         for (String ref : new String[]{"main", "release/1.2", "v1.0.0", "feature_x-y", sha}) {
-            GitRepositoryService.validateRef(ref);
+            assertThat(GitRepositoryService.validateRef(ref)).isEqualTo(ref);
         }
+    }
+
+    @Test
+    void validateRefReturnsThePaddedRefTrimmed() {
+        assertThat(GitRepositoryService.validateRef("  release/1.2\t")).isEqualTo("release/1.2");
     }
 }

@@ -69,15 +69,17 @@ public class GitRepositoryService {
     /**
      * Branch, tag or commit name as {@link #sync} looks it up: starts with a letter or digit (no option injection),
      * only {@code A-Za-z0-9._/-}, at most 200 characters, no {@code ..}, {@code //}, {@code /.}, trailing slash or
-     * {@code .lock}. Fails with 400 INVALID_GIT_REF. Callers may reject early; {@link #sync} and {@link #remoteCommit}
-     * check again so no path can bypass it.
+     * {@code .lock}. Surrounding whitespace is trimmed first; the trimmed ref is returned, so callers use that value
+     * and never trim again. Fails with 400 INVALID_GIT_REF. Callers may reject early; {@link #sync} and
+     * {@link #remoteCommit} check again so no path can bypass it.
      */
-    public static void validateRef(String ref) {
+    public static String validateRef(String ref) {
         String r = ref == null ? "" : ref.trim();
         if (!REF.matcher(r).matches() || r.contains("..") || r.contains("//") || r.endsWith("/") || r.endsWith(".lock")
                 || r.contains("/.")) {
             throw new GitOperationException(HttpStatus.BAD_REQUEST, "INVALID_GIT_REF", "Invalid Git branch, tag or commit");
         }
+        return r;
     }
 
     /** Same rules as the connection test: absolute https URL (http only with the test flag), no userinfo. */
@@ -113,7 +115,7 @@ public class GitRepositoryService {
      */
     public GitCheckout sync(Path repoDir, String repoUrl, String ref, String composePath, UUID credentialId) {
         validateUrl(repoUrl);
-        validateRef(ref);
+        String gitRef = validateRef(ref);
         CredentialsProvider provider = provider(credentialId, repoUrl);
         boolean fresh = !Files.exists(repoDir.resolve(".git"));
         prepare(repoDir);
@@ -124,7 +126,7 @@ public class GitRepositoryService {
                 properties.cloneTimeout().toNanos());
         String commit = null;
         try (Git git = Git.open(repoDir.toFile())) {
-            commit = fetch(git, repoUrl.trim(), ref.trim(), provider, guard);
+            commit = fetch(git, repoUrl.trim(), gitRef, provider, guard);
             git.reset().setMode(ResetCommand.ResetType.HARD).setRef(commit).call();
             guard.check();
         } catch (GitAPIException | IOException | RuntimeException e) {
@@ -184,12 +186,12 @@ public class GitRepositoryService {
      */
     public String remoteCommit(String repoUrl, String ref, UUID credentialId) {
         validateUrl(repoUrl);
-        validateRef(ref);
+        String gitRef = validateRef(ref);
         CredentialsProvider provider = provider(credentialId, repoUrl);
-        if (SHA.matcher(ref.trim()).matches()) {
-            return ref.trim().toLowerCase();
+        if (SHA.matcher(gitRef).matches()) {
+            return gitRef.toLowerCase();
         }
-        Ref found = lookupRemoteRef(repoUrl.trim(), ref.trim(), provider,
+        Ref found = lookupRemoteRef(repoUrl.trim(), gitRef, provider,
                 new CloneGuard(null, Long.MAX_VALUE, properties.cloneTimeout().toNanos()));
         ObjectId peeled = found.getPeeledObjectId();
         return (peeled != null ? peeled : found.getObjectId()).name();

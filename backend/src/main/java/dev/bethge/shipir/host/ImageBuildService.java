@@ -126,7 +126,12 @@ class ImageBuildService {
         String gitRef = null;
         if (fromGit) {
             gitUrl = request.gitUrl().trim();
-            gitRef = validateGitRef(request.gitRef());
+            try {
+                gitRef = GitRepositoryService.validateRef(request.gitRef());
+            } catch (GitOperationException e) {
+                // HostExceptionHandler only covers HostException; same status and code as before
+                throw new HostException(e.status(), e.code(), e.getMessage());
+            }
             checkGit(gitUrl, request.gitCredentialId());
         }
         long maxBytes = properties.maxBuildContext().toBytes();
@@ -341,16 +346,6 @@ class ImageBuildService {
             }
         }
         return args;
-    }
-
-    /** Delegates to the shared rule in {@link GitRepositoryService#validateRef}; same 400 INVALID_GIT_REF. */
-    static String validateGitRef(String ref) {
-        try {
-            GitRepositoryService.validateRef(ref);
-        } catch (GitOperationException e) {
-            throw new HostException(e.status(), e.code(), e.getMessage());
-        }
-        return ref.trim();
     }
 
     private void checkGit(String url, UUID credentialId) {
