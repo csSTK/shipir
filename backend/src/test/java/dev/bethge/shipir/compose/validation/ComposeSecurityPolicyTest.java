@@ -216,6 +216,29 @@ class ComposeSecurityPolicyTest {
     }
 
     @Test
+    void deniesTypelessBindViaDriverOptsEvenWhenDeviceIsInsideTheDirectory() throws IOException {
+        Files.createDirectories(dir.resolve("data"));
+        String json = "{\"volumes\":{\"v\":{\"driver_opts\":{\"o\":\"bind\",\"device\":\"%s/data\"}}}}".formatted(dir);
+        assertThat(check(json)).containsExactly("volume v: bind mount via driver_opts");
+    }
+
+    @Test
+    void allowsBindWithRsharedOptionAndDeviceInsideTheDirectory() throws IOException {
+        Files.createDirectories(dir.resolve("data"));
+        String json = "{\"volumes\":{\"v\":{\"driver_opts\":{\"type\":\"none\",\"o\":\"bind,rshared\",\"device\":\"%s/data\"}}}}"
+                .formatted(dir);
+        assertThat(check(json)).isEmpty();
+    }
+
+    @Test
+    void deniesBindViaDriverOptsWhoseDeviceEscapesWithDotDotAfterAnExistingDirectory() throws IOException {
+        Files.createDirectories(dir.resolve("data"));
+        String json = "{\"volumes\":{\"v\":{\"driver_opts\":{\"type\":\"none\",\"o\":\"bind\",\"device\":\"%s/data/../../etc\"}}}}"
+                .formatted(dir);
+        assertThat(check(json)).containsExactly("volume v: bind mount via driver_opts");
+    }
+
+    @Test
     void allowsLocalAndUnsetDriverWithoutTypeAndTmpfs() {
         String json = "{\"volumes\":{\"a\":{},\"b\":{\"driver\":\"local\",\"driver_opts\":{}},"
                 + "\"c\":{\"driver\":\"local\",\"driver_opts\":{\"type\":\"TMPFS\",\"device\":\"tmpfs\"}},"
