@@ -239,6 +239,29 @@ public class HostResourcesService {
         }
     }
 
+    /**
+     * Lifecycle actions on one container, same rule as exec consoles: OPERATE on the host, or OPERATE on the managed
+     * deployment owning the container. 404 if the container is not visible to the user, 403 if visible but not operable.
+     */
+    private void requireContainerOperate(UUID hostId, String containerId) {
+        requireView(hostId);
+        if (access.canOperate(hostId)) {
+            return;
+        }
+        ContainerDetailsDto details = call(hostId, (id, endpoint) -> containers.inspect(id, endpoint, containerId));
+        UUID deployment = details.composeProject() == null ? null
+                : managedDeployments.managedDeploymentIds(hostId).get(details.composeProject());
+        if (deployment != null && access.canOperate(hostId, deployment)) {
+            return;
+        }
+        boolean visible = access.hostFullyVisible(hostId)
+                || (deployment != null && access.visibleDeploymentIds(hostId).orElseThrow().contains(deployment));
+        if (!visible) {
+            throw new HostException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Resource not found");
+        }
+        throw new HostException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied");
+    }
+
     /** Everything a prune with the given scope would remove now. Host-level OPERATE, like the prune itself. */
     public PrunePreviewResponse prunePreview(UUID hostId, PruneRequest.ImageScope imageScope, boolean includeManagedVolumes) {
         requireOperate(hostId);
@@ -404,8 +427,8 @@ public class HostResourcesService {
 
     @Auditable(action = "CONTAINER_START", targetType = "CONTAINER", targetId = "#containerId")
     void startContainer(UUID hostId, String containerId) {
-        requireOperate(hostId);
         validateResourceId(containerId);
+        requireContainerOperate(hostId, containerId);
         call(hostId, (id, endpoint) -> {
             containers.startContainer(id, endpoint, containerId);
             return null;
@@ -414,8 +437,8 @@ public class HostResourcesService {
 
     @Auditable(action = "CONTAINER_STOP", targetType = "CONTAINER", targetId = "#containerId")
     void stopContainer(UUID hostId, String containerId, String timeout) {
-        requireOperate(hostId);
         validateResourceId(containerId);
+        requireContainerOperate(hostId, containerId);
         int seconds = parseTimeout(timeout);
         call(hostId, (id, endpoint) -> {
             containers.stopContainer(id, endpoint, containerId, seconds);
@@ -425,8 +448,8 @@ public class HostResourcesService {
 
     @Auditable(action = "CONTAINER_RESTART", targetType = "CONTAINER", targetId = "#containerId")
     void restartContainer(UUID hostId, String containerId, String timeout) {
-        requireOperate(hostId);
         validateResourceId(containerId);
+        requireContainerOperate(hostId, containerId);
         int seconds = parseTimeout(timeout);
         call(hostId, (id, endpoint) -> {
             containers.restartContainer(id, endpoint, containerId, seconds);
@@ -436,8 +459,8 @@ public class HostResourcesService {
 
     @Auditable(action = "CONTAINER_PAUSE", targetType = "CONTAINER", targetId = "#containerId")
     void pauseContainer(UUID hostId, String containerId) {
-        requireOperate(hostId);
         validateResourceId(containerId);
+        requireContainerOperate(hostId, containerId);
         call(hostId, (id, endpoint) -> {
             containers.pauseContainer(id, endpoint, containerId);
             return null;
@@ -446,8 +469,8 @@ public class HostResourcesService {
 
     @Auditable(action = "CONTAINER_UNPAUSE", targetType = "CONTAINER", targetId = "#containerId")
     void unpauseContainer(UUID hostId, String containerId) {
-        requireOperate(hostId);
         validateResourceId(containerId);
+        requireContainerOperate(hostId, containerId);
         call(hostId, (id, endpoint) -> {
             containers.unpauseContainer(id, endpoint, containerId);
             return null;
@@ -456,8 +479,8 @@ public class HostResourcesService {
 
     @Auditable(action = "CONTAINER_KILL", targetType = "CONTAINER", targetId = "#containerId")
     void killContainer(UUID hostId, String containerId) {
-        requireOperate(hostId);
         validateResourceId(containerId);
+        requireContainerOperate(hostId, containerId);
         call(hostId, (id, endpoint) -> {
             containers.killContainer(id, endpoint, containerId);
             return null;
