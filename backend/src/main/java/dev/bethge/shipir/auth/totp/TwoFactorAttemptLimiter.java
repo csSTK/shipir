@@ -3,13 +3,14 @@ package dev.bethge.shipir.auth.totp;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * In-memory throttle for second-factor codes, keyed by username (not session, so a fresh password login does not
  * reset it): after {@code maxAttempts} wrong codes the user is locked for {@code lockout}, even for a right code.
- * {@link #isLocked} and {@link #recordFailure} are separate calls and are not atomic on their own: every caller in
+ * {@link #remainingLockout} and {@link #recordFailure} are separate calls and are not atomic on their own: every caller in
  * {@link TotpService} runs them inside a transaction that holds the user's row lock
  * ({@code findByUsernameForUpdate}) from before the check until after the failure is recorded, so parallel
  * guesses for one user are serialized (see the parallel tests in {@code TwoFactorApiTest}). Keep it that way.
@@ -29,16 +30,18 @@ class TwoFactorAttemptLimiter {
         this.clock = clock;
     }
 
-    boolean isLocked(String username) {
+    /** Time left on the lockout, or {@link Duration#ZERO} when the user may try again. */
+    Duration remainingLockout(String username) {
         State s = states.get(username);
         if (s == null || s.lockedUntil() == null) {
-            return false;
+            return Duration.ZERO;
         }
-        if (clock.instant().isBefore(s.lockedUntil())) {
-            return true;
+        Duration remaining = Duration.between(clock.instant(), s.lockedUntil());
+        if (remaining.isPositive()) {
+            return remaining;
         }
         states.remove(username, s);
-        return false;
+        return Duration.ZERO;
     }
 
     void recordFailure(String username) {

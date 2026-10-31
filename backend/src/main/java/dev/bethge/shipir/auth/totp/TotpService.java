@@ -24,6 +24,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
@@ -200,8 +201,9 @@ public class TotpService {
     }
 
     private void requireNotLocked(String username) {
-        if (limiter.isLocked(username)) {
-            throw new TwoFactorLockedException();
+        Duration remaining = limiter.remainingLockout(username);
+        if (!remaining.isZero()) {
+            throw new TwoFactorLockedException(remaining);
         }
     }
 

@@ -14,6 +14,7 @@ import dev.bethge.shipir.common.security.SetupStatus;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -110,7 +111,11 @@ class TotpController {
 
     @ExceptionHandler(TwoFactorException.class)
     ResponseEntity<ErrorResponse> handle(TwoFactorException ex) {
-        return ResponseEntity.status(ex.status()).body(new ErrorResponse(ex.code(), ex.getMessage()));
+        var response = ResponseEntity.status(ex.status());
+        if (ex instanceof TwoFactorLockedException locked) {
+            response = response.header(HttpHeaders.RETRY_AFTER, Long.toString(locked.retryAfterSeconds()));
+        }
+        return response.body(new ErrorResponse(ex.code(), ex.getMessage()));
     }
 
     @ExceptionHandler(EncryptionKeyMissingException.class)

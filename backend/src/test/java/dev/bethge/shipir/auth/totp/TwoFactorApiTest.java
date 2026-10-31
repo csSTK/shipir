@@ -319,6 +319,8 @@ class TwoFactorApiTest {
         MvcResult locked = send(half, "POST", "/api/auth/2fa/verify", codeJson(Totp.code(e.secret, now() + 1)));
         assertThat(locked.getResponse().getStatus()).isEqualTo(429);
         assertThat(body(locked).get("code").asString()).isEqualTo("TOO_MANY_ATTEMPTS");
+        // remaining lockout in whole seconds, never more than the 5 minute default lockout
+        assertThat(retryAfterSeconds(locked)).isBetween(1L, 300L);
         // a fresh password login does not reset the counter
         Session again = login("admin", ADMIN_PASSWORD);
         assertThat(status(again, "POST", "/api/auth/2fa/verify", codeJson(Totp.code(e.secret, now() + 1)))).isEqualTo(429);
@@ -333,7 +335,15 @@ class TwoFactorApiTest {
         for (int i = 0; i < 5; i++) {
             assertThat(status(s, "POST", "/api/auth/2fa/confirm", codeJson("000000"))).isEqualTo(400);
         }
-        assertThat(status(s, "POST", "/api/auth/2fa/confirm", codeJson("000000"))).isEqualTo(429);
+        MvcResult locked = send(s, "POST", "/api/auth/2fa/confirm", codeJson("000000"));
+        assertThat(locked.getResponse().getStatus()).isEqualTo(429);
+        assertThat(retryAfterSeconds(locked)).isBetween(1L, 300L);
+    }
+
+    private static long retryAfterSeconds(MvcResult r) {
+        String header = r.getResponse().getHeader("Retry-After");
+        assertThat(header).as("Retry-After on 429").isNotNull();
+        return Long.parseLong(header);
     }
 
     @Test
