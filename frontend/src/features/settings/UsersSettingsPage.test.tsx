@@ -145,6 +145,16 @@ describe('UsersSettingsPage', () => {
     expect(await screen.findByText('Fresh-Pass-98765!')).toBeTruthy()
   })
 
+  it('shows EXTERNAL_IDENTITY inline when the reset is refused for an SSO user', async () => {
+    renderPage((path, method) =>
+      method === 'POST' && path === '/users/u2/reset-password' ? new ApiError(409, 'x', 'EXTERNAL_IDENTITY') : undefined,
+    )
+    await screen.findByText('anna')
+    fireEvent.click(screen.getByRole('button', { name: 'Reset password for anna' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Reset password' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/single sign-on/i)
+  })
+
   it('deletes after confirmation and shows USER_HAS_HISTORY inline', async () => {
     renderPage((_path, method) => (method === 'DELETE' ? new ApiError(409, 'x', 'USER_HAS_HISTORY') : undefined))
     await screen.findByText('anna')
