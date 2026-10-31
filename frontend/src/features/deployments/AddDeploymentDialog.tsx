@@ -7,6 +7,8 @@ import { EnvEditor, toPayload, validateEnv, YamlEditor } from './editor/index.ts
 import { describeDeploymentError } from './deploymentErrors.ts'
 import { GitSourceFields, type GitFormValue } from './GitSourceFields.tsx'
 import { ImportFileFields, type ImportedCompose, type ImportedEnv } from './ImportFileFields.tsx'
+import { PortainerImportFields } from './portainer/PortainerImportFields.tsx'
+import type { PortainerStackFile } from './portainer/api.ts'
 import { fromYaml } from './wizard/fromYaml.ts'
 import { ComposeWizard, applyFreePorts, preferredHostPorts, referencedEnvKeys, specToState, type WizardState } from './wizard/index.ts'
 import { TemplatePicker, type AppTemplate } from './templates/index.ts'
@@ -26,7 +28,12 @@ const GENERIC_FILE_NAMES = ['compose', 'docker-compose', 'stack']
 function suggestName(fileName: string): string {
   const base = fileName.replace(/\.ya?ml$/i, '').toLowerCase()
   if (GENERIC_FILE_NAMES.includes(base)) return ''
-  return base.replace(/[^a-z0-9_-]+/g, '-').replace(/^[^a-z0-9]+|-+$/g, '').slice(0, 63)
+  return sanitizeName(base)
+}
+
+/** Lowercases and replaces everything outside the deployment-name alphabet. */
+function sanitizeName(raw: string): string {
+  return raw.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^[^a-z0-9]+|-+$/g, '').slice(0, 63)
 }
 
 /**
@@ -41,7 +48,7 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
   const [yaml, setYaml] = useState('')
   const [env, setEnv] = useState<EnvEntry[]>([])
   const { data: user } = useCurrentUser()
-  const [source, setSource] = useState<'file' | 'git' | 'import'>('file')
+  const [source, setSource] = useState<'file' | 'git' | 'import' | 'portainer'>('file')
   const [git, setGit] = useState<GitFormValue>(EMPTY_GIT_FORM)
   const [mode, setMode] = useState<'template' | 'yaml' | 'wizard'>('yaml')
   const [template, setTemplate] = useState<AppTemplate | null>(null)
@@ -133,6 +140,14 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
     applyImport()
   }
 
+  /** A fetched Portainer stack goes through the same prefill as the picked files. */
+  function importStack({ name: stackName, yaml: text, env: entries }: PortainerStackFile) {
+    const suggestion = sanitizeName(stackName)
+    if (suggestion) setName((current) => (current.trim() === '' ? suggestion : current))
+    picked.current = { yaml: text, env: entries }
+    applyImport()
+  }
+
   function importEnv({ entries }: ImportedEnv) {
     picked.current.env = entries
     if (picked.current.yaml === null) setEnv(entries)
@@ -142,6 +157,7 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
   function submit(e: FormEvent) {
     e.preventDefault()
     if (source !== 'git' && mode !== 'yaml') return // Enter inside the wizard must not submit
+    if (isImport && !imported) return // nothing to create before a file or stack was imported
     const trimmed = name.trim()
     if (!NAME_PATTERN.test(trimmed) || trimmed.length > 63) {
       setProblem(tr('AddDeploymentDialog.useLowercaseLettersDigitsHyphens'))
@@ -191,14 +207,15 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
     )
   }
 
-  const composeVisible = source === 'file' || (source === 'import' && imported)
+  const isImport = source === 'import' || source === 'portainer'
+  const composeVisible = source === 'file' || (isImport && imported)
 
   return (
     <Dialog size="lg" open onOpenChange={(open) => !open && onClose()} title={tr('AddDeploymentDialog.addDeployment')}>
       <form onSubmit={submit} className="ui-form">
         <TextField label={tr('AddDeploymentDialog.name')} value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" spellCheck={false} />
         <div className="wz-modes" role="radiogroup" aria-label={tr('AddDeploymentDialog.source')}>
-          {([['file', tr('AddDeploymentDialog.newFile')], ['import', tr('AddDeploymentDialog.importFile')], ['git', tr('AddDeploymentDialog.gitRepository')]] as const).map(([value, label]) => (
+          {([['file', tr('AddDeploymentDialog.newFile')], ['import', tr('AddDeploymentDialog.importFile')], ['portainer', tr('AddDeploymentDialog.importFromPortainer')], ['git', tr('AddDeploymentDialog.gitRepository')]] as const).map(([value, label]) => (
             <label key={value} className="wz-mode">
               <input type="radio" name="deployment-source" checked={source === value} onChange={() => setSource(value)} />
               {label}
@@ -214,7 +231,8 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
         <div hidden={source !== 'import'}>
           <ImportFileFields onCompose={importCompose} onEnv={importEnv} />
         </div>
-        {source === 'import' && importHint && (
+        {source === 'portainer' && <PortainerImportFields onStack={importStack} />}
+        {isImport && importHint && (
           <p className="if-hint" role="status">
             {tr('AddDeploymentDialog.importFallbackHint', { reason: importHint })}
           </p>
@@ -273,7 +291,7 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
           <Button variant="ghost" onClick={onClose}>
             {tr('AddDeploymentDialog.cancel')}
           </Button>
-          <Button variant="primary" type="submit" disabled={create.isPending} hidden={(source === 'import' && !imported) || (composeVisible && mode !== 'yaml')}>
+          <Button variant="primary" type="submit" disabled={create.isPending} hidden={(isImport && !imported) || (composeVisible && mode !== 'yaml')}>
             {tr('AddDeploymentDialog.createDeployment')}
           </Button>
         </div>

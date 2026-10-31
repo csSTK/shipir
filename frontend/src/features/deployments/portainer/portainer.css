@@ -1,0 +1,44 @@
+.pi-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.pi-actions {
+  display: flex;
+}
+.pi-stacks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.pi-stack {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+.pi-stack__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.pi-stack__name {
+  font-size: var(--text-body-size);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pi-stack__reason,
+.pi-empty {
+  font-size: var(--text-small-size);
+  color: var(--color-text-muted);
+}
+.pi-empty {
+  margin: 0;
+}
