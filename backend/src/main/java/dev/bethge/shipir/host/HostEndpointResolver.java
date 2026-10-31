@@ -13,7 +13,8 @@ import org.springframework.stereotype.Component;
  * Builds the {@link DockerEndpoint} of a stored host, decrypting its TLS material in memory only. A TCP host is checked
  * against the egress policy on every call (the stored address may have been fine at creation and denied since, or its
  * DNS name may now point inside); a denied host fails like an unreachable one, so no daemon is contacted.
- * docker-java resolves the name again when it connects, so a rebind between check and connect is not excluded.
+ * The check is a fast fail: the TCP transport itself resolves the name once through the egress policy and connects to
+ * the validated address, so a rebind between check and connect cannot redirect the connection.
  */
 @Component
 public class HostEndpointResolver {

@@ -96,7 +96,8 @@ public class HostService {
      * Ping for a connection test or create. A TCP target is checked against the egress policy first (the daemon is never
      * contacted when denied), and for TCP every failure (denied, refused, timed out, TLS, permission) reports the same
      * generic UNREACHABLE, so the test cannot be used to map internal ports. A LOCAL socket keeps the real error code
-     * (no port to probe). docker-java resolves the host itself, so a DNS rebind after the check is not excluded.
+     * (no port to probe). The check is a fast fail only: the TCP transport resolves the name once through the egress
+     * policy and connects to the validated address, so a DNS rebind after the check cannot redirect the connection.
      */
     private ConnectionTestResult ping(DockerEndpoint endpoint) {
         if (endpoint instanceof DockerEndpoint.Tcp tcp) {

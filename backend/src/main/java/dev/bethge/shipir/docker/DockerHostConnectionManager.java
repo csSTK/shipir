@@ -1,7 +1,9 @@
 package dev.bethge.shipir.docker;
 
 import com.github.dockerjava.api.DockerClient;
+import dev.bethge.shipir.common.net.EgressPolicy;
 import jakarta.annotation.PreDestroy;
+import org.apache.hc.client5.http.SystemDefaultDnsResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,9 +30,15 @@ public class DockerHostConnectionManager {
     private final DockerClientFactory factory;
     private final DockerProperties properties;
 
+    /** Production wiring: TCP host names are resolved once, through the egress policy, and connected as validated. */
     @Autowired
+    public DockerHostConnectionManager(DockerProperties properties, EgressPolicy egress) {
+        this(new DefaultDockerClientFactory(properties, egress.dnsResolver()), properties);
+    }
+
+    /** System DNS, no egress policy: for tests against local daemons only. */
     public DockerHostConnectionManager(DockerProperties properties) {
-        this(new DefaultDockerClientFactory(properties), properties);
+        this(new DefaultDockerClientFactory(properties, SystemDefaultDnsResolver.INSTANCE), properties);
     }
 
     DockerHostConnectionManager(DockerClientFactory factory, DockerProperties properties) {
