@@ -1,6 +1,7 @@
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ApiError } from '../../../shared/api/client.ts'
-import { useDetectedProxy, useGenerateCompose, useTraefikTemplate, type DetectedProxy } from '../api.ts'
+import { useDetectedProxy, useGenerateCompose, useManagedProxyType, useTraefikTemplate, type DetectedProxy } from '../api.ts'
 import { YamlEditor } from '../editor/index.ts'
 import {
   buildSpec,
@@ -107,15 +108,20 @@ const DEFAULT_CERT_RESOLVER = 'letsencrypt'
 
 function DomainSection({
   n,
+  hostId,
   service,
   fields,
   detected,
+  managedCaddy,
   onChange,
 }: {
+  hostId: string
   n: number
   service: ServiceForm
   fields: Map<string, string>
   detected: DetectedProxy | undefined
+  /** The host runs Shipir's managed Caddy, which ignores Docker labels: Caddy labels are not offered. */
+  managedCaddy: boolean
   onChange: (patch: Partial<ServiceForm>) => void
 }) {
   const { t } = useTranslation('deployments')
@@ -130,6 +136,11 @@ function DomainSection({
     for (const k of Object.keys(patch)) touched.current.add(k)
     set(patch)
   }
+
+  // A Caddy choice made before the managed proxy was known (or prefilled) would only be rejected by the server.
+  useEffect(() => {
+    if (managedCaddy && d.proxy === 'CADDY') onChange({ domain: { ...d, proxy: 'TRAEFIK' } })
+  }, [managedCaddy, d, onChange])
 
   // The first time a host is typed, untouched proxy, network and port take what is known.
   function setHost(host: string) {
@@ -174,7 +185,8 @@ function DomainSection({
       ) : detected && !detected.visible ? (
         <p className="wz-hint" role="status">{t('ComposeWizard.proxyDetectionNotAvailable')}</p>
       ) : (
-        detected && (
+        detected &&
+        !managedCaddy && (
           <div className="wz-detect">
             <p className="wz-hint" role="status">{t('ComposeWizard.noReverseProxyDetected')}</p>
             <p className="wz-hint">{t('ComposeWizard.traefikTemplateHint')}</p>
@@ -189,11 +201,16 @@ function DomainSection({
           </div>
         )
       )}
+      {managedCaddy && (
+        <p className="wz-hint" role="status">
+          {t('ComposeWizard.managedCaddyHint')} <Link to={`/environments/${hostId}/domains`}>{t('ComposeWizard.openDomains')}</Link>
+        </p>
+      )}
       <div className="wz-row wz-row--domain">
         <TextField label={t('ComposeWizard.serviceNDomainHost', { n })} error={err('host')} value={d.host} placeholder="app.example.com" onChange={(e) => setHost(e.target.value)} autoComplete="off" spellCheck={false} />
         <TextField label={t('ComposeWizard.serviceNDomainPort', { n })} error={err('port')} inputMode="numeric" value={d.port} onChange={(e) => setOwn({ port: e.target.value })} />
         <Select label={t('ComposeWizard.serviceNDomainProxy', { n })} value={d.proxy} onChange={(e) => setOwn({ proxy: e.target.value as ProxyType })}>
-          {PROXY_TYPES.map((p) => (
+          {PROXY_TYPES.filter((p) => !(managedCaddy && p === 'CADDY')).map((p) => (
             <option key={p} value={p}>
               {t(`ComposeWizard.proxyName${p}`)}
             </option>
@@ -213,6 +230,8 @@ function DomainSection({
 }
 
 function ServiceCard({
+  hostId,
+  managedCaddy,
   index,
   service,
   state,
@@ -221,6 +240,8 @@ function ServiceCard({
   onChange,
   onRemove,
 }: {
+  hostId: string
+  managedCaddy: boolean
   index: number
   service: ServiceForm
   state: WizardState
@@ -328,7 +349,7 @@ function ServiceCard({
         </Button>
       </fieldset>
 
-      <DomainSection n={n} service={service} fields={fields} detected={detected} onChange={onChange} />
+      <DomainSection n={n} hostId={hostId} service={service} fields={fields} detected={detected} managedCaddy={managedCaddy} onChange={onChange} />
 
       <Toggle name={`${p}-networks`} label={t('ComposeWizard.networks')} options={networkNames} selected={service.networks} onChange={(networks) => onChange({ networks })} />
       <Toggle name={`${p}-depends`} label={t('ComposeWizard.startsAfter')} options={others} selected={service.dependsOn} onChange={(dependsOn) => onChange({ dependsOn })} />
@@ -354,10 +375,13 @@ export function ComposeWizard({
   initial?: WizardState
 }) {
   const detected = useDetectedProxy(hostId, active).data
+  const [state, setState] = useState<WizardState>(() => initial ?? initialState())
+  // Asked once a domain is being entered, so wizards without a domain make no extra request.
+  const managedCaddy =
+    useManagedProxyType(hostId, active && state.services.some((s) => s.domain.host.trim() !== '')).data?.instance?.type === 'CADDY'
   const { t } = useTranslation('deployments')
   const previewId = useId()
-  const generate = useGenerateCompose()
-  const [state, setState] = useState<WizardState>(() => initial ?? initialState())
+  const generate = useGenerateCompose(hostId)
   const [yaml, setYaml] = useState<string | null>(null)
   const [shown, setShown] = useState(false)
   const [problems, setProblems] = useState<string[]>([])
@@ -388,6 +412,8 @@ export function ComposeWizard({
     <div className="wz">
       {state.services.map((s, i) => (
         <ServiceCard
+          hostId={hostId}
+          managedCaddy={managedCaddy}
           key={s.uid}
           index={i}
           service={s}

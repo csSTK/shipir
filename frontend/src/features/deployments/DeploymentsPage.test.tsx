@@ -225,6 +225,7 @@ describe('DeploymentsPage', () => {
           spec: expect.objectContaining({
             services: [expect.objectContaining({ name: 'web', image: 'nginx', environment: [{ key: 'TOKEN', value: null, ref: 'API_TOKEN' }] })],
           }),
+          hostId: 'h1',
         },
       })
       expect(screen.getByRole('radio', { name: 'YAML' })).toBeChecked()

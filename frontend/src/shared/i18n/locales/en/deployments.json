@@ -551,6 +551,8 @@
   "model.useLettersDigitsDotsHyphens": "Use letters, digits, dots, hyphens and underscores; start with a letter or digit.",
   "ComposeWizard.proxyNameTRAEFIK": "Traefik",
   "ComposeWizard.proxyNameCADDY": "Caddy",
+  "ComposeWizard.managedCaddyHint": "This environment runs Shipir's managed Caddy proxy, which does not read Docker labels, so Caddy labels are not offered. Publish this service under Domains instead.",
+  "ComposeWizard.openDomains": "Open Domains",
   "AddDeploymentDialog.checkingFreePorts": "Checking free ports…",
   "AddDeploymentDialog.portTakenUsing": "Port {{from}} was taken, using {{to}}.",
   "InstallTemplateDialog.installName": "Install {{name}}",

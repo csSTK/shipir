@@ -237,4 +237,32 @@ class ComposeGeneratorDomainTest {
         assertThat(generator.generate(spec(s, List.of(new NetworkSpec("default", "bridge", false)))))
                 .contains("networks:\n  default:\n    driver: bridge\n");
     }
+
+    @Test
+    void caddyLabelsAreRejectedForAHostWithManagedCaddy() {
+        var ex = catchThrowableOfType(InvalidComposeSpecException.class, () -> generator.generate(spec(
+                app(new DomainSpec("blog.example.com", 2368, ProxyType.CADDY, null), null, null), null), ProxyType.CADDY));
+        assertThat(ex.violations()).anySatisfy(v -> assertThat(v)
+                .startsWith("services.app.domain.proxy").contains("managed Caddy").contains("Domains"));
+    }
+
+    @Test
+    void caddyLabelsAreGeneratedWhenTheHostHasNoManagedProxy() {
+        DomainSpec domain = new DomainSpec("blog.example.com", 2368, ProxyType.CADDY, "caddy");
+        ComposeSpec spec = spec(app(domain, null, null), null);
+        assertThat(generator.generate(spec, null)).isEqualTo(generator.generate(spec)).contains("caddy: blog.example.com");
+    }
+
+    @Test
+    void caddyLabelsAreGeneratedWhenTheHostManagesTraefik() {
+        DomainSpec domain = new DomainSpec("blog.example.com", 2368, ProxyType.CADDY, "caddy");
+        assertThat(generator.generate(spec(app(domain, null, null), null), ProxyType.TRAEFIK))
+                .contains("caddy: blog.example.com");
+    }
+
+    @Test
+    void traefikLabelsAreUnchangedOnAHostWithManagedCaddy() {
+        ComposeSpec spec = spec(app(new DomainSpec("blog.example.com", 2368, ProxyType.TRAEFIK, "proxy"), null, null), null);
+        assertThat(generator.generate(spec, ProxyType.CADDY)).isEqualTo(generator.generate(spec));
+    }
 }

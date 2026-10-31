@@ -551,6 +551,8 @@
   "model.useLettersDigitsDotsHyphens": "Verwende Buchstaben, Ziffern, Punkte, Bindestriche und Unterstriche; beginne mit einem Buchstaben oder einer Ziffer.",
   "ComposeWizard.proxyNameTRAEFIK": "Traefik",
   "ComposeWizard.proxyNameCADDY": "Caddy",
+  "ComposeWizard.managedCaddyHint": "Diese Umgebung betreibt den von Shipir verwalteten Caddy-Proxy, der keine Docker-Labels liest. Caddy-Labels werden deshalb nicht angeboten. Veröffentliche den Dienst stattdessen unter Domains.",
+  "ComposeWizard.openDomains": "Domains öffnen",
   "AddDeploymentDialog.checkingFreePorts": "Prüfe freie Ports…",
   "AddDeploymentDialog.portTakenUsing": "Port {{from}} war belegt, verwende {{to}}.",
   "InstallTemplateDialog.installName": "{{name}} installieren",

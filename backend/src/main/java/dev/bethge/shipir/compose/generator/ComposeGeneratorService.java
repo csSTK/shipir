@@ -58,11 +58,19 @@ public class ComposeGeneratorService {
             .build();
 
     public String generate(ComposeSpec spec) {
+        return generate(spec, null);
+    }
+
+    /**
+     * @param managedProxy the proxy Shipir manages on the target host, or null. Shipir's managed Caddy does not read
+     *                     Docker labels, so Caddy label domains are rejected there (managed routes are the way).
+     */
+    public String generate(ComposeSpec spec, ProxyType managedProxy) {
         if (spec == null) {
             throw new InvalidComposeSpecException(List.of("spec: required"));
         }
         List<String> errors = new ArrayList<>();
-        validate(spec, errors);
+        validate(spec, managedProxy, errors);
         if (!errors.isEmpty()) {
             throw new InvalidComposeSpecException(errors);
         }
@@ -71,7 +79,7 @@ public class ComposeGeneratorService {
 
     // ---- validation ----
 
-    private void validate(ComposeSpec spec, List<String> errors) {
+    private void validate(ComposeSpec spec, ProxyType managedProxy, List<String> errors) {
         Set<String> networks = declared("networks", orEmpty(spec.networks()).stream()
                 .map(n -> n == null ? null : n.name()).toList(), errors);
         Set<String> volumes = declared("volumes", orEmpty(spec.volumes()).stream()
@@ -98,7 +106,7 @@ public class ComposeGeneratorService {
                 .map(s -> s == null ? null : s.name()).toList(), errors);
         for (ServiceSpec s : spec.services()) {
             if (s != null && s.name() != null) {
-                validateService(s, serviceNames, networks, volumes, errors);
+                validateService(s, serviceNames, networks, volumes, managedProxy, errors);
             }
         }
         detectCycle(spec.services(), errors);
@@ -153,7 +161,7 @@ public class ComposeGeneratorService {
     }
 
     private void validateService(ServiceSpec s, Set<String> serviceNames, Set<String> networks,
-                                 Set<String> volumes, List<String> errors) {
+                                 Set<String> volumes, ProxyType managedProxy, List<String> errors) {
         String at = "services." + s.name();
         if (s.image() == null || !IMAGE.matcher(s.image()).matches()) {
             errors.add(at + ".image: required, no whitespace or quotes");
@@ -190,7 +198,7 @@ public class ComposeGeneratorService {
             }
         }
         if (s.domain() != null) {
-            validateDomain(at, s, errors);
+            validateDomain(at, s, managedProxy, errors);
         }
         for (String d : orEmpty(s.dependsOn())) {
             if (d == null || !serviceNames.contains(d)) {
@@ -213,7 +221,7 @@ public class ComposeGeneratorService {
         }
     }
 
-    private void validateDomain(String at, ServiceSpec s, List<String> errors) {
+    private void validateDomain(String at, ServiceSpec s, ProxyType managedProxy, List<String> errors) {
         DomainSpec d = s.domain();
         if (d.host() == null || !DnsNames.isValidHostname(d.host())) {
             errors.add(at + ".domain.host: must be a lower-case domain name such as app.example.com");
@@ -223,6 +231,9 @@ public class ComposeGeneratorService {
         }
         if (d.proxy() == null) {
             errors.add(at + ".domain.proxy: must be TRAEFIK or CADDY");
+        } else if (d.proxy() == ProxyType.CADDY && managedProxy == ProxyType.CADDY) {
+            errors.add(at + ".domain.proxy: this environment has a managed Caddy proxy, which does not read Docker labels;"
+                    + " add the domain under Domains instead");
         }
         if (d.network() != null && COMPOSE_DEFAULT_NETWORK.equals(d.network())) {
             // Compose's own project network; emitting it as "external: true" makes the file unresolvable.

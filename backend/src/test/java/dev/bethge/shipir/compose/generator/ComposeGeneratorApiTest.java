@@ -43,6 +43,8 @@ class ComposeGeneratorApiTest {
     UserRepository users;
     @Autowired
     PasswordEncoder encoder;
+    @Autowired
+    org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     @BeforeEach
     void seedUsers() {
@@ -110,6 +112,74 @@ class ComposeGeneratorApiTest {
         mvc.perform(generate("operator", body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.yaml").value(org.hamcrest.Matchers.containsString("caddy: blog.example.com")));
+    }
+
+    private static final String CADDY_DOMAIN = """
+            {"hostId":"%s","spec":{"services":[{"name":"web","image":"nginx",
+              "domain":{"host":"blog.example.com","port":80,"proxy":"CADDY","network":null}}]}}""";
+
+    /** A host owned by admin; with a managed proxy of the given type unless null. */
+    private java.util.UUID host(String proxyType) {
+        java.util.UUID id = jdbc.queryForObject("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
+                + "SELECT 'Generator host', 'LOCAL', id FROM users WHERE username = 'admin' RETURNING id",
+                java.util.UUID.class);
+        if (proxyType != null) {
+            jdbc.update("INSERT INTO proxy_instances (host_id, type, acme_email, default_cert_mode) "
+                    + "VALUES (?, ?, 'ops@example.com', 'ACME_HTTP')", id, proxyType);
+        }
+        return id;
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void removeHosts() {
+        jdbc.update("DELETE FROM proxy_instances");
+        jdbc.update("DELETE FROM permissions");
+        jdbc.update("DELETE FROM docker_hosts WHERE name = 'Generator host'");
+    }
+
+    @Test
+    void invisibleHostIsIndistinguishableFromAnUnknownOne() throws Exception {
+        java.util.UUID hidden = host("CADDY");
+        String unknown = mvc.perform(generate("operator", CADDY_DOMAIN.formatted(java.util.UUID.randomUUID())))
+                .andExpect(status().isNotFound()).andReturn().getResponse().getContentAsString();
+        mvc.perform(generate("operator", CADDY_DOMAIN.formatted(hidden)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("HOST_NOT_FOUND"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(unknown));
+    }
+
+    @Test
+    void visibleHostWithManagedCaddyRejectsCaddyLabels() throws Exception {
+        java.util.UUID id = host("CADDY");
+        grantView(id);
+        mvc.perform(generate("operator", CADDY_DOMAIN.formatted(id)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_COMPOSE_SPEC"))
+                .andExpect(jsonPath("$.details[0]").value(org.hamcrest.Matchers.containsString("managed Caddy")));
+    }
+
+    @Test
+    void visibleHostWithManagedTraefikOrNoProxyKeepsCaddyLabels() throws Exception {
+        for (String type : new String[] {"TRAEFIK", null}) {
+            java.util.UUID id = host(type);
+            grantView(id);
+            mvc.perform(generate("operator", CADDY_DOMAIN.formatted(id)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.yaml").value(org.hamcrest.Matchers.containsString("caddy: blog.example.com")));
+            removeHosts();
+        }
+    }
+
+    private void grantView(java.util.UUID hostId) {
+        jdbc.update("INSERT INTO permissions (user_id, host_id, level) SELECT id, ?, 'VIEW' FROM users "
+                + "WHERE username = 'operator'", hostId);
+    }
+
+    @Test
+    void unknownHostIdIs404InsteadOfSilentlyIgnored() throws Exception {
+        String body = """
+                {"hostId":"00000000-0000-0000-0000-000000000001","spec":{"services":[{"name":"web","image":"nginx"}]}}""";
+        mvc.perform(generate("operator", body)).andExpect(status().isNotFound());
     }
 
     @Test

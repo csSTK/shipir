@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../shared/api/client.ts'
 import { ComposeWizard } from './ComposeWizard.tsx'
@@ -20,8 +21,9 @@ afterEach(() => {
   else delete (navigator as { clipboard?: unknown }).clipboard
 })
 
-function serve(proxy: unknown) {
+function serve(proxy: unknown, managed: unknown = { instance: null, setupBlockedReason: null }) {
   apiFetch.mockImplementation((path: string) => {
+    if (path === '/hosts/h1/proxy/managed') return Promise.resolve(managed)
     if (path === '/hosts/h1/proxy') return proxy instanceof Error ? Promise.reject(proxy) : Promise.resolve(proxy)
     if (path === '/compose/proxy-templates/traefik') return Promise.resolve({ yaml: 'services:\n  traefik: {}\n' })
     if (path === '/compose/generate') return Promise.resolve({ yaml: 'services: {}\n' })
@@ -31,9 +33,11 @@ function serve(proxy: unknown) {
 
 function open() {
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <ComposeWizard hostId="h1" onContinue={() => {}} />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <ComposeWizard hostId="h1" onContinue={() => {}} />
+      </QueryClientProvider>
+    </MemoryRouter>,
   )
 }
 const group = () => screen.getByRole('group', { name: 'Service 1 domain' })
@@ -209,5 +213,44 @@ describe('wizard domain section', () => {
     serve({ visible: false })
     open()
     expect(screen.queryByText('Variable name')).not.toBeInTheDocument()
+  })
+
+  it('does not offer Caddy labels on a host with a managed Caddy and points to Domains', async () => {
+    serve({ visible: true, proxy: null, container: null, network: null }, { instance: { type: 'CADDY' }, setupBlockedReason: null })
+    open()
+    fireEvent.change(screen.getByLabelText('Service 1 domain host'), { target: { value: 'app.example.com' } })
+    expect(await within(group()).findByText(/does not read Docker labels/)).toBeInTheDocument()
+    expect(within(group()).getByRole('link', { name: 'Open Domains' })).toHaveAttribute('href', '/environments/h1/domains')
+    expect(within(screen.getByLabelText('Service 1 domain proxy')).queryByRole('option', { name: 'Caddy' })).toBeNull()
+    expect(within(screen.getByLabelText('Service 1 domain proxy')).getByRole('option', { name: 'Traefik' })).toBeInTheDocument()
+    expect(within(group()).queryByText(/No reverse proxy detected/)).toBeNull()
+  })
+
+  it('switches an already chosen Caddy back to Traefik once the managed Caddy is known', async () => {
+    serve({ visible: true, proxy: null, container: null, network: null }, { instance: { type: 'CADDY' }, setupBlockedReason: null })
+    open()
+    fireEvent.change(screen.getByLabelText('Service 1 domain proxy'), { target: { value: 'CADDY' } })
+    fireEvent.change(screen.getByLabelText('Service 1 domain host'), { target: { value: 'app.example.com' } })
+    await waitFor(() => expect(screen.getByLabelText('Service 1 domain proxy')).toHaveValue('TRAEFIK'))
+  })
+
+  it('keeps offering Caddy on a host with a managed Traefik or no managed proxy', async () => {
+    serve({ visible: true, proxy: null, container: null, network: null }, { instance: { type: 'TRAEFIK' }, setupBlockedReason: null })
+    open()
+    fireEvent.change(screen.getByLabelText('Service 1 domain host'), { target: { value: 'app.example.com' } })
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/proxy/managed'))
+    expect(within(screen.getByLabelText('Service 1 domain proxy')).getByRole('option', { name: 'Caddy' })).toBeInTheDocument()
+    expect(within(group()).queryByText(/does not read Docker labels/)).toBeNull()
+  })
+
+  it('sends the host id with the generate request and skips the managed lookup without a domain', async () => {
+    serve({ visible: true, proxy: null, container: null, network: null })
+    open()
+    fireEvent.change(screen.getByLabelText('Service 1 name'), { target: { value: 'web' } })
+    fireEvent.change(screen.getByLabelText('Service 1 image'), { target: { value: 'nginx' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Preview YAML' }))
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/compose/generate', expect.anything()))
+    expect(apiFetch.mock.calls.find((c) => c[0] === '/compose/generate')![1].body.hostId).toBe('h1')
+    expect(apiFetch).not.toHaveBeenCalledWith('/hosts/h1/proxy/managed')
   })
 })
