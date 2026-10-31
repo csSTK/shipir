@@ -215,7 +215,10 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
         <div className="wz-modes" role="radiogroup" aria-label={tr('AddDeploymentDialog.source')}>
           {([['file', tr('AddDeploymentDialog.newFile')], ['import', tr('AddDeploymentDialog.importFile')], ['portainer', tr('AddDeploymentDialog.importFromPortainer')], ['git', tr('AddDeploymentDialog.gitRepository')]] as const).map(([value, label]) => (
             <label key={value} className="wz-mode">
-              <input type="radio" name="deployment-source" checked={source === value} onChange={() => setSource(value)} />
+              <input type="radio" name="deployment-source" checked={source === value} onChange={() => {
+                  setSource(value)
+                  picked.current = { yaml: null, env: null } // the file pickers reset when they unmount
+                }} />
               {label}
             </label>
           ))}
@@ -226,9 +229,8 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
             <EnvEditor value={env} onChange={setEnv} />
           </>
         )}
-        <div hidden={source !== 'import'}>
-          <ImportFileFields onCompose={importCompose} onEnv={importEnv} />
-        </div>
+        {/* Mounted only for this source: its hidden "Compose file" file input must not shadow the editor's label. */}
+        {source === 'import' && <ImportFileFields onCompose={importCompose} onEnv={importEnv} />}
         {source === 'portainer' && <PortainerImportFields onStack={importStack} />}
         {isImport && importHint && (
           <p className="if-hint" role="status">
