@@ -682,6 +682,25 @@ class ChatOrchestratorTest {
     }
 
     @Test
+    void exhaustedRetriesWithoutProviderRetryAfterOmitTheEstimatedTime() throws Exception {
+        List<java.time.Duration> sleeps = recordSleeps();
+        try {
+            Login l = login("viewer");
+            String id = newSession(l);
+            for (int i = 0; i < 4; i++) {
+                llm.rateLimited(null);
+            }
+            say(l, id, "Hello");
+
+            assertThat(sleeps).hasSize(2);
+            assertThat(lastContent(messages(l, id)))
+                    .isEqualTo("Error (RATE_LIMITED): The language model is rate limited; try again later.");
+        } finally {
+            restoreSleeper();
+        }
+    }
+
+    @Test
     void noRetryOnceTokensWereStreamed() throws Exception {
         List<java.time.Duration> sleeps = recordSleeps();
         try {

@@ -419,6 +419,10 @@ public class ChatOrchestrator {
      */
     private static String errorMessage(LlmException e) {
         if (e.code() == LlmException.Code.RATE_LIMITED) {
+            // Without the provider's Retry-After the wait is only our default, so no retry time is stated.
+            if (e.retryAfter() == null) {
+                return "The language model is rate limited; try again later.";
+            }
             return "The language model is rate limited; retry in about " + waitSeconds(e) + "s.";
         }
         Integer status = e.httpStatus();
