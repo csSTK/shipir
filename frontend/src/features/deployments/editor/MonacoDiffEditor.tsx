@@ -1,12 +1,9 @@
-import { DiffEditor, loader } from '@monaco-editor/react'
-import * as monaco from 'monaco-editor'
-import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
+import { DiffEditor } from '@monaco-editor/react'
 import { useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import { editorFontSize } from './editorFontSize.ts'
+import './monacoEnvironment.ts'
 
-self.MonacoEnvironment = { getWorker: () => new EditorWorker() }
-loader.config({ monaco })
 
 const darkQuery = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null
 function subscribeDark(cb: () => void) {

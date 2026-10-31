@@ -1,18 +1,10 @@
-import Editor, { loader } from '@monaco-editor/react'
-import * as monaco from 'monaco-editor'
-import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
+import Editor from '@monaco-editor/react'
 import { configureMonacoYaml } from 'monaco-yaml'
-import YamlWorker from 'monaco-yaml/yaml.worker?worker'
 import { useSyncExternalStore } from 'react'
 import composeSchema from './compose-spec.json'
 import { useTranslation } from 'react-i18next'
 import { editorFontSize } from './editorFontSize.ts'
-
-// Bundle Monaco from node_modules: no CDN loader, workers come from Vite.
-self.MonacoEnvironment = {
-  getWorker: (_id, label) => (label === 'yaml' ? new YamlWorker() : new EditorWorker()),
-}
-loader.config({ monaco })
+import { monaco } from './monacoEnvironment.ts'
 
 const SCHEMA_URI = 'inmemory://shipir/compose-spec.json'
 let configured = false
