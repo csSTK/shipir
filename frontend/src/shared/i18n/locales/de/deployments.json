@@ -614,5 +614,17 @@
   "fromYaml.reuse": "YAML-Anker, Aliase und Merge-Keys (&, *, <<) werden nicht unterstützt.",
   "fromYaml.networkUndeclared": "{{where}}: Netzwerk '{{name}}' ist unter networks nicht deklariert.",
   "fromYaml.dependsUnknown": "{{where}}: '{{name}}' ist kein anderer Dienst in dieser Datei.",
-  "fromYaml.withPath": "{{where}}: {{message}}"
+  "fromYaml.withPath": "{{where}}: {{message}}",
+  "AddDeploymentDialog.importFile": "Datei importieren",
+  "AddDeploymentDialog.importFallbackHint": "Der Formular-Assistent kann diese Datei nicht darstellen, deshalb ist sie im YAML-Editor geöffnet. Grund: {{reason}}",
+  "ImportFileFields.composeFile": "Compose-Datei (.yml, .yaml)",
+  "ImportFileFields.envFile": "Umgebungsdatei (optional)",
+  "ImportFileFields.chooseFile": "Datei wählen",
+  "ImportFileFields.noFileChosen": "Keine Datei gewählt",
+  "ImportFileFields.tooLarge": "{{name}} ist zu groß (Limit {{limit}} KiB).",
+  "ImportFileFields.unreadable": "{{name}} konnte nicht gelesen werden.",
+  "ImportFileFields.notText": "{{name}} ist keine Textdatei.",
+  "ImportFileFields.wrongExtension": "{{name}}: Bitte eine .yml- oder .yaml-Datei wählen.",
+  "ImportFileFields.invalidEnvLines": "{{name}} ist keine gültige Env-Datei (prüfe Zeile {{lines}}).",
+  "ImportFileFields.chooseFileFor": "Datei wählen, {{field}}"
 }

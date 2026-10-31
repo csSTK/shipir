@@ -6,17 +6,28 @@ import { useCreateDeployment, type EnvEntry } from './api.ts'
 import { EnvEditor, toPayload, validateEnv, YamlEditor } from './editor/index.ts'
 import { describeDeploymentError } from './deploymentErrors.ts'
 import { GitSourceFields, type GitFormValue } from './GitSourceFields.tsx'
+import { ImportFileFields, type ImportedCompose, type ImportedEnv } from './ImportFileFields.tsx'
+import { fromYaml } from './wizard/fromYaml.ts'
 import { ComposeWizard, applyFreePorts, preferredHostPorts, referencedEnvKeys, specToState, type WizardState } from './wizard/index.ts'
 import { TemplatePicker, type AppTemplate } from './templates/index.ts'
 import { InstallTemplateDialog, type InstallSeed } from './templates/InstallTemplateDialog.tsx'
 import { fetchFreePorts } from './templates/api.ts'
 import './wizard/wizard.css'
 import './templates/templates.css'
+import './ImportFileFields.css'
 import { Button, Dialog, TextField } from '../../shared/ui/index.ts'
 import { useTranslation } from 'react-i18next'
 
 const EMPTY_GIT_FORM: GitFormValue = { repoUrl: '', ref: 'main', composePath: 'compose.yaml', credentialId: '' }
 const NAME_PATTERN = /^[a-z0-9][a-z0-9_-]*$/
+const GENERIC_FILE_NAMES = ['compose', 'docker-compose', 'stack']
+
+/** Deployment name suggested by the compose file name ("shop.yml" -> "shop"); generic names suggest nothing. */
+function suggestName(fileName: string): string {
+  const base = fileName.replace(/\.ya?ml$/i, '').toLowerCase()
+  if (GENERIC_FILE_NAMES.includes(base)) return ''
+  return base.replace(/[^a-z0-9_-]+/g, '-').replace(/^[^a-z0-9]+|-+$/g, '').slice(0, 63)
+}
 
 /**
  * Create form: name, then either the Compose file (Monaco) or the form wizard, plus environment variables.
@@ -30,7 +41,7 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
   const [yaml, setYaml] = useState('')
   const [env, setEnv] = useState<EnvEntry[]>([])
   const { data: user } = useCurrentUser()
-  const [source, setSource] = useState<'file' | 'git'>('file')
+  const [source, setSource] = useState<'file' | 'git' | 'import'>('file')
   const [git, setGit] = useState<GitFormValue>(EMPTY_GIT_FORM)
   const [mode, setMode] = useState<'template' | 'yaml' | 'wizard'>('yaml')
   const [template, setTemplate] = useState<AppTemplate | null>(null)
@@ -40,6 +51,10 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
   const [checkingPorts, setCheckingPorts] = useState(false)
   const [portNotices, setPortNotices] = useState<{ from: number; to: number }[]>([])
   const [problem, setProblem] = useState<string | null>(null)
+  /** Latest picked files; a ref so two picks in quick succession both see each other. */
+  const picked = useRef<{ yaml: string | null; env: EnvEntry[] | null }>({ yaml: null, env: null })
+  const [imported, setImported] = useState(false)
+  const [importHint, setImportHint] = useState<string | null>(null)
   const [yamlError, setYamlError] = useState<{ message: string; details?: string[] } | null>(null)
 
   /** Adds an empty row per key that has none yet; existing values stay. */
@@ -89,9 +104,44 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
     setMode('wizard')
   }
 
+  /** Puts the picked files into the editors: the wizard when it can represent the compose file, else YAML mode with the reason. */
+  function applyImport() {
+    const { yaml: text, env: entries } = picked.current
+    if (text === null) return
+    const rows = entries ?? []
+    setImported(true)
+    setYaml(text)
+    setYamlError(null)
+    setEnv(rows)
+    const result = fromYaml(text, rows.map((e) => e.key))
+    if (result.ok) {
+      setImportHint(null)
+      setTemplate(null)
+      setPortNotices([])
+      setSeed((current) => ({ key: current.key + 1, state: result.state }))
+      setMode('wizard')
+    } else {
+      setImportHint(result.reason)
+      setMode('yaml')
+    }
+  }
+
+  function importCompose({ fileName, text }: ImportedCompose) {
+    const suggestion = suggestName(fileName)
+    if (suggestion) setName((current) => (current.trim() === '' ? suggestion : current))
+    picked.current.yaml = text
+    applyImport()
+  }
+
+  function importEnv({ entries }: ImportedEnv) {
+    picked.current.env = entries
+    if (picked.current.yaml === null) setEnv(entries)
+    else applyImport()
+  }
+
   function submit(e: FormEvent) {
     e.preventDefault()
-    if (source === 'file' && mode !== 'yaml') return // Enter inside the wizard must not submit
+    if (source !== 'git' && mode !== 'yaml') return // Enter inside the wizard must not submit
     const trimmed = name.trim()
     if (!NAME_PATTERN.test(trimmed) || trimmed.length > 63) {
       setProblem(tr('AddDeploymentDialog.useLowercaseLettersDigitsHyphens'))
@@ -141,12 +191,14 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
     )
   }
 
+  const composeVisible = source === 'file' || (source === 'import' && imported)
+
   return (
     <Dialog size="lg" open onOpenChange={(open) => !open && onClose()} title={tr('AddDeploymentDialog.addDeployment')}>
       <form onSubmit={submit} className="ui-form">
         <TextField label={tr('AddDeploymentDialog.name')} value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" spellCheck={false} />
         <div className="wz-modes" role="radiogroup" aria-label={tr('AddDeploymentDialog.source')}>
-          {([['file', tr('AddDeploymentDialog.newFile')], ['git', tr('AddDeploymentDialog.gitRepository')]] as const).map(([value, label]) => (
+          {([['file', tr('AddDeploymentDialog.newFile')], ['import', tr('AddDeploymentDialog.importFile')], ['git', tr('AddDeploymentDialog.gitRepository')]] as const).map(([value, label]) => (
             <label key={value} className="wz-mode">
               <input type="radio" name="deployment-source" checked={source === value} onChange={() => setSource(value)} />
               {label}
@@ -159,7 +211,15 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
             <EnvEditor value={env} onChange={setEnv} />
           </>
         )}
-        <div className="wz-modes" role="radiogroup" aria-label={tr('AddDeploymentDialog.editingMode')} hidden={source !== 'file'}>
+        <div hidden={source !== 'import'}>
+          <ImportFileFields onCompose={importCompose} onEnv={importEnv} />
+        </div>
+        {source === 'import' && importHint && (
+          <p className="if-hint" role="status">
+            {tr('AddDeploymentDialog.importFallbackHint', { reason: importHint })}
+          </p>
+        )}
+        <div className="wz-modes" role="radiogroup" aria-label={tr('AddDeploymentDialog.editingMode')} hidden={!composeVisible}>
           {([['template', tr('AddDeploymentDialog.fromTemplate')], ['wizard', tr('AddDeploymentDialog.formWizard')], ['yaml', 'YAML']] as const).map(([value, label]) => (
             <label key={value} className="wz-mode">
               <input type="radio" name="compose-mode" checked={mode === value} onChange={() => setMode(value)} />
@@ -167,13 +227,13 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
             </label>
           ))}
         </div>
-        {source === 'file' && mode === 'template' && <TemplatePicker onSelect={(t) => void pickTemplate(t)} onInstall={setInstalling} selectedId={template?.id} />}
-        {source === 'file' && mode === 'template' && checkingPorts && (
+        {composeVisible && mode === 'template' && <TemplatePicker onSelect={(t) => void pickTemplate(t)} onInstall={setInstalling} selectedId={template?.id} />}
+        {composeVisible && mode === 'template' && checkingPorts && (
           <p className="tp__hint" role="status">
             {tr('AddDeploymentDialog.checkingFreePorts')}
           </p>
         )}
-        <div hidden={source !== 'file' || mode !== 'wizard'}>
+        <div hidden={!composeVisible || mode !== 'wizard'}>
           {portNotices.length > 0 && (
             <ul className="tp-notice" role="status">
               {portNotices.map((n) => (
@@ -195,9 +255,9 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
               <p className="tp-vars__note">{tr('AddDeploymentDialog.fillInTheirValuesAfter')}</p>
             </div>
           )}
-          <ComposeWizard hostId={hostId} active={source === 'file' && mode === 'wizard'} key={seed.key} initial={seed.state} onContinue={continueInEditor} />
+          <ComposeWizard hostId={hostId} active={composeVisible && mode === 'wizard'} key={seed.key} initial={seed.state} onContinue={continueInEditor} />
         </div>
-        <div className="ui-form" hidden={source !== 'file' || mode !== 'yaml'}>
+        <div className="ui-form" hidden={!composeVisible || mode !== 'yaml'}>
           <div className="ui-field">
             <span className="ui-field__label">{tr('AddDeploymentDialog.composeFile')}</span>
             <YamlEditor label={tr('AddDeploymentDialog.composeFile2')} value={yaml} onChange={setYaml} height="260px" error={yamlError} />
@@ -213,7 +273,7 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
           <Button variant="ghost" onClick={onClose}>
             {tr('AddDeploymentDialog.cancel')}
           </Button>
-          <Button variant="primary" type="submit" disabled={create.isPending} hidden={source === 'file' && mode !== 'yaml'}>
+          <Button variant="primary" type="submit" disabled={create.isPending} hidden={(source === 'import' && !imported) || (composeVisible && mode !== 'yaml')}>
             {tr('AddDeploymentDialog.createDeployment')}
           </Button>
         </div>

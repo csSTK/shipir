@@ -614,5 +614,17 @@
   "fromYaml.reuse": "YAML anchors, aliases and merge keys (&, *, <<) are not supported.",
   "fromYaml.networkUndeclared": "{{where}}: network '{{name}}' is not declared under networks.",
   "fromYaml.dependsUnknown": "{{where}}: '{{name}}' is not another service in this file.",
-  "fromYaml.withPath": "{{where}}: {{message}}"
+  "fromYaml.withPath": "{{where}}: {{message}}",
+  "AddDeploymentDialog.importFile": "Import file",
+  "AddDeploymentDialog.importFallbackHint": "The form wizard cannot show this file, so it is open in the YAML editor instead. Reason: {{reason}}",
+  "ImportFileFields.composeFile": "Compose file (.yml, .yaml)",
+  "ImportFileFields.envFile": "Environment file (optional)",
+  "ImportFileFields.chooseFile": "Choose file",
+  "ImportFileFields.noFileChosen": "No file chosen",
+  "ImportFileFields.tooLarge": "{{name}} is too large (limit {{limit}} KiB).",
+  "ImportFileFields.unreadable": "{{name}} could not be read.",
+  "ImportFileFields.notText": "{{name}} is not a text file.",
+  "ImportFileFields.wrongExtension": "{{name}}: choose a .yml or .yaml file.",
+  "ImportFileFields.invalidEnvLines": "{{name}} is not a valid env file (check line {{lines}}).",
+  "ImportFileFields.chooseFileFor": "Choose file, {{field}}"
 }
