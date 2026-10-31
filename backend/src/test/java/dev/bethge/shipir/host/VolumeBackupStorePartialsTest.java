@@ -7,7 +7,10 @@ import org.springframework.util.unit.DataSize;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,7 +28,7 @@ class VolumeBackupStorePartialsTest {
 
     @BeforeEach
     void setUp() {
-        store = new VolumeBackupStore(new VolumeBackupProperties(DataSize.ofMegabytes(1), "alpine:3", base, false, Duration.ofMinutes(1)));
+        store = new VolumeBackupStore(new VolumeBackupProperties(DataSize.ofMegabytes(1), "alpine:3", base, false, Duration.ofMinutes(1)), Clock.systemUTC());
     }
 
     private Path put(String volume, String name) throws Exception {
@@ -58,9 +61,36 @@ class VolumeBackupStorePartialsTest {
     }
 
     @Test
+    void ageIsMeasuredAgainstTheInjectedClock() throws Exception {
+        Path part = put("data", ".backup-1.part");
+        Instant modified = Files.getLastModifiedTime(part).toInstant();
+        VolumeBackupProperties props = new VolumeBackupProperties(DataSize.ofMegabytes(1), "alpine:3", base, false, Duration.ofMinutes(1));
+
+        assertThat(new VolumeBackupStore(props, Clock.fixed(modified.plus(Duration.ofMinutes(30)), ZoneOffset.UTC))
+                .pruneStalePartials(Duration.ofHours(1))).isZero();
+        assertThat(part).exists();
+
+        assertThat(new VolumeBackupStore(props, Clock.fixed(modified.plus(Duration.ofHours(2)), ZoneOffset.UTC))
+                .pruneStalePartials(Duration.ofHours(1))).isEqualTo(1);
+        assertThat(part).doesNotExist();
+    }
+
+    @Test
+    void doesNothingWhenTheStoreDirectoryItselfIsASymlink() throws Exception {
+        Path realStore = Files.createDirectories(outside.resolve("real-store/" + host + "/data"));
+        Path part = Files.writeString(realStore.resolve(".backup-1.part"), "x");
+        Path link = Files.createSymbolicLink(outside.resolve("store-link"), outside.resolve("real-store"));
+        VolumeBackupStore linked = new VolumeBackupStore(new VolumeBackupProperties(DataSize.ofMegabytes(1), "alpine:3", link, false,
+                Duration.ofMinutes(1)), Clock.systemUTC());
+
+        assertThat(linked.pruneStalePartials(Duration.ZERO)).isZero();
+        assertThat(part).exists();
+    }
+
+    @Test
     void doesNothingWithoutStoreDirectory() {
         VolumeBackupStore empty = new VolumeBackupStore(new VolumeBackupProperties(DataSize.ofMegabytes(1), "alpine:3",
-                base.resolve("missing"), false, Duration.ofMinutes(1)));
+                base.resolve("missing"), false, Duration.ofMinutes(1)), Clock.systemUTC());
 
         assertThat(empty.pruneStalePartials(Duration.ZERO)).isZero();
     }

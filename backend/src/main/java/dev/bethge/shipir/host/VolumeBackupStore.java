@@ -14,6 +14,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.FileTime;
+import java.time.Clock;
 import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.Instant;
@@ -41,9 +42,11 @@ class VolumeBackupStore {
     private static final Pattern PARTIAL = Pattern.compile("\\.backup-.*\\.part");
 
     private final VolumeBackupProperties properties;
+    private final Clock clock;
 
-    VolumeBackupStore(VolumeBackupProperties properties) {
+    VolumeBackupStore(VolumeBackupProperties properties, Clock clock) {
         this.properties = properties;
+        this.clock = clock;
     }
 
     /** Stores the stream, then deletes all but the newest {@code keep} archives of the volume. Returns the new file. */
@@ -51,7 +54,10 @@ class VolumeBackupStore {
         Path base = properties.dir().toAbsolutePath().normalize();
         Files.createDirectories(base);
         Path dir = PathValidationUtil.resolve(base, hostId + "/" + volume);
-        Files.createDirectories(dir);
+        // One level at a time, each only created when absent and never through a symlink, so a planted host or
+        // volume symlink cannot make us create directories outside the store.
+        Path hostDir = ensureRealDirectory(base.resolve(hostId.toString()));
+        ensureRealDirectory(hostDir.resolve(dir.getFileName()));
         if (!isRealVolumeDir(base, hostId, volume, dir)) {
             throw new IOException("Backup directory of the volume is a symlink or leaves the store");
         }
@@ -65,6 +71,17 @@ class VolumeBackupStore {
         }
         prune(dir, volume, keep);
         return target;
+    }
+
+    /** Creates {@code dir} when absent; refuses (IOException) anything present that is not a real directory. */
+    private static Path ensureRealDirectory(Path dir) throws IOException {
+        if (!Files.exists(dir, LinkOption.NOFOLLOW_LINKS)) {
+            Files.createDirectory(dir);
+        }
+        if (!Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("Backup directory is a symlink or not a directory");
+        }
+        return dir;
     }
 
     /** The stored archives of one volume on one host, newest first. Empty when nothing was stored yet. */
@@ -197,7 +214,7 @@ class VolumeBackupStore {
         if (!Files.isDirectory(base, LinkOption.NOFOLLOW_LINKS)) {
             return 0;
         }
-        FileTime cutoff = FileTime.from(Instant.now().minus(minAge));
+        FileTime cutoff = FileTime.from(clock.instant().minus(minAge));
         int deleted = 0;
         try {
             for (Path hostDir : realDirectories(base)) {

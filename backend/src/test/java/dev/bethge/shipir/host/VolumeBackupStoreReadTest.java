@@ -10,6 +10,7 @@ import org.springframework.util.unit.DataSize;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -33,7 +34,7 @@ class VolumeBackupStoreReadTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        store = new VolumeBackupStore(new VolumeBackupProperties(DataSize.ofMegabytes(1), "alpine:3", base, false, Duration.ofMinutes(1)));
+        store = new VolumeBackupStore(new VolumeBackupProperties(DataSize.ofMegabytes(1), "alpine:3", base, false, Duration.ofMinutes(1)), Clock.systemUTC());
         put(host, "data", OLD, "old");
         put(host, "data", NEW, "newer!");
         put(host, "other", "other-20260101T000000Z.tar", "x");
@@ -67,7 +68,7 @@ class VolumeBackupStoreReadTest {
     @Test
     void listIsEmptyWhenTheStoreDirectoryDoesNotExist() {
         VolumeBackupStore empty = new VolumeBackupStore(new VolumeBackupProperties(DataSize.ofMegabytes(1), "alpine:3",
-                base.resolve("missing"), false, Duration.ofMinutes(1)));
+                base.resolve("missing"), false, Duration.ofMinutes(1)), Clock.systemUTC());
         assertThat(empty.list(host, "data")).isEmpty();
     }
 

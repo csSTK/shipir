@@ -10,6 +10,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -31,7 +32,7 @@ class VolumeBackupStoreWriteSymlinkTest {
 
     @BeforeEach
     void setUp() {
-        store = new VolumeBackupStore(new VolumeBackupProperties(DataSize.ofMegabytes(1), "alpine:3", base, false, Duration.ofMinutes(1)));
+        store = new VolumeBackupStore(new VolumeBackupProperties(DataSize.ofMegabytes(1), "alpine:3", base, false, Duration.ofMinutes(1)), Clock.systemUTC());
     }
 
     private static ByteArrayInputStream content() {
@@ -51,6 +52,35 @@ class VolumeBackupStoreWriteSymlinkTest {
         assertThatThrownBy(() -> store.write(host, "data", content(), Instant.now(), 3)).isInstanceOfAny(IOException.class, PathValidationException.class);
 
         assertThat(fileCount(outside)).isZero();
+    }
+
+    @Test
+    void writeCreatesNothingBehindAHostDirectorySymlinkOutsideTheStore() throws Exception {
+        Files.createSymbolicLink(base.resolve(host.toString()), outside);
+
+        assertThatThrownBy(() -> store.write(host, "data", content(), Instant.now(), 3)).isInstanceOfAny(IOException.class, PathValidationException.class);
+
+        assertThat(fileCount(outside)).as("no volume directory created through the symlink").isZero();
+    }
+
+    @Test
+    void writeCreatesNothingBehindAHostDirectorySymlinkedToAnotherHostInsideTheStore() throws Exception {
+        Path otherHost = Files.createDirectories(base.resolve(UUID.randomUUID().toString()));
+        Files.createSymbolicLink(base.resolve(host.toString()), otherHost);
+
+        assertThatThrownBy(() -> store.write(host, "data", content(), Instant.now(), 3)).isInstanceOfAny(IOException.class, PathValidationException.class);
+
+        assertThat(fileCount(otherHost)).as("no volume directory created in the other host's tree").isZero();
+    }
+
+    @Test
+    void writeRefusesADanglingHostDirectorySymlinkAndCreatesNoTarget() throws Exception {
+        Path missing = outside.resolve("not-yet");
+        Files.createSymbolicLink(base.resolve(host.toString()), missing);
+
+        assertThatThrownBy(() -> store.write(host, "data", content(), Instant.now(), 3)).isInstanceOfAny(IOException.class, PathValidationException.class);
+
+        assertThat(missing).doesNotExist();
     }
 
     @Test

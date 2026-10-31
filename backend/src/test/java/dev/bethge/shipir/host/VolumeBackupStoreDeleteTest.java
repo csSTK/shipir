@@ -8,6 +8,7 @@ import org.springframework.util.unit.DataSize;
 import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -28,7 +29,7 @@ class VolumeBackupStoreDeleteTest {
 
     @BeforeEach
     void setUp() {
-        store = new VolumeBackupStore(new VolumeBackupProperties(DataSize.ofMegabytes(1), "alpine:3", base, false, Duration.ofMinutes(1)));
+        store = new VolumeBackupStore(new VolumeBackupProperties(DataSize.ofMegabytes(1), "alpine:3", base, false, Duration.ofMinutes(1)), Clock.systemUTC());
     }
 
     private Path put(UUID h, String volume, String name) throws Exception {
