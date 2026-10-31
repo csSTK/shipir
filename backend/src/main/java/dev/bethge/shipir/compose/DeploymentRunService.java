@@ -234,9 +234,9 @@ public class DeploymentRunService {
             String envText = decryptEnv(version);
             alignCheckout(deployment, version);
             DiskState before = DiskState.of(files, deployment);
-            files.write(hostId, deployment.getName(), version.getYamlContent(), envText);
             List<String> services = null;
             try {
+                files.write(hostId, deployment.getName(), version.getYamlContent(), envText);
                 enforceRunPolicy(deployment, endpoint, username, userId != null ? userId : version.getCreatedBy(), version);
                 if (service != null) {
                     deploymentService.requireService(deployment, endpoint, service);
@@ -665,15 +665,18 @@ public class DeploymentRunService {
     /**
      * A run that was refused (policy gate, invalid file) must not leave the refused compose file or .env on disk: the
      * files are written before the gate because the gate reads them from disk. Best effort like
-     * {@link #restoreAfterFailedPull}; a failure is audited. Nothing to restore when there was no compose file before.
+     * {@link #restoreAfterFailedPull}; a failure is audited. Without a readable previous compose file the written files are
+     * removed (fail closed).
      */
     private void restoreDisk(Deployment deployment, DiskState before, UUID userId, String username) {
-        if (before.yaml() == null) {
-            log.warn("Deployment {} was not restored after a refused run: no readable compose file was captured before it",
-                    deployment.getId());
-            return;
-        }
         try {
+            if (before.yaml() == null) {
+                // fail closed: no usable snapshot (absent, a symlink or unreadable), so the refused files must not stay
+                log.warn("Deployment {} had no readable compose file before a refused run: removing the refused files",
+                        deployment.getId());
+                files.deleteManagedFiles(deployment.getHostId(), deployment.getName());
+                return;
+            }
             files.write(deployment.getHostId(), deployment.getName(), before.yaml(), before.env());
         } catch (RuntimeException e) {
             reportRestoreFailure(deployment, userId, username, "DISK_RESTORE", e);
@@ -740,7 +743,7 @@ public class DeploymentRunService {
 
     private void restore(UUID hostId, String name, String yaml, String envText) {
         if (yaml == null) {
-            files.delete(hostId, name);
+            files.deleteManagedFiles(hostId, name); // never the whole directory: a git checkout lives in repo/
             return;
         }
         files.write(hostId, name, yaml, envText);

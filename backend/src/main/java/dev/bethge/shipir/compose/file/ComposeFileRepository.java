@@ -93,6 +93,22 @@ public class ComposeFileRepository {
         }
     }
 
+    /**
+     * Removes only the files Shipir writes ({@code compose.yaml}, {@code .env}, the rollback override) and leaves the rest
+     * of the directory, notably a Git checkout in {@code repo/}, alone. A symlink at one of those names is unlinked, never
+     * followed. Unlike {@link #write} this fails loudly: callers use it to take back a refused file.
+     */
+    public void deleteManagedFiles(UUID hostId, String deploymentName) {
+        Path dir = deploymentDir(hostId, deploymentName);
+        for (String file : SHIPIR_WRITTEN_FILES) {
+            try {
+                Files.deleteIfExists(dir.resolve(file));
+            } catch (IOException e) {
+                throw new UncheckedIOException("Could not delete " + file, e);
+            }
+        }
+    }
+
     /** Validated deployment directory (may not exist yet); working directory for compose execution. */
     public Path deploymentDir(UUID hostId, String deploymentName) {
         return PathValidationUtil.resolve(existingBaseDir(), segment(hostId, deploymentName));
