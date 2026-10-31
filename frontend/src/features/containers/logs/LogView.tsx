@@ -72,7 +72,7 @@ export function LogView({ lines, label, emptyText, truncated = false, services, 
   useLayoutEffect(() => {
     const el = logRef.current
     if (el && followingRef.current) el.scrollTop = el.scrollHeight
-  }, [visible.length])
+  }, [visible]) // not visible.length: at the buffer cap the length stays constant while lines shift
 
   useEffect(() => {
     const el = logRef.current

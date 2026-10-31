@@ -98,3 +98,16 @@ describe('LogView with a full 5000-line buffer', () => {
     expect(findMatchesSpy).toHaveBeenCalledTimes(5000)
   })
 })
+
+describe('LogView autoscroll at the buffer cap', () => {
+  it('keeps following when the buffer is full and the oldest line is dropped for each new one', () => {
+    const rerender = view(mk(5000))
+    const log = screen.getByRole('log')
+    let height = 1000
+    Object.defineProperty(log, 'scrollHeight', { configurable: true, get: () => height })
+    log.scrollTop = 0
+    height = 1100
+    rerender(mk(5000, 1)) // same length, shifted window
+    expect(log.scrollTop).toBe(1100)
+  })
+})
