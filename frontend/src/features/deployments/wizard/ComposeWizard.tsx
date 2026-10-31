@@ -27,6 +27,17 @@ function patchAt<T>(list: T[], index: number, patch: Partial<T>): T[] {
   return list.map((item, i) => (i === index ? { ...item, ...patch } : item))
 }
 
+// Visual column labels for a list of rows; the inputs keep their own per-row accessible names, so this is hidden from assistive tech.
+function ColumnHeads({ labels }: { labels: string[] }) {
+  return (
+    <div className="wz-head" aria-hidden="true">
+      {labels.map((l, i) => (
+        <span key={i}>{l}</span>
+      ))}
+    </div>
+  )
+}
+
 function Toggle({ name, label, options, selected, onChange }: { name: string; label: string; options: string[]; selected: string[]; onChange: (next: string[]) => void }) {
   if (options.length === 0) return null
   return (
@@ -68,8 +79,10 @@ function ResourceList({
     <section className="wz-section" aria-label={title}>
       <h3 className="wz-section__title">{title}</h3>
       {rows.length === 0 && <p className="wz-hint">{t('ComposeWizard.noneDeclared')}</p>}
+      <div className="wz-table wz-table--env">
+      {rows.length > 0 && <ColumnHeads labels={[t('ComposeWizard.singularName', { singular }), t('ComposeWizard.driverOptional')]} />}
       {rows.map((r, i) => (
-        <div className="wz-row wz-row--resource" key={i}>
+        <div className="wz-row" key={i}>
           <TextField label={t('ComposeWizard.singularValueName', { singular, value: i + 1 })} hideLabel error={fields.get(`${kind}.${i}.name`)} placeholder={t('ComposeWizard.singularName', { singular })} value={r.name} onChange={(e) => onChange(patchAt(rows, i, { name: e.target.value }))} autoComplete="off" spellCheck={false} />
           <TextField label={t('ComposeWizard.singularValueDriver', { singular, value: i + 1 })} hideLabel error={fields.get(`${kind}.${i}.driver`)} placeholder={t('ComposeWizard.driverOptional')} value={r.driver} onChange={(e) => onChange(patchAt(rows, i, { driver: e.target.value }))} autoComplete="off" spellCheck={false} />
           <div className="wz-toggle">
@@ -80,6 +93,7 @@ function ResourceList({
           </Button>
         </div>
       ))}
+      </div>
       <Button variant="secondary" onClick={() => onChange([...rows, { name: '', driver: '', external: false }])}>
         {t('ComposeWizard.addLowercase', { lowerCase })}
       </Button>
@@ -249,8 +263,10 @@ function ServiceCard({
 
       <fieldset className="wz-group">
         <legend>{t('ComposeWizard.ports')}</legend>
+        <div className="wz-table wz-table--port">
+        {service.ports.length > 0 && <ColumnHeads labels={[t('ComposeWizard.host'), t('ComposeWizard.containerPort'), t('ComposeWizard.protocol')]} />}
         {service.ports.map((r, j) => (
-          <div className="wz-row wz-row--port" key={j}>
+          <div className="wz-row" key={j}>
             <TextField label={t('ComposeWizard.serviceNPortValueHost', { n, value: j + 1 })} hideLabel error={err(`ports.${j}.host`)} inputMode="numeric" placeholder={t('ComposeWizard.any')} value={r.host} onChange={(e) => onChange({ ports: patchAt(service.ports, j, { host: e.target.value }) })} />
             <TextField label={t('ComposeWizard.serviceNPortValueContainer', { n, value: j + 1 })} hideLabel error={err(`ports.${j}.container`)} inputMode="numeric" placeholder={t('ComposeWizard.container')} value={r.container} onChange={(e) => onChange({ ports: patchAt(service.ports, j, { container: e.target.value }) })} />
             <Select label={t('ComposeWizard.serviceNPortValueProtocol', { n, value: j + 1 })} hideLabel value={r.protocol} onChange={(e) => onChange({ ports: patchAt(service.ports, j, { protocol: e.target.value as 'tcp' | 'udp' }) })}>
@@ -262,6 +278,7 @@ function ServiceCard({
             </Button>
           </div>
         ))}
+        </div>
         <Button variant="secondary" onClick={() => onChange({ ports: [...service.ports, { host: '', container: '', protocol: 'tcp' }] })}>
           {t('ComposeWizard.addPortToServiceN', { n })}
         </Button>
@@ -269,10 +286,12 @@ function ServiceCard({
 
       <fieldset className="wz-group">
         <legend>{t('ComposeWizard.environment')}</legend>
+        <div className="wz-table wz-table--env">
+        {service.env.length > 0 && <ColumnHeads labels={[t('ComposeWizard.variableName'), t('ComposeWizard.value')]} />}
         {service.env.map((r, j) => (
-          <div className="wz-row wz-row--env" key={j}>
+          <div className="wz-row" key={j}>
             <TextField label={t('ComposeWizard.serviceNEnvValueName', { n, value: j + 1 })} hideLabel error={err(`env.${j}.key`)} value={r.key} placeholder={t('ComposeWizard.name')} onChange={(e) => onChange({ env: patchAt(service.env, j, { key: e.target.value }) })} autoComplete="off" spellCheck={false} />
-            <TextField label={t('ComposeWizard.serviceNEnvValueValue2', { n, value: j + 1, value2: r.ref ? 'reference' : 'value' })} hideLabel error={err(`env.${j}.value`)} placeholder={r.ref ? t('ComposeWizard.deploymentVariable') : t('ComposeWizard.value')} value={r.value} onChange={(e) => onChange({ env: patchAt(service.env, j, { value: e.target.value }) })} autoComplete="off" spellCheck={false} />
+            <TextField label={r.ref ? t('ComposeWizard.serviceNEnvValueReference', { n, value: j + 1 }) : t('ComposeWizard.serviceNEnvValueValue', { n, value: j + 1 })} hideLabel error={err(`env.${j}.value`)} placeholder={r.ref ? t('ComposeWizard.deploymentVariable') : t('ComposeWizard.value')} value={r.value} onChange={(e) => onChange({ env: patchAt(service.env, j, { value: e.target.value }) })} autoComplete="off" spellCheck={false} />
             <div className="wz-toggle">
               <Switch label={t('ComposeWizard.fromDeploymentVariable')} checked={r.ref} onChange={(e) => onChange({ env: patchAt(service.env, j, { ref: e.target.checked }) })} />
             </div>
@@ -281,6 +300,7 @@ function ServiceCard({
             </Button>
           </div>
         ))}
+        </div>
         <Button variant="secondary" onClick={() => onChange({ env: [...service.env, { key: '', value: '', ref: false }] })}>
           {t('ComposeWizard.addEnvVarToService', { n })}
         </Button>
@@ -288,8 +308,10 @@ function ServiceCard({
 
       <fieldset className="wz-group">
         <legend>{t('ComposeWizard.volumes')}</legend>
+        <div className="wz-table wz-table--env">
+        {service.volumes.length > 0 && <ColumnHeads labels={[t('ComposeWizard.volumeOrPath'), t('ComposeWizard.pathInContainer')]} />}
         {service.volumes.map((r, j) => (
-          <div className="wz-row wz-row--env" key={j}>
+          <div className="wz-row" key={j}>
             <TextField label={t('ComposeWizard.serviceNMountValueSource', { n, value: j + 1 })} hideLabel error={err(`volumes.${j}.source`)} value={r.source} placeholder={t('ComposeWizard.dataOrData')} onChange={(e) => onChange({ volumes: patchAt(service.volumes, j, { source: e.target.value }) })} autoComplete="off" spellCheck={false} />
             <TextField label={t('ComposeWizard.serviceNMountValueTarget', { n, value: j + 1 })} hideLabel error={err(`volumes.${j}.target`)} value={r.target} placeholder="/data" onChange={(e) => onChange({ volumes: patchAt(service.volumes, j, { target: e.target.value }) })} autoComplete="off" spellCheck={false} />
             <div className="wz-toggle">
@@ -300,6 +322,7 @@ function ServiceCard({
             </Button>
           </div>
         ))}
+        </div>
         <Button variant="secondary" onClick={() => onChange({ volumes: [...service.volumes, { source: '', target: '', readOnly: false }] })}>
           {t('ComposeWizard.addVolumeToServiceN', { n })}
         </Button>

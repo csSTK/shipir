@@ -61,13 +61,32 @@
 .wz-row--two {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
-.wz-row--port {
-  /* 6rem is a fixed layout track for the port input, not spacing (outside the token rule). */
+/* Row lists share one column grid with their header row (subgrid), so headers line up with the inputs. */
+.wz-table {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+}
+.wz-table--port {
+  /* 6rem is a fixed layout track for the protocol select, not spacing (outside the token rule). */
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 6rem auto;
 }
-.wz-row--env,
-.wz-row--resource {
+.wz-table--env {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+}
+.wz-table > .wz-row,
+.wz-table > .wz-head {
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+}
+.wz-head {
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--text-caption-size);
+  letter-spacing: var(--text-caption-tracking);
+  line-height: var(--text-caption-leading);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-muted);
 }
 .wz-row--domain {
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr);
@@ -167,11 +186,14 @@
 }
 @media (max-width: 600px) {
   .wz-row--two,
-  .wz-row--port,
-  .wz-row--env,
   .wz-row--domain,
-  .wz-row--resource {
+  .wz-table--port,
+  .wz-table--env {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* Stacked rows put every input on its own line; per-column headers no longer apply. */
+  .wz-head {
+    display: none;
   }
   .wz-toggle {
     padding-top: 0;
