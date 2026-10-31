@@ -3,6 +3,7 @@ package dev.bethge.shipir.docker.client;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.exception.BadRequestException;
 import com.github.dockerjava.api.exception.ConflictException;
+import com.github.dockerjava.api.exception.NotFoundException;
 import com.github.dockerjava.api.exception.NotModifiedException;
 import com.github.dockerjava.api.exception.DockerException;
 import com.github.dockerjava.api.exception.InternalServerErrorException;
@@ -27,6 +28,7 @@ import com.github.dockerjava.api.model.RestartPolicy;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.dto.PruneCandidateDto;
+import dev.bethge.shipir.docker.dto.RecreateLeftoverAction;
 import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
 import dev.bethge.shipir.docker.dto.ContainerDetailsDto;
@@ -44,7 +46,11 @@ import java.util.TreeMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -54,11 +60,20 @@ public class ContainerServiceImpl implements ContainerService {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ContainerServiceImpl.class);
 
+    /** Infix of the temporary name the old container gets during a recreate; {@link #WAS_RUNNING_SUFFIX} may follow. */
+    static final String OLD_NAME_MARKER = "-shipir-old-";
+    /** Appended to the temporary old name when the container was running, so a crash cannot lose that fact. */
+    static final String WAS_RUNNING_SUFFIX = "-r";
+    private static final Pattern LEFTOVER_NAME =
+            Pattern.compile("(.+)" + OLD_NAME_MARKER + "[0-9a-f]{8}(" + WAS_RUNNING_SUFFIX + ")?");
+
     static final String PROJECT_LABEL = "com.docker.compose.project";
     static final String SERVICE_LABEL = "com.docker.compose.service";
     static final String WORKING_DIR_LABEL = "com.docker.compose.project.working_dir";
 
     private final DockerCallSupport calls;
+    /** Old-container names of recreates running in this process; the leftover reconciliation must not touch them. */
+    final Set<String> recreatesInFlight = ConcurrentHashMap.newKeySet();
 
     public ContainerServiceImpl(DockerHostConnectionManager manager) {
         this.calls = new DockerCallSupport(manager);
@@ -370,7 +385,7 @@ public class ContainerServiceImpl implements ContainerService {
         }
     }
 
-    private static final java.util.regex.Pattern ANONYMOUS_VOLUME = java.util.regex.Pattern.compile("[0-9a-f]{64}");
+    private static final Pattern ANONYMOUS_VOLUME = Pattern.compile("[0-9a-f]{64}");
 
     /**
      * Binds the old container's anonymous volumes (image VOLUME declarations, named by a 64-hex id) into the new one at
@@ -398,12 +413,13 @@ public class ContainerServiceImpl implements ContainerService {
             String name = stripSlash(old.getName());
             boolean running = old.getState() != null && Boolean.TRUE.equals(old.getState().getRunning());
             String suffix = UUID.randomUUID().toString().substring(0, 8);
-            String oldName = name + "-shipir-old-" + suffix;
+            String oldName = name + OLD_NAME_MARKER + suffix + (running ? WAS_RUNNING_SUFFIX : "");
             HostConfig baseHost = old.getHostConfig() == null ? HostConfig.newHostConfig() : old.getHostConfig();
             String newId = createFrom(client, spec, name + "-shipir-new-" + suffix, baseHost, old.getConfig(), old.getId(), old.getMounts());
             List<String> addedVolumes = volumesAddedByNewImage(client, newId, old.getMounts());
             boolean stopped = running; // set before stopping: a failed stop may still have stopped it
             boolean oldRenamed = false;
+            recreatesInFlight.add(oldName);
             try {
                 if (running) {
                     try {
@@ -423,6 +439,8 @@ public class ContainerServiceImpl implements ContainerService {
                 throw new DockerConnectionException(DockerErrorCode.RECREATE_FAILED, restored
                         ? "The container could not be recreated; the previous container was restored."
                         : "The container could not be recreated and restoring the previous one failed.", e);
+            } finally {
+                recreatesInFlight.remove(oldName);
             }
             try {
                 client.removeContainerCmd(id).withForce(true).withRemoveVolumes(false).exec();
@@ -433,6 +451,64 @@ public class ContainerServiceImpl implements ContainerService {
         });
     }
 
+    @Override
+    public List<RecreateLeftoverAction> reconcileRecreateLeftovers(UUID hostId, DockerEndpoint endpoint) {
+        return calls.call(hostId, endpoint, client -> {
+            List<RecreateLeftoverAction> actions = new ArrayList<>();
+            for (Container c : client.listContainersCmd().withShowAll(true).exec()) {
+                String leftover = primaryName(c);
+                if (leftover == null || recreatesInFlight.contains(leftover)) {
+                    continue;
+                }
+                Matcher m = LEFTOVER_NAME.matcher(leftover);
+                if (!m.matches()) {
+                    continue;
+                }
+                String name = m.group(1);
+                actions.add(new RecreateLeftoverAction(name, leftover,
+                        reconcileLeftover(client, c.getId(), name, m.group(2) != null)));
+            }
+            return actions;
+        });
+    }
+
+    /** Decides on a fresh look at the original name, not on the listing the leftover came from (it may be stale). */
+    private static RecreateLeftoverAction.Outcome reconcileLeftover(DockerClient client, String id, String name,
+                                                                    boolean wasRunning) {
+        try {
+            Container holder = client.listContainersCmd().withShowAll(true).withNameFilter(List.of(name)).exec().stream()
+                    .filter(c -> name.equals(primaryName(c)))
+                    .findFirst().orElse(null);
+            if (holder != null) {
+                boolean startHolder = wasRunning && !"running".equals(holder.getState());
+                if (startHolder) {
+                    client.startContainerCmd(holder.getId()).exec();
+                }
+                client.removeContainerCmd(id).withForce(true).withRemoveVolumes(false).exec();
+                log.warn("Removed leftover container of an interrupted recreate; {} exists{}", name,
+                        startHolder ? " and was started" : "");
+                return startHolder ? RecreateLeftoverAction.Outcome.ORIGINAL_STARTED : RecreateLeftoverAction.Outcome.REMOVED;
+            }
+            client.renameContainerCmd(id).withName(name).exec();
+            if (wasRunning) {
+                client.startContainerCmd(id).exec();
+            }
+            log.warn("Renamed leftover container of an interrupted recreate back to {}{}", name,
+                    wasRunning ? " and started it" : "");
+            return wasRunning ? RecreateLeftoverAction.Outcome.RESTORED_AND_STARTED : RecreateLeftoverAction.Outcome.RESTORED;
+        } catch (ConflictException | NotFoundException e) {
+            log.info("Leftover of {} changed under us, leaving it for the next pass: {}", name, e.toString());
+            return RecreateLeftoverAction.Outcome.SKIPPED;
+        } catch (RuntimeException e) {
+            log.error("Could not reconcile leftover container of {}: {}", name, e.toString());
+            return RecreateLeftoverAction.Outcome.FAILED;
+        }
+    }
+
+    private static String primaryName(Container c) {
+        return c.getNames() == null || c.getNames().length == 0 ? null : stripSlash(c.getNames()[0]);
+    }
+
     /**
      * Anonymous volumes the freshly created container got on its own (a VOLUME path only the new image declares), i.e.
      * the ones the old container never had. Only these may be removed on rollback; the old data must stay.
@@ -441,7 +517,7 @@ public class ContainerServiceImpl implements ContainerService {
                                                        List<InspectContainerResponse.Mount> oldMounts) {
         try {
             Set<String> oldNames = oldMounts == null ? Set.of() : oldMounts.stream()
-                    .map(InspectContainerResponse.Mount::getName).filter(java.util.Objects::nonNull)
+                    .map(InspectContainerResponse.Mount::getName).filter(Objects::nonNull)
                     .collect(Collectors.toSet());
             List<InspectContainerResponse.Mount> fresh = client.inspectContainerCmd(newId).exec().getMounts();
             if (fresh == null) {

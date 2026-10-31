@@ -4,6 +4,7 @@ import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.dto.ContainerCreateSpec;
 import dev.bethge.shipir.docker.dto.ContainerResourcesSpec;
 import dev.bethge.shipir.docker.dto.CreatedResourceDto;
+import dev.bethge.shipir.docker.dto.RecreateLeftoverAction;
 import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import dev.bethge.shipir.docker.dto.ContainerDetailsDto;
 import dev.bethge.shipir.docker.dto.ContainerDto;
@@ -67,6 +68,20 @@ public interface ContainerService {
      * {@code DockerConnectionException}: NOT_FOUND (container or image missing), RECREATE_FAILED (rolled back).
      */
     CreatedResourceDto recreateContainer(UUID hostId, DockerEndpoint endpoint, String id, ContainerCreateSpec spec);
+
+    /**
+     * Cleans up after a recreate that was cut short (Shipir died between renaming the old container to
+     * {@code <name>-shipir-old-<8 hex>} and finishing). The recreate appends {@code -r} to that name when the old
+     * container was running, which is how the prior state survives a crash (leftovers without it, e.g. from before this
+     * convention, count as stopped). For each leftover: if a container with the
+     * original name exists, a running-before leftover first gets that container started when it is not running (crash
+     * after the new one took the name but before it started), then the leftover is removed (anonymous volumes are
+     * kept); otherwise the leftover is renamed back and started if it was running. A name that is taken while we act
+     * is SKIPPED; a failing action is FAILED and does not stop the others. Leftovers of a recreate running right now in
+     * this process are ignored. Assumes a single Shipir instance per Docker host. Throws
+     * {@code DockerConnectionException} if the host is unreachable.
+     */
+    List<RecreateLeftoverAction> reconcileRecreateLeftovers(UUID hostId, DockerEndpoint endpoint);
 
     /**
      * Applies resource limits to an existing container without restarting it ({@code docker update}). Throws
