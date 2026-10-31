@@ -65,6 +65,15 @@ public class PermissionService {
         return isAdmin(subject) || allowsOperate(subject, deploymentLevel(subject, hostId, deploymentId));
     }
 
+    /** True when the subject may OPERATE at least one managed deployment of the host (via any grant). */
+    @Transactional(readOnly = true)
+    public boolean canOperateAnyDeployment(PermissionSubject subject, UUID hostId) {
+        if (isAdmin(subject)) {
+            return true;
+        }
+        return deployments.deploymentIdsOf(hostId).stream().anyMatch(d -> canOperate(subject, hostId, d));
+    }
+
     /** True when the whole host (all deployments, unmanaged ones, containers, ...) is visible. */
     @Transactional(readOnly = true)
     public boolean hostFullyVisible(PermissionSubject subject, UUID hostId) {

@@ -117,4 +117,13 @@ class HostContainerLifecycleAccessTest extends HostApiTestBase {
                 .andExpect(status().isForbidden());
         verify(containers, never()).startContainer(any(), any(), any());
     }
+
+    @Test
+    void hostViewOnlyUserIsRejectedWithoutInspectingTheContainer() throws Exception {
+        grantHost("operator", host, "VIEW");
+        mvc.perform(login("operator").write(post("/api/hosts/{h}/containers/shop1/start", host)))
+                .andExpect(status().isForbidden());
+        verify(containers, never()).inspect(any(), any(), any());
+        verify(containers, never()).startContainer(any(), any(), any());
+    }
 }

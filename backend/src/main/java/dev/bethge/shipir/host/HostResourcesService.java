@@ -248,6 +248,9 @@ public class HostResourcesService {
         if (access.canOperate(hostId)) {
             return;
         }
+        if (!access.canOperateAnyDeployment(hostId)) {
+            throw new HostException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied");
+        }
         ContainerDetailsDto details = call(hostId, (id, endpoint) -> containers.inspect(id, endpoint, containerId));
         UUID deployment = details.composeProject() == null ? null
                 : managedDeployments.managedDeploymentIds(hostId).get(details.composeProject());

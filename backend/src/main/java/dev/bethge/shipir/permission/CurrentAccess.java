@@ -73,6 +73,10 @@ public class CurrentAccess {
         return subject().map(s -> permissions.canOperate(s, hostId, deploymentId)).orElse(true);
     }
 
+    public boolean canOperateAnyDeployment(UUID hostId) {
+        return subject().map(s -> permissions.canOperateAnyDeployment(s, hostId)).orElse(true);
+    }
+
     public boolean hostFullyVisible(UUID hostId) {
         return subject().map(s -> permissions.hostFullyVisible(s, hostId)).orElse(true);
     }
