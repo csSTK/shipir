@@ -88,13 +88,39 @@ public class ContainerServiceImpl implements ContainerService {
 
     @Override
     public ContainerDetailsDto inspect(UUID hostId, DockerEndpoint endpoint, String id) {
-        return calls.call(hostId, endpoint, client -> toDetails(client.inspectContainerCmd(id).exec()));
+        return calls.call(hostId, endpoint, client -> {
+            InspectContainerResponse r = client.inspectContainerCmd(id).exec();
+            return toDetails(r, imageEnv(client, r.getImageId()));
+        });
     }
 
     private static final int MAX_HEALTH_LOGS = 5;
     private static final int MAX_HEALTH_OUTPUT = 1000;
 
-    static ContainerDetailsDto toDetails(InspectContainerResponse r) {
+    /** The image's Config.Env; empty when the image is gone or unreadable, so the container inspect still works. */
+    private static List<ContainerDetailsDto.EnvVar> imageEnv(DockerClient client, String imageId) {
+        if (imageId == null || imageId.isBlank()) return List.of();
+        try {
+            var imageConfig = client.inspectImageCmd(imageId).exec().getConfig();
+            return imageConfig == null ? List.of() : parseEnv(imageConfig.getEnv());
+        } catch (RuntimeException e) {
+            log.debug("image env of {} unavailable: {}", imageId, e.toString());
+            return List.of();
+        }
+    }
+
+    private static List<ContainerDetailsDto.EnvVar> parseEnv(String[] entries) {
+        List<ContainerDetailsDto.EnvVar> env = new ArrayList<>();
+        if (entries == null) return env;
+        for (String entry : entries) {
+            int eq = entry.indexOf('=');
+            env.add(eq < 0 ? new ContainerDetailsDto.EnvVar(entry, "")
+                    : new ContainerDetailsDto.EnvVar(entry.substring(0, eq), entry.substring(eq + 1)));
+        }
+        return env;
+    }
+
+    static ContainerDetailsDto toDetails(InspectContainerResponse r, List<ContainerDetailsDto.EnvVar> imageEnv) {
         var state = r.getState();
         var config = r.getConfig();
         Map<String, String> labels = config == null || config.getLabels() == null
@@ -102,14 +128,7 @@ public class ContainerServiceImpl implements ContainerService {
         List<String> command = new ArrayList<>();
         if (r.getPath() != null) command.add(r.getPath());
         if (r.getArgs() != null) command.addAll(Arrays.asList(r.getArgs()));
-        List<ContainerDetailsDto.EnvVar> env = new ArrayList<>();
-        if (config != null && config.getEnv() != null) {
-            for (String entry : config.getEnv()) {
-                int eq = entry.indexOf('=');
-                env.add(eq < 0 ? new ContainerDetailsDto.EnvVar(entry, "")
-                        : new ContainerDetailsDto.EnvVar(entry.substring(0, eq), entry.substring(eq + 1)));
-            }
-        }
+        List<ContainerDetailsDto.EnvVar> env = config == null ? List.of() : parseEnv(config.getEnv());
         List<ContainerDetailsDto.Mount> mounts = r.getMounts() == null ? List.of() : r.getMounts().stream()
                 .map(m -> new ContainerDetailsDto.Mount(m.getName() != null ? "volume" : "bind", m.getName(),
                         m.getSource(), m.getDestination() == null ? null : m.getDestination().getPath(),
@@ -133,7 +152,7 @@ public class ContainerServiceImpl implements ContainerService {
                 r.getRestartCount() == null ? 0 : r.getRestartCount(),
                 new ContainerDetailsDto.RestartPolicy(policy == null || policy.getName() == null || policy.getName().isEmpty()
                         ? "no" : policy.getName(), policy == null || policy.getMaximumRetryCount() == null ? 0 : policy.getMaximumRetryCount()),
-                command, cmd, privileged, hostNetwork, env, mounts, labels, networks, ports(settings == null ? null : settings.getPorts()),
+                command, cmd, privileged, hostNetwork, env, imageEnv, mounts, labels, networks, ports(settings == null ? null : settings.getPorts()),
                 state == null ? null : health(state.getHealth()),
                 project == null || project.isBlank() ? null : project, service == null || service.isBlank() ? null : service);
     }

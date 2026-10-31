@@ -15,6 +15,7 @@ export const sample: ContainerDetails = {
   privileged: false,
   hostNetwork: false,
   env: [{ key: 'MODE', value: 'prod' }],
+  imageEnv: [],
   mounts: [
     { type: 'volume', name: 'data', source: '/var/lib/docker/volumes/data/_data', destination: '/data', readOnly: false },
     { type: 'bind', name: null, source: '/srv/conf', destination: '/conf', readOnly: true },

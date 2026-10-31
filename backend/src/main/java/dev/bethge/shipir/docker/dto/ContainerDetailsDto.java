@@ -8,7 +8,8 @@ import java.util.Map;
  * Inspect view of one container. {@code env} values are filled by the docker/ layer; callers that must not
  * expose them replace them via {@link #withoutEnvValues()}. {@code health} is null without a healthcheck,
  * {@code command} is entrypoint plus cmd as the daemon reports it; {@code cmd} is the configured Cmd only (what create
- * takes), {@code hostNetwork} means network mode host. {@code startedAt} null if the container never ran, compose fields null for non-Compose containers.
+ * takes), {@code imageEnv} the environment baked into the image (what the container inherits unless overridden; empty if
+ * the image cannot be inspected), {@code hostNetwork} means network mode host. {@code startedAt} null if the container never ran, compose fields null for non-Compose containers.
  */
 public record ContainerDetailsDto(
         String id,
@@ -24,6 +25,7 @@ public record ContainerDetailsDto(
         boolean privileged,
         boolean hostNetwork,
         List<EnvVar> env,
+        List<EnvVar> imageEnv,
         List<Mount> mounts,
         Map<String, String> labels,
         List<Network> networks,
@@ -31,6 +33,16 @@ public record ContainerDetailsDto(
         Health health,
         String composeProject,
         String composeService) {
+
+    /** Without image env (not known to the caller). */
+    public ContainerDetailsDto(String id, String name, String image, String state, Instant created, Instant startedAt,
+                               int restartCount, RestartPolicy restartPolicy, List<String> command, List<String> cmd,
+                               boolean privileged, boolean hostNetwork, List<EnvVar> env, List<Mount> mounts,
+                               Map<String, String> labels, List<Network> networks, List<Port> ports, Health health,
+                               String composeProject, String composeService) {
+        this(id, name, image, state, created, startedAt, restartCount, restartPolicy, command, cmd, privileged,
+                hostNetwork, env, List.of(), mounts, labels, networks, ports, health, composeProject, composeService);
+    }
 
     /** {@code name} is Docker's policy name ({@code no}, {@code always}, {@code on-failure}, {@code unless-stopped}). */
     public record RestartPolicy(String name, int maxRetries) {
@@ -60,7 +72,8 @@ public record ContainerDetailsDto(
 
     public ContainerDetailsDto withoutEnvValues() {
         return new ContainerDetailsDto(id, name, image, state, created, startedAt, restartCount, restartPolicy,
-                command, cmd, privileged, hostNetwork, env.stream().map(e -> new EnvVar(e.key(), null)).toList(), mounts, labels, networks, ports,
+                command, cmd, privileged, hostNetwork, env.stream().map(e -> new EnvVar(e.key(), null)).toList(),
+                imageEnv.stream().map(e -> new EnvVar(e.key(), null)).toList(), mounts, labels, networks, ports,
                 health, composeProject, composeService);
     }
 }

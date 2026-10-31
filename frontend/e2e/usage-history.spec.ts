@@ -28,6 +28,7 @@ const details = {
   privileged: false,
   hostNetwork: false,
   env: [],
+  imageEnv: [],
   mounts: [],
   labels: {},
   networks: [],

@@ -4,6 +4,32 @@ import { joinCommand, splitCommand } from './api.ts'
 import { anonymousVolumeTargets, buildContainerSpec, formFromDetails, validateContainerForm } from './containerForm.ts'
 
 describe('formFromDetails', () => {
+  const withImageEnv = {
+    ...sample,
+    env: [{ key: 'PATH', value: '/usr/bin' }, { key: 'VERSION', value: '1.0' }, { key: 'MODE', value: 'prod' }, { key: 'LEVEL', value: 'debug' }, { key: 'TWEAK', value: 'mine' }],
+    imageEnv: [{ key: 'PATH', value: '/usr/bin' }, { key: 'VERSION', value: '1.0' }, { key: 'LEVEL', value: 'info' }, { key: 'TWEAK', value: 'default' }],
+  }
+
+  it('leaves image-baked variables out of the form but keeps added and changed ones', () => {
+    expect(formFromDetails(withImageEnv, 'edit').env).toEqual([
+      { key: 'MODE', value: 'prod' },
+      { key: 'LEVEL', value: 'debug' },
+      { key: 'TWEAK', value: 'mine' },
+    ])
+  })
+
+  it('an untouched edit sends no image default, so a newer image default takes effect on recreate', () => {
+    const spec = buildContainerSpec(formFromDetails(withImageEnv, 'edit'), false)
+    expect(spec.env).toEqual({ MODE: 'prod', LEVEL: 'debug', TWEAK: 'mine' })
+    expect(spec.env).not.toHaveProperty('VERSION')
+    expect(spec.env).not.toHaveProperty('PATH')
+  })
+
+  it('sends no env at all when only image defaults were set', () => {
+    const d = { ...sample, env: [{ key: 'PATH', value: '/usr/bin' }], imageEnv: [{ key: 'PATH', value: '/usr/bin' }] }
+    expect(buildContainerSpec(formFromDetails(d, 'edit'), false).env).toBeUndefined()
+  })
+
   it('prefills an edit from inspect with the cmd only, without tmpfs mounts or duplicate port bindings', () => {
     const f = formFromDetails(sample, 'edit')
     expect(f.name).toBe('web')

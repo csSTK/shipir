@@ -56,6 +56,8 @@ export interface ContainerDetails {
   /** Network mode host. */
   hostNetwork: boolean
   env: { key: string; value: string | null }[]
+  /** Environment baked into the image (what the container inherits unless overridden); values null for VIEWER. */
+  imageEnv: { key: string; value: string | null }[]
   mounts: ContainerMount[]
   labels: Record<string, string>
   networks: ContainerNetwork[]

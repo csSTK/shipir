@@ -133,6 +133,17 @@ function networksFromDetails(d: ContainerDetails): NetworkRow[] {
 export type ContainerFormMode = 'create' | 'edit' | 'duplicate'
 
 /**
+ * Inspect env contains the variables the image bakes in. Posting those back would pin the old image's defaults
+ * over a newer image's, so only variables absent from the image env or with a different value are kept.
+ */
+function overridesOfImageEnv(d: ContainerDetails): EnvEntry[] {
+  const baked = new Map((d.imageEnv ?? []).map((e) => [e.key, e.value]))
+  return d.env
+    .filter((e) => !baked.has(e.key) || baked.get(e.key) !== e.value)
+    .map((e) => ({ key: e.key, value: e.value ?? '' }))
+}
+
+/**
  * Prefill from inspect. The command field takes the configured cmd only (not the entrypoint, which the backend
  * carries over). Anonymous tmpfs mounts (inspect labels them bind without source) are dropped.
  * A duplicate gets no name and no fixed host ports, as both would collide with the original.
@@ -161,7 +172,7 @@ export function formFromDetails(d: ContainerDetails, mode: 'edit' | 'duplicate')
     command: joinCommand(d.cmd),
     privileged: d.privileged,
     hostNetwork: d.hostNetwork,
-    env: d.env.map((e) => ({ key: e.key, value: e.value ?? '' })),
+    env: overridesOfImageEnv(d),
     ports,
     mounts,
     networks: networksFromDetails(d),

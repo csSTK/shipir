@@ -33,7 +33,7 @@ class ContainerInspectTest {
     private ContainerServiceImpl service;
 
     private static final String JSON = """
-            {"Id":"abc","Name":"/shop-web-1","Created":"2026-01-02T03:04:05.123456789Z","Path":"nginx","Args":["-g","daemon off;"],
+            {"Id":"abc","Image":"sha256:img1","Name":"/shop-web-1","Created":"2026-01-02T03:04:05.123456789Z","Path":"nginx","Args":["-g","daemon off;"],
              "RestartCount":4,
              "State":{"Status":"running","Running":true,"StartedAt":"2026-01-02T03:04:06Z",
                "Health":{"Status":"unhealthy","FailingStreak":3,"Log":[
@@ -60,6 +60,32 @@ class ContainerInspectTest {
         when(manager.client(any(), any())).thenReturn(client);
         service = new ContainerServiceImpl(manager);
         when(client.inspectContainerCmd("abc").exec()).thenReturn(readJson(JSON));
+        when(client.inspectImageCmd("sha256:img1").exec()).thenReturn(new ObjectMapper()
+                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .readValue("{\"Config\":{\"Env\":[\"PATH=/usr/bin\",\"A=0\",\"NGINX_VERSION=1.27\"]}}",
+                        com.github.dockerjava.api.command.InspectImageResponse.class));
+    }
+
+    @Test
+    void exposesTheImageBakedEnvSeparatelyFromTheContainerEnv() {
+        ContainerDetailsDto d = service.inspect(hostId, ENDPOINT, "abc");
+
+        assertThat(d.imageEnv()).containsExactly(new ContainerDetailsDto.EnvVar("PATH", "/usr/bin"),
+                new ContainerDetailsDto.EnvVar("A", "0"), new ContainerDetailsDto.EnvVar("NGINX_VERSION", "1.27"));
+    }
+
+    @Test
+    void imageEnvIsEmptyWhenTheImageCannotBeInspected() throws Exception {
+        when(client.inspectImageCmd("sha256:img1").exec()).thenThrow(new NotFoundException("gone"));
+
+        assertThat(service.inspect(hostId, ENDPOINT, "abc").imageEnv()).isEmpty();
+    }
+
+    @Test
+    void withoutEnvValuesAlsoWithholdsTheImageEnvValues() {
+        ContainerDetailsDto d = service.inspect(hostId, ENDPOINT, "abc").withoutEnvValues();
+
+        assertThat(d.imageEnv()).extracting(ContainerDetailsDto.EnvVar::value).containsOnlyNulls();
     }
 
     private static InspectContainerResponse readJson(String json) throws Exception {

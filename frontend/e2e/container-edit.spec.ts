@@ -28,6 +28,7 @@ const details = {
   privileged: false,
   hostNetwork: false,
   env: [{ key: 'MODE', value: 'prod' }],
+  imageEnv: [],
   mounts: [
     { type: 'volume', name: 'data', source: '/var/lib/docker/volumes/data', destination: '/data', readOnly: false },
     { type: 'bind', name: null, source: '', destination: '/run/tmp', readOnly: false },
