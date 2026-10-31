@@ -139,7 +139,7 @@ export function DomainsPage() {
     )
   } else if (data.instance) {
     body = <Ready instance={data.instance} hostId={id} isAdmin={isAdmin} canPublish={canPublish} />
-  } else if (data.setupBlockedReason) {
+  } else if (data.setupBlockedReason && data.setupBlockedReason !== 'UNKNOWN') {
     body = <Blocked reason={data.setupBlockedReason} hostId={id} />
   } else if (!isAdmin) {
     body = <ReadOnlyNotice />

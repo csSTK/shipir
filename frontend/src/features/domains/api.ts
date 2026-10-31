@@ -3,7 +3,7 @@ import { apiFetch } from '../../shared/api/client.ts'
 
 export type ProxyType = 'TRAEFIK' | 'CADDY'
 export type CertMode = 'ACME_HTTP' | 'ACME_DNS' | 'INTERNAL' | 'CUSTOM'
-export type SetupBlockedReason = 'EXISTING_PROXY' | 'PORTS_IN_USE'
+export type SetupBlockedReason = 'EXISTING_PROXY' | 'PORTS_IN_USE' | 'UNKNOWN'
 
 /** The managed proxy of a host. `deploymentStatus` is null when its deployment no longer exists. */
 export interface ProxyInstance {

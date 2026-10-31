@@ -195,6 +195,13 @@ describe('DomainsPage', () => {
     expect(screen.queryByRole('radio')).not.toBeInTheDocument()
   })
 
+  it('does not claim a port or proxy conflict when the viewer cannot see the whole environment', async () => {
+    mockApi('VIEWER', { instance: null, setupBlockedReason: 'UNKNOWN' })
+    renderPage()
+    expect(await screen.findByText(/Only administrators can set up/i)).toBeInTheDocument()
+    expect(screen.queryByText(/already in the way/i)).not.toBeInTheDocument()
+  })
+
   it('shows the ready state with proxy type, status and an empty publish list', async () => {
     mockApi('VIEWER', { instance, setupBlockedReason: null })
     renderPage()

@@ -121,7 +121,8 @@ public class ProxySetupService {
             throw new ProxyException(HttpStatus.CONFLICT, "PROXY_EXISTS", "This environment already has a managed proxy");
         }
         SetupBlockedReason blocked = blockedReason(hostId);
-        if (blocked != null) {
+        // UNKNOWN only occurs for callers who do not see the whole host; a setup needs ADMIN, who always does
+        if (blocked != null && blocked != SetupBlockedReason.UNKNOWN) {
             throw new ProxyException(HttpStatus.CONFLICT, "PROXY_SETUP_BLOCKED",
                     blocked == SetupBlockedReason.EXISTING_PROXY
                             ? "Another reverse proxy already runs on this environment"
@@ -297,11 +298,14 @@ public class ProxySetupService {
         }
     }
 
-    /** EXISTING_PROXY, PORTS_IN_USE or null (a setup is possible). */
+    /** EXISTING_PROXY, PORTS_IN_USE, UNKNOWN (caller does not see the whole host) or null (a setup is possible). */
     private SetupBlockedReason blockedReason(UUID hostId) {
         try {
             ProxyDetectionResponse detected = resources.proxy(hostId);
-            if (detected.visible() && detected.proxy() != null) {
+            if (!detected.visible()) {
+                return SetupBlockedReason.UNKNOWN;
+            }
+            if (detected.proxy() != null) {
                 return SetupBlockedReason.EXISTING_PROXY;
             }
             HostPortsResponse report = ports.report(hostId, "80,443");
@@ -313,9 +317,12 @@ public class ProxySetupService {
         } catch (RuntimeException e) {
             if (e instanceof CodedException coded) {
                 // HostException: its status is not visible here; the codes it uses for "not there" are these
-                boolean missing = "HOST_NOT_FOUND".equals(coded.code());
-                throw new ProxyException(missing ? HttpStatus.NOT_FOUND : HttpStatus.BAD_GATEWAY, coded.code(),
-                        e.getMessage());
+                HttpStatus status = switch (coded.code()) {
+                    case "HOST_NOT_FOUND" -> HttpStatus.NOT_FOUND;
+                    case "FORBIDDEN" -> HttpStatus.FORBIDDEN;
+                    default -> HttpStatus.BAD_GATEWAY;
+                };
+                throw new ProxyException(status, coded.code(), e.getMessage());
             }
             throw e;
         }

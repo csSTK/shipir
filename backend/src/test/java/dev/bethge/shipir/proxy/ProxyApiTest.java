@@ -126,6 +126,8 @@ class ProxyApiTest {
     VolumeService volumes;
     @MockitoSpyBean
     DeploymentRunService runs;
+    @MockitoSpyBean
+    dev.bethge.shipir.host.HostResourcesService hostResources;
 
     UUID hostId;
     final List<ComposeCommand> commands = new CopyOnWriteArrayList<>();
@@ -320,6 +322,33 @@ class ProxyApiTest {
         }
         assertThat(commands).isEmpty();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM proxy_instances", Integer.class)).isZero();
+    }
+
+    @Test
+    void restrictedViewerGetsAnExplicitUnknownBlockedReason() throws Exception {
+        UUID dep = jdbc.queryForObject("INSERT INTO deployments (name, host_id, compose_file_path, created_by) "
+                + "SELECT 'shop', ?, 'x', id FROM users WHERE username = 'admin' RETURNING id", UUID.class, hostId);
+        jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) SELECT id, ?, 'VIEW' "
+                + "FROM users WHERE username = 'viewer'", dep);
+
+        mvc.perform(get(url()).session(login("viewer").session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.instance").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.setupBlockedReason").value("UNKNOWN"));
+    }
+
+    static class Denied extends RuntimeException implements dev.bethge.shipir.common.exception.CodedException {
+        @Override
+        public String code() {
+            return "FORBIDDEN";
+        }
+    }
+
+    @Test
+    void forbiddenFromHostDetectionStaysForbiddenInsteadOfBadGateway() throws Exception {
+        org.mockito.Mockito.doThrow(new Denied()).when(hostResources).proxy(any());
+
+        mvc.perform(get(url()).session(login("admin").session())).andExpect(status().isForbidden());
     }
 
     @Test
