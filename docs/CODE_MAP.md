@@ -451,7 +451,7 @@ Repo root:
 
 CI:
 - `.github/workflows/tests.yml`: reusable tests (`workflow_call`/`workflow_dispatch`, inputs `backend`/`frontend`/`e2e`): Maven verify, pnpm lint/test/build, Playwright (report artifact on failure), `csp` (`pnpm e2e:csp`) and `nginx-headers` (`check-headers.sh`) jobs gated on `frontend`
-- `.github/workflows/ci.yml`: push to `dev` and PRs: paths-filter (`backend/**`, `frontend/**`, CI files) calls `tests.yml` with `e2e: false`; concurrency cancels superseded runs
+- `.github/workflows/ci.yml`: push to `dev` and PRs: paths-filter (`backend/**`, `frontend/**`, `scripts/**`, CI files) calls `tests.yml` with `e2e: false`, and the `scripts` job runs `scripts/backup-restore.test.sh` (stubbed tools, no container or DB); concurrency cancels superseded runs
 - `.github/workflows/release.yml`: on push to `prd`, runs `tests.yml` (all suites), then builds and pushes backend/frontend images (matrix) to ghcr.io/csstk/shipir-{backend,frontend} tagged `sha-<full sha>` and `latest`
 - `.github/workflows/tag.yml`: on `v*` tag push, re-tags the existing `sha-<commit>` images with semver tags (`imagetools create`, no build); fails if the sha image is missing
 

@@ -59,6 +59,12 @@ assert_file "$B/database.dump"
 [[ "$(cat "$B/stacks.tar.gz")" == "ARCHIVE:/data/stacks" ]] || fail "stacks archive"
 [[ "$(cat "$B/volume-backups.tar.gz")" == "ARCHIVE:/data/volume-backups" ]] || fail "volume-backups archive"
 
+# Backup files are owner-only (backup.sh runs with umask 077). GNU stat first: BSD stat rejects -c.
+file_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
+for file in database.dump stacks.tar.gz volume-backups.tar.gz MANIFEST; do
+  [[ "$(file_mode "$B/$file")" == "600" ]] || fail "$file is not mode 600"
+done
+
 # Restore of a full backup restores both volumes.
 : > "$STUB_LOG"
 echo RESTORE | "$HERE/restore.sh" "$B" > /dev/null
@@ -77,5 +83,8 @@ cp "$B/stacks.tar.gz" "$B/volume-backups.tar.gz"
 : > "$STUB_LOG"
 if echo RESTORE | STUB_EMPTY_CHECK_EXIT=1 "$HERE/restore.sh" "$B" > /dev/null 2>&1; then fail "non-empty volume accepted"; fi
 ! grep -q 'EXTRACTED' "$STUB_LOG" || fail "extracted into non-empty volume"
+# The refusal comes before anything is changed: no backend stop and no database restore.
+! grep -q ' stop backend' "$STUB_LOG" || fail "refused restore stopped the backend"
+! grep -q 'pg_restore' "$STUB_LOG" || fail "refused restore ran pg_restore"
 
 echo "backup-restore.test.sh: all passed"

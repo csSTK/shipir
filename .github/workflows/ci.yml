@@ -1,6 +1,6 @@
 name: CI
 
-# Dev and PR checks: path-filtered tests only. e2e and image builds are not run here.
+# Dev and PR checks: path-filtered tests and the backup/restore shell test only. e2e and image builds are not run here.
 
 on:
   push:
@@ -22,6 +22,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      scripts: ${{ steps.filter.outputs.scripts }}
     steps:
       - uses: actions/checkout@v4
 
@@ -37,6 +38,9 @@ jobs:
               - 'frontend/**'
               - '.github/workflows/tests.yml'
               - '.github/workflows/ci.yml'
+            scripts:
+              - 'scripts/**'
+              - '.github/workflows/ci.yml'
 
   tests:
     needs: changes
@@ -48,3 +52,15 @@ jobs:
       backend: ${{ needs.changes.outputs.backend == 'true' }}
       frontend: ${{ needs.changes.outputs.frontend == 'true' }}
       e2e: false
+
+  # Shell test for scripts/backup.sh and restore.sh. It puts stubs for docker, pg_dump, pg_restore and psql
+  # on PATH, so it starts no container and touches no database; the runner needs nothing extra.
+  scripts:
+    needs: changes
+    if: ${{ needs.changes.outputs.scripts == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Backup and restore script test
+        run: scripts/backup-restore.test.sh
