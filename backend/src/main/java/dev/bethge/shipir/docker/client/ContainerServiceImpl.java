@@ -613,12 +613,34 @@ public class ContainerServiceImpl implements ContainerService {
             }
             try {
                 cmd.exec();
-            } catch (BadRequestException | InternalServerErrorException e) {
+            } catch (BadRequestException e) {
                 throw new DockerConnectionException(DockerErrorCode.UPDATE_REJECTED,
                         "The daemon refused the new resource limits.", e);
+            } catch (InternalServerErrorException e) {
+                // The daemon reports refused limits (e.g. "Minimum memory limit allowed is 6MB") as 500.
+                // Any other 500 is a genuine daemon failure and falls through to the generic mapping (502).
+                if (refusesLimits(e)) {
+                    throw new DockerConnectionException(DockerErrorCode.UPDATE_REJECTED,
+                            "The daemon refused the new resource limits.", e);
+                }
+                throw e;
             }
             return null;
         });
+    }
+
+    /** Daemon-side runtime/OS failures that mention limits but are not a refusal of the requested values. */
+    private static final java.util.List<String> RUNTIME_FAILURES =
+            java.util.List.of("cannot allocate", "oci runtime", "cgroup", "no space left", "permission denied");
+    /** The daemon's own validation messages for update requests. */
+    private static final java.util.List<String> LIMIT_VALIDATION = java.util.List.of(
+            "minimum memory limit", "memory limit should be smaller", "memory reservation",
+            "cannot set both nanocpus and cpuperiod", "restart policy");
+
+    private static boolean refusesLimits(InternalServerErrorException e) {
+        String message = e.getMessage() == null ? "" : e.getMessage().toLowerCase(java.util.Locale.ROOT);
+        return RUNTIME_FAILURES.stream().noneMatch(message::contains)
+                && LIMIT_VALIDATION.stream().anyMatch(message::contains);
     }
 
     @Override
