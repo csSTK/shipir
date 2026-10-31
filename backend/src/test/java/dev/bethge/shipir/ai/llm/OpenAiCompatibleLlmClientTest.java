@@ -94,11 +94,6 @@ class OpenAiCompatibleLlmClientTest {
     }
 
     @Test
-    void usesHttp11Only() {
-        assertThat(client.httpVersion()).isEqualTo(java.net.http.HttpClient.Version.HTTP_1_1);
-    }
-
-    @Test
     void streamsTextTokensAndSendsAuthAndBody() {
         sse(delta("{\"role\":\"assistant\",\"content\":\"Hel\"}"), delta("{\"content\":\"lo\"}"),
                 delta("{}"), "[DONE]");
@@ -381,5 +376,26 @@ class OpenAiCompatibleLlmClientTest {
                 List.of(), t -> { }))
                 .isInstanceOfSatisfying(LlmException.class,
                         e -> assertThat(e.code()).isEqualTo(LlmException.Code.UNREACHABLE));
+    }
+
+    @Test
+    void connectsToTheValidatedAddressEvenIfTheNameRebindsAfterwards() {
+        // first resolution: loopback (allowed here); every later one: the cloud metadata address (always denied)
+        java.util.concurrent.atomic.AtomicInteger lookups = new java.util.concurrent.atomic.AtomicInteger();
+        EgressPolicy rebinding = new EgressPolicy(new EgressProperties(true), host -> {
+            if (!host.equals("rebind.test")) {
+                return java.net.InetAddress.getAllByName(host);
+            }
+            return new java.net.InetAddress[]{java.net.InetAddress.getByName(
+                    lookups.getAndIncrement() == 0 ? "127.0.0.1" : "169.254.169.254")};
+        });
+        OpenAiCompatibleLlmClient pinned = new OpenAiCompatibleLlmClient(new LlmProperties(Duration.ofSeconds(2), Duration.ofMillis(500)), MAPPER, rebinding);
+        sse(delta("{\"content\":\"ok\"}"), "[DONE]");
+
+        LlmResponse r = pinned.chat("http://rebind.test:" + server.getAddress().getPort() + "/v1", "m", KEY,
+                List.of(LlmMessage.user("hi")), List.of(), t -> { });
+
+        assertThat(r.content()).isEqualTo("ok");
+        assertThat(requestBody.get()).isNotNull();
     }
 }

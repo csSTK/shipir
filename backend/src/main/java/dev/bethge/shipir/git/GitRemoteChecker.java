@@ -27,7 +27,7 @@ class GitRemoteChecker {
 
     GitRemoteChecker(GitProperties properties, EgressPolicy policy) {
         this.properties = properties;
-        this.connections = new EgressGuardedConnectionFactory(policy);
+        this.connections = new EgressGuardedConnectionFactory(policy, properties.connectTimeout());
     }
 
     /** Throws {@link GitException} (400 INVALID_REPO_URL) unless the URL is an absolute https URL with a host and no userinfo. */

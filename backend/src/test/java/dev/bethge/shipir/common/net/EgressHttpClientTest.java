@@ -103,4 +103,78 @@ class EgressHttpClientTest {
         EgressHttpClient.Response r = client.send("GET", uri("/big"), Map.of(), TIMEOUT);
         assertThat(r.body().length()).isLessThanOrEqualTo(1_048_576);
     }
+
+    @Test
+    void streamHandsOverTheOpenBodyAndCanBeAbortedWhileBlocked() throws Exception {
+        server.createContext("/slow", ex -> {
+            ex.getResponseHeaders().add("Content-Type", "text/event-stream");
+            ex.sendResponseHeaders(200, 0);
+            ex.getResponseBody().write("data: 1\n\n".getBytes());
+            ex.getResponseBody().flush();
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException ignored) {
+                // test over
+            }
+            ex.close();
+        });
+        try (EgressHttpClient client = new EgressHttpClient(new EgressPolicy(new EgressProperties(true)))) {
+            String first = client.stream("GET", uri("/slow"), Map.of(), null, Duration.ofSeconds(10), response -> {
+                assertThat(response.status()).isEqualTo(200);
+                assertThat(response.header("Content-Type")).isEqualTo("text/event-stream");
+                java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(response.body()));
+                String line = r.readLine();
+                r.readLine(); // the blank line ending the event
+                Thread t = new Thread(() -> {
+                    try {
+                        Thread.sleep(200);
+                    } catch (InterruptedException ignored) {
+                        // fine
+                    }
+                    response.abort();
+                });
+                t.start();
+                long start = System.nanoTime();
+                try {
+                    assertThat(r.readLine()).isNull(); // aborted: end of stream
+                } catch (java.io.IOException aborted) {
+                    // aborted: the blocked read fails
+                }
+                assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(3));
+                return line;
+            });
+            assertThat(first).isEqualTo("data: 1");
+        }
+    }
+
+    @Test
+    void streamIdleReadTimesOutAsSocketTimeout() throws Exception {
+        server.createContext("/stall", ex -> {
+            try {
+                Thread.sleep(3000);
+            } catch (InterruptedException ignored) {
+                // test over
+            }
+            ex.close();
+        });
+        try (EgressHttpClient client = new EgressHttpClient(new EgressPolicy(new EgressProperties(true)))) {
+            assertThatThrownBy(() -> client.stream("GET", uri("/stall"), Map.of(), null, Duration.ofMillis(300), r -> "x"))
+                    .isInstanceOf(java.net.SocketTimeoutException.class);
+        }
+    }
+
+    @Test
+    void streamValidatesTheAddressInTheLookupItConnectsWith() throws Exception {
+        AtomicInteger n = new AtomicInteger();
+        EgressPolicy rebinding = new EgressPolicy(new EgressProperties(true), host -> host.equals("rebind.test")
+                ? new InetAddress[]{InetAddress.getByName(n.getAndIncrement() == 0 ? "127.0.0.1" : "169.254.169.254")}
+                : InetAddress.getAllByName(host));
+        try (EgressHttpClient client = new EgressHttpClient(rebinding)) {
+            int status = client.stream("GET",
+                    URI.create("http://rebind.test:" + server.getAddress().getPort() + "/ok"), Map.of(), null,
+                    TIMEOUT, r -> r.status());
+            assertThat(status).isEqualTo(200);
+            assertThat(n.get()).isEqualTo(1);
+        }
+    }
 }

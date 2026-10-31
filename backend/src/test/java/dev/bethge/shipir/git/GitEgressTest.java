@@ -111,4 +111,20 @@ class GitEgressTest {
                 .isInstanceOfSatisfying(GitOperationException.class, e -> assertThat(e.code()).isEqualTo("GIT_UNREACHABLE"));
         assertThat(hits).isEmpty();
     }
+
+    @Test
+    void connectsToTheValidatedAddressEvenIfTheNameRebindsAfterwards() {
+        // first resolution of rebind.test: loopback (allowed with the opt-in); later ones: the metadata address
+        java.util.concurrent.atomic.AtomicInteger n = new java.util.concurrent.atomic.AtomicInteger();
+        EgressPolicy rebinding = new EgressPolicy(new EgressProperties(true), host -> host.equals("rebind.test")
+                ? new InetAddress[]{InetAddress.getByName(n.getAndIncrement() == 0 ? "127.0.0.1" : "169.254.169.254")}
+                : InetAddress.getAllByName(host));
+
+        String outcome = new GitRemoteChecker(props(), rebinding)
+                .check("http://rebind.test:" + server.getAddress().getPort() + "/x.git", "rebind.test", "u", "t");
+
+        // the stub answers 404 on the validated address: reached, so NOT_FOUND instead of UNREACHABLE
+        assertThat(outcome).isEqualTo(GitRemoteChecker.NOT_FOUND);
+        assertThat(hits).isNotEmpty();
+    }
 }

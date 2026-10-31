@@ -1,7 +1,8 @@
 package dev.bethge.shipir.ai.llm;
 
-import dev.bethge.shipir.common.net.EgressDeniedException;
+import dev.bethge.shipir.common.net.EgressHttpClient;
 import dev.bethge.shipir.common.net.EgressPolicy;
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -14,10 +15,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.net.http.HttpTimeoutException;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -34,8 +32,8 @@ import java.util.function.Consumer;
 
 /**
  * Native Gemini API: {@code POST {baseUrl}/models/{model}:streamGenerateContent?alt=sse}. The key travels only in the
- * {@code x-goog-api-key} header, and never to a host the egress policy denies (checked before the request; JDK HttpClient
- * cannot pin the resolved address, so a DNS rebind between check and connect is not excluded).
+ * {@code x-goog-api-key} header, and never to a host the egress policy denies (validated inside the lookup the
+ * connection uses via {@link EgressHttpClient}, so a DNS rebind after validation is excluded).
  */
 @Component
 public class GeminiLlmClient implements LlmClient {
@@ -52,76 +50,66 @@ public class GeminiLlmClient implements LlmClient {
 
     private final LlmProperties properties;
     private final ObjectMapper mapper;
-    private final EgressPolicy egress;
-    private final HttpClient http;
+    private final EgressHttpClient http;
 
     public GeminiLlmClient(LlmProperties properties, ObjectMapper mapper, EgressPolicy egress) {
         this.properties = properties;
-        this.egress = egress;
         this.mapper = mapper;
-        this.http = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(properties.connectTimeout())
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .build();
+        this.http = new EgressHttpClient(egress, properties.connectTimeout());
     }
 
-    /** HTTP version of the underlying client (pinned to 1.1, HTTP/2 streams hung with some providers). */
-    HttpClient.Version httpVersion() {
-        return http.version();
+    @PreDestroy
+    void close() throws IOException {
+        http.close();
     }
 
     @Override
     public LlmResponse chat(String baseUrl, String model, String apiKey, List<LlmMessage> messages,
                             List<LlmToolDefinition> tools, Consumer<String> onToken) {
-        HttpRequest request = buildRequest(baseUrl, model, apiKey, messages, tools);
-        try {
-            // before any connection: the API key must never reach a denied (internal) host
-            egress.check(request.uri());
-        } catch (EgressDeniedException e) {
-            throw new LlmException(LlmException.Code.UNREACHABLE, "LLM provider is unreachable");
-        }
+        PreparedRequest request = buildRequest(baseUrl, model, apiKey, messages, tools);
         AtomicBoolean timedOut = new AtomicBoolean();
-        HttpResponse<InputStream> response;
         try {
-            response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
-        } catch (HttpTimeoutException e) {
+            // The address is validated inside the lookup the connection uses (no DNS rebinding window); a denied host
+            // fails before any byte, so the API key never reaches it.
+            return http.stream("POST", request.uri(), request.headers(), request.body(), properties.readTimeout(),
+                    response -> handle(response, apiKey, onToken, timedOut));
+        } catch (SocketTimeoutException e) {
             throw new LlmException(LlmException.Code.TIMEOUT, "LLM provider did not answer in time");
-        } catch (IOException e) {
-            throw new LlmException(LlmException.Code.UNREACHABLE, "LLM provider is unreachable");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new LlmException(LlmException.Code.UNREACHABLE, "Request interrupted");
-        }
-        try (InputStream body = response.body()) {
-            int status = response.statusCode();
-            if (status < 200 || status >= 300) {
-                logErrorBody(status, body, apiKey);
-                throw statusError(status, response.headers().firstValue("Retry-After").orElse(null));
-            }
-            return readStream(body, onToken, timedOut);
         } catch (IOException e) {
             if (timedOut.get()) {
                 throw new LlmException(LlmException.Code.TIMEOUT, "LLM stream stalled");
             }
-            throw new LlmException(LlmException.Code.UNREACHABLE, "LLM stream was interrupted");
+            throw new LlmException(LlmException.Code.UNREACHABLE, "LLM provider is unreachable");
         }
     }
 
+    private LlmResponse handle(EgressHttpClient.StreamResponse response, String apiKey, Consumer<String> onToken,
+                               AtomicBoolean timedOut) throws IOException {
+        int status = response.status();
+        if (status < 200 || status >= 300) {
+            logErrorBody(status, response, apiKey);
+            throw statusError(status, response.header("Retry-After"));
+        }
+        return readStream(response, onToken, timedOut);
+    }
+
+    private record PreparedRequest(URI uri, Map<String, String> headers, String body) {
+    }
+
     /** Debug only: the body is read under the idle watchdog so a stalled error response cannot hang the call. */
-    private void logErrorBody(int status, InputStream body, String apiKey) {
+    private void logErrorBody(int status, EgressHttpClient.StreamResponse response, String apiKey) {
         if (!log.isDebugEnabled()) {
             return;
         }
-        ScheduledFuture<?> watchdog = arm(body, new AtomicBoolean());
+        ScheduledFuture<?> watchdog = arm(response, new AtomicBoolean());
         try {
-            log.debug("Gemini provider answered HTTP {}: {}", status, ProviderErrorBody.read(body, apiKey));
+            log.debug("Gemini provider answered HTTP {}: {}", status, ProviderErrorBody.read(response.body(), apiKey));
         } finally {
             watchdog.cancel(false);
         }
     }
 
-    private HttpRequest buildRequest(String baseUrl, String model, String apiKey, List<LlmMessage> messages,
+    private PreparedRequest buildRequest(String baseUrl, String model, String apiKey, List<LlmMessage> messages,
                                      List<LlmToolDefinition> tools) {
         URI uri;
         try {
@@ -136,13 +124,8 @@ public class GeminiLlmClient implements LlmClient {
             throw new LlmException(LlmException.Code.UNREACHABLE, "Invalid LLM base URL");
         }
         String json = mapper.writeValueAsString(buildBody(messages, tools));
-        return HttpRequest.newBuilder(uri)
-                .timeout(properties.readTimeout())
-                .header("Content-Type", "application/json")
-                .header("Accept", "text/event-stream")
-                .header("x-goog-api-key", apiKey)
-                .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8))
-                .build();
+        return new PreparedRequest(uri, Map.of("Content-Type", "application/json",
+                "Accept", "text/event-stream", "x-goog-api-key", apiKey), json);
     }
 
     private Map<String, Object> buildBody(List<LlmMessage> messages, List<LlmToolDefinition> tools) {
@@ -283,17 +266,17 @@ public class GeminiLlmClient implements LlmClient {
         return new LlmException(LlmException.Code.BAD_RESPONSE, "LLM provider answered HTTP " + status, null, status);
     }
 
-    private LlmResponse readStream(InputStream body, Consumer<String> onToken, AtomicBoolean timedOut)
+    private LlmResponse readStream(EgressHttpClient.StreamResponse response, Consumer<String> onToken, AtomicBoolean timedOut)
             throws IOException {
         StringBuilder text = new StringBuilder();
         List<LlmToolCall> toolCalls = new ArrayList<>();
         boolean sawChunk = false;
-        ScheduledFuture<?>[] watchdog = {arm(body, timedOut)};
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(body, StandardCharsets.UTF_8))) {
+        ScheduledFuture<?>[] watchdog = {arm(response, timedOut)};
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 watchdog[0].cancel(false);
-                watchdog[0] = arm(body, timedOut);
+                watchdog[0] = arm(response, timedOut);
                 if (!line.startsWith("data:")) {
                     continue;
                 }
@@ -313,14 +296,10 @@ public class GeminiLlmClient implements LlmClient {
         return new LlmResponse(text.toString(), toolCalls);
     }
 
-    private ScheduledFuture<?> arm(InputStream body, AtomicBoolean timedOut) {
+    private ScheduledFuture<?> arm(EgressHttpClient.StreamResponse response, AtomicBoolean timedOut) {
         return WATCHDOG.schedule(() -> {
             timedOut.set(true);
-            try {
-                body.close();
-            } catch (IOException ignored) {
-                // closing only unblocks the reader
-            }
+            response.abort(); // only unblocks the reader
         }, properties.readTimeout().toMillis(), TimeUnit.MILLISECONDS);
     }
 
