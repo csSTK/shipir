@@ -9,6 +9,7 @@ import dev.bethge.shipir.auth.UserRepository;
 import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
 import dev.bethge.shipir.docker.DockerConnectionException;
+import dev.bethge.shipir.docker.ViewerErrorCodes;
 import dev.bethge.shipir.docker.client.ContainerService;
 import dev.bethge.shipir.docker.client.ExecHandle;
 import dev.bethge.shipir.docker.client.ExecService;
@@ -199,7 +200,7 @@ public class ExecSessionHandler {
             }
         } catch (DockerConnectionException e) {
             sessions.remove(session.id);
-            throw translate(e);
+            throw translate(e, role == Role.ADMIN);
         } catch (EncryptionKeyMissingException e) {
             sessions.remove(session.id);
             throw new ExecException(HttpStatus.BAD_GATEWAY, "ENCRYPTION_KEY_MISSING", "No encryption key is configured");
@@ -218,12 +219,13 @@ public class ExecSessionHandler {
         return new ExecException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied");
     }
 
-    private static ExecException translate(DockerConnectionException e) {
+    private static ExecException translate(DockerConnectionException e, boolean admin) {
         return switch (e.getCode()) {
             case NOT_FOUND -> new ExecException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Container not found");
             case INVALID_STATE -> new ExecException(HttpStatus.CONFLICT, "INVALID_CONTAINER_STATE",
                     "The container is not running");
-            default -> new ExecException(HttpStatus.BAD_GATEWAY, e.getCode().name(), "Environment could not be reached");
+            default -> new ExecException(HttpStatus.BAD_GATEWAY, ViewerErrorCodes.forViewer(e.getCode(), admin),
+                    "Environment could not be reached");
         };
     }
 
@@ -241,7 +243,7 @@ public class ExecSessionHandler {
         try {
             project = containers.inspect(hostId, endpoints.endpointOf(host), containerId).composeProject();
         } catch (DockerConnectionException e) {
-            throw translate(e);
+            throw translate(e, false); // only the OPERATOR gate calls this
         } catch (EncryptionKeyMissingException e) {
             throw new ExecException(HttpStatus.BAD_GATEWAY, "ENCRYPTION_KEY_MISSING", "No encryption key is configured");
         } catch (SecretDecryptionException e) {
@@ -464,7 +466,9 @@ public class ExecSessionHandler {
 
     private void onEnd(Session s, Throwable failure) {
         if (failure instanceof DockerConnectionException e) {
-            finish(s, ExecMessage.Status.ERROR, e.getCode().name());
+            // the audit keeps the raw code, the frame the one this role may see
+            finish(s, ExecMessage.Status.ERROR, e.getCode().name(),
+                    ViewerErrorCodes.forViewer(e.getCode(), s.role == Role.ADMIN));
         } else if (failure != null) {
             finish(s, ExecMessage.Status.ERROR, "UNAVAILABLE");
         } else {
@@ -473,6 +477,10 @@ public class ExecSessionHandler {
     }
 
     private void finish(Session s, ExecMessage.Status status, String reason) {
+        finish(s, status, reason, reason);
+    }
+
+    private void finish(Session s, ExecMessage.Status status, String reason, String frameReason) {
         ExecHandle handle;
         synchronized (s) {
             if (s.ended()) {
@@ -480,7 +488,7 @@ public class ExecSessionHandler {
             }
             s.endedAt = clock.instant();
             handle = s.handle;
-            ExecMessage last = new ExecMessage(s.nextSeq++, ExecMessage.Type.STATUS, null, status, reason);
+            ExecMessage last = new ExecMessage(s.nextSeq++, ExecMessage.Type.STATUS, null, status, frameReason);
             if (s.stompSessionId != null) {
                 send(s, last);
                 sessions.remove(s.id, s);

@@ -276,5 +276,6 @@
   "CreateContainerDialog.anonymousVolumesKept": "Anonymous volumes ({{paths}}) are kept with their data.",
   "CreateContainerDialog.anonymousVolumesFresh": "Anonymous volumes ({{paths}}) are not copied; the copy gets new empty ones.",
   "containerForm.enterANetworkName": "Enter a network name or remove the row.",
-  "containerForm.eachNetworkOnlyOnce": "Each network can be listed only once."
+  "containerForm.eachNetworkOnlyOnce": "Each network can be listed only once.",
+  "ContainersPage.managedViaDomains": "Managed via Domains"
 }

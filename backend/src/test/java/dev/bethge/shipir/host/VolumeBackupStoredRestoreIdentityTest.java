@@ -63,7 +63,7 @@ class VolumeBackupStoredRestoreIdentityTest {
 
         VolumeBackupProperties props = new VolumeBackupProperties(DataSize.ofMegabytes(10), "alpine:3", base, false, Duration.ofMinutes(1));
         VolumeBackupStore store = new VolumeBackupStore(props, Clock.systemUTC());
-        service = new VolumeBackupService(hosts, endpoints, archives, store, access, props, Clock.systemUTC());
+        service = new VolumeBackupService(hosts, endpoints, archives, store, access, props, Clock.systemUTC(), mock(SystemManagedGuard.class));
 
         Path dir = Files.createDirectories(base.resolve(hostId.toString()).resolve(VOLUME));
         file = dir.resolve(NAME);

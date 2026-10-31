@@ -613,4 +613,20 @@ class ProxyRouteApiTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("CONTAINER_NOT_FOUND"));
     }
+
+    @Test
+    void aTlsFailureOnAttachIsUnreachableForAnOperatorAndTlsErrorForAnAdmin() throws Exception {
+        grantDeployment("operator");
+        doThrow(new DockerConnectionException(DockerErrorCode.TLS_ERROR, "bad cert", null)).when(networks)
+                .connectContainer(any(), any(), any(), any());
+        mvc.perform(login("operator").write(post(url())).contentType(APPLICATION_JSON)
+                        .content(body("shop.example.com", "shop-web-1", "")))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("UNREACHABLE"));
+        mvc.perform(login("admin").write(post(url())).contentType(APPLICATION_JSON)
+                        .content(body("shop.example.com", "shop-web-1", "")))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("TLS_ERROR"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM proxy_routes", Integer.class)).isZero();
+    }
 }

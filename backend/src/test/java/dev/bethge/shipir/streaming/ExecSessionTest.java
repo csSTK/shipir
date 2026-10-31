@@ -940,4 +940,44 @@ class ExecSessionTest {
             return payload;
         }
     }
+
+    @Test
+    void operatorStartFailureHidesTheConnectionCodeAndAdminKeepsIt() throws Exception {
+        Client op = operatorClient("execop", Role.OPERATOR);
+        grantHost(op, "OPERATE");
+        containerOf("plain", null);
+        when(execService.open(any(), any(DockerEndpoint.class), eq("plain"), anyList(), anyInt(), anyInt(), any(), any()))
+                .thenThrow(new DockerConnectionException(DockerErrorCode.TLS_ERROR, "x", null));
+        var asOperator = op.exec("plain", "{}", true);
+        assertThat(asOperator.statusCode()).isEqualTo(502);
+        assertThat(asOperator.body()).contains("UNREACHABLE").doesNotContain("TLS_ERROR");
+
+        var asAdmin = admin().exec("plain", "{}", true);
+        assertThat(asAdmin.statusCode()).isEqualTo(502);
+        assertThat(asAdmin.body()).contains("TLS_ERROR");
+    }
+
+    @Test
+    void operatorEndFrameHidesTheConnectionCodeAuditKeepsItAndAdminSeesIt() throws Exception {
+        Client op = operatorClient("execop", Role.OPERATOR);
+        grantHost(op, "OPERATE");
+        containerOf("plain", null);
+        String opId = op.create("plain");
+        StompSession s = op.connect();
+        BlockingQueue<String> q = subscribe(s, "/topic/exec/" + opId);
+        onEnd.accept(new DockerConnectionException(DockerErrorCode.TLS_ERROR, "x", null));
+        assertThat(q.poll(5, TimeUnit.SECONDS)).contains("\"status\":\"ERROR\"").contains("UNREACHABLE")
+                .doesNotContain("TLS_ERROR");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> auditRows(op, "EXEC_END").size() == 1);
+        assertThat(auditRows(op, "EXEC_END").get(0).get("details").toString()).contains("TLS_ERROR");
+        s.disconnect();
+
+        Client admin = admin();
+        String adminId = admin.create("web");
+        StompSession as = admin.connect();
+        BlockingQueue<String> aq = subscribe(as, "/topic/exec/" + adminId);
+        onEnd.accept(new DockerConnectionException(DockerErrorCode.TLS_ERROR, "x", null));
+        assertThat(aq.poll(5, TimeUnit.SECONDS)).contains("\"status\":\"ERROR\"").contains("TLS_ERROR");
+        as.disconnect();
+    }
 }

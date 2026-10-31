@@ -38,7 +38,8 @@ class VolumeBackupScheduleServiceDeleteTest {
 
     @BeforeEach
     void setUp() {
-        service = new VolumeBackupScheduleService(schedules, hosts, mock(UserRepository.class), access, Clock.systemUTC(), store);
+        service = new VolumeBackupScheduleService(schedules, hosts, mock(UserRepository.class), access, Clock.systemUTC(), store,
+                mock(SystemManagedGuard.class));
         when(hosts.existsById(hostId)).thenReturn(true);
         when(access.canView(hostId)).thenReturn(true);
         when(access.canOperate(hostId)).thenReturn(true);

@@ -204,4 +204,19 @@ class HostImageTagPushTest extends HostApiTestBase {
                         .contentType("application/json").content("{\"reference\":\"app:1\"}")))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("HOST_NOT_FOUND"));
     }
+
+    @Test
+    void operatorPushFailureHidesTheConnectionCodeAndAdminKeepsIt() throws Exception {
+        doThrow(new DockerConnectionException(DockerErrorCode.PERMISSION_DENIED, "x", null))
+                .when(images).push(any(), any(), any(), any(), any());
+        mvc.perform(login("operator").write(push("ghcr.io/owner/app:1"))).andExpect(status().isAccepted());
+        org.awaitility.Awaitility.await().atMost(5, java.util.concurrent.TimeUnit.SECONDS)
+                .untilAsserted(() -> assertThat(lines).contains("Push failed (UNREACHABLE)"));
+        assertThat(String.join("\n", lines)).doesNotContain("PERMISSION_DENIED");
+
+        lines.clear();
+        mvc.perform(login("admin").write(push("ghcr.io/owner/app:2"))).andExpect(status().isAccepted());
+        org.awaitility.Awaitility.await().atMost(5, java.util.concurrent.TimeUnit.SECONDS)
+                .untilAsserted(() -> assertThat(lines).contains("Push failed (PERMISSION_DENIED)"));
+    }
 }

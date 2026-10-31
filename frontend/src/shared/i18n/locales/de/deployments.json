@@ -651,5 +651,9 @@
   "DeployFilesReview.deployingApprovesTheseFilesAs": "Deployen genehmigt diese Dateien in ihrem jetzigen Zustand. Spätere Änderungen schränken automatische Läufe ein, bis ein ADMIN erneut deployt.",
   "DeployFilesReview.noExtraFiles": "Keine zusätzlichen Dateien im Deployment-Verzeichnis.",
   "DeployFilesReview.symbolicLinksAreApprovedToo": "Symbolische Links werden ebenfalls genehmigt, aber hier nicht aufgelistet.",
-  "DeployFilesReview.theListIsCutOff": "Die Liste ist bei 5000 Einträgen abgeschnitten. Weitere Dateien werden ebenfalls genehmigt."
+  "DeployFilesReview.theListIsCutOff": "Die Liste ist bei 5000 Einträgen abgeschnitten. Weitere Dateien werden ebenfalls genehmigt.",
+  "DeploymentsPage.managedViaDomains": "Verwaltet über Domains",
+  "DeploymentDetailPage.managedViaDomains": "Verwaltet über Domains",
+  "DeploymentDetailPage.managedViaDomainsHint": "Dieses Deployment ist der Reverse-Proxy und wird über Domains verwaltet. Nur ein Administrator kann es hier ändern.",
+  "DeploymentDetailPage.openDomains": "Domains öffnen"
 }

@@ -3,6 +3,7 @@ package dev.bethge.shipir.streaming;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.DockerErrorCode;
+import dev.bethge.shipir.docker.ViewerErrorCodes;
 import dev.bethge.shipir.docker.client.ContainerLogService;
 import dev.bethge.shipir.docker.client.ContainerService;
 import dev.bethge.shipir.docker.dto.ContainerDto;
@@ -82,7 +83,7 @@ public class DeploymentLogStreamService {
     private record Key(Target target, Options options) {
     }
 
-    private record Subscription(String username, String sessionId, String subscriptionId) {
+    private record Subscription(String username, String sessionId, String subscriptionId, boolean admin) {
     }
 
     /** One followed container. */
@@ -134,10 +135,12 @@ public class DeploymentLogStreamService {
     private final StompFrameSender sender;
     private final DeploymentLogProperties properties;
     private final Clock clock;
+    private final StreamViewers viewers;
 
     DeploymentLogStreamService(ContainerService containers, ContainerLogService logs, DockerHostRepository hosts,
                                HostEndpointResolver endpoints, StompFrameSender sender,
-                               DeploymentLogProperties properties, Clock clock) {
+                               DeploymentLogProperties properties, Clock clock, StreamViewers viewers) {
+        this.viewers = viewers;
         this.containers = containers;
         this.logs = logs;
         this.hosts = hosts;
@@ -173,6 +176,7 @@ public class DeploymentLogStreamService {
     /** Registers a subscription, replays the buffer and starts the worker for the first subscriber. */
     void subscribe(Target target, Options options, String username, String sessionId, String subscriptionId) {
         Key key = new Key(target, options);
+        boolean admin = viewers.isAdmin(username); // once, on the subscribe thread
         Stream stream;
         boolean first;
         while (true) {
@@ -188,7 +192,7 @@ public class DeploymentLogStreamService {
                 if (stream.closed) {
                     continue; // released concurrently, start over with a fresh stream
                 }
-                Subscription sub = new Subscription(username, sessionId, subscriptionId);
+                Subscription sub = new Subscription(username, sessionId, subscriptionId, admin);
                 stream.subscribers.add(sub);
                 for (DeploymentLogMessage m : stream.buffer) {
                     send(stream, sub, m);
@@ -552,6 +556,12 @@ public class DeploymentLogStreamService {
     }
 
     private void send(Stream stream, Subscription sub, DeploymentLogMessage message) {
+        if (message.type() == DeploymentLogMessage.Type.STATUS && message.status() == DeploymentLogMessage.Status.ERROR) {
+            // the buffered frame keeps the raw code; each recipient gets the one it may see (also on replay)
+            message = new DeploymentLogMessage(message.seq(), message.type(), message.service(), message.container(),
+                    message.containerId(), message.stream(), ViewerErrorCodes.forStreamFrame(message.line(), sub.admin),
+                    message.status(), message.timestamp());
+        }
         sender.send(sub.sessionId, sub.subscriptionId, destination(stream.key.target()), message);
     }
 

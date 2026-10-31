@@ -136,6 +136,27 @@ class ConfigFileApiTest {
         assertThat(Files.exists(dir.resolve("a.txt"))).isFalse();
     }
 
+    @Test
+    void filesOfASystemManagedDeploymentAreAdminOnly() throws Exception {
+        jdbc.update("UPDATE deployments SET system_managed = TRUE WHERE id = ?::uuid", deploymentId);
+        Login admin = login("admin");
+        saveFile(admin, "traefik.yml", "a: 1");
+        Login op = login("operator");
+        mvc.perform(get(url()).session(op.session())).andExpect(status().isForbidden());
+        mvc.perform(get(url()).session(op.session()).param("path", "traefik.yml")).andExpect(status().isForbidden());
+        mvc.perform(op.write(put(url())).param("path", "traefik.yml").contentType(APPLICATION_JSON).content(body("evil: 1")))
+                .andExpect(status().isForbidden());
+        mvc.perform(op.write(put(url())).param("path", "new.yml").contentType(APPLICATION_JSON).content(body("x")))
+                .andExpect(status().isForbidden());
+        mvc.perform(op.write(delete(url())).param("path", "traefik.yml")).andExpect(status().isForbidden());
+        mvc.perform(get(url() + "/backups").session(op.session()).param("path", "traefik.yml"))
+                .andExpect(status().isForbidden());
+        assertThat(Files.readString(dir.resolve("traefik.yml"))).isEqualTo("a: 1");
+        assertThat(dir.resolve("new.yml")).doesNotExist();
+        mvc.perform(get(url()).session(admin.session())).andExpect(status().isOk());
+        mvc.perform(get(url()).session(admin.session()).param("path", "traefik.yml")).andExpect(status().isOk());
+    }
+
     record Login(MockHttpSession session, Cookie csrf) {
         MockHttpServletRequestBuilder write(MockHttpServletRequestBuilder b) {
             return b.session(session).cookie(csrf).header("X-XSRF-TOKEN", csrf.getValue());

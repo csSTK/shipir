@@ -384,4 +384,20 @@ class ProxySyncServiceTest {
         }
         assertThat(maxInside.get()).isEqualTo(1);
     }
+
+    @Test
+    void connectionCodeInTheSyncFailureIsOnlyShownToAdmin() {
+        instance(ProxyType.TRAEFIK);
+        container(ProxyType.TRAEFIK, "running");
+        doThrow(new DockerConnectionException(DockerErrorCode.TLS_ERROR, "x", null))
+                .when(fileService).writeFiles(any(), any(), any(), any(), any(), anyLong());
+
+        when(access.isAdmin()).thenReturn(false);
+        assertThatThrownBy(() -> service.sync(HOST)).isInstanceOfSatisfying(ProxyException.class,
+                e -> assertThat(e.getMessage()).contains("UNREACHABLE").doesNotContain("TLS_ERROR"));
+
+        when(access.isAdmin()).thenReturn(true);
+        assertThatThrownBy(() -> service.sync(HOST)).isInstanceOfSatisfying(ProxyException.class,
+                e -> assertThat(e.getMessage()).contains("TLS_ERROR"));
+    }
 }

@@ -16,6 +16,8 @@ export interface DeploymentSummary {
   managedDeploymentId?: string | null
   /** A newer image exists in a registry for one of the project's images. */
   updateAvailable?: boolean
+  /** The managed proxy deployment: ADMIN only, shown as managed via Domains. Optional for older servers. */
+  systemManaged?: boolean
 }
 
 export function useDeployments(hostId: string) {
@@ -37,6 +39,8 @@ export interface ManagedDeployment {
   source: DeploymentSource
   lastDeployedAt: string | null
   createdAt: string
+  /** The managed proxy deployment: ADMIN only, shown as managed via Domains. Optional for older servers. */
+  systemManaged?: boolean
 }
 
 /** Git source of a deployment (`null` for FILE deployments); never contains a token. */

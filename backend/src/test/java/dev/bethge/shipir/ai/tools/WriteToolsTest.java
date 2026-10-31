@@ -193,6 +193,26 @@ class WriteToolsTest {
     }
 
     @Test
+    void writeToolsAreForbiddenForOperatorOnASystemManagedDeploymentButAdminMayAct() {
+        jdbc.update("UPDATE deployments SET system_managed = TRUE WHERE id = ?", deploymentId);
+        for (String tool : List.of("run_deployment", "stop_deployment", "git_redeploy_deployment", "delete_deployment")) {
+            ProposalResult p = registry.propose(tool, stack(hostId, deploymentId), ctx(Role.OPERATOR), SESSION);
+            assertThat(p.accepted()).as(tool).isTrue();
+            ToolResult result = registry.executeConfirmed(p.action().token(), ctx(Role.OPERATOR));
+            assertThat(result.error()).as(tool).isTrue();
+            assertThat(result.content()).as(tool).contains("FORBIDDEN");
+        }
+        String update = "{\"hostId\":\"" + hostId + "\",\"deploymentId\":\"" + deploymentId + "\",\"yaml\":\"services:\\n  evil:\\n    image: x\\n\"}";
+        ProposalResult up = registry.propose("update_deployment", update, ctx(Role.OPERATOR), SESSION);
+        assertThat(up.accepted()).isTrue();
+        assertThat(registry.executeConfirmed(up.action().token(), ctx(Role.OPERATOR)).content()).contains("FORBIDDEN");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM deployments", Integer.class)).isEqualTo(1);
+
+        ToolResult admin = confirmed("stop_deployment", stack(hostId, deploymentId), Role.ADMIN);
+        assertThat(admin.error()).isFalse();
+    }
+
+    @Test
     void writeToolsNeverRunWithoutConfirmation() {
         ToolResult result = registry.execute("delete_deployment", stack(hostId, deploymentId), ctx(Role.ADMIN));
 

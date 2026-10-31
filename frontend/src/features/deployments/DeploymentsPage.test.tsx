@@ -126,6 +126,22 @@ describe('DeploymentsPage', () => {
     expect(screen.queryByRole('button', { name: 'Deploy shop' })).not.toBeInTheDocument()
   })
 
+  it('labels the system-managed proxy as managed via Domains and gives an operator no deploy or stop on it', async () => {
+    serve([{ name: 'shipir-proxy', containerCount: 1, runningCount: 1, status: 'RUNNING', workingDir: null, systemManaged: true, managed: true, managedDeploymentId: 'p1' }, deployments[0]], {
+      role: 'OPERATOR',
+      managed: [
+        { id: 'p1', name: 'shipir-proxy', status: 'RUNNING', source: 'FILE', lastDeployedAt: null, createdAt: 'x', systemManaged: true },
+        { id: 'm1', name: 'shop', status: 'RUNNING', source: 'FILE', lastDeployedAt: null, createdAt: 'x' },
+      ],
+    })
+    renderPage()
+    await screen.findByText('/srv/shop')
+    expect(screen.getByRole('link', { name: 'Managed via Domains' })).toHaveAttribute('href', '/environments/h1/domains')
+    expect(screen.queryByRole('button', { name: 'Deploy shipir-proxy' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Stop shipir-proxy' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Deploy shop' })).toBeInTheDocument()
+  })
+
   it('lets operators add a deployment and deploy a managed one', async () => {
     serve(deployments, { role: 'OPERATOR', managed: [{ id: 'm1', name: 'shop', status: 'RUNNING', source: 'FILE', lastDeployedAt: null, createdAt: 'x' }] })
     renderPage()

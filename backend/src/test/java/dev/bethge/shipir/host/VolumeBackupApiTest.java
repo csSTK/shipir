@@ -205,4 +205,20 @@ class VolumeBackupApiTest extends HostApiTestBase {
         mvc.perform(get("/api/hosts/{h}/volumes/data/backup", host).session(login("admin").session()))
                 .andExpect(status().isBadGateway()).andExpect(jsonPath("$.code").value("UNREACHABLE"));
     }
+
+    @Test
+    void operatorDoesNotLearnWhichConnectionFailureTheHostHas() throws Exception {
+        doThrow(new DockerConnectionException(DockerErrorCode.TLS_ERROR, "x", null))
+                .when(archives).backup(any(), any(), any(), any(), anyLong());
+        mvc.perform(get("/api/hosts/{h}/volumes/data/backup", host).session(login("operator").session()))
+                .andExpect(status().isBadGateway()).andExpect(jsonPath("$.code").value("UNREACHABLE"));
+    }
+
+    @Test
+    void adminKeepsTheConnectionFailureCode() throws Exception {
+        doThrow(new DockerConnectionException(DockerErrorCode.TLS_ERROR, "x", null))
+                .when(archives).backup(any(), any(), any(), any(), anyLong());
+        mvc.perform(get("/api/hosts/{h}/volumes/data/backup", host).session(login("admin").session()))
+                .andExpect(status().isBadGateway()).andExpect(jsonPath("$.code").value("TLS_ERROR"));
+    }
 }

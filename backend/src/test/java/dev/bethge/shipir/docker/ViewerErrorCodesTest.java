@@ -1,6 +1,5 @@
-package dev.bethge.shipir.host;
+package dev.bethge.shipir.docker;
 
-import dev.bethge.shipir.docker.DockerErrorCode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -10,7 +9,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class HostFailureCodesTest {
+class ViewerErrorCodesTest {
 
     /** Meaningful after a real Docker operation: no oracle for the target's address/port. */
     private static final Set<DockerErrorCode> PASS_THROUGH = EnumSet.of(
@@ -39,15 +38,27 @@ class HostFailureCodesTest {
     @EnumSource(DockerErrorCode.class)
     void nonAdminsSeeOnlyAllowListedCodesAdminsSeeAll(DockerErrorCode code) {
         String expected = PASS_THROUGH.contains(code) ? code.name() : "UNREACHABLE";
-        assertThat(HostFailureCodes.forViewer(code, false)).isEqualTo(expected);
-        assertThat(HostFailureCodes.forViewer(code, true)).isEqualTo(code.name());
+        assertThat(ViewerErrorCodes.forViewer(code, false)).isEqualTo(expected);
+        assertThat(ViewerErrorCodes.forViewer(code, true)).isEqualTo(code.name());
     }
 
     @Test
     void stringOverloadCollapsesTimeoutAndUnknownNames() {
-        assertThat(HostFailureCodes.forViewer("TIMEOUT", false)).isEqualTo("UNREACHABLE");
-        assertThat(HostFailureCodes.forViewer("TIMEOUT", true)).isEqualTo("TIMEOUT");
-        assertThat(HostFailureCodes.forViewer("SOMETHING_ELSE", false)).isEqualTo("UNREACHABLE");
-        assertThat(HostFailureCodes.forViewer("SOMETHING_ELSE", true)).isEqualTo("SOMETHING_ELSE");
+        assertThat(ViewerErrorCodes.forViewer("TIMEOUT", false)).isEqualTo("UNREACHABLE");
+        assertThat(ViewerErrorCodes.forViewer("TIMEOUT", true)).isEqualTo("TIMEOUT");
+        assertThat(ViewerErrorCodes.forViewer("SOMETHING_ELSE", false)).isEqualTo("UNREACHABLE");
+        assertThat(ViewerErrorCodes.forViewer("SOMETHING_ELSE", true)).isEqualTo("SOMETHING_ELSE");
+    }
+
+    @Test
+    void streamFramesFilterDockerCodesButKeepOurOwn() {
+        assertThat(ViewerErrorCodes.forStreamFrame("TLS_ERROR", false)).isEqualTo("UNREACHABLE");
+        assertThat(ViewerErrorCodes.forStreamFrame("TLS_ERROR", true)).isEqualTo("TLS_ERROR");
+        assertThat(ViewerErrorCodes.forStreamFrame("PULL_FAILED", false)).isEqualTo("PULL_FAILED");
+        assertThat(ViewerErrorCodes.forStreamFrame("NOT_FOUND", false)).isEqualTo("NOT_FOUND");
+        assertThat(ViewerErrorCodes.forViewer("NOT_FOUND", false)).isEqualTo("UNREACHABLE");
+        assertThat(ViewerErrorCodes.forStreamFrame("UNAVAILABLE", false)).isEqualTo("UNAVAILABLE");
+        assertThat(ViewerErrorCodes.forStreamFrame("CONTAINER_LIMIT", false)).isEqualTo("CONTAINER_LIMIT");
+        assertThat(ViewerErrorCodes.forStreamFrame(null, false)).isNull();
     }
 }

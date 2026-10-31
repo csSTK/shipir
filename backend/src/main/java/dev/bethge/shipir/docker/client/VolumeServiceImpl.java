@@ -52,7 +52,8 @@ public class VolumeServiceImpl implements VolumeService {
     }
 
     private static VolumeDto toDto(InspectVolumeResponse v, Set<String> mounted) {
-        return new VolumeDto(v.getName(), v.getDriver(), v.getMountpoint(), created(v), mounted.contains(v.getName()));
+        return new VolumeDto(v.getName(), v.getDriver(), v.getMountpoint(), created(v), mounted.contains(v.getName()),
+                v.getLabels() == null ? null : v.getLabels().get("com.docker.compose.project"));
     }
 
     /** docker-java has no typed field for {@code CreatedAt}; read the raw ISO-8601 value, null if absent/unparsable. */

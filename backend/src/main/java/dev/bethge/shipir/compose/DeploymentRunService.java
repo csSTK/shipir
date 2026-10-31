@@ -288,7 +288,8 @@ public class DeploymentRunService {
             deployment.setStatus(DeploymentStatus.STOPPED);
             deployments.save(deployment);
             return new DeploymentSummaryResponse(deployment.getId(), deployment.getName(), deployment.getStatus(),
-                    deployment.getSourceType(), deployment.getLastDeployedAt(), deployment.getCreatedAt());
+                    deployment.getSourceType(), deployment.getLastDeployedAt(), deployment.getCreatedAt(),
+                    deployment.isSystemManaged());
         } finally {
             locks.release(deployment.getId());
         }

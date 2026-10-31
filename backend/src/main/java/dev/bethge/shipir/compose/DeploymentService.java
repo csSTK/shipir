@@ -114,7 +114,7 @@ public class DeploymentService {
         return deployments.findByHostIdOrderByNameAsc(hostId).stream()
                 .filter(s -> visible.isEmpty() || visible.get().contains(s.getId()))
                 .map(s -> new DeploymentSummaryResponse(s.getId(), s.getName(), s.getStatus(), s.getSourceType(),
-                        s.getLastDeployedAt(), s.getCreatedAt()))
+                        s.getLastDeployedAt(), s.getCreatedAt(), s.isSystemManaged()))
                 .toList();
     }
 
@@ -337,6 +337,7 @@ public class DeploymentService {
         requireView(hostId, id);
         DockerHost host = requireHost(hostId);
         Deployment deployment = requireDeployment(hostId, id);
+        requireAdminIfSystemManaged(deployment);
         DockerEndpoint endpoint = endpointOf(host);
         // compose reads env_file/include before it lists anything: non-ADMIN callers must not trigger that for outside files
         enforceFileAccess(hostId, deployment.getName(), composeFileOf(deployment), access.isAdmin());
@@ -662,6 +663,16 @@ public class DeploymentService {
         if (!access.canOperate(hostId, id)) {
             throw forbidden();
         }
+        requireAdminIfSystemManaged(hostId, id);
+    }
+
+    /**
+     * 403 FORBIDDEN for a non-ADMIN caller when the deployment is system-managed (the managed proxy). Call after the
+     * view/operate checks so an invisible deployment stays a 404. Every write path goes through
+     * {@link #requireOperate}, which includes this check.
+     */
+    public void requireAdminIfSystemManaged(UUID hostId, UUID id) {
+        requireAdminIfSystemManaged(requireDeployment(hostId, id));
     }
 
     /** 403 FORBIDDEN for a non-ADMIN caller on a system-managed deployment (its env holds ADMIN-only secrets). */
@@ -724,6 +735,7 @@ public class DeploymentService {
                         s.getImageUpdateLastResult())
                 : null;
         return new DeploymentDetailResponse(s.getId(), s.getName(), s.getStatus(), s.getSourceType(),
-                s.getLastDeployedAt(), s.getCreatedAt(), yaml, envKeys, gitInfo, imageInfo, s.getProfiles());
+                s.getLastDeployedAt(), s.getCreatedAt(), yaml, envKeys, gitInfo, imageInfo, s.getProfiles(),
+                s.isSystemManaged());
     }
 }

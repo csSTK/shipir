@@ -87,6 +87,36 @@ describe('ContainersPage', () => {
     expect(within(dialog).queryByRole('radio')).not.toBeInTheDocument()
   })
 
+  describe('system-managed proxy containers', () => {
+    const proxyDeployments = [{ name: 'shop', managed: true, managedDeploymentId: 'm1', systemManaged: true }]
+    const serveWithProxy = (role: string) =>
+      apiFetch.mockImplementation((path: string) => {
+        if (path === '/auth/me') return Promise.resolve({ username: 'u', role, setupRequired: false })
+        if (path.endsWith('/containers')) return Promise.resolve(containers)
+        if (path.endsWith('/deployments')) return Promise.resolve(proxyDeployments)
+        return Promise.resolve([])
+      })
+
+    it('labels the containers as managed via Domains and hides every action for an operator', async () => {
+      serveWithProxy('OPERATOR')
+      renderAt('/environments/h1/containers', 'OPERATOR')
+      await screen.findByRole('button', { name: 'More actions for web' })
+      expect(screen.getAllByText('Managed via Domains').length).toBeGreaterThan(0)
+      const row = screen.getByRole('row', { name: /web/ })
+      expect(within(row).queryByRole('button', { name: 'Stop web' })).not.toBeInTheDocument()
+      expect(within(row).queryByRole('button', { name: 'Console web' })).not.toBeInTheDocument()
+      const menu = await openMenu('web')
+      expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Details'])
+    })
+
+    it('leaves the actions to an admin', async () => {
+      serveWithProxy('ADMIN')
+      renderAt('/environments/h1/containers', 'ADMIN')
+      expect(await screen.findByRole('button', { name: 'Stop web' })).toBeInTheDocument()
+      expect(screen.getAllByText('Managed via Domains').length).toBeGreaterThan(0)
+    })
+  })
+
   it('does not offer publishing to viewers', async () => {
     mockWithRole('VIEWER')
     renderAt('/environments/h1/containers', 'VIEWER')

@@ -144,6 +144,23 @@ describe('DeploymentDetailPage', () => {
     expect(await screen.findByRole('heading', { name: 'Deployment not found' })).toBeInTheDocument()
   })
 
+  it('shows the managed-via-Domains hint instead of the deployment when the server answers 403', async () => {
+    serve('OPERATOR', { [`GET ${BASE}`]: () => new ApiError(403, 'Access denied', 'FORBIDDEN') })
+    renderPage()
+    expect(await screen.findByRole('heading', { name: 'Managed via Domains' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(/managed through Domains/)
+    expect(screen.getByRole('link', { name: 'Open Domains' })).toHaveAttribute('href', '/environments/h1/domains')
+    expect(screen.queryByRole('button', { name: 'Deploy' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
+  })
+
+  it('shows the hint to an admin but keeps the actions', async () => {
+    serve('ADMIN', { [`GET ${BASE}`]: () => ({ ...deployment, systemManaged: true }) })
+    renderPage()
+    expect(await screen.findByRole('note')).toHaveTextContent(/managed through Domains/)
+    expect(screen.getByRole('button', { name: 'Deploy' })).toBeInTheDocument()
+  })
+
   it('shows an error with retry for other failures', async () => {
     serve('ADMIN', { [`GET ${BASE}`]: () => new ApiError(500, 'boom', 'INTERNAL') })
     renderPage()

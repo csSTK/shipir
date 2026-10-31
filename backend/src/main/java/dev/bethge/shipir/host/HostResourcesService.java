@@ -5,6 +5,7 @@ import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.ViewerErrorCodes;
 import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.client.ContainerService;
 import dev.bethge.shipir.docker.client.DockerSystemService;
@@ -83,12 +84,15 @@ public class HostResourcesService {
     private final DockerSystemService system;
 
     private final EgressPolicy egress;
+    private final SystemManagedGuard systemManaged;
 
     HostResourcesService(DockerHostRepository hosts, HostEndpointResolver endpoints, ContainerService containers,
                          ImageService images, NetworkService networks, VolumeService volumes,
                          ManagedDeploymentLookup managedDeployments, CurrentAccess access,
                          RunOutput streams, RegistryAuthSource registryAuths,
-                         ImageUpdateStore imageUpdates, DockerSystemService system, EgressPolicy egress) {
+                         ImageUpdateStore imageUpdates, DockerSystemService system, EgressPolicy egress,
+                         SystemManagedGuard systemManaged) {
+        this.systemManaged = systemManaged;
         this.system = system;
         this.egress = egress;
         this.hosts = hosts;
@@ -114,8 +118,10 @@ public class HostResourcesService {
         Map<String, UUID> managed = managedDeployments.managedDeploymentIds(hostId);
         var visible = access.visibleDeploymentIds(hostId);
         Set<String> outdatedProjects = projectsWithUpdates(hostId);
+        Set<String> system = managedDeployments.systemManagedNames(hostId);
         return found.stream()
-                .map(s -> HostDeploymentResponse.of(s, managed.get(s.name()), outdatedProjects.contains(s.name())))
+                .map(s -> HostDeploymentResponse.of(s, managed.get(s.name()), outdatedProjects.contains(s.name()),
+                        system.contains(s.name())))
                 .filter(r -> access.hostFullyVisible(hostId)
                         || (r.managedDeploymentId() != null && visible.orElseThrow().contains(r.managedDeploymentId())))
                 .toList();
@@ -250,6 +256,7 @@ public class HostResourcesService {
     private void requireContainerOperate(UUID hostId, String containerId) {
         requireView(hostId);
         if (access.canOperate(hostId)) {
+            systemManaged.requireNotSystemManagedContainer(hostId, containerId);
             return;
         }
         if (!access.canOperateAnyDeployment(hostId)) {
@@ -268,6 +275,7 @@ public class HostResourcesService {
         UUID deployment = details.composeProject() == null ? null
                 : managedDeployments.managedDeploymentIds(hostId).get(details.composeProject());
         if (deployment != null && access.canOperate(hostId, deployment)) {
+            systemManaged.requireNotSystemManaged(hostId, details);
             return;
         }
         boolean visible = access.hostFullyVisible(hostId)
@@ -286,11 +294,12 @@ public class HostResourcesService {
     public PrunePreviewResponse prunePreview(UUID hostId, PruneRequest.ImageScope imageScope, boolean includeManagedVolumes) {
         requireOperate(hostId);
         Set<String> managed = managedDeployments.managedDeploymentIds(hostId).keySet();
+        Set<String> restricted = systemManaged.restrictedProjects(hostId);
         return call(hostId, (id, endpoint) -> {
-            List<PruneCandidateDto> allVolumes = volumes.listPrunable(id, endpoint);
+            List<PruneCandidateDto> allVolumes = withoutProjects(volumes.listPrunable(id, endpoint), restricted);
             List<PruneCandidateDto> keptVolumes = filterVolumes(allVolumes, managed, includeManagedVolumes);
             return new PrunePreviewResponse(
-                    PrunePreviewResponse.Category.of(containers.listPrunable(id, endpoint)),
+                    PrunePreviewResponse.Category.of(withoutProjects(containers.listPrunable(id, endpoint), restricted)),
                     PrunePreviewResponse.Category.of(images.listPrunable(id, endpoint, imageScope == PruneRequest.ImageScope.UNUSED)),
                     PrunePreviewResponse.Category.of(keptVolumes),
                     PrunePreviewResponse.Category.of(networks.listPrunable(id, endpoint)),
@@ -313,13 +322,15 @@ public class HostResourcesService {
             throw new HostException(HttpStatus.BAD_REQUEST, "NOTHING_SELECTED", "Select at least one resource type");
         }
         Set<String> managed = managedDeployments.managedDeploymentIds(hostId).keySet();
+        Set<String> restricted = systemManaged.restrictedProjects(hostId);
         return call(hostId, (id, endpoint) -> {
             PruneResponse.Result c = PruneResponse.Result.NONE, v = c, n = c, i = c;
             if (request.pruneContainers()) {
-                c = removeAll(containers.listPrunable(id, endpoint), cid -> containers.removeContainer(id, endpoint, cid, false));
+                c = removeAll(withoutProjects(containers.listPrunable(id, endpoint), restricted), cid -> containers.removeContainer(id, endpoint, cid, false));
             }
             if (request.pruneVolumes()) {
-                v = removeAll(filterVolumes(volumes.listPrunable(id, endpoint), managed, request.withManagedVolumes()),
+                v = removeAll(filterVolumes(withoutProjects(volumes.listPrunable(id, endpoint), restricted), managed,
+                        request.withManagedVolumes()),
                         name -> volumes.removeVolume(id, endpoint, name));
             }
             if (request.pruneNetworks()) {
@@ -331,6 +342,12 @@ public class HostResourcesService {
             }
             return new PruneResponse(c, i, v, n, c.reclaimedBytes() + i.reclaimedBytes() + v.reclaimedBytes() + n.reclaimedBytes());
         });
+    }
+
+    /** Drops candidates of the given Compose projects (the system-managed proxy, for non-ADMIN callers). */
+    private static List<PruneCandidateDto> withoutProjects(List<PruneCandidateDto> all, Set<String> projects) {
+        return projects.isEmpty() ? all
+                : all.stream().filter(c -> c.composeProject() == null || !projects.contains(c.composeProject())).toList();
     }
 
     private static List<PruneCandidateDto> filterVolumes(List<PruneCandidateDto> all, Set<String> managedProjects,
@@ -365,6 +382,7 @@ public class HostResourcesService {
     void removeContainer(UUID hostId, String containerId, boolean force) {
         requireOperate(hostId);
         validateResourceId(containerId);
+        systemManaged.requireNotSystemManagedContainer(hostId, containerId);
         call(hostId, (id, endpoint) -> {
             containers.removeContainer(id, endpoint, containerId, force);
             return null;
@@ -414,7 +432,7 @@ public class HostResourcesService {
             sink.accept("Pulled " + reference);
             status = RunStatus.DONE;
         } catch (DockerConnectionException e) {
-            sink.accept("Pull failed (" + HostFailureCodes.forViewer(e.getCode(), admin) + ")");
+            sink.accept("Pull failed (" + ViewerErrorCodes.forViewer(e.getCode(), admin) + ")");
         } catch (RuntimeException e) {
             log.warn("Image pull {} failed unexpectedly: {}", runId, e.toString());
             sink.accept("Pull failed (UNKNOWN)");
@@ -431,6 +449,7 @@ public class HostResourcesService {
     void removeVolume(UUID hostId, String name) {
         requireOperate(hostId);
         validateResourceId(name);
+        systemManaged.requireNotSystemManagedVolume(hostId, name);
         call(hostId, (id, endpoint) -> {
             volumes.removeVolume(id, endpoint, name);
             return null;
@@ -553,24 +572,28 @@ public class HostResourcesService {
             targetId = "#request?.name() != null ? #request.name() : #request?.image()")
     CreatedResourceDto createContainer(UUID hostId, CreateContainerRequest request) {
         requireOperate(hostId);
-        ContainerCreateSpec spec = authorizedSpec(request);
+        ContainerCreateSpec spec = authorizedSpec(hostId, request);
         return call(hostId, (id, endpoint) -> containers.createContainer(id, endpoint, spec));
     }
 
-    /** The create validation and the ADMIN gate, shared by create, duplicate and recreate so none can be weaker. */
-    private ContainerCreateSpec authorizedSpec(CreateContainerRequest request) {
+    /** The create validation, the ADMIN gate and the system-managed volume gate, shared by create, duplicate and recreate so none can be weaker. */
+    private ContainerCreateSpec authorizedSpec(UUID hostId, CreateContainerRequest request) {
         ContainerCreateSpec spec = validateContainer(request);
         boolean bind = spec.mounts().stream().anyMatch(m -> "BIND".equals(m.type()));
         if ((spec.privileged() || spec.hostNetwork() || bind) && !access.isAdmin()) {
             throw new HostException(HttpStatus.FORBIDDEN, "ADMIN_REQUIRED",
                     "Privileged mode, host networking and bind mounts need the ADMIN role");
         }
+        // the proxy's certificate keys and DNS config live in its volumes: no one but ADMIN may mount them elsewhere
+        spec.mounts().stream().filter(m -> "VOLUME".equals(m.type())).map(ContainerCreateSpec.Mount::source)
+                .forEach(source -> systemManaged.requireNotSystemManagedVolume(hostId, source));
         return spec;
     }
 
     /** Compose owns its containers: changing one behind its back would be undone by the next {@code up}. */
     private ContainerDetailsDto requireNotComposeManaged(UUID hostId, String containerId) {
         ContainerDetailsDto existing = call(hostId, (id, endpoint) -> containers.inspect(id, endpoint, containerId));
+        systemManaged.requireNotSystemManaged(hostId, existing);
         if (existing.composeProject() != null) {
             throw new HostException(HttpStatus.CONFLICT, "MANAGED_BY_COMPOSE",
                     "This container belongs to a Compose project; change it through its deployment");
@@ -587,7 +610,7 @@ public class HostResourcesService {
     CreatedResourceDto recreateContainer(UUID hostId, String containerId, CreateContainerRequest request) {
         requireOperate(hostId);
         validateResourceId(containerId);
-        ContainerCreateSpec spec = authorizedSpec(request);
+        ContainerCreateSpec spec = authorizedSpec(hostId, request);
         ContainerDetailsDto existing = requireNotComposeManaged(hostId, containerId);
         ContainerCreateSpec named = withName(spec, existing.name());
         return call(hostId, (id, endpoint) -> containers.recreateContainer(id, endpoint, containerId, named));
@@ -598,7 +621,7 @@ public class HostResourcesService {
     CreatedResourceDto duplicateContainer(UUID hostId, String containerId, CreateContainerRequest request) {
         requireOperate(hostId);
         validateResourceId(containerId);
-        ContainerCreateSpec spec = authorizedSpec(request);
+        ContainerCreateSpec spec = authorizedSpec(hostId, request);
         requireNotComposeManaged(hostId, containerId);
         return call(hostId, (id, endpoint) -> containers.createContainer(id, endpoint, spec));
     }
@@ -875,7 +898,7 @@ public class HostResourcesService {
                 throw new HostException(HttpStatus.CONFLICT, "RESOURCE_IN_USE",
                         "Built-in networks cannot be removed");
             }
-            throw badGateway(HostFailureCodes.forViewer(e.getCode(), access.isAdmin()), "Environment could not be reached");
+            throw badGateway(ViewerErrorCodes.forViewer(e.getCode(), access.isAdmin()), "Environment could not be reached");
         } catch (EncryptionKeyMissingException e) {
             throw badGateway("ENCRYPTION_KEY_MISSING", "No encryption key is configured");
         } catch (SecretDecryptionException e) {

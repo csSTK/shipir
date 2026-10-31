@@ -43,7 +43,11 @@ function updateTarget(hostId: string, c: Container, deployments: DeploymentSumma
 const MAX_PORT_CHIPS = 2
 
 /** `updates` maps container id to the page where its update is applied; `pending` is the row whose action is running. */
-function baseColumnsFor(updates: Map<string, string>, pending: { id: string; action: ContainerAction } | null): ResourceColumn<Container>[] {
+function baseColumnsFor(
+  updates: Map<string, string>,
+  pending: { id: string; action: ContainerAction } | null,
+  systemProjects: Set<string>,
+): ResourceColumn<Container>[] {
   return [
     {
       id: 'name',
@@ -89,7 +93,18 @@ function baseColumnsFor(updates: Map<string, string>, pending: { id: string; act
         </span>
       ),
     },
-    { id: 'deployment', header: i18n.t('containers:ContainersPage.deployment'), defaultWidth: 120, sortValue: (c) => c.composeProject, render: (c) => c.composeProject ?? '–' },
+    { id: 'deployment', header: i18n.t('containers:ContainersPage.deployment'), defaultWidth: 120, sortValue: (c) => c.composeProject, render: (c) => (
+        <span>
+          {c.composeProject ?? '–'}
+          {c.composeProject && systemProjects.has(c.composeProject) && (
+            <>
+              {' '}
+              <Badge tone="muted">{i18n.t('containers:ContainersPage.managedViaDomains')}</Badge>
+            </>
+          )}
+        </span>
+      ),
+    },
     {
       id: 'ports',
       header: i18n.t('containers:ContainersPage.ports'),
@@ -239,36 +254,43 @@ export function ContainersPage() {
     }
     return map
   }, [id, data, deployments.data, images.data])
-  const baseColumns = useMemo(() => baseColumnsFor(updates, pending), [updates, pending])
+  const systemProjects = useMemo(
+    () => new Set((Array.isArray(deployments.data) ? deployments.data : []).filter((d) => d.systemManaged).map((d) => d.name)),
+    [deployments.data],
+  )
+  const baseColumns = useMemo(() => baseColumnsFor(updates, pending, systemProjects), [updates, pending, systemProjects])
   const columns = useMemo(
     () => [...baseColumns.slice(0, 3), ...statsColumns(series), ...baseColumns.slice(3)],
     [baseColumns, series],
   )
 
   function rowActions(c: Container): RowActions {
+    // containers of the managed proxy are operated through Domains; only an ADMIN may act on them here
+    const locked = !isAdmin && !!c.composeProject && systemProjects.has(c.composeProject)
+    const mayWrite = canWrite && !locked
     const available = actionsFor(c.state)
     const toggle = available.find(isToggle)
     const busy = act.isPending
     const primary: NonNullable<RowActions['primary']> = []
-    if (canWrite && toggle) {
+    if (mayWrite && toggle) {
       primary.push({ label: LABELS[toggle][0], icon: TOGGLE_ICONS[toggle], onSelect: () => run(c, toggle), disabled: busy })
     }
     primary.push({ label: t('ContainersPage.logs'), icon: ScrollText, onSelect: () => navigate(`${c.id}/logs`) })
-    if (canConsole(c.composeProject) && c.state === 'running') {
+    if (!locked && canConsole(c.composeProject) && c.state === 'running') {
       primary.push({ label: t('ContainersPage.console'), icon: SquareTerminal, onSelect: () => navigate(`${c.id}/console`) })
     }
     const menu: MenuEntry[] = []
-    if (canWrite) {
+    if (mayWrite) {
       for (const a of available) {
         if (a === toggle || a === 'kill') continue
         menu.push({ label: LABELS[a][0], icon: MENU_ICONS[a], onSelect: () => run(c, a), disabled: busy })
       }
     }
     menu.push({ label: t('ContainersPage.details'), icon: <Info {...ICON_PROPS} />, onSelect: () => navigate(c.id) })
-    if (canWrite) {
+    if (mayWrite) {
       menu.push({ label: t('ContainersPage.publish'), icon: <Globe {...ICON_PROPS} />, onSelect: () => setPublishTarget(c) })
     }
-    if (canWrite) {
+    if (mayWrite) {
       menu.push({ type: 'separator' })
       if (available.includes('kill')) {
         menu.push({ label: t('ContainersPage.kill'), icon: MENU_ICONS.kill, danger: true, disabled: busy, onSelect: () => setKillTarget(c) })

@@ -1,7 +1,9 @@
 package dev.bethge.shipir.streaming;
 
+import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerErrorCode;
+import dev.bethge.shipir.docker.ViewerErrorCodes;
 import dev.bethge.shipir.docker.client.ContainerService;
 import dev.bethge.shipir.docker.client.ContainerStatsService;
 import dev.bethge.shipir.docker.dto.ContainerDto;
@@ -44,7 +46,7 @@ public class ContainerStatsStreamService {
     private static final Pattern TOPIC =
             Pattern.compile("^" + Pattern.quote(TOPIC_PREFIX) + "([0-9a-fA-F-]{36})/stats$");
 
-    private record Subscription(String sessionId, String subscriptionId, String username) {
+    private record Subscription(String sessionId, String subscriptionId, String username, boolean admin) {
     }
 
     private record Sampled(String containerId, String project, ContainerStatsDto stats) {
@@ -111,6 +113,7 @@ public class ContainerStatsStreamService {
 
     /** Registers a subscription and starts the sampling worker for the first subscriber of the host. */
     void subscribe(UUID hostId, String username, String sessionId, String subscriptionId) {
+        boolean admin = access.roleOf(username).filter(r -> r == Role.ADMIN).isPresent(); // once, on the subscribe thread
         while (true) {
             HostStream stream;
             boolean first;
@@ -126,7 +129,7 @@ public class ContainerStatsStreamService {
                 if (stream.closed) {
                     continue; // released concurrently, start over with a fresh stream
                 }
-                stream.subscribers.add(new Subscription(sessionId, subscriptionId, username));
+                stream.subscribers.add(new Subscription(sessionId, subscriptionId, username, admin));
                 if (first) {
                     HostStream started = stream;
                     stream.worker = Thread.ofVirtual().name("container-stats-" + hostId).unstarted(() -> run(started));
@@ -301,7 +304,8 @@ public class ContainerStatsStreamService {
                         .map(ContainerStatsStreamService::toSample).toList();
             }
             sender.send(sub.sessionId, sub.subscriptionId, destination(stream.hostId),
-                    new ContainerStatsMessage(seq, samples, code));
+                    new ContainerStatsMessage(seq, samples,
+                            code == null ? null : ViewerErrorCodes.forStreamFrame(code, sub.admin)));
         }
     }
 

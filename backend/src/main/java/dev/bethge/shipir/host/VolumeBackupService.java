@@ -4,6 +4,7 @@ import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
 import dev.bethge.shipir.docker.DockerConnectionException;
+import dev.bethge.shipir.docker.ViewerErrorCodes;
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.client.VolumeArchiveService;
@@ -36,6 +37,7 @@ import java.util.regex.Pattern;
 /**
  * Backup (tar download) and restore (tar upload) of a named volume, plus the unattended backup used by schedules.
  * ADMIN/OPERATOR via SecurityConfig, and host-level OPERATE here: 404 when the host is not visible, 403 without it.
+ * Volumes of the system-managed proxy are ADMIN only ({@link SystemManagedGuard}).
  * Archive contents never reach the audit log or the logs.
  */
 @Service
@@ -52,9 +54,12 @@ public class VolumeBackupService {
     private final CurrentAccess access;
     private final VolumeBackupProperties properties;
     private final Clock clock;
+    private final SystemManagedGuard systemManaged;
 
     VolumeBackupService(DockerHostRepository hosts, HostEndpointResolver endpoints, VolumeArchiveService archives,
-                        VolumeBackupStore store, CurrentAccess access, VolumeBackupProperties properties, Clock clock) {
+                        VolumeBackupStore store, CurrentAccess access, VolumeBackupProperties properties, Clock clock,
+                        SystemManagedGuard systemManaged) {
+        this.systemManaged = systemManaged;
         this.hosts = hosts;
         this.endpoints = endpoints;
         this.archives = archives;
@@ -69,6 +74,7 @@ public class VolumeBackupService {
     public VolumeBackupDownload backup(UUID hostId, String volume) {
         requireOperate(hostId);
         validateVolumeName(volume);
+        systemManaged.requireNotSystemManagedVolume(hostId, volume);
         long max = properties.maxBytes().toBytes();
         InputStream content = call(hostId, (id, endpoint) ->
                 archives.backup(id, endpoint, volume, properties.helperImage(), max));
@@ -84,6 +90,7 @@ public class VolumeBackupService {
     public void restore(UUID hostId, String volume, MultipartFile file, boolean confirm) {
         requireOperate(hostId);
         validateVolumeName(volume);
+        systemManaged.requireNotSystemManagedVolume(hostId, volume);
         if (file == null || file.isEmpty()) {
             throw new HostException(HttpStatus.BAD_REQUEST, "INVALID_ARCHIVE", "The upload is empty");
         }
@@ -118,6 +125,7 @@ public class VolumeBackupService {
     public List<StoredVolumeBackup> listStored(UUID hostId, String volume) {
         requireOperate(hostId);
         validateVolumeName(volume);
+        systemManaged.requireNotSystemManagedVolume(hostId, volume);
         return store.list(hostId, volume);
     }
 
@@ -126,6 +134,7 @@ public class VolumeBackupService {
     public VolumeBackupDownload downloadStored(UUID hostId, String volume, String fileName) {
         requireOperate(hostId);
         validateVolumeName(volume);
+        systemManaged.requireNotSystemManagedVolume(hostId, volume);
         Path file = store.resolve(hostId, volume, fileName).orElseThrow(
                 () -> new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found"));
         try {
@@ -145,6 +154,7 @@ public class VolumeBackupService {
     public void restoreStored(UUID hostId, String volume, String fileName, boolean confirm) {
         requireOperate(hostId);
         validateVolumeName(volume);
+        systemManaged.requireNotSystemManagedVolume(hostId, volume);
         Path file = store.resolve(hostId, volume, fileName).orElseThrow(
                 () -> new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found"));
         long max = properties.maxBytes().toBytes();
@@ -235,7 +245,7 @@ public class VolumeBackupService {
         }
     }
 
-    private static HostException translate(DockerConnectionException e) {
+    private HostException translate(DockerConnectionException e) {
         return switch (e.getCode()) {
             case NOT_FOUND -> new HostException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Volume not found");
             case IN_USE -> new HostException(HttpStatus.CONFLICT, "VOLUME_IN_USE",
@@ -244,7 +254,7 @@ public class VolumeBackupService {
                     "The upload is not a valid, safe volume archive");
             case INVALID_VOLUME_NAME -> new HostException(HttpStatus.BAD_REQUEST, "INVALID_RESOURCE_ID", "Invalid resource id");
             case SIZE_LIMIT_EXCEEDED -> sizeLimit();
-            default -> new HostException(HttpStatus.BAD_GATEWAY, e.getCode().name(), "Environment could not be reached");
+            default -> new HostException(HttpStatus.BAD_GATEWAY, ViewerErrorCodes.forViewer(e.getCode(), access.isAdmin()), "Environment could not be reached");
         };
     }
 

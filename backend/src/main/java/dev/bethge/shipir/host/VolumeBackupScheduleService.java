@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /** Create, list and delete volume backup schedules (host-level OPERATE); the scheduler records runs via {@link #recordRun}. */
@@ -33,9 +34,12 @@ public class VolumeBackupScheduleService {
     private final CurrentAccess access;
     private final Clock clock;
     private final VolumeBackupStore store;
+    private final SystemManagedGuard systemManaged;
 
     VolumeBackupScheduleService(VolumeBackupScheduleRepository schedules, DockerHostRepository hosts, UserRepository users,
-                                CurrentAccess access, Clock clock, VolumeBackupStore store) {
+                                CurrentAccess access, Clock clock, VolumeBackupStore store,
+                                SystemManagedGuard systemManaged) {
+        this.systemManaged = systemManaged;
         this.schedules = schedules;
         this.hosts = hosts;
         this.users = users;
@@ -47,7 +51,10 @@ public class VolumeBackupScheduleService {
     @Transactional(readOnly = true)
     public List<VolumeBackupScheduleResponse> list(UUID hostId) {
         requireOperate(hostId);
-        return schedules.findByHostIdOrderByVolumeName(hostId).stream().map(VolumeBackupScheduleService::toResponse).toList();
+        Set<String> hidden = systemManaged.restrictedVolumeNames(hostId);
+        return schedules.findByHostIdOrderByVolumeName(hostId).stream()
+                .filter(s -> !hidden.contains(s.getVolumeName()))
+                .map(VolumeBackupScheduleService::toResponse).toList();
     }
 
     @Auditable(action = "VOLUME_BACKUP_SCHEDULE_CREATE", targetType = "VOLUME", targetId = "#request.volumeName()",
@@ -58,6 +65,7 @@ public class VolumeBackupScheduleService {
         if (!violations.isEmpty()) {
             throw new HostException(HttpStatus.BAD_REQUEST, "INVALID_SCHEDULE", "Invalid backup schedule", violations);
         }
+        systemManaged.requireNotSystemManagedVolume(hostId, request.volumeName());
         if (schedules.existsByHostIdAndVolumeName(hostId, request.volumeName())) {
             throw new HostException(HttpStatus.CONFLICT, "SCHEDULE_EXISTS", SCHEDULE_EXISTS);
         }
@@ -75,6 +83,7 @@ public class VolumeBackupScheduleService {
         requireOperate(hostId);
         VolumeBackupSchedule schedule = schedules.findByIdAndHostId(scheduleId, hostId).orElseThrow(
                 () -> new HostException(HttpStatus.NOT_FOUND, "SCHEDULE_NOT_FOUND", "Backup schedule not found"));
+        systemManaged.requireNotSystemManagedVolume(hostId, schedule.getVolumeName());
         schedules.delete(schedule);
         // Row first, files after and best-effort: a failing file delete must not keep a schedule the user removed
         // (it would keep running). Leftover archives are logged. One schedule per (host, volume) is enforced by a

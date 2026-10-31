@@ -24,7 +24,8 @@ class DeploymentLogRevalidateTest {
     private final DeploymentLogStreamService service = new DeploymentLogStreamService(mock(ContainerService.class),
             mock(ContainerLogService.class), hosts, mock(HostEndpointResolver.class),
             mock(StompFrameSender.class),
-            new DeploymentLogProperties(100, 10, 8192, 100, 1000, 100, Duration.ofHours(1)), Clock.systemUTC());
+            new DeploymentLogProperties(100, 10, 8192, 100, 1000, 100, Duration.ofHours(1)), Clock.systemUTC(),
+            mock(StreamViewers.class));
     {
         // a known host keeps the workers alive (an unknown one ends the stream on its own)
         when(hosts.findById(any())).thenReturn(Optional.of(mock(DockerHost.class)));

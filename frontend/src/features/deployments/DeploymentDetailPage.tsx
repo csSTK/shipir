@@ -90,6 +90,24 @@ export function DeploymentDetailPage() {
     )
   }
 
+  if (deployment.error instanceof ApiError && deployment.error.status === 403) {
+    // Only the managed proxy deployment answers 403 on its detail (ADMIN only): it is operated through Domains.
+    return (
+      <section className="sd">
+        <Link className="sd-back" to={listPath}>
+          {t('DeploymentDetailPage.deployments')}
+        </Link>
+        <PageHeader title={t('DeploymentDetailPage.managedViaDomains')} />
+        <p role="status" className="sd-muted">
+          {t('DeploymentDetailPage.managedViaDomainsHint')}
+        </p>
+        <div>
+          <Link to={`/environments/${hostId}/domains`}>{t('DeploymentDetailPage.openDomains')}</Link>
+        </div>
+      </section>
+    )
+  }
+
   if (deployment.error) {
     const notFound = deployment.error instanceof ApiError && deployment.error.code === 'DEPLOYMENT_NOT_FOUND'
     return (
@@ -240,6 +258,11 @@ export function DeploymentDetailPage() {
         }
       />
 
+      {data.systemManaged && (
+        <p role="note" className="sd-muted">
+          {t('DeploymentDetailPage.managedViaDomainsHint')} <Link to={`/environments/${hostId}/domains`}>{t('DeploymentDetailPage.openDomains')}</Link>
+        </p>
+      )}
       {actionError && (
         <p role="alert" className="ui-error">
           {actionError}

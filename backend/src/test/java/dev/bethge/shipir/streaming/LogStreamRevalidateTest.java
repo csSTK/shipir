@@ -28,7 +28,8 @@ class LogStreamRevalidateTest {
     private final ContainerLogService logs = mock(ContainerLogService.class);
     private final DockerHostRepository hosts = mock(DockerHostRepository.class);
     private final LogStreamHandler handler = new LogStreamHandler(logs, hosts, mock(HostEndpointResolver.class),
-            mock(StompFrameSender.class), new LogStreamProperties(200, 500, 8192, 1000), Clock.systemUTC());
+            mock(StompFrameSender.class), new LogStreamProperties(200, 500, 8192, 1000), Clock.systemUTC(),
+            mock(StreamViewers.class));
 
     @Test
     void throwingPredicateDropsThatStreamAndStillChecksTheOthers() throws Exception {

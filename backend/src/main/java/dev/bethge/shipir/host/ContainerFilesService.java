@@ -4,6 +4,7 @@ import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
 import dev.bethge.shipir.docker.DockerConnectionException;
+import dev.bethge.shipir.docker.ViewerErrorCodes;
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.client.ContainerFileService;
 import dev.bethge.shipir.docker.dto.ContainerFileEntry;
@@ -244,7 +245,7 @@ public class ContainerFilesService {
         }
     }
 
-    private static HostException translate(DockerConnectionException e) {
+    private HostException translate(DockerConnectionException e) {
         return switch (e.getCode()) {
             case NOT_FOUND -> new HostException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Container or path not found");
             case INVALID_PATH -> invalidPath();
@@ -255,7 +256,7 @@ public class ContainerFilesService {
                     "Listing a directory this large needs a running container with find in its image");
             case INVALID_STATE -> new HostException(HttpStatus.CONFLICT, "INVALID_CONTAINER_STATE",
                     "The container is not in a state that allows this action");
-            default -> new HostException(HttpStatus.BAD_GATEWAY, e.getCode().name(), "Environment could not be reached");
+            default -> new HostException(HttpStatus.BAD_GATEWAY, ViewerErrorCodes.forViewer(e.getCode(), access.isAdmin()), "Environment could not be reached");
         };
     }
 

@@ -118,6 +118,36 @@ class HostPruneTest extends HostApiTestBase {
     }
 
     @Test
+    void operatorPruneNeverTouchesTheSystemManagedProxyProject() throws Exception {
+        when(managed.systemManagedNames(any())).thenReturn(java.util.Set.of("app"));
+        mvc.perform(get("/api/hosts/{h}/prune/preview?includeManagedVolumes=true", host)
+                        .session(login("operator").session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.containers.count").value(0))
+                .andExpect(jsonPath("$.volumes.count").value(1))
+                .andExpect(jsonPath("$.volumes.items[0].id").value("plain"));
+        mvc.perform(login("operator").write(post("/api/hosts/{h}/prune", host))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"containers\":true,\"volumes\":true,\"includeManagedVolumes\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.containers.removed").value(0))
+                .andExpect(jsonPath("$.volumes.removed").value(1));
+        verify(containers, never()).removeContainer(any(), any(), eq("c1"), anyBoolean());
+        verify(volumes, never()).removeVolume(any(), any(), eq("app_data"));
+    }
+
+    @Test
+    void adminPruneStillIncludesTheSystemManagedProject() throws Exception {
+        when(managed.systemManagedNames(any())).thenReturn(java.util.Set.of("app"));
+        mvc.perform(login("admin").write(post("/api/hosts/{h}/prune", host))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"containers\":true,\"volumes\":true,\"includeManagedVolumes\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.containers.removed").value(1))
+                .andExpect(jsonPath("$.volumes.removed").value(2));
+    }
+
+    @Test
     void managedVolumesAreRemovedOnlyWhenExplicit() throws Exception {
         mvc.perform(login("admin").write(post("/api/hosts/{h}/prune", host))
                         .contentType(MediaType.APPLICATION_JSON)

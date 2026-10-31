@@ -49,6 +49,8 @@ function joinRows(live: DeploymentSummary[], managed: ManagedDeployment[]): Row[
   return rows
 }
 
+const isSystem = (r: Row) => !!(r.managed?.systemManaged || r.live?.systemManaged)
+
 /** `/environments/:id/deployments`: Compose projects of one environment, plus managed deployments. */
 export function DeploymentsPage() {
   const { t } = useTranslation('deployments')
@@ -56,6 +58,7 @@ export function DeploymentsPage() {
   const navigate = useNavigate()
   const { data: user } = useCurrentUser()
   const canWrite = user?.role === 'ADMIN' || user?.role === 'OPERATOR'
+  const isAdmin = user?.role === 'ADMIN'
   const live = useDeployments(id)
   const managed = useManagedDeployments(id)
   const deploy = useDeployDeployment(id)
@@ -178,7 +181,16 @@ export function DeploymentsPage() {
       id: 'managed',
       header: t('DeploymentsPage.managed'),
       sortValue: (r) => (r.managed ? 0 : 1),
-      render: (r) => (r.managed ? <Badge tone="ok">{t('DeploymentsPage.managed')}</Badge> : '–'),
+      render: (r) =>
+        isSystem(r) ? (
+          <Link className="deployments__link" to={`/environments/${id}/domains`}>
+            <Badge tone="muted">{t('DeploymentsPage.managedViaDomains')}</Badge>
+          </Link>
+        ) : r.managed ? (
+          <Badge tone="ok">{t('DeploymentsPage.managed')}</Badge>
+        ) : (
+          '–'
+        ),
     },
   ]
   const busy = deploy.isPending || stop.isPending
@@ -186,7 +198,8 @@ export function DeploymentsPage() {
     const details: MenuEntry = r.managed
       ? { label: t('DeploymentsPage.openDetails'), onSelect: () => navigate(`/environments/${id}/deployments/${r.managed!.id}`) }
       : { label: t('DeploymentsPage.showContainers'), onSelect: () => navigate(`/environments/${id}/containers?deployment=${encodeURIComponent(r.name)}`) }
-    if (!canWrite) return { menu: [details] }
+    // the managed proxy is operated through Domains; only an ADMIN may act on it here
+    if (!canWrite || (isSystem(r) && !isAdmin)) return { menu: [details] }
     if (r.managed) {
       return {
         primary: [

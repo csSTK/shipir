@@ -268,4 +268,13 @@ class ContainerFilesApiTest extends HostApiTestBase {
                 .andExpect(status().isForbidden());
         verify(files, org.mockito.Mockito.never()).upload(any(), any(), any(), any(), any(), anyLong());
     }
+
+    @Test
+    void adminKeepsTheConnectionFailureCode() throws Exception {
+        // the endpoints are ADMIN only today; the code is still filtered by role so a later opening cannot leak it
+        doThrow(new DockerConnectionException(DockerErrorCode.TLS_ERROR, "x", null))
+                .when(files).list(any(), any(), any(), eq("/tls"), anyLong());
+        mvc.perform(get("/api/hosts/{h}/containers/c1/files?path=/tls", host).session(login("admin").session()))
+                .andExpect(status().isBadGateway()).andExpect(jsonPath("$.code").value("TLS_ERROR"));
+    }
 }

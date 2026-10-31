@@ -4,6 +4,7 @@ import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.ViewerErrorCodes;
 import dev.bethge.shipir.host.DockerHost;
 import dev.bethge.shipir.host.DockerHostRepository;
 import dev.bethge.shipir.host.HostEndpointResolver;
@@ -29,6 +30,11 @@ public class ProxyHostAccess {
         this.hosts = hosts;
         this.endpoints = endpoints;
         this.access = access;
+    }
+
+    /** True only for a signed-in ADMIN (not the system caller); decides how much Docker failure detail a message may carry. */
+    public boolean isAdmin() {
+        return access.isAdmin();
     }
 
     public void requireView(UUID hostId) {
@@ -59,8 +65,12 @@ public class ProxyHostAccess {
         }
     }
 
-    /** 502 with the stable Docker error code; the daemon's own text is never passed on. */
-    static ProxyException dockerFailure(DockerConnectionException e) {
-        return new ProxyException(HttpStatus.BAD_GATEWAY, e.getCode().name(), "Environment could not be reached");
+    /**
+     * 502 with the stable Docker error code; the daemon's own text is never passed on. Connection-level codes (TLS,
+     * permission, timeout, ...) are shown to ADMINs only, everyone else gets UNREACHABLE.
+     */
+    ProxyException dockerFailure(DockerConnectionException e) {
+        return new ProxyException(HttpStatus.BAD_GATEWAY, ViewerErrorCodes.forViewer(e.getCode(), access.isAdmin()),
+                "Environment could not be reached");
     }
 }

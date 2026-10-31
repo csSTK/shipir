@@ -288,4 +288,19 @@ class AdoptionApiTest extends DeploymentTestBase {
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
         assertNothingAdopted(1);
     }
+
+    @Test
+    void listingFailureHidesTheConnectionCodeFromOperatorAndAdminKeepsIt() throws Exception {
+        when(containers.listContainers(any(), any()))
+                .thenThrow(new dev.bethge.shipir.docker.DockerConnectionException(
+                        dev.bethge.shipir.docker.DockerErrorCode.TLS_ERROR, "x", null));
+        mvc.perform(login("operator").write(post(url("legacy")).contentType("application/json")
+                        .content("{\"yaml\":\"x: 1\"}")))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("UNREACHABLE"));
+        mvc.perform(login("admin").write(post(url("legacy")).contentType("application/json")
+                        .content("{\"yaml\":\"x: 1\"}")))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("TLS_ERROR"));
+    }
 }

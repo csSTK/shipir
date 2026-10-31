@@ -578,4 +578,14 @@ class HostImageBuildTest extends HostApiTestBase {
         verify(streams, timeout(5000)).complete(any(), eq(RunStatus.FAILED));
         assertThat(lines).contains("Build failed (DOCKERFILE_NOT_FOUND)");
     }
+
+    @Test
+    void adminBuildFailureKeepsTheConnectionCode() throws Exception {
+        // builds are ADMIN only today; the sink code is still filtered by role so a later opening cannot leak it
+        doThrow(new DockerConnectionException(DockerErrorCode.TLS_ERROR, "x", null))
+                .when(images).build(any(), any(), any(), any(), any(), any());
+        mvc.perform(login("admin").write(build(CONTEXT, "tag", "myapp:6"))).andExpect(status().isAccepted());
+        verify(streams, timeout(5000)).complete(any(), eq(RunStatus.FAILED));
+        assertThat(lines).contains("Build failed (TLS_ERROR)");
+    }
 }

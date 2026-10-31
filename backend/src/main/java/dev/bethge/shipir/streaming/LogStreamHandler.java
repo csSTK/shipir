@@ -1,6 +1,7 @@
 package dev.bethge.shipir.streaming;
 
 import dev.bethge.shipir.docker.DockerConnectionException;
+import dev.bethge.shipir.docker.ViewerErrorCodes;
 import dev.bethge.shipir.docker.client.ContainerLogService;
 import dev.bethge.shipir.docker.dto.LogLine;
 import dev.bethge.shipir.host.DockerHostRepository;
@@ -53,7 +54,7 @@ public class LogStreamHandler {
     private record Key(Target target, Options options) {
     }
 
-    private record Subscription(String sessionId, String subscriptionId, String username) {
+    private record Subscription(String sessionId, String subscriptionId, String username, boolean admin) {
     }
 
     private static final class Stream {
@@ -80,9 +81,11 @@ public class LogStreamHandler {
     private final StompFrameSender sender;
     private final LogStreamProperties properties;
     private final Clock clock;
+    private final StreamViewers viewers;
 
     LogStreamHandler(ContainerLogService logs, DockerHostRepository hosts, HostEndpointResolver endpoints,
-                     StompFrameSender sender, LogStreamProperties properties, Clock clock) {
+                     StompFrameSender sender, LogStreamProperties properties, Clock clock, StreamViewers viewers) {
+        this.viewers = viewers;
         this.logs = logs;
         this.hosts = hosts;
         this.endpoints = endpoints;
@@ -117,6 +120,7 @@ public class LogStreamHandler {
     /** Registers a subscription, replays the buffer and starts the Docker follow for the first subscriber. */
     void subscribe(Target target, Options options, String username, String sessionId, String subscriptionId) {
         Key key = new Key(target, options);
+        boolean admin = viewers.isAdmin(username); // once, on the subscribe thread
         Stream stream;
         boolean first;
         while (true) {
@@ -132,7 +136,7 @@ public class LogStreamHandler {
                 if (stream.closed) {
                     continue; // released concurrently, start over with a fresh stream
                 }
-                Subscription sub = new Subscription(sessionId, subscriptionId, username);
+                Subscription sub = new Subscription(sessionId, subscriptionId, username, admin);
                 stream.subscribers.add(sub);
                 for (LogStreamMessage m : stream.buffer) {
                     send(stream, sub, m);
@@ -342,6 +346,11 @@ public class LogStreamHandler {
     }
 
     private void send(Stream stream, Subscription sub, LogStreamMessage message) {
+        if (message.type() == LogStreamMessage.Type.STATUS && message.status() == LogStreamMessage.Status.ERROR) {
+            // the buffered frame keeps the raw code; each recipient gets the one it may see (also on replay)
+            message = new LogStreamMessage(message.seq(), message.type(), message.stream(),
+                    ViewerErrorCodes.forStreamFrame(message.line(), sub.admin), message.status(), message.timestamp());
+        }
         sender.send(sub.sessionId, sub.subscriptionId, destination(stream.target), message);
     }
 

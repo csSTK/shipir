@@ -8,6 +8,7 @@ import dev.bethge.shipir.common.net.EgressPolicy;
 import dev.bethge.shipir.compose.execution.RegistryAuthSource;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.ViewerErrorCodes;
 import dev.bethge.shipir.docker.client.ImageService;
 import dev.bethge.shipir.docker.dto.BuildSpec;
 import dev.bethge.shipir.docker.dto.RegistryLogin;
@@ -161,11 +162,12 @@ class ImageBuildService {
             streams.registerRun(runId, hostId, null);
             Consumer<String> sink = streams.start(runId);
             Path workDir = work;
+            boolean admin = access.isAdmin(); // read here: the worker thread has no request context
             String url = gitUrl;
             String ref = gitRef;
             UUID credential = request.gitCredentialId();
             Thread.ofVirtual().name("image-build-" + runId).start(() ->
-                    runBuild(hostId, endpoint, workDir, spec, logins, url, ref, credential, runId, sink));
+                    runBuild(hostId, endpoint, workDir, spec, logins, url, ref, credential, runId, sink, admin));
             handedOver = true; // the worker deletes the directory and frees the host slot
             return new ImageRunResponse(runId);
         } catch (IOException e) {
@@ -181,7 +183,8 @@ class ImageBuildService {
     }
 
     private void runBuild(UUID hostId, DockerEndpoint endpoint, Path work, BuildSpec spec, List<RegistryLogin> logins,
-                          String gitUrl, String gitRef, UUID credential, String runId, Consumer<String> sink) {
+                          String gitUrl, String gitRef, UUID credential, String runId, Consumer<String> sink,
+                          boolean admin) {
         RunStatus status = RunStatus.FAILED;
         Consumer<String> output = new BoundedSink(sink);
         try {
@@ -202,7 +205,7 @@ class ImageBuildService {
             sink.accept("Built " + spec.tag());
             status = RunStatus.DONE;
         } catch (DockerConnectionException e) {
-            sink.accept("Build failed (" + e.getCode() + ")");
+            sink.accept("Build failed (" + ViewerErrorCodes.forViewer(e.getCode(), admin) + ")");
         } catch (HostException e) {
             sink.accept("Build failed (" + e.code() + ")");
         } catch (GitOperationException e) {
@@ -272,12 +275,14 @@ class ImageBuildService {
         String runId = UUID.randomUUID().toString();
         streams.registerRun(runId, hostId, null);
         Consumer<String> sink = streams.start(runId);
-        Thread.ofVirtual().name("image-push-" + runId).start(() -> runPush(hostId, endpoint, pushed, login, runId, sink));
+        boolean admin = access.isAdmin(); // read here: the worker thread has no request context
+        Thread.ofVirtual().name("image-push-" + runId)
+                .start(() -> runPush(hostId, endpoint, pushed, login, runId, sink, admin));
         return new ImageRunResponse(runId);
     }
 
     private void runPush(UUID hostId, DockerEndpoint endpoint, String reference, RegistryLogin login, String runId,
-                         Consumer<String> sink) {
+                         Consumer<String> sink, boolean admin) {
         RunStatus status = RunStatus.FAILED;
         try {
             sink.accept("Pushing " + reference);
@@ -285,7 +290,7 @@ class ImageBuildService {
             sink.accept("Pushed " + reference);
             status = RunStatus.DONE;
         } catch (DockerConnectionException e) {
-            sink.accept("Push failed (" + e.getCode() + ")");
+            sink.accept("Push failed (" + ViewerErrorCodes.forViewer(e.getCode(), admin) + ")");
         } catch (RuntimeException e) {
             log.warn("Image push {} failed unexpectedly: {}", runId, e.getClass().getSimpleName());
             sink.accept("Push failed (UNKNOWN)");
@@ -365,7 +370,8 @@ class ImageBuildService {
                 case INVALID_ARCHIVE -> new HostException(HttpStatus.BAD_REQUEST, "INVALID_ARCHIVE",
                         "The build context is not a safe tar or tar.gz archive");
                 case SIZE_LIMIT_EXCEEDED -> sizeLimit();
-                default -> new HostException(HttpStatus.BAD_GATEWAY, e.getCode().name(), "Environment could not be reached");
+                default -> new HostException(HttpStatus.BAD_GATEWAY, ViewerErrorCodes.forViewer(e.getCode(), access.isAdmin()),
+                        "Environment could not be reached");
             };
         } catch (IOException e) {
             throw new HostException(HttpStatus.BAD_REQUEST, "UPLOAD_UNREADABLE", "The build context could not be read");
@@ -442,7 +448,8 @@ class ImageBuildService {
             if (e.getCode() == dev.bethge.shipir.docker.DockerErrorCode.NOT_FOUND) {
                 throw new HostException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Image not found");
             }
-            throw new HostException(HttpStatus.BAD_GATEWAY, e.getCode().name(), "Environment could not be reached");
+            throw new HostException(HttpStatus.BAD_GATEWAY, ViewerErrorCodes.forViewer(e.getCode(), access.isAdmin()),
+                        "Environment could not be reached");
         } catch (EncryptionKeyMissingException e) {
             throw new HostException(HttpStatus.BAD_GATEWAY, "ENCRYPTION_KEY_MISSING", "No encryption key is configured");
         } catch (SecretDecryptionException e) {

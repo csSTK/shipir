@@ -85,7 +85,7 @@ class VolumeBackupStoredRestoreIntegrationTest {
 
         VolumeBackupProperties props = new VolumeBackupProperties(DataSize.ofMegabytes(10), IMAGE, base, false, Duration.ofMinutes(1));
         store = new VolumeBackupStore(props, Clock.systemUTC());
-        service = new VolumeBackupService(hosts, endpoints, archives, store, access, props, Clock.systemUTC());
+        service = new VolumeBackupService(hosts, endpoints, archives, store, access, props, Clock.systemUTC(), mock(SystemManagedGuard.class));
     }
 
     @AfterEach

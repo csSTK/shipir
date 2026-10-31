@@ -2,6 +2,7 @@ package dev.bethge.shipir.proxy.config;
 
 import dev.bethge.shipir.compose.generator.model.ProxyType;
 import dev.bethge.shipir.docker.DockerConnectionException;
+import dev.bethge.shipir.docker.ViewerErrorCodes;
 import dev.bethge.shipir.docker.client.ContainerFileService;
 import dev.bethge.shipir.docker.dto.ContainerFileWrite;
 import dev.bethge.shipir.proxy.ProxyException;
@@ -72,7 +73,8 @@ class CaddyCustomConfigValidator implements CustomConfigValidator {
             }
         } catch (DockerConnectionException e) {
             throw new ProxyException(HttpStatus.BAD_GATEWAY, "PROXY_SYNC_FAILED",
-                    "The configuration could not be validated (" + e.getCode() + ")");
+                    "The configuration could not be validated ("
+                            + ViewerErrorCodes.forViewer(e.getCode(), access.isAdmin()) + ")");
         } finally {
             cleanUp(hostId, absolute);
         }

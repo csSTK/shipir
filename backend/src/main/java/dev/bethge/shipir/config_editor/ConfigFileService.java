@@ -86,6 +86,7 @@ public class ConfigFileService {
 
     public List<ConfigFileEntry> tree(UUID hostId, UUID id) {
         deployments.requireView(hostId, id);
+        deployments.requireAdminIfSystemManaged(hostId, id);
         Path dir = deployments.directoryOf(hostId, id);
         if (!Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) {
             return List.of();
@@ -222,6 +223,7 @@ public class ConfigFileService {
             deployments.requireOperate(hostId, id);
         } else {
             deployments.requireView(hostId, id);
+            deployments.requireAdminIfSystemManaged(hostId, id);
         }
         Path root = deployments.directoryOf(hostId, id);
         if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {

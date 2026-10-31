@@ -317,7 +317,7 @@ public class ProxyRouteService {
             if (e.getCode() == DockerErrorCode.NOT_FOUND) {
                 return List.of();
             }
-            throw ProxyHostAccess.dockerFailure(e);
+            throw access.dockerFailure(e);
         }
     }
 
@@ -397,7 +397,7 @@ public class ProxyRouteService {
                         "The container could not be attached to the network " + ProxySyncService.PROXY_NETWORK
                                 + " (is the proxy set up and the container still there?)");
             }
-            throw ProxyHostAccess.dockerFailure(e);
+            throw access.dockerFailure(e);
         }
     }
 
@@ -410,7 +410,7 @@ public class ProxyRouteService {
             networks.disconnectContainer(hostId, endpoint, ProxySyncService.PROXY_NETWORK, container.id());
         } catch (DockerConnectionException e) {
             if (e.getCode() != DockerErrorCode.NOT_FOUND) {
-                throw ProxyHostAccess.dockerFailure(e);
+                throw access.dockerFailure(e);
             }
         }
     }
@@ -423,14 +423,14 @@ public class ProxyRouteService {
         }
     }
 
-    private static <T> T call(java.util.function.Supplier<T> docker) {
+    private <T> T call(java.util.function.Supplier<T> docker) {
         try {
             return docker.get();
         } catch (DockerConnectionException e) {
             if (e.getCode() == DockerErrorCode.NOT_FOUND) {
                 throw containerNotFound();
             }
-            throw ProxyHostAccess.dockerFailure(e);
+            throw access.dockerFailure(e);
         }
     }
 

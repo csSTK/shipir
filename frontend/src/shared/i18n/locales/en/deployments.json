@@ -651,5 +651,9 @@
   "DeployFilesReview.deployingApprovesTheseFilesAs": "Deploying approves these files as they are now. Later changes to them make automatic runs restricted until an ADMIN deploys again.",
   "DeployFilesReview.noExtraFiles": "No extra files in the deployment directory.",
   "DeployFilesReview.symbolicLinksAreApprovedToo": "Symbolic links are approved too but not listed here.",
-  "DeployFilesReview.theListIsCutOff": "The list is cut off at 5000 entries. Files beyond it are approved as well."
+  "DeployFilesReview.theListIsCutOff": "The list is cut off at 5000 entries. Files beyond it are approved as well.",
+  "DeploymentsPage.managedViaDomains": "Managed via Domains",
+  "DeploymentDetailPage.managedViaDomains": "Managed via Domains",
+  "DeploymentDetailPage.managedViaDomainsHint": "This deployment is the reverse proxy and is managed through Domains. Only an administrator can change it here.",
+  "DeploymentDetailPage.openDomains": "Open Domains"
 }

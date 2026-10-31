@@ -4,6 +4,7 @@ import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.ViewerErrorCodes;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
 import dev.bethge.shipir.docker.client.DockerSystemService;
 import dev.bethge.shipir.docker.dto.DockerSystemInfoDto;
@@ -98,7 +99,7 @@ public class HostOverviewService {
             return future.get(Math.max(0, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
         } catch (TimeoutException e) {
             future.cancel(true);
-            return down(host, HostFailureCodes.forViewer("TIMEOUT", admin), tagList);
+            return down(host, ViewerErrorCodes.forViewer("TIMEOUT", admin), tagList);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             future.cancel(true);
@@ -118,7 +119,7 @@ public class HostOverviewService {
                             info.containersUnhealthy()),
                     info.images(), info.volumes(), tagList);
         } catch (DockerConnectionException e) {
-            return down(host, HostFailureCodes.forViewer(e.getCode(), admin), tagList);
+            return down(host, ViewerErrorCodes.forViewer(e.getCode(), admin), tagList);
         } catch (EncryptionKeyMissingException e) {
             return down(host, "ENCRYPTION_KEY_MISSING", tagList);
         } catch (SecretDecryptionException e) {

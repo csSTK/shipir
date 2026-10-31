@@ -6,6 +6,7 @@ import dev.bethge.shipir.common.security.SecretDecryptionException;
 import dev.bethge.shipir.compose.generator.model.ProxyType;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.ViewerErrorCodes;
 import dev.bethge.shipir.docker.client.ContainerFileService;
 import dev.bethge.shipir.docker.client.ContainerService;
 import dev.bethge.shipir.docker.client.ExecHandle;
@@ -148,7 +149,7 @@ public class ProxySyncService {
                     containers.restartContainer(hostId, endpoint, proxy.id(), STOP_TIMEOUT_SECONDS);
                 }
             } catch (DockerConnectionException e) {
-                throw failed("The certificate files could not be removed from the proxy (" + e.getCode() + ")");
+                throw failed("The certificate files could not be removed from the proxy (" + ViewerErrorCodes.forViewer(e.getCode(), access.isAdmin()) + ")");
             }
             return null;
         });
@@ -210,7 +211,7 @@ public class ProxySyncService {
                 containers.restartContainer(hostId, endpoint, proxy.id(), STOP_TIMEOUT_SECONDS);
             }
         } catch (DockerConnectionException e) {
-            throw failed("The proxy configuration could not be written (" + e.getCode() + ")");
+            throw failed("The proxy configuration could not be written (" + ViewerErrorCodes.forViewer(e.getCode(), access.isAdmin()) + ")");
         }
     }
 
@@ -322,7 +323,7 @@ public class ProxySyncService {
             command.addAll(args);
             return runMarked(hostId, endpoint, proxy.id(), command);
         } catch (DockerConnectionException e) {
-            throw failed("The proxy could not be reached (" + e.getCode() + ")");
+            throw failed("The proxy could not be reached (" + ViewerErrorCodes.forViewer(e.getCode(), access.isAdmin()) + ")");
         }
     }
 
@@ -331,7 +332,7 @@ public class ProxySyncService {
         try {
             return findContainer(hostId, access.endpoint(hostId), type).id();
         } catch (DockerConnectionException e) {
-            throw failed("The proxy could not be reached (" + e.getCode() + ")");
+            throw failed("The proxy could not be reached (" + ViewerErrorCodes.forViewer(e.getCode(), access.isAdmin()) + ")");
         }
     }
 

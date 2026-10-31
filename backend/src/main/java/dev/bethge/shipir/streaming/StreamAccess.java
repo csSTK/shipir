@@ -52,7 +52,8 @@ class StreamAccess {
     /**
      * May the user hold a console on a container of the host? ADMIN always; OPERATOR only when
      * {@code operatorEnabled} and with OPERATE on the host or, for a container of a managed deployment, on that
-     * deployment ({@code deploymentId} null = not owned by a managed deployment, needs OPERATE on the host).
+     * deployment ({@code deploymentId} null = not owned by a managed deployment, needs OPERATE on the host). Containers
+     * of a system-managed deployment (the managed proxy) are ADMIN only.
      */
     boolean mayExec(String username, UUID hostId, UUID deploymentId, boolean operatorEnabled) {
         Optional<PermissionSubject> s = subject(username);
@@ -64,6 +65,9 @@ class StreamAccess {
         }
         if (s.get().role() != Role.OPERATOR || !operatorEnabled) {
             return false;
+        }
+        if (deploymentId != null && systemManagedIds(hostId).contains(deploymentId)) {
+            return false; // the managed proxy: ADMIN only, whatever the operator grants say
         }
         return deploymentId == null ? permissions.canOperate(s.get(), hostId)
                 : permissions.canOperate(s.get(), hostId, deploymentId);
@@ -89,10 +93,20 @@ class StreamAccess {
         if (permissions.canOperate(s.get(), hostId)) {
             return new ExecScope(true, java.util.List.of());
         }
+        Set<UUID> system = systemManagedIds(hostId);
         java.util.List<String> projects = managedDeployments.managedDeploymentIds(hostId).entrySet().stream()
+                .filter(e -> !system.contains(e.getValue()))
                 .filter(e -> permissions.canOperate(s.get(), hostId, e.getValue()))
                 .map(java.util.Map.Entry::getKey).sorted().toList();
         return new ExecScope(false, projects);
+    }
+
+    /** Ids of the host's system-managed deployments (the managed proxy). */
+    private Set<UUID> systemManagedIds(UUID hostId) {
+        Set<String> names = managedDeployments.systemManagedNames(hostId);
+        return managedDeployments.managedDeploymentIds(hostId).entrySet().stream()
+                .filter(e -> names.contains(e.getKey())).map(java.util.Map.Entry::getValue)
+                .collect(Collectors.toSet());
     }
 
     /** Console access for the container's owner: 404 unless the container is visible to the user. */

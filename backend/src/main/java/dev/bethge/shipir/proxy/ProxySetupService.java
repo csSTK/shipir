@@ -338,7 +338,7 @@ public class ProxySetupService {
             }
         } catch (DockerConnectionException e) {
             if (e.getCode() != DockerErrorCode.NAME_TAKEN) {
-                throw ProxyHostAccess.dockerFailure(e);
+                throw access.dockerFailure(e);
             }
         }
     }

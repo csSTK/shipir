@@ -9,11 +9,13 @@ import dev.bethge.shipir.compose.dto.EnvEntry;
 import dev.bethge.shipir.compose.execution.ComposeProperties;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.ViewerErrorCodes;
 import dev.bethge.shipir.docker.client.ContainerService;
 import dev.bethge.shipir.docker.dto.ContainerDetailsDto;
 import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.host.ConnectionType;
 import dev.bethge.shipir.host.DockerHost;
+import dev.bethge.shipir.permission.CurrentAccess;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -43,9 +45,11 @@ public class AdoptionService {
     private final DeploymentRepository repository;
     private final ContainerService containers;
     private final ComposeProperties properties;
+    private final CurrentAccess access;
 
     AdoptionService(DeploymentService deployments, DeploymentRepository repository, ContainerService containers,
-                    ComposeProperties properties) {
+                    ComposeProperties properties, CurrentAccess access) {
+        this.access = access;
         this.deployments = deployments;
         this.repository = repository;
         this.containers = containers;
@@ -73,7 +77,8 @@ public class AdoptionService {
             members = containers.listContainers(hostId, endpoint).stream()
                     .filter(c -> name.equals(c.composeProject())).toList();
         } catch (DockerConnectionException e) {
-            throw new DeploymentException(HttpStatus.BAD_GATEWAY, e.getCode().name(), "The Docker host could not be reached");
+            throw new DeploymentException(HttpStatus.BAD_GATEWAY, ViewerErrorCodes.forViewer(e.getCode(), access.isAdmin()),
+                    "The Docker host could not be reached");
         }
         if (members.isEmpty()) {
             throw new DeploymentException(HttpStatus.NOT_FOUND, "PROJECT_NOT_FOUND",
@@ -115,7 +120,8 @@ public class AdoptionService {
         try {
             labels = containers.inspect(hostId, endpoint, container.id()).labels();
         } catch (DockerConnectionException e) {
-            throw new DeploymentException(HttpStatus.BAD_GATEWAY, e.getCode().name(), "The Docker host could not be reached");
+            throw new DeploymentException(HttpStatus.BAD_GATEWAY, ViewerErrorCodes.forViewer(e.getCode(), access.isAdmin()),
+                    "The Docker host could not be reached");
         }
         String configFiles = labels == null ? null : labels.get(CONFIG_FILES_LABEL);
         if (configFiles == null || configFiles.isBlank()) {

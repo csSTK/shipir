@@ -46,7 +46,7 @@ class HostImageUpdateFlagTest {
         when(access.hostFullyVisible(hostId)).thenReturn(true);
         when(access.visibleDeploymentIds(hostId)).thenReturn(java.util.Optional.empty());
         service = new HostResourcesService(hosts, endpoints, containers, images, null, null, managed, access,
-                null, mock(RegistryAuthSource.class), store, mock(DockerSystemService.class), null);
+                null, mock(RegistryAuthSource.class), store, mock(DockerSystemService.class), null, mock(SystemManagedGuard.class));
     }
 
     private static ContainerDto container(String image, String project) {
