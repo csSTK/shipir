@@ -199,7 +199,8 @@ describe('DomainsPage', () => {
     mockApi('VIEWER', { instance: null, setupBlockedReason: 'UNKNOWN' })
     renderPage()
     expect(await screen.findByText(/Only administrators can set up/i)).toBeInTheDocument()
-    expect(screen.queryByText(/already in the way/i)).not.toBeInTheDocument()
+    // Real Blocked title from en/domains.json (DomainsPage.blockedTitle); it must not render for UNKNOWN.
+    expect(screen.queryByText('A proxy is already in the way')).not.toBeInTheDocument()
   })
 
   it('shows the ready state with proxy type, status and an empty publish list', async () => {
