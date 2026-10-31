@@ -289,8 +289,11 @@ class DockerEventStreamServiceTest {
     }
 
     /**
-     * Unsubscribes while holding the stream's monitor, so a worker woken by the stop cannot proceed and
-     * stays alive; returns whether it was interrupted at that point (a dead thread always reports false).
+     * Unsubscribes while holding the stream's monitor and the reconnect loop's private lock (same order as
+     * production: stream monitor first, then the loop lock inside {@code stop()}). A worker woken by the stop
+     * has to re-acquire that loop lock to see {@code stopped} and return, so it stays alive (blocked) until
+     * this method returns; this makes the read deterministic. Returns whether the worker was interrupted at
+     * that point (a dead thread always reports false).
      */
     private boolean unsubscribeAndReadInterruptWhileAlive(Thread worker, String session, String subscription)
             throws Exception {
@@ -300,10 +303,18 @@ class DockerEventStreamServiceTest {
         synchronized (field.get(service)) {
             stream = ((java.util.Map<?, ?>) field.get(service)).get(hostId);
         }
+        var loopField = stream.getClass().getDeclaredField("loop");
+        loopField.setAccessible(true);
+        Object loop = loopField.get(stream);
+        var lockField = loop.getClass().getDeclaredField("lock");
+        lockField.setAccessible(true);
+        Object loopLock = lockField.get(loop);
         synchronized (stream) {
-            service.unsubscribe(session, subscription);
-            assertThat(worker.isAlive()).isTrue();
-            return worker.isInterrupted();
+            synchronized (loopLock) {
+                service.unsubscribe(session, subscription);
+                assertThat(worker.isAlive()).isTrue();
+                return worker.isInterrupted();
+            }
         }
     }
 
