@@ -27,6 +27,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -81,7 +82,7 @@ public class DeploymentLogStreamService {
     private record Key(Target target, Options options) {
     }
 
-    private record Subscription(String sessionId, String subscriptionId) {
+    private record Subscription(String username, String sessionId, String subscriptionId) {
     }
 
     /** One followed container. */
@@ -170,7 +171,7 @@ public class DeploymentLogStreamService {
     }
 
     /** Registers a subscription, replays the buffer and starts the worker for the first subscriber. */
-    void subscribe(Target target, Options options, String sessionId, String subscriptionId) {
+    void subscribe(Target target, Options options, String username, String sessionId, String subscriptionId) {
         Key key = new Key(target, options);
         Stream stream;
         boolean first;
@@ -187,7 +188,7 @@ public class DeploymentLogStreamService {
                 if (stream.closed) {
                     continue; // released concurrently, start over with a fresh stream
                 }
-                Subscription sub = new Subscription(sessionId, subscriptionId);
+                Subscription sub = new Subscription(username, sessionId, subscriptionId);
                 stream.subscribers.add(sub);
                 for (DeploymentLogMessage m : stream.buffer) {
                     send(stream, sub, m);
@@ -216,6 +217,56 @@ public class DeploymentLogStreamService {
             if (empty) {
                 release(stream);
             }
+        }
+    }
+
+    /**
+     * Drops the user's subscriptions to projects they may no longer follow (role, grant or account changed after
+     * SUBSCRIBE). Nothing is sent to them any more; the STOMP connection itself stays. Fails closed per stream: if the
+     * check throws, that subscription is dropped and the remaining streams are still checked.
+     */
+    void revalidate(String username, Predicate<Target> stillAllowed) {
+        List<Stream> all;
+        synchronized (streams) {
+            all = new ArrayList<>(streams.values());
+        }
+        for (Stream stream : all) {
+            List<Subscription> own;
+            synchronized (stream) {
+                own = stream.subscribers.stream().filter(s -> username.equals(s.username)).toList();
+            }
+            if (own.isEmpty()) {
+                continue;
+            }
+            boolean allowed;
+            try {
+                allowed = stillAllowed.test(stream.key.target());
+            } catch (RuntimeException e) {
+                log.warn("Project log access revalidation failed for {} on host {}, dropping the subscription: {}",
+                        stream.key.target().project(), stream.key.target().hostId(), e.toString());
+                allowed = false;
+            }
+            if (!allowed) {
+                own.forEach(s -> unsubscribe(s.sessionId, s.subscriptionId));
+            }
+        }
+    }
+
+    /** Drops every subscription on a deleted host, whoever holds it. */
+    void dropHost(UUID hostId) {
+        List<Stream> all;
+        synchronized (streams) {
+            all = new ArrayList<>(streams.values());
+        }
+        for (Stream stream : all) {
+            if (!stream.key.target().hostId().equals(hostId)) {
+                continue;
+            }
+            List<Subscription> dropped;
+            synchronized (stream) {
+                dropped = List.copyOf(stream.subscribers);
+            }
+            dropped.forEach(s -> unsubscribe(s.sessionId, s.subscriptionId));
         }
     }
 

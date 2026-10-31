@@ -6,15 +6,17 @@ import org.springframework.context.event.EventListener;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageDeliveryException;
+import org.springframework.messaging.MessageHandler;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
-import org.springframework.messaging.support.ChannelInterceptor;
+import org.springframework.messaging.support.ExecutorChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
 
 /**
@@ -27,7 +29,7 @@ import java.util.regex.Pattern;
  * CONNECT and SUBSCRIBE are refused with SETUP_REQUIRED while the user has a pending {@link SetupStatus} step.
  */
 @Component
-public class StompSecurityInterceptor implements ChannelInterceptor {
+public class StompSecurityInterceptor implements ExecutorChannelInterceptor {
 
     static final String CSRF_HEADER = "X-XSRF-TOKEN";
     private static final Pattern DEPLOYMENT_TOPIC =
@@ -91,6 +93,9 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                     }
                     chatSubscriptions.add(accessor.getUser().getName(), chat.group(1), accessor.getSessionId(),
                             accessor.getSubscriptionId());
+                    // registered now, so a change from here on is seen by AccessRevalidator; one landing before is caught here
+                    recheckOrDrop(() -> chatAccess.maySubscribe(accessor.getUser().getName(), chat.group(1)),
+                            () -> chatSubscriptions.remove(accessor.getSessionId(), accessor.getSubscriptionId()));
                     break;
                 }
                 var execTopic = EXEC_TOPIC.matcher(destination);
@@ -101,6 +106,8 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                             accessor.getSessionId(), accessor.getSubscriptionId())) {
                         throw new MessageDeliveryException("Subscription destination not allowed");
                     }
+                    recheckOrDrop(() -> mayUseConsole(user),
+                            () -> execSessions.detach(accessor.getSessionId(), accessor.getSubscriptionId()));
                     break;
                 }
                 var eventHost = DockerEventStreamService.parse(destination);
@@ -110,6 +117,8 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                         throw new MessageDeliveryException("Subscription destination not allowed");
                     }
                     eventStreams.subscribe(eventHost, accessor.getUser().getName(), accessor.getSessionId(), accessor.getSubscriptionId());
+                    recheckOrDrop(() -> access.hostFullyVisible(accessor.getUser().getName(), eventHost),
+                            () -> eventStreams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId()));
                     break;
                 }
                 var statsHost = ContainerStatsStreamService.parse(destination);
@@ -120,6 +129,8 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                     }
                     statsStreams.subscribe(statsHost, accessor.getUser().getName(), accessor.getSessionId(),
                             accessor.getSubscriptionId());
+                    recheckOrDrop(() -> access.hostVisible(accessor.getUser().getName(), statsHost),
+                            () -> statsStreams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId()));
                     break;
                 }
                 var projectLogs = DeploymentLogStreamService.parse(destination);
@@ -135,7 +146,10 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                     } catch (IllegalArgumentException e) {
                         throw new MessageDeliveryException("Invalid log stream option");
                     }
-                    deploymentLogs.subscribe(projectLogs, options, accessor.getSessionId(), accessor.getSubscriptionId());
+                    deploymentLogs.subscribe(projectLogs, options, accessor.getUser().getName(), accessor.getSessionId(),
+                            accessor.getSubscriptionId());
+                    recheckOrDrop(() -> access.mayFollowProject(accessor.getUser().getName(), projectLogs.hostId(), projectLogs.project()),
+                            () -> deploymentLogs.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId()));
                     break;
                 }
                 var logTarget = LogStreamHandler.parse(destination);
@@ -151,6 +165,8 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                         throw new MessageDeliveryException("Invalid log stream option");
                     }
                     logStreams.subscribe(logTarget, options, accessor.getUser().getName(), accessor.getSessionId(), accessor.getSubscriptionId());
+                    recheckOrDrop(() -> access.mayFollowContainer(accessor.getUser().getName(), logTarget.hostId(), logTarget.containerId()),
+                            () -> logStreams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId()));
                     break;
                 }
                 var m = DEPLOYMENT_TOPIC.matcher(destination);
@@ -161,6 +177,8 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
                     throw new MessageDeliveryException("Subscription destination not allowed");
                 }
                 streams.subscribe(m.group(1), accessor.getUser().getName(), accessor.getSessionId(), accessor.getSubscriptionId());
+                recheckOrDrop(() -> access.mayFollowRun(accessor.getUser().getName(), streams.targetOf(m.group(1))),
+                        () -> streams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId()));
             }
             case UNSUBSCRIBE -> {
                 streams.unsubscribe(accessor.getSessionId(), accessor.getSubscriptionId());
@@ -192,6 +210,40 @@ public class StompSecurityInterceptor implements ChannelInterceptor {
             }
         }
         return message;
+    }
+
+    @Override
+    public void afterMessageHandled(Message<?> message, MessageChannel channel, MessageHandler handler, Exception ex) {
+        // Chat frames go through the simple broker, which registers a subscription only after preSend. A synthetic
+        // UNSUBSCRIBE of a concurrent revalidation can overtake the real SUBSCRIBE and find nothing to remove, so
+        // once the broker has handled the SUBSCRIBE the access is checked again and the subscription ended if gone
+        // (idempotent: the broker ignores an UNSUBSCRIBE it does not know).
+        StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+        if (ex != null || accessor == null || accessor.getCommand() != StompCommand.SUBSCRIBE
+                || accessor.getUser() == null) {
+            return;
+        }
+        var chat = CHAT_TOPIC.matcher(String.valueOf(accessor.getDestination()));
+        if (chat.matches() && !chatAccess.maySubscribe(accessor.getUser().getName(), chat.group(1))) {
+            chatSubscriptions.end(accessor.getSessionId(), accessor.getSubscriptionId());
+        }
+    }
+
+    /**
+     * Second access check after a subscription was registered (see the SUBSCRIBE branches). Fails closed: if the
+     * check says no or throws (e.g. database down), the registration is dropped and the SUBSCRIBE refused.
+     */
+    private static void recheckOrDrop(BooleanSupplier stillAllowed, Runnable drop) {
+        boolean allowed;
+        try {
+            allowed = stillAllowed.getAsBoolean();
+        } catch (RuntimeException e) {
+            allowed = false;
+        }
+        if (!allowed) {
+            drop.run();
+            throw new MessageDeliveryException("Subscription destination not allowed");
+        }
     }
 
     private void checkConnect(StompHeaderAccessor accessor) {

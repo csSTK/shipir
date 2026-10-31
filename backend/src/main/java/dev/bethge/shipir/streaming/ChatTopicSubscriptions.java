@@ -53,11 +53,25 @@ class ChatTopicSubscriptions {
             if (!subscriptions.remove(s)) {
                 continue; // a concurrent revalidation already ended it
             }
-            SimpMessageHeaderAccessor accessor = SimpMessageHeaderAccessor.create(SimpMessageType.UNSUBSCRIBE);
-            accessor.setSessionId(s.sessionId);
-            accessor.setSubscriptionId(s.subscriptionId);
-            accessor.setLeaveMutable(true);
-            clientInbound.send(MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders()));
+            sendUnsubscribe(s.sessionId, s.subscriptionId);
         }
+    }
+
+    /**
+     * Forgets the subscription and sends the synthetic UNSUBSCRIBE even if it was already forgotten: used after the
+     * broker handled a SUBSCRIBE whose access is gone, where an earlier synthetic UNSUBSCRIBE may have been processed
+     * before the broker knew the subscription.
+     */
+    void end(String sessionId, String subscriptionId) {
+        remove(sessionId, subscriptionId);
+        sendUnsubscribe(sessionId, subscriptionId);
+    }
+
+    private void sendUnsubscribe(String sessionId, String subscriptionId) {
+        SimpMessageHeaderAccessor accessor = SimpMessageHeaderAccessor.create(SimpMessageType.UNSUBSCRIBE);
+        accessor.setSessionId(sessionId);
+        accessor.setSubscriptionId(subscriptionId);
+        accessor.setLeaveMutable(true);
+        clientInbound.send(MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders()));
     }
 }

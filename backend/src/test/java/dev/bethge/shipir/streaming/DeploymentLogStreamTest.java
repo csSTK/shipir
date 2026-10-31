@@ -653,6 +653,41 @@ class DeploymentLogStreamTest {
         s2.disconnect();
     }
 
+    @Autowired
+    org.springframework.context.ApplicationEventPublisher events;
+
+    @Test
+    void revokedGrantStopsProjectLogFrames() throws Exception {
+        StompSession s = connect();
+        BlockingQueue<String> q = subscribe(s, topic("shop"));
+        awaitFollowing("c-web");
+        lineSinks.get("c-web").accept(line("before"));
+        assertThat(q.poll(5, TimeUnit.SECONDS)).contains("before");
+
+        jdbc.update("DELETE FROM permissions WHERE user_id = ? AND host_id = ?", user.getId(), hostId);
+        events.publishEvent(new dev.bethge.shipir.common.security.UserAccessChangedEvent("viewer"));
+
+        await().atMost(5, TimeUnit.SECONDS).until(() -> service.subscriberCount(
+                new DeploymentLogStreamService.Target(hostId, "shop")) == 0);
+        Consumer<LogLine> sink = lineSinks.get("c-web");
+        if (sink != null) {
+            sink.accept(line("after revoke"));
+        }
+        assertThat(drain(q, 500)).noneMatch(f -> f.contains("after revoke"));
+        s.disconnect();
+    }
+
+    @Test
+    void removedHostDropsProjectLogSubscriptions() throws Exception {
+        StompSession s = connect();
+        subscribe(s, topic("shop"));
+        awaitFollowing("c-web");
+        events.publishEvent(new dev.bethge.shipir.common.security.HostRemovedEvent(hostId));
+        await().atMost(5, TimeUnit.SECONDS).until(() -> service.subscriberCount(
+                new DeploymentLogStreamService.Target(hostId, "shop")) == 0);
+        s.disconnect();
+    }
+
     /** Accepts any content type so the test sees the raw JSON bytes the server sent. */
     private static final class RawBytesConverter extends org.springframework.messaging.converter.AbstractMessageConverter {
         RawBytesConverter() {

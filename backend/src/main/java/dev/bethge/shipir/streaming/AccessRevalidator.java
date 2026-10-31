@@ -12,7 +12,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * handshake principal, so without this an open console or log subscription would outlive the revoked right. Runs
  * after commit, so the checks see the new database state; without a transaction it runs immediately.
  * Exec consoles of a user who may no longer open them (not an enabled ADMIN, nor an OPERATOR with OPERATE on the
- * host or the container's deployment while operator consoles are enabled) are ended; deploy output and chat subscriptions the user may no longer follow, container log subscriptions the user may no longer follow (same policy as at SUBSCRIBE) and event subscriptions of
+ * host or the container's deployment while operator consoles are enabled) are ended; deploy output and chat subscriptions the user may no longer follow, container and project log subscriptions the user may no longer follow (same policy as at SUBSCRIBE) and event subscriptions of
  * hosts the user no longer fully sees are dropped. Stats frames are filtered per frame and need nothing here.
  */
 @Component
@@ -21,17 +21,19 @@ class AccessRevalidator {
     private final StreamAccess access;
     private final ExecSessionHandler execSessions;
     private final LogStreamHandler logStreams;
+    private final DeploymentLogStreamService projectLogStreams;
     private final DockerEventStreamService eventStreams;
     private final ComposeOutputStreamService runStreams;
     private final ChatTopicSubscriptions chatSubscriptions;
     private final ChatTopicAccess chatAccess;
 
     AccessRevalidator(StreamAccess access, ExecSessionHandler execSessions, LogStreamHandler logStreams,
-                      DockerEventStreamService eventStreams, ComposeOutputStreamService runStreams,
+                      DeploymentLogStreamService projectLogStreams, DockerEventStreamService eventStreams, ComposeOutputStreamService runStreams,
                       ChatTopicSubscriptions chatSubscriptions, ChatTopicAccess chatAccess) {
         this.access = access;
         this.execSessions = execSessions;
         this.logStreams = logStreams;
+        this.projectLogStreams = projectLogStreams;
         this.eventStreams = eventStreams;
         this.runStreams = runStreams;
         this.chatSubscriptions = chatSubscriptions;
@@ -49,6 +51,7 @@ class AccessRevalidator {
         execSessions.revalidate(user,
                 (hostId, deploymentId) -> access.mayExec(user, hostId, deploymentId, execSessions.operatorEnabled()));
         logStreams.revalidate(user, t -> access.mayFollowContainer(user, t.hostId(), t.containerId()));
+        projectLogStreams.revalidate(user, t -> access.mayFollowProject(user, t.hostId(), t.project()));
         eventStreams.revalidate(user, hostId -> access.hostFullyVisible(user, hostId));
         runStreams.revalidate(user, target -> access.mayFollowRun(user, target));
         chatSubscriptions.revalidate(user, chatId -> chatAccess.maySubscribe(user, chatId));
@@ -59,6 +62,7 @@ class AccessRevalidator {
     void onHostRemoved(HostRemovedEvent event) {
         execSessions.revokeHost(event.hostId());
         logStreams.dropHost(event.hostId());
+        projectLogStreams.dropHost(event.hostId());
         eventStreams.dropHost(event.hostId());
     }
 }
