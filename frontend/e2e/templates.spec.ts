@@ -108,3 +108,40 @@ test('ports lookup failure falls back to the template default', async ({ page, a
   await expect(page.getByLabel('Service 1 port 1 host')).toHaveValue('8080')
   await expect(page.getByText(/was taken/)).toHaveCount(0)
 })
+
+test.describe('German card buttons at minimum card width', () => {
+  test.use({ locale: 'de-DE' })
+
+  test('Install and Customize stay inside the card without overflow', async ({ page, api }) => {
+    mockCommon(api)
+    api.mock('GET', '/api/auth/me', { body: { username: 'u', role: 'OPERATOR', setupRequired: false, locale: null } })
+    await page.goto('/environments/a/deployments')
+    await page.getByRole('button', { name: 'Deployment hinzufügen' }).click()
+    await page.getByRole('radio', { name: 'Aus Vorlage' }).check()
+
+    // Pin every column to the card's minimum width (the grid's minmax lower bound, 11rem) so the narrowest case is measured.
+    const grid = page.getByRole('list', { name: 'Vorlagen', exact: true })
+    await grid.evaluate((el) => {
+      ;(el as HTMLElement).style.gridTemplateColumns = 'repeat(auto-fill, 11rem)'
+    })
+
+    const cards = grid.getByRole('listitem')
+    await expect(cards).toHaveCount(2)
+    for (let i = 0; i < 2; i++) {
+      const card = cards.nth(i)
+      const cardBox = await card.boundingBox()
+      expect(cardBox).not.toBeNull()
+      const install = card.getByRole('button', { name: 'Installieren' })
+      const customize = card.getByRole('button', { name: 'Anpassen' })
+      for (const button of [install, customize]) {
+        const box = await button.boundingBox()
+        expect(box).not.toBeNull()
+        // The label fits its button (nowrap text would otherwise overflow it) ...
+        expect(await button.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+        // ... and the button stays inside its card.
+        expect(box!.x).toBeGreaterThanOrEqual(cardBox!.x - 0.5)
+        expect(box!.x + box!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width + 0.5)
+      }
+    }
+  })
+})
