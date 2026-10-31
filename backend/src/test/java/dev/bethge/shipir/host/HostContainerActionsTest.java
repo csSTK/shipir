@@ -108,13 +108,23 @@ class HostContainerActionsTest extends HostApiTestBase {
 
     @ParameterizedTest
     @CsvSource({"NOT_FOUND,404,RESOURCE_NOT_FOUND", "INVALID_STATE,409,INVALID_CONTAINER_STATE",
-            "UNREACHABLE,502,UNREACHABLE", "TIMEOUT,502,TIMEOUT", "PERMISSION_DENIED,502,PERMISSION_DENIED"})
+            "UNREACHABLE,502,UNREACHABLE", "TIMEOUT,502,UNREACHABLE", "PERMISSION_DENIED,502,UNREACHABLE"})
     void dockerFailuresMapToStatusAndAuditFailure(DockerErrorCode code, int http, String apiCode) throws Exception {
         String host = localHostId();
         doThrow(new DockerConnectionException(code, "boom", null)).when(containers).pauseContainer(any(), any(), any());
         mvc.perform(login("operator").write(post("/api/hosts/{h}/containers/c1/pause", host)))
                 .andExpect(status().is(http))
                 .andExpect(jsonPath("$.code").value(apiCode));
+        assertThat(audit("CONTAINER_PAUSE")).containsExactly("FAILURE:c1");
+    }
+
+    @Test
+    void adminSeesTheRawCodeOfACollapsedFailure() throws Exception {
+        String host = localHostId();
+        doThrow(new DockerConnectionException(DockerErrorCode.TIMEOUT, "boom", null)).when(containers).pauseContainer(any(), any(), any());
+        mvc.perform(login("admin").write(post("/api/hosts/{h}/containers/c1/pause", host)))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("TIMEOUT"));
         assertThat(audit("CONTAINER_PAUSE")).containsExactly("FAILURE:c1");
     }
 

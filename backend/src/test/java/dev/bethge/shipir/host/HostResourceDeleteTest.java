@@ -83,13 +83,23 @@ class HostResourceDeleteTest extends HostApiTestBase {
 
     @ParameterizedTest
     @CsvSource({"NOT_FOUND,404,RESOURCE_NOT_FOUND", "IN_USE,409,RESOURCE_IN_USE",
-            "BUILTIN_NETWORK,409,RESOURCE_IN_USE", "UNREACHABLE,502,UNREACHABLE", "TIMEOUT,502,TIMEOUT"})
+            "BUILTIN_NETWORK,409,RESOURCE_IN_USE", "UNREACHABLE,502,UNREACHABLE", "TIMEOUT,502,UNREACHABLE"})
     void dockerFailuresMapToStatusAndAuditFailure(DockerErrorCode code, int http, String apiCode) throws Exception {
         String host = localHostId();
         doThrow(new DockerConnectionException(code, "boom", null)).when(volumes).removeVolume(any(), any(), any());
         mvc.perform(login("operator").write(delete("/api/hosts/{h}/volumes/v1", host)))
                 .andExpect(status().is(http))
                 .andExpect(jsonPath("$.code").value(apiCode));
+        assertThat(audit("VOLUME_DELETE")).containsExactly("FAILURE:v1");
+    }
+
+    @Test
+    void adminSeesTheRawCodeOfACollapsedFailure() throws Exception {
+        String host = localHostId();
+        doThrow(new DockerConnectionException(DockerErrorCode.TIMEOUT, "boom", null)).when(volumes).removeVolume(any(), any(), any());
+        mvc.perform(login("admin").write(delete("/api/hosts/{h}/volumes/v1", host)))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("TIMEOUT"));
         assertThat(audit("VOLUME_DELETE")).containsExactly("FAILURE:v1");
     }
 
