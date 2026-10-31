@@ -47,7 +47,7 @@ Per-file map of the codebase: `docs/CODE_MAP.md`. Read or grep it when you need 
 ## Model Policy
 
 - **Planning uses Opus.** Planning means architecture and stack decisions, breaking work into epics and tasks, writing issue descriptions and acceptance criteria, and setting dependencies (`text-to-task`). Run planning sessions on Opus (`/model opus`).
-- **Orchestration uses Sonnet.** The `/next-task*` skills coordinate implementation and do not plan. Run them on Sonnet (`/model sonnet`). Wave planning in `next-task-plan` part 2 (file sets, waves, hand-off prompts) is orchestration, not planning, so it runs on Sonnet.
+- **Orchestration uses Opus.** The `/next-task*` skills coordinate implementation and do not plan. Run them on Sonnet (`/model sonnet`). Wave planning in `next-task-plan` part 2 (file sets, waves, hand-off prompts) is orchestration, not planning, so it runs on Sonnet.
 - **Implementation is done only by Sonnet or Haiku sub-agents.** Opus does not write production code. Delegate each implementation task to the `implementer-sonnet` or `implementer-haiku` subagent (`.claude/agents/`), passing the bead ID.
 - **Pick the implementation model by scope:**
   - **Haiku**: small, well-specified, low-risk changes, such as boilerplate, renames, simple DTOs or entities, config tweaks, docs, and straightforward tests.
@@ -56,6 +56,7 @@ Per-file map of the codebase: `docs/CODE_MAP.md`. Read or grep it when you need 
 - Before starting implementation, a task should have a bead with clear acceptance criteria. If it doesn't, stop and plan it (on Opus) first.
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:46cd31e7 -->
+
 ## Beads Issue Tracker
 
 This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
@@ -93,6 +94,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 2. **Run quality gates** (if code changed) - Tests, linters, builds
 3. **Update issue status** - Close finished work, update in-progress items
 4. **Handle git/sync by active profile**:
+
    ```bash
    # Conservative/minimal/default: report status and proposed commands; wait for approval.
    git status
@@ -103,9 +105,11 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
    git push
    git status
    ```
+
 5. **Hand off** - Summarize changes, validation, issue status, and any blocked sync/commit/push step
 
 **Critical rules:**
+
 - Explicit user or orchestrator instructions override this Beads block.
 - Do not commit or push without clear authority from the active profile or the current user request.
 - If a required sync or push is blocked, stop and report the exact command and error.
@@ -113,33 +117,36 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 ## Tech Stack
 
-| Area | Decision |
-|---|---|
-| Backend | Java (current LTS), Spring Boot |
-| Frontend | React: feature-oriented folders (`features/containers`, `features/deployments`, `features/hosts`, ...), Monaco Editor for YAML/configs, React Query |
-| Database | PostgreSQL 16 |
-| Migrations | Flyway. Hibernate never changes the schema (`ddl-auto: validate`) |
-| Docker access | `docker-java`, wrapped behind our own interfaces |
-| Compose execution | `docker compose` as a subprocess (`ProcessBuilder`). No reimplementation of the Compose spec |
-| Real-time | WebSocket with STOMP (logs, events, compose output, exec terminal) |
-| Auth | Spring Security, server-side session (HttpOnly cookie + CSRF), RBAC |
-| Tests | JUnit 5, Testcontainers (Postgres + Docker), ArchUnit later |
+| Area              | Decision                                                                                                                                            |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend           | Java (current LTS), Spring Boot                                                                                                                     |
+| Frontend          | React: feature-oriented folders (`features/containers`, `features/deployments`, `features/hosts`, ...), Monaco Editor for YAML/configs, React Query |
+| Database          | PostgreSQL 16                                                                                                                                       |
+| Migrations        | Flyway. Hibernate never changes the schema (`ddl-auto: validate`)                                                                                   |
+| Docker access     | `docker-java`, wrapped behind our own interfaces                                                                                                    |
+| Compose execution | `docker compose` as a subprocess (`ProcessBuilder`). No reimplementation of the Compose spec                                                        |
+| Real-time         | WebSocket with STOMP (logs, events, compose output, exec terminal)                                                                                  |
+| Auth              | Spring Security, server-side session (HttpOnly cookie + CSRF), RBAC                                                                                 |
+| Tests             | JUnit 5, Testcontainers (Postgres + Docker), ArchUnit later                                                                                         |
 
 ## Build & Test
 
 ### Backend
 
 Maven wrapper, no local Maven needed:
+
 ```bash
 ./backend/mvnw -f backend/pom.xml compile   # Compile
 ./backend/mvnw -f backend/pom.xml test      # Run tests
 ./backend/mvnw -f backend/pom.xml verify    # Full build incl. tests
 ```
+
 **Docker must be running for backend tests** (Testcontainers starts a throwaway Postgres 16). No local Postgres or `DB_PASSWORD` needed.
 
 ### Frontend
 
 From `frontend/`:
+
 ```bash
 pnpm install                       # Install dependencies
 pnpm dev                           # Run dev server
@@ -200,6 +207,7 @@ dev.bethge.shipir
 **Dependency direction:** `docker/` knows no other feature module. `compose/` and `streaming/` may use `docker/`, never the other way around. `ai/` may call other feature services (its tools are thin adapters over them); no feature imports `ai/`. The AI-origin marker for audit entries lives in `common/`, so `audit/` never depends on `ai/`. To be enforced with ArchUnit later.
 
 **Principles:**
+
 - **Never pass docker-java types outward.** Expose our own interfaces and DTOs.
 - **Don't rebuild Compose.** Store the YAML, run `docker compose up/down/pull/config` as a subprocess, and stream the output live over WebSocket.
 - **Two UI modes for Compose:** a form wizard (generates YAML from DTOs) and an advanced mode (raw YAML editor with Compose JSON schema validation in the frontend).
@@ -211,6 +219,7 @@ dev.bethge.shipir
 ## AI assistant
 
 Decided in epic shipr-9sm. An in-app chat that can do what the signed-in user can do in Shipir.
+
 - **Providers:** two, each with its own stored config (base URL, model, encrypted API key + hint): OpenAI-compatible chat completions with tool calling (default, seeded with the NVIDIA build API and model GLM 5.3 Flash; also works with Anthropic's OpenAI-compatible endpoint) or native Google Gemini (`streamGenerateContent`, function calling). ADMIN picks the active provider at `/settings/ai`. No native Anthropic client.
 - **Tools run as the signed-in user** with their role (VIEWER is read-only). Tools are thin adapters over existing feature services, never raw Docker, shell or SQL access.
 - **Writes need explicit Confirm** in the chat. Model output alone never changes anything.
