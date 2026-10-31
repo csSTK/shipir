@@ -37,4 +37,23 @@ class ComposeOutputStreamRevalidateTest {
         assertThat(service.subscriberCount("mine")).isZero();
         assertThat(service.subscriberCount("theirs")).isEqualTo(1);
     }
+
+    @Test
+    void throwingPredicateDropsThatRunAndStillChecksTheOthers() {
+        service.registerRun("broken", UUID.randomUUID(), UUID.randomUUID());
+        service.registerRun("kept", UUID.randomUUID(), UUID.randomUUID());
+        service.subscribe("broken", "alice", "s1", "a");
+        service.subscribe("kept", "alice", "s1", "b");
+        var keptTarget = service.targetOf("kept");
+
+        service.revalidate("alice", target -> {
+            if (!target.equals(keptTarget)) {
+                throw new IllegalStateException("db down");
+            }
+            return true;
+        });
+
+        assertThat(service.subscriberCount("broken")).isZero();
+        assertThat(service.subscriberCount("kept")).isEqualTo(1);
+    }
 }

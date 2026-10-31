@@ -3,6 +3,8 @@ package dev.bethge.shipir.streaming;
 import dev.bethge.shipir.common.security.DeploymentRemovedEvent;
 import dev.bethge.shipir.common.security.HostRemovedEvent;
 import dev.bethge.shipir.common.security.UserAccessChangedEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -17,6 +19,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
  */
 @Component
 class AccessRevalidator {
+
+    private static final Logger log = LoggerFactory.getLogger(AccessRevalidator.class);
 
     private final StreamAccess access;
     private final ExecSessionHandler execSessions;
@@ -48,21 +52,30 @@ class AccessRevalidator {
     @TransactionalEventListener(fallbackExecution = true)
     void onAccessChanged(UserAccessChangedEvent event) {
         String user = event.username();
-        execSessions.revalidate(user,
-                (hostId, deploymentId) -> access.mayExec(user, hostId, deploymentId, execSessions.operatorEnabled()));
-        logStreams.revalidate(user, t -> access.mayFollowContainer(user, t.hostId(), t.containerId()));
-        projectLogStreams.revalidate(user, t -> access.mayFollowProject(user, t.hostId(), t.project()));
-        eventStreams.revalidate(user, hostId -> access.hostFullyVisible(user, hostId));
-        runStreams.revalidate(user, target -> access.mayFollowRun(user, target));
-        chatSubscriptions.revalidate(user, chatId -> chatAccess.maySubscribe(user, chatId));
+        // each revalidator is isolated: one failing must not leave the other channels of this user unchecked
+        isolated("exec", () -> execSessions.revalidate(user,
+                (hostId, deploymentId) -> access.mayExec(user, hostId, deploymentId, execSessions.operatorEnabled())));
+        isolated("log", () -> logStreams.revalidate(user, t -> access.mayFollowContainer(user, t.hostId(), t.containerId())));
+        isolated("project log", () -> projectLogStreams.revalidate(user, t -> access.mayFollowProject(user, t.hostId(), t.project())));
+        isolated("event", () -> eventStreams.revalidate(user, hostId -> access.hostFullyVisible(user, hostId)));
+        isolated("run output", () -> runStreams.revalidate(user, target -> access.mayFollowRun(user, target)));
+        isolated("chat", () -> chatSubscriptions.revalidate(user, chatId -> chatAccess.maySubscribe(user, chatId)));
+    }
+
+    private static void isolated(String channel, Runnable revalidation) {
+        try {
+            revalidation.run();
+        } catch (RuntimeException e) {
+            log.warn("Revalidating {} subscriptions failed: {}", channel, e.getClass().getSimpleName());
+        }
     }
 
     /** A deleted host takes its consoles and log/event subscriptions with it. */
     @TransactionalEventListener(fallbackExecution = true)
     void onHostRemoved(HostRemovedEvent event) {
-        execSessions.revokeHost(event.hostId());
-        logStreams.dropHost(event.hostId());
-        projectLogStreams.dropHost(event.hostId());
-        eventStreams.dropHost(event.hostId());
+        isolated("exec", () -> execSessions.revokeHost(event.hostId()));
+        isolated("log", () -> logStreams.dropHost(event.hostId()));
+        isolated("project log", () -> projectLogStreams.dropHost(event.hostId()));
+        isolated("event", () -> eventStreams.dropHost(event.hostId()));
     }
 }

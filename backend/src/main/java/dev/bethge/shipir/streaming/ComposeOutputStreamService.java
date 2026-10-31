@@ -2,6 +2,8 @@ package dev.bethge.shipir.streaming;
 
 import dev.bethge.shipir.common.stream.RunOutput;
 import dev.bethge.shipir.common.stream.RunStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Lazy;
@@ -39,6 +41,8 @@ import java.util.function.Predicate;
 @Service
 @EnableConfigurationProperties(StreamProperties.class)
 public class ComposeOutputStreamService implements RunOutput {
+
+    private static final Logger log = LoggerFactory.getLogger(ComposeOutputStreamService.class);
 
     public static final String TOPIC_PREFIX = "/topic/deployments/";
 
@@ -180,7 +184,19 @@ public class ComposeOutputStreamService implements RunOutput {
                 subscribed = stream.subscribers.stream().anyMatch(s -> username.equals(s.username));
             }
             // the predicate costs DB queries: only ask for runs this user is subscribed to
-            if (!subscribed || runStillAllowed.test(targetOf(runId))) {
+            if (!subscribed) {
+                return;
+            }
+            boolean allowed;
+            try {
+                allowed = runStillAllowed.test(targetOf(runId));
+            } catch (RuntimeException e) {
+                // fail closed for this run only; the remaining runs are still checked
+                log.warn("Run access revalidation failed for run {}, dropping the subscription: {}",
+                        runId, e.getClass().getSimpleName());
+                allowed = false;
+            }
+            if (allowed) {
                 return;
             }
             synchronized (stream) {

@@ -187,7 +187,19 @@ public class DockerEventStreamService {
                 revoked = stream.subscribers.stream().filter(s -> username.equals(s.username)).toList();
             }
             // the predicate costs DB queries: only ask for hosts this user is subscribed to
-            if (revoked.isEmpty() || hostStillAllowed.test(stream.hostId)) {
+            if (revoked.isEmpty()) {
+                continue;
+            }
+            boolean allowed;
+            try {
+                allowed = hostStillAllowed.test(stream.hostId);
+            } catch (RuntimeException e) {
+                // fail closed for this host only; the remaining hosts are still checked
+                log.warn("Event access revalidation failed for host {}, dropping the subscription: {}",
+                        stream.hostId, e.getClass().getSimpleName());
+                allowed = false;
+            }
+            if (allowed) {
                 continue;
             }
             revoked.forEach(s -> unsubscribe(s.sessionId, s.subscriptionId));

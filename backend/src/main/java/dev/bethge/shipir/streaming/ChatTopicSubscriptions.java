@@ -1,5 +1,7 @@
 package dev.bethge.shipir.streaming;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.MessageChannel;
@@ -19,6 +21,8 @@ import java.util.function.Predicate;
  */
 @Component
 class ChatTopicSubscriptions {
+
+    private static final Logger log = LoggerFactory.getLogger(ChatTopicSubscriptions.class);
 
     private record Subscription(String username, String chatSessionId, String sessionId, String subscriptionId) {
     }
@@ -47,13 +51,30 @@ class ChatTopicSubscriptions {
     /** Ends the user's subscriptions to chat sessions they may no longer follow; the STOMP connection stays. */
     void revalidate(String username, Predicate<String> chatSessionStillAllowed) {
         for (Subscription s : subscriptions) {
-            if (!username.equals(s.username) || chatSessionStillAllowed.test(s.chatSessionId)) {
+            if (!username.equals(s.username)) {
+                continue;
+            }
+            boolean allowed;
+            try {
+                allowed = chatSessionStillAllowed.test(s.chatSessionId);
+            } catch (RuntimeException e) {
+                // fail closed for this subscription only; the remaining ones are still checked
+                log.warn("Chat access revalidation failed for chat session {}, ending the subscription: {}",
+                        s.chatSessionId, e.getClass().getSimpleName());
+                allowed = false;
+            }
+            if (allowed) {
                 continue;
             }
             if (!subscriptions.remove(s)) {
                 continue; // a concurrent revalidation already ended it
             }
-            sendUnsubscribe(s.sessionId, s.subscriptionId);
+            try {
+                sendUnsubscribe(s.sessionId, s.subscriptionId);
+            } catch (RuntimeException e) {
+                // already forgotten above; a failing send must not leave the remaining subscriptions unchecked
+                log.warn("Ending chat subscription failed: {}", e.getClass().getSimpleName());
+            }
         }
     }
 

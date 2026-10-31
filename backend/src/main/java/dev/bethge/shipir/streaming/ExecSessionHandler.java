@@ -363,7 +363,19 @@ public class ExecSessionHandler {
      */
     public void revalidate(String username, BiPredicate<UUID, UUID> stillAllowed) {
         for (Session s : List.copyOf(sessions.values())) {
-            if (s.username.equals(username) && !stillAllowed.test(s.hostId, s.deploymentId)) {
+            if (!s.username.equals(username)) {
+                continue;
+            }
+            boolean allowed;
+            try {
+                allowed = stillAllowed.test(s.hostId, s.deploymentId);
+            } catch (RuntimeException e) {
+                // fail closed for this console only; the remaining consoles are still checked
+                log.warn("Exec access revalidation failed for a console on host {}, ending it: {}",
+                        s.hostId, e.getClass().getSimpleName());
+                allowed = false;
+            }
+            if (!allowed) {
                 finish(s, ExecMessage.Status.ENDED, "ACCESS_REVOKED");
             }
         }

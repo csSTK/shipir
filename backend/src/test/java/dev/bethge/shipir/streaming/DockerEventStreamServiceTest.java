@@ -151,6 +151,24 @@ class DockerEventStreamServiceTest {
     }
 
     @Test
+    void throwingPredicateDropsThatHostSubscriptionAndStillChecksTheOthers() {
+        UUID other = UUID.randomUUID();
+        when(hosts.findById(other)).thenReturn(Optional.of(DockerHost.local("o", UUID.randomUUID())));
+        service.subscribe(hostId, "alice", "s1", "a");
+        service.subscribe(other, "alice", "s1", "b");
+
+        service.revalidate("alice", host -> {
+            if (host.equals(hostId)) {
+                throw new IllegalStateException("db down");
+            }
+            return true;
+        });
+
+        assertThat(service.subscriberCount(hostId)).isZero();
+        assertThat(service.subscriberCount(other)).isEqualTo(1);
+    }
+
+    @Test
     void revalidateKeepsTheSubscriptionWhenAccessIsStillGranted() {
         service.subscribe(hostId, "alice", "s1", "a");
         service.revalidate("alice", host -> true);
