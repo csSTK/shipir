@@ -516,6 +516,33 @@ class DeploymentLogStreamTest {
     }
 
     @Test
+    void containerWhoseRetriesWereExhaustedIsFollowedAgainAfterItRestarted() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        when(logService.follow(any(), any(DockerEndpoint.class), eq("c-db"), anyInt(), anyBoolean(), any(), any()))
+                .thenAnswer(inv -> {
+                    if (attempts.incrementAndGet() <= 4) { // first try + 3 retries fail
+                        throw new DockerConnectionException(DockerErrorCode.UNREACHABLE, "down", null);
+                    }
+                    lineSinks.put("c-db", inv.getArgument(5));
+                    endSinks.put("c-db", inv.getArgument(6));
+                    return mock(Closeable.class);
+                });
+        StompSession s = connect();
+        BlockingQueue<String> q = subscribe(s, topic("shop"));
+        await().atMost(10, TimeUnit.SECONDS).until(() -> attempts.get() >= 4);
+        awaitRefreshRounds(10);
+        assertThat(attempts.get()).isEqualTo(4); // given up while it kept running
+
+        containers.set(List.of(container("c-web", "web", "shop", "running"), container("c-db", "db", "shop", "exited")));
+        awaitRefreshRounds(2);
+        containers.set(List.of(container("c-web", "web", "shop", "running"), container("c-db", "db", "shop", "running")));
+        awaitFollowing("c-db");
+        lineSinks.get("c-db").accept(line("after restart"));
+        assertThat(drain(q, 500)).anyMatch(f -> f.contains("after restart") && f.contains("\"service\":\"db\""));
+        s.disconnect();
+    }
+
+    @Test
     void containerStartedLaterIsPickedUpByTheRefresh() throws Exception {
         containers.set(List.of(container("c-web", "web", "shop", "running")));
         StompSession s = connect();

@@ -48,7 +48,8 @@ import java.util.regex.Pattern;
  * CONTAINER_LIMIT), line length, lines per second per container and for the whole project (excess dropped and
  * summarized in one marker line), and the replay buffer. Known limit: a container whose follow could not be started
  * (e.g. the daemon refused the log call) is reported once and retried by the worker at most {@link #MAX_START_RETRIES}
- * times with backoff; after that it stays failed until the last subscriber left and a new SUBSCRIBE starts over.
+ * times with backoff; after that it stays failed until the container is seen stopped and running again (restart), which starts over, or
+ * until the last subscriber left and a new SUBSCRIBE starts over.
  * Lines of different containers are not re-sorted by time.
  */
 @Service
@@ -97,6 +98,8 @@ public class DeploymentLogStreamService {
         int failures;
         /** Refresh rounds to wait before the next retry of a failed start. */
         int ticksUntilRetry;
+        /** Set while retries are exhausted and the container was seen not running; a later running state resets them. */
+        boolean sawStopped;
         final LogStreamSupport.RateWindow rate = new LogStreamSupport.RateWindow();
 
         Follower(ContainerDto c) {
@@ -347,6 +350,17 @@ public class DeploymentLogStreamService {
                     tails.add(stream.key.options().tail());
                     generations.add(++f.generation);
                 } else if (f.ended && f.failed) {
+                    boolean running = "running".equals(c.state());
+                    if (f.failures > MAX_START_RETRIES) {
+                        // retries exhausted: only a restart (seen not running, then running again) starts over
+                        if (!running) {
+                            f.sawStopped = true;
+                        } else if (f.sawStopped) {
+                            f.sawStopped = false;
+                            f.failures = 0;
+                            f.ticksUntilRetry = 0;
+                        }
+                    }
                     if (f.failures <= MAX_START_RETRIES && --f.ticksUntilRetry <= 0) {
                         f.ended = false;
                         toStart.add(f);
