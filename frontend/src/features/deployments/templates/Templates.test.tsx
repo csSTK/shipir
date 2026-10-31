@@ -120,6 +120,15 @@ describe('template picker', () => {
     expect(host).toHaveValue('9000')
   })
 
+  it('keeps a taken fixed port (53), warns about it and does not swap it', async () => {
+    const pihole = { ...templates[0], id: 'pihole', name: 'Pi-hole', spec: { services: [{ name: 'dns', image: 'pihole/pihole', ports: [{ host: 53, container: 53, protocol: 'udp' }] }], networks: [], volumes: [] } }
+    serve([pihole], { used: [{ port: 53, protocol: 'udp' }], suggestions: [{ preferred: 53, free: 5353 }] })
+    open()
+    fireEvent.click(await customizeButton('Pi-hole'))
+    expect(await screen.findByText(/Port 53 is taken on this host and was kept/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Service 1 port 1 host')).toHaveValue('53')
+  })
+
   it('leaves non-clashing ports untouched without a notice', async () => {
     serve()
     open()

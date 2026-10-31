@@ -57,6 +57,7 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
   const latestPick = useRef(0)
   const [checkingPorts, setCheckingPorts] = useState(false)
   const [portNotices, setPortNotices] = useState<{ from: number; to: number }[]>([])
+  const [keptPorts, setKeptPorts] = useState<number[]>([])
   const [problem, setProblem] = useState<string | null>(null)
   /** Latest picked files; a ref so two picks in quick succession both see each other. */
   const picked = useRef<{ yaml: string | null; env: EnvEntry[] | null }>({ yaml: null, env: null })
@@ -81,11 +82,12 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
     const pick = ++latestPick.current
     let state = specToState(t.spec)
     let replaced: { from: number; to: number }[] = []
+    let kept: number[] = []
     const preferred = preferredHostPorts(state)
     if (preferred.length > 0) {
       setCheckingPorts(true)
       try {
-        ;({ state, replaced } = applyFreePorts(state, await fetchFreePorts(hostId, preferred)))
+        ;({ state, replaced, kept } = applyFreePorts(state, await fetchFreePorts(hostId, preferred)))
       } catch {
         // Lookup failed: keep the template's own ports, the user can still edit them.
       }
@@ -93,6 +95,7 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
     if (pick !== latestPick.current) return // a newer pick took over and owns the flag
     setCheckingPorts(false)
     setPortNotices(replaced)
+    setKeptPorts(kept)
     setTemplate(t)
     setSeed((current) => ({ key: current.key + 1, state }))
     addEnvKeys([...t.env.map((h) => h.key), ...referencedEnvKeys(state)])
@@ -105,6 +108,7 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
     setInstalling(null)
     setTemplate(t)
     setPortNotices([])
+    setKeptPorts([])
     setSeed((current) => ({ key: current.key + 1, state }))
     setEnv(values)
     setName(installName)
@@ -252,10 +256,13 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
           </p>
         )}
         <div hidden={!composeVisible || mode !== 'wizard'}>
-          {portNotices.length > 0 && (
+          {(portNotices.length > 0 || keptPorts.length > 0) && (
             <ul className="tp-notice" role="status">
               {portNotices.map((n) => (
                 <li key={n.from}>{tr('AddDeploymentDialog.portTakenUsing', { from: n.from, to: n.to })}</li>
+              ))}
+              {keptPorts.map((port) => (
+                <li key={`kept-${port}`}>{tr('InstallTemplateDialog.fixedPortTaken', { port })}</li>
               ))}
             </ul>
           )}
