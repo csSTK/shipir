@@ -1029,7 +1029,7 @@
   {
     "id": "minio",
     "name": "MinIO",
-    "description": "S3-compatible object storage. Open the console on port 9101 after the first deploy and sign in with the user and password below. The S3 API listens on port 9100.",
+    "description": "S3-compatible object storage, from the pgsty community fork of MinIO (the upstream project no longer publishes images). Open the console on port 9101 after the first deploy and sign in with the user and password below. The S3 API listens on port 9100.",
     "env": [
       {
         "key": "MINIO_ROOT_USER",
