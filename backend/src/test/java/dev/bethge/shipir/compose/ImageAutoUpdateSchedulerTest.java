@@ -11,6 +11,7 @@ import dev.bethge.shipir.docker.dto.ImageDto;
 import dev.bethge.shipir.host.ImageUpdates;
 import dev.bethge.shipir.streaming.ComposeOutputStreamService;
 import org.junit.jupiter.api.BeforeEach;
+import org.mockito.AdditionalAnswers;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.TestPropertySource;
@@ -26,6 +27,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -433,6 +435,91 @@ class ImageAutoUpdateSchedulerTest extends DeploymentTestBase {
 
         assertThat(commands).isEmpty(); // nothing was pulled or changed: no rollback is involved
         assertThat(lastResult(id)).isEqualTo("FAILED");
+    }
+
+    @Test
+    void failedRunIsStillReportedWhenTheStepAfterTheWorkerThrows() throws Exception {
+        UUID id = deployed("web", true);
+        pullFails = true;
+        DeploymentService flaky = mock(DeploymentService.class, AdditionalAnswers.delegatesTo(deploymentService));
+        AtomicInteger calls = new AtomicInteger();
+        org.mockito.Mockito.doAnswer(inv -> {
+            if (calls.incrementAndGet() > 1) { // the host vanished while the worker ran
+                throw new IllegalStateException("host deleted");
+            }
+            return inv.getMethod().invoke(deploymentService, inv.getArguments());
+        }).when(flaky).requireHost(any());
+        ImageAutoUpdateScheduler broken = new ImageAutoUpdateScheduler(deploymentRepository, updates, containers, images,
+                flaky, runs, locks, clock, new ImageAutoUpdateProperties(true, Duration.ofSeconds(60),
+                Duration.ofMinutes(2), Duration.ofSeconds(30), Duration.ofSeconds(5), Duration.ofMinutes(1)),
+                ms -> clock.advance(Duration.ofMillis(ms)));
+
+        broken.tick();
+
+        assertThat(notificationTypes()).containsExactly("IMAGE_UPDATE_FAILED");
+        assertThat(lastResult(id)).isEqualTo("FAILED_NOT_ROLLED_BACK");
+        assertThat(audit("IMAGE_AUTO_UPDATE")).containsExactly("system:FAILURE");
+        locks.acquire(id); // lock released
+        locks.release(id);
+    }
+
+    private ImageAutoUpdateScheduler schedulerWith(DeploymentRunService runService) {
+        return new ImageAutoUpdateScheduler(deploymentRepository, updates, containers, images, deploymentService,
+                runService, locks, clock, new ImageAutoUpdateProperties(true, Duration.ofSeconds(60),
+                Duration.ofMinutes(2), Duration.ofSeconds(30), Duration.ofSeconds(5), Duration.ofMinutes(1)),
+                ms -> clock.advance(Duration.ofMillis(ms)));
+    }
+
+    @Test
+    void interruptedWaitWhileTheWorkerRunsReportsItsLaterFailureAndKeepsTheLockUntilThen() throws Exception {
+        UUID id = deployed("web", true);
+        upGate = new java.util.concurrent.CountDownLatch(1);
+        upFails = true;
+        DeploymentRunService interrupting = mock(DeploymentRunService.class, AdditionalAnswers.delegatesTo(runs));
+        org.mockito.Mockito.doAnswer(inv -> {
+            CompletableFuture<?> run = (CompletableFuture<?>) inv.getMethod().invoke(runs, inv.getArguments());
+            Thread.currentThread().interrupt(); // shutdown arrives while the worker is running
+            return run;
+        }).when(interrupting).autoPullUpdate(any());
+
+        schedulerWith(interrupting).tick();
+        Thread.interrupted(); // clear the flag for the rest of the test
+
+        assertThat(notificationTypes()).isEmpty(); // the worker has not failed yet
+        assertThatThrownBy(() -> locks.acquire(id)).isInstanceOf(DeploymentException.class);
+
+        upGate.countDown();
+        await().atMost(15, TimeUnit.SECONDS).untilAsserted(() ->
+                assertThat(notificationTypes()).containsExactly("IMAGE_UPDATE_FAILED"));
+        assertThat(lastResult(id)).isEqualTo("FAILED_NOT_ROLLED_BACK");
+        await().atMost(15, TimeUnit.SECONDS).ignoreExceptions().until(() -> {
+            locks.acquire(id);
+            return true;
+        });
+        locks.release(id);
+    }
+
+    @Test
+    void interruptedWaitOnAnAlreadyFailedRunIsReportedAsError() throws Exception {
+        UUID id = deployed("web", true);
+        CompletableFuture<DeploymentRunService.PullUpdateOutcome> failedRun = new CompletableFuture<>() {
+            @Override
+            public DeploymentRunService.PullUpdateOutcome get(long timeout, TimeUnit unit) throws InterruptedException {
+                throw new InterruptedException();
+            }
+        };
+        failedRun.completeExceptionally(new IllegalStateException("worker crashed"));
+        DeploymentRunService stub = mock(DeploymentRunService.class, AdditionalAnswers.delegatesTo(runs));
+        org.mockito.Mockito.doReturn(failedRun).when(stub).autoPullUpdate(any());
+
+        schedulerWith(stub).tick();
+        Thread.interrupted();
+
+        assertThat(notificationTypes()).containsExactly("IMAGE_UPDATE_FAILED");
+        assertThat(lastResult(id)).isEqualTo("FAILED_NOT_ROLLED_BACK");
+        assertThat(audit("IMAGE_AUTO_UPDATE")).containsExactly("system:FAILURE");
+        locks.acquire(id);
+        locks.release(id);
     }
 
     private ImageAutoUpdateScheduler impatientWith(DeploymentRepository repository) {

@@ -172,10 +172,26 @@ class ImageAutoUpdateScheduler {
         } catch (RuntimeException | Error e) {
             // The worker may still run compose: the lock must not be released before it ends.
             if (!run.isDone()) {
-                handOver(run, deployment.getId(), handedOver);
+                handOver(run, deployment.getId(), handedOver, null);
+            } else if (failed(run)) {
+                // The automatic worker no longer reports its own failure, so it must not go unreported here.
+                try {
+                    finish(deployment, now, false, "ERROR", false, previous.size(), services, true);
+                } catch (RuntimeException reportError) {
+                    e.addSuppressed(reportError);
+                }
             }
             throw e;
         }
+    }
+
+    /** True when the finished run failed (exceptionally or with an unsuccessful outcome). */
+    private static boolean failed(CompletableFuture<DeploymentRunService.PullUpdateOutcome> run) {
+        if (run.isCompletedExceptionally() || run.isCancelled()) {
+            return true;
+        }
+        DeploymentRunService.PullUpdateOutcome outcome = run.getNow(null);
+        return outcome != null && !outcome.success();
     }
 
     /** Everything after the worker started: wait, health check, rollback decision, report. */
@@ -186,9 +202,13 @@ class ImageAutoUpdateScheduler {
         if (!run.isDone()) {
             // The worker still runs compose: a rollback now would be a second concurrent `up`, and releasing the lock
             // would let a manual run start next to it. Report without rollback; the worker's end releases the lock.
-            handOver(run, deployment.getId(), handedOver);
             if (outcome != null) {
+                handOver(run, deployment.getId(), handedOver, null);
                 finish(deployment, now, false, "TIMEOUT", false, previous.size(), services, true);
+            } else {
+                // Interrupted while the worker still runs: nobody waits for it, so its end must report a failure.
+                handOver(run, deployment.getId(), handedOver,
+                        () -> finish(deployment, now, false, "ERROR", false, previous.size(), services, true));
             }
             return;
         }
@@ -197,6 +217,9 @@ class ImageAutoUpdateScheduler {
             outcome = run.getNow(outcome);
         }
         if (outcome == null) {
+            if (failed(run)) {
+                finish(deployment, now, false, "ERROR", false, previous.size(), services, true);
+            }
             return; // interrupted: shutting down
         }
         UUID hostId = deployment.getHostId();
@@ -214,10 +237,25 @@ class ImageAutoUpdateScheduler {
         finish(deployment, now, false, reason, rolledBack, previous.size(), services, true);
     }
 
-    /** Releases the deployment lock when the still running worker ends, so the lock never outlives or precedes it. */
-    private void handOver(CompletableFuture<?> run, UUID deploymentId, AtomicBoolean handedOver) {
+    /**
+     * Releases the deployment lock when the still running worker ends, so the lock never outlives or precedes it.
+     * {@code reportIfFailed} (may be null) runs first when the worker failed and nobody else reports it.
+     */
+    private void handOver(CompletableFuture<DeploymentRunService.PullUpdateOutcome> run, UUID deploymentId,
+                          AtomicBoolean handedOver, Runnable reportIfFailed) {
         if (handedOver.compareAndSet(false, true)) {
-            run.whenComplete((outcome, error) -> locks.release(deploymentId));
+            run.whenComplete((outcome, error) -> {
+                try {
+                    if (reportIfFailed != null && (error != null || (outcome != null && !outcome.success()))) {
+                        reportIfFailed.run();
+                    }
+                } catch (RuntimeException e) {
+                    log.warn("Reporting the failed image auto-update of deployment {} failed: {}", deploymentId,
+                            e.getClass().getSimpleName());
+                } finally {
+                    locks.release(deploymentId);
+                }
+            });
         }
     }
 
