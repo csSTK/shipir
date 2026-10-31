@@ -642,5 +642,14 @@
   "PortainerImportFields.stackNotFound": "Dieser Stack existiert in Portainer nicht mehr.",
   "PortainerImportFields.unreachable": "Portainer ist nicht erreichbar.",
   "PortainerImportFields.badResponse": "Portainer hat eine unerwartete Antwort gesendet.",
-  "PortainerImportFields.failed": "Der Import aus Portainer ist fehlgeschlagen."
+  "PortainerImportFields.failed": "Der Import aus Portainer ist fehlgeschlagen.",
+  "DeploymentDetailPage.reviewBeforeDeploying": "Vor dem Deployen prüfen",
+  "DeploymentDetailPage.deployNameThisApprovesTheFiles": "<strong>{{name}}</strong> deployen? Die laufenden Container werden ersetzt.",
+  "DeployFilesReview.loadingFiles": "Dateien werden geladen…",
+  "DeployFilesReview.couldNotLoadTheFiles": "Die Dateien konnten nicht geladen werden. Du kannst trotzdem fortfahren.",
+  "DeployFilesReview.extraFiles": "Zusätzliche Dateien",
+  "DeployFilesReview.deployingApprovesTheseFilesAs": "Deployen genehmigt diese Dateien in ihrem jetzigen Zustand. Spätere Änderungen schränken automatische Läufe ein, bis ein ADMIN erneut deployt.",
+  "DeployFilesReview.noExtraFiles": "Keine zusätzlichen Dateien im Deployment-Verzeichnis.",
+  "DeployFilesReview.symbolicLinksAreApprovedToo": "Symbolische Links werden ebenfalls genehmigt, aber hier nicht aufgelistet.",
+  "DeployFilesReview.theListIsCutOff": "Die Liste ist bei 5000 Einträgen abgeschnitten. Weitere Dateien werden ebenfalls genehmigt."
 }

@@ -152,4 +152,57 @@ class ComposeGraphHasherTest {
         Path file = Files.writeString(dir.resolve("plain"), "x");
         assertThat(ComposeGraphHasher.hash(file)).isEmpty(); // not a directory
     }
+
+    @Test
+    void shipirsOwnBackupDirectoryAtTheTopIsIgnoredButNotElsewhere() throws Exception {
+        Files.writeString(dir.resolve("compose.yaml"), "a");
+        String base = hash();
+        Files.createDirectories(dir.resolve(".shipir-backups/abc"));
+        Files.writeString(dir.resolve(".shipir-backups/abc/1.bak"), "old");
+        assertThat(hash()).isEqualTo(base);
+        Files.writeString(dir.resolve(".shipir-backups/abc/2.bak"), "newer");
+        assertThat(hash()).isEqualTo(base);
+        Files.createDirectories(dir.resolve("sub/.shipir-backups"));
+        Files.writeString(dir.resolve("sub/.shipir-backups/x"), "y");
+        assertThat(hash()).isNotEqualTo(base);
+    }
+
+    @Test
+    void symlinkIntoShipirsOwnUnhashedPathsFailsClosed() throws Exception {
+        Files.createDirectories(dir.resolve("repo/.git"));
+        Files.writeString(dir.resolve("repo/.git/config"), "x");
+        Files.createSymbolicLink(dir.resolve("gitlink"), Path.of("repo/.git/config"));
+        assertThat(ComposeGraphHasher.hash(dir)).isEmpty();
+        Files.delete(dir.resolve("gitlink"));
+        Files.createSymbolicLink(dir.resolve("gitdir"), Path.of("repo/.git"));
+        assertThat(ComposeGraphHasher.hash(dir)).isEmpty();
+        Files.delete(dir.resolve("gitdir"));
+        Files.createDirectories(dir.resolve(".shipir-backups/abc"));
+        Files.writeString(dir.resolve(".shipir-backups/abc/1.bak"), "old");
+        Files.createSymbolicLink(dir.resolve("bak"), Path.of(".shipir-backups/abc/1.bak"));
+        assertThat(ComposeGraphHasher.hash(dir)).isEmpty();
+    }
+
+    @Test
+    void symlinkToANormalRepoFileIsStillFine() throws Exception {
+        Files.createDirectories(dir.resolve("repo"));
+        Files.writeString(dir.resolve("repo/app.env"), "A=1");
+        Files.createSymbolicLink(dir.resolve("link"), Path.of("repo/app.env"));
+        assertThat(ComposeGraphHasher.hash(dir)).isPresent();
+    }
+
+    @Test
+    void directoryWithTooManyEntriesFailsClosed() throws Exception {
+        for (int i = 0; i < 5; i++) {
+            Files.createFile(dir.resolve("f" + i));
+        }
+        Files.createDirectories(dir.resolve("d"));
+        assertThat(ComposeGraphHasher.hash(dir, ComposeGraphHasher.MAX_BYTES, 6)).isPresent();
+        assertThat(ComposeGraphHasher.hash(dir, ComposeGraphHasher.MAX_BYTES, 5)).isEmpty();
+    }
+
+    @Test
+    void entryCapIsNotAboveWhatTheConfigTreeLists() {
+        assertThat(ComposeGraphHasher.MAX_ENTRIES).isEqualTo(5000);
+    }
 }

@@ -1,0 +1,29 @@
+.dfr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.dfr-heading {
+  margin: 0;
+  font-size: var(--text-small-size);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.01em;
+  opacity: var(--opacity-muted);
+}
+.dfr-note {
+  margin: 0;
+  font-size: var(--text-small-size);
+  opacity: var(--opacity-muted);
+}
+.dfr-note--error {
+  color: var(--color-bad);
+  opacity: 1;
+}
+.dfr-list {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--text-small-size);
+  overflow-wrap: anywhere;
+}

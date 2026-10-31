@@ -175,3 +175,18 @@ test('editing the content shows a hint and pauses Deploy and Pull & update', asy
   await expect(page.getByText(/Deploy and pull actions are paused/)).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Pull & update' })).toBeEnabled()
 })
+
+test('admin sees the extra files in the directory before the deploy is approved', async ({ page, api }) => {
+  mockCommon(api, 'ADMIN')
+  api.mock('GET', `${BASE}/s1/files`, {
+    body: [{ path: 'conf/extra.yaml', directory: false, size: 12, modifiedAt: '2026-10-01T10:00:00Z', readOnly: false }],
+  })
+  api.mock('POST', `${BASE}/s1/deploy`, { status: 202, body: { runId: 'dep-9', versionId: 'v2' } })
+
+  await page.goto('/environments/a/deployments/s1')
+  await page.getByRole('button', { name: 'Deploy', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Review before deploying' })
+  await expect(dialog.getByText('conf/extra.yaml')).toBeVisible()
+  await dialog.getByRole('button', { name: 'Deploy', exact: true }).click()
+  await expect(page.getByLabel('Deployment output')).toContainText('dep-9')
+})

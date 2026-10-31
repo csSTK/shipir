@@ -642,5 +642,14 @@
   "PortainerImportFields.stackNotFound": "This stack no longer exists in Portainer.",
   "PortainerImportFields.unreachable": "Portainer could not be reached.",
   "PortainerImportFields.badResponse": "Portainer sent an unexpected response.",
-  "PortainerImportFields.failed": "The import from Portainer failed."
+  "PortainerImportFields.failed": "The import from Portainer failed.",
+  "DeploymentDetailPage.reviewBeforeDeploying": "Review before deploying",
+  "DeploymentDetailPage.deployNameThisApprovesTheFiles": "Deploy <strong>{{name}}</strong>? The running containers are replaced.",
+  "DeployFilesReview.loadingFiles": "Loading files…",
+  "DeployFilesReview.couldNotLoadTheFiles": "Could not load the files. You can still continue.",
+  "DeployFilesReview.extraFiles": "Extra files",
+  "DeployFilesReview.deployingApprovesTheseFilesAs": "Deploying approves these files as they are now. Later changes to them make automatic runs restricted until an ADMIN deploys again.",
+  "DeployFilesReview.noExtraFiles": "No extra files in the deployment directory.",
+  "DeployFilesReview.symbolicLinksAreApprovedToo": "Symbolic links are approved too but not listed here.",
+  "DeployFilesReview.theListIsCutOff": "The list is cut off at 5000 entries. Files beyond it are approved as well."
 }

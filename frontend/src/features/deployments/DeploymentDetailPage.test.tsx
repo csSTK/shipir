@@ -176,6 +176,67 @@ describe('DeploymentDetailPage', () => {
     expect(deploy).not.toHaveBeenCalled()
   })
 
+  it('shows the extra files to an ADMIN before deploying and deploys only after confirming', async () => {
+    const deploy = vi.fn(() => ({ runId: 'd-9', versionId: 'v2' }))
+    serve('ADMIN', {
+      [`GET ${BASE}/versions`]: () => versions.slice(1),
+      [`GET ${BASE}/files`]: () => [
+        { path: 'conf', directory: true, size: 0, modifiedAt: '2026-10-01T10:00:00Z', readOnly: false },
+        { path: 'conf/extra.yaml', directory: false, size: 12, modifiedAt: '2026-10-01T10:00:00Z', readOnly: false },
+      ],
+      [`POST ${BASE}/deploy`]: deploy,
+    })
+    renderPage()
+    fireEvent.click(await deployButton())
+    const dialog = await screen.findByRole('dialog', { name: 'Review before deploying' })
+    expect(deploy).not.toHaveBeenCalled()
+    expect(await within(dialog).findByText('conf/extra.yaml')).toBeInTheDocument()
+    expect(within(dialog).queryByText('conf')).not.toBeInTheDocument()
+    expect(within(dialog).getByText(/Deploying approves/)).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Deploy' }))
+    expect(await screen.findByText('d-9')).toBeInTheDocument()
+  })
+
+  it('warns an ADMIN when the file list is cut off and that links are not listed', async () => {
+    const many = Array.from({ length: 5000 }, (_, i) => ({ path: `f${i}.yaml`, directory: false, size: 1, modifiedAt: '2026-10-01T10:00:00Z', readOnly: false }))
+    serve('ADMIN', { [`GET ${BASE}/versions`]: () => versions.slice(1), [`GET ${BASE}/files`]: () => many })
+    renderPage()
+    fireEvent.click(await deployButton())
+    const dialog = await screen.findByRole('dialog', { name: 'Review before deploying' })
+    expect(await within(dialog).findByText(/list is cut off/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/Symbolic links are approved too/)).toBeInTheDocument()
+  })
+
+  it('does not show the cut-off warning for a short list', async () => {
+    serve('ADMIN', { [`GET ${BASE}/versions`]: () => versions.slice(1), [`GET ${BASE}/files`]: () => [] })
+    renderPage()
+    fireEvent.click(await deployButton())
+    const dialog = await screen.findByRole('dialog', { name: 'Review before deploying' })
+    await within(dialog).findByText('No extra files in the deployment directory.')
+    expect(within(dialog).queryByText(/list is cut off/)).not.toBeInTheDocument()
+  })
+
+  it('tells an ADMIN when there are no extra files', async () => {
+    serve('ADMIN', { [`GET ${BASE}/versions`]: () => versions.slice(1), [`GET ${BASE}/files`]: () => [] })
+    renderPage()
+    fireEvent.click(await deployButton())
+    const dialog = await screen.findByRole('dialog', { name: 'Review before deploying' })
+    expect(await within(dialog).findByText('No extra files in the deployment directory.')).toBeInTheDocument()
+  })
+
+  it('keeps the confirmation usable when the file list cannot be loaded', async () => {
+    serve('ADMIN', {
+      [`GET ${BASE}/versions`]: () => versions.slice(1),
+      [`GET ${BASE}/files`]: () => new ApiError(500, 'boom', 'INTERNAL'),
+      [`POST ${BASE}/deploy`]: () => ({ runId: 'd-10', versionId: 'v2' }),
+    })
+    renderPage()
+    fireEvent.click(await deployButton())
+    const dialog = await screen.findByRole('dialog', { name: 'Review before deploying' })
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Could not load the files')
+    expect(within(dialog).getByRole('button', { name: 'Deploy' })).toBeEnabled()
+  })
+
   it('deploys at once when nothing was deployed yet', async () => {
     serve('OPERATOR', { [`GET ${BASE}/versions`]: () => [versions[0]], [`POST ${BASE}/deploy`]: () => ({ runId: 'd-5', versionId: 'v3' }) })
     renderPage()

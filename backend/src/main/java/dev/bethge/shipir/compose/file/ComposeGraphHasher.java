@@ -8,6 +8,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
@@ -18,11 +19,17 @@ import java.util.stream.Stream;
  * env_file targets and a Git checkout. An ADMIN's deploy stores it with the version; a system run may stay unrestricted only
  * while the directory still hashes to the same value.
  *
- * <p>Only {@code <dir>/repo/.git} (Shipir's own Git metadata, hidden from the config editor) and the rollback override
- * (rewritten per run) are skipped; every other {@code .git}, which an OPERATOR can write, is hashed. Files are streamed, and
- * the total size is capped: a directory over the cap (a big bind-mounted data dir) yields empty. Symlinks are hashed by
- * their link text; one whose resolved target is outside the directory (or does not exist) yields empty, so nothing
- * outside the approved tree can be vouched for. Any I/O problem yields empty: the caller must treat that as "not approved".
+ * <p>Only {@code <dir>/repo/.git} (Shipir's own Git metadata, hidden from the config editor), {@code <dir>/.shipir-backups}
+ * (the config editor's backups, rewritten on every save) and the rollback override (rewritten per run) are skipped; every
+ * other {@code .git}, which an OPERATOR can write, is hashed. Files are streamed, and the total size and the number of
+ * entries are capped: a directory over either cap (a big bind-mounted data dir) yields empty. Symlinks are hashed by
+ * their link text; one whose resolved target is outside the directory, does not exist or lies inside one of the skipped
+ * (unhashed) paths yields empty, so nothing outside the approved tree can be vouched for. Files that containers write
+ * into the directory (bind-mounted data dirs) still change the hash: the next system run is then restricted until an ADMIN
+ * deploys again. That is accepted: such a directory is not part of an approvable compose graph. Any I/O problem yields empty: the caller must treat that as "not approved".
+ *
+ * <p>Not covered: references from {@code compose.yaml} into {@code .shipir-backups} or {@code repo/.git} (unhashed paths;
+ * the compose security policy has to deny them).
  *
  * <p>Known residual risk: the hash is checked before the compose process starts, so a file changed in between is not
  * noticed (same window as the earlier "only Shipir's own files" rule).
@@ -32,31 +39,56 @@ public final class ComposeGraphHasher {
     /** Total bytes hashed per directory before the hash fails closed. */
     public static final long MAX_BYTES = 256L * 1024 * 1024;
 
+    /**
+     * Total entries (files, directories, links) visited per directory before the hash fails closed. Kept equal to the
+     * config editor's tree limit ({@code ConfigFileService.MAX_TREE_ENTRIES}), so the ADMIN's deploy review never lists
+     * fewer files than the hash covers.
+     */
+    public static final int MAX_ENTRIES = 5000;
+
+    /** The config editor's backup directory (see {@code ConfigFileService.BACKUP_DIR}). */
+    static final String BACKUP_DIR = ".shipir-backups";
+
     private static final String GIT_DIR = ".git";
 
     private ComposeGraphHasher() {
     }
 
     public static Optional<String> hash(Path dir) {
-        return hash(dir, MAX_BYTES);
+        return hash(dir, MAX_BYTES, MAX_ENTRIES);
     }
 
     public static Optional<String> hash(Path dir, long maxBytes) {
+        return hash(dir, maxBytes, MAX_ENTRIES);
+    }
+
+    public static Optional<String> hash(Path dir, long maxBytes, int maxEntries) {
         if (!Files.exists(dir, LinkOption.NOFOLLOW_LINKS)) {
             return Optional.of(digestOf(new byte[0]));
         }
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             Path realRoot = dir.toRealPath();
-            long[] budget = {maxBytes};
-            update(md, dir, dir, realRoot, budget);
+            long[] budget = {maxBytes, maxEntries};
+            List<Path> skipped = new ArrayList<>();
+            addIfPresent(skipped, dir.resolve(ComposeFileRepository.REPO_DIR).resolve(GIT_DIR));
+            addIfPresent(skipped, dir.resolve(BACKUP_DIR));
+            update(md, dir, dir, realRoot, budget, skipped);
             return Optional.of(HexFormat.of().formatHex(md.digest()));
         } catch (IOException | RuntimeException | NoSuchAlgorithmException e) {
             return Optional.empty();
         }
     }
 
-    private static void update(MessageDigest md, Path root, Path current, Path realRoot, long[] budget) throws IOException {
+    /** Real paths of skipped directories, so a symlink cannot smuggle their (unhashed) content into the graph. */
+    private static void addIfPresent(List<Path> skipped, Path p) throws IOException {
+        if (Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS)) {
+            skipped.add(p.toRealPath());
+        }
+    }
+
+    private static void update(MessageDigest md, Path root, Path current, Path realRoot, long[] budget, List<Path> skipped)
+            throws IOException {
         List<Path> children;
         try (Stream<Path> s = Files.list(current)) {
             children = s.sorted().toList();
@@ -68,17 +100,27 @@ public final class ComposeGraphHasher {
                 continue;
             }
             String rel = root.relativize(p).toString();
+            if (--budget[1] < 0) {
+                throw new IOException("too many entries to fingerprint");
+            }
             if (Files.isSymbolicLink(p)) {
-                if (!p.toRealPath().startsWith(realRoot)) {
-                    throw new IOException("symlink leaves the directory: " + rel); // also dangling links (toRealPath throws)
+                Path target = p.toRealPath(); // throws for dangling links
+                if (!target.startsWith(realRoot)) {
+                    throw new IOException("symlink leaves the directory: " + rel);
+                }
+                if (skipped.stream().anyMatch(target::startsWith)) {
+                    throw new IOException("symlink points into an unhashed path: " + rel);
                 }
                 put(md, "L", rel, Files.readSymbolicLink(p).toString().getBytes(StandardCharsets.UTF_8));
             } else if (Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS)) {
-                if (name.equals(GIT_DIR) && current.equals(root.resolve("repo"))) {
+                if (name.equals(GIT_DIR) && current.equals(root.resolve(ComposeFileRepository.REPO_DIR))) {
+                    continue;
+                }
+                if (top && name.equals(BACKUP_DIR)) {
                     continue;
                 }
                 put(md, "D", rel, new byte[0]);
-                update(md, root, p, realRoot, budget);
+                update(md, root, p, realRoot, budget, skipped);
             } else if (Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS)) {
                 putFile(md, rel, p, budget);
             } else {

@@ -25,6 +25,7 @@ import { ConfigFilesPanel } from './config-files/index.ts'
 import { ServicesCard } from './services/index.ts'
 import { UptimeCard } from './uptime/index.ts'
 import { WebhookCard } from './webhook/index.ts'
+import { DeployFilesReview } from './DeployFilesReview.tsx'
 import { DeploymentContentPanel } from './DeploymentContentPanel.tsx'
 import { describeDeploymentError } from './deploymentErrors.ts'
 import { useTranslation } from 'react-i18next'
@@ -45,7 +46,7 @@ function formatDate(iso: string | null): string {
   return iso ? formatDateTime(iso) : i18n.t('deployments:DeploymentDetailPage.never')
 }
 
-type Dialog = { kind: 'delete' } | { kind: 'stop' } | { kind: 'deploy'; draftId: string } | { kind: 'rollback'; version: DeploymentVersion } | null
+type Dialog = { kind: 'delete' } | { kind: 'stop' } | { kind: 'deploy'; draftId: string | null } | { kind: 'rollback'; version: DeploymentVersion } | null
 
 /** `/environments/:id/deployments/:deploymentId`: status, actions, content and version history of a managed deployment. */
 export function DeploymentDetailPage() {
@@ -126,7 +127,9 @@ export function DeploymentDetailPage() {
   function onDeployClick() {
     // A draft that will be snapshotted and a deployed version to compare with: confirm with the diff first.
     const draft = versions.data?.find((v) => !v.deployed)
-    if (draft && hasDeployed) setDialog({ kind: 'deploy', draftId: draft.id })
+    const withDiff = draft !== undefined && hasDeployed
+    // An ADMIN's deploy approves every file in the directory for later automatic runs: show them first.
+    if (withDiff || user?.role === 'ADMIN') setDialog({ kind: 'deploy', draftId: withDiff ? draft.id : null })
     else startDeploy()
   }
 
@@ -330,14 +333,23 @@ export function DeploymentDetailPage() {
       {dialog?.kind === 'deploy' && (
         <ConfirmDialog
           size="xl"
-          title={t('DeploymentDetailPage.deployChanges')}
+          title={dialog.draftId ? t('DeploymentDetailPage.deployChanges') : t('DeploymentDetailPage.reviewBeforeDeploying')}
           confirmLabel={t('DeploymentDetailPage.deploy')}
           error={dialogError}
           onConfirm={confirmDeploy}
           open onOpenChange={(open) => !open && closeDialog()}
-          details={<VersionDiff hostId={hostId} deploymentId={deploymentId} versionId={dialog.draftId} />}
+          details={
+            <>
+              {dialog.draftId && <VersionDiff hostId={hostId} deploymentId={deploymentId} versionId={dialog.draftId} />}
+              {user?.role === 'ADMIN' && <DeployFilesReview hostId={hostId} deploymentId={deploymentId} />}
+            </>
+          }
         >
-          <Trans t={t} i18nKey="DeploymentDetailPage.deployNameWithTheseChanges" values={{ name: data.name }} components={{ strong: <strong /> }} />
+          {dialog.draftId ? (
+            <Trans t={t} i18nKey="DeploymentDetailPage.deployNameWithTheseChanges" values={{ name: data.name }} components={{ strong: <strong /> }} />
+          ) : (
+            <Trans t={t} i18nKey="DeploymentDetailPage.deployNameThisApprovesTheFiles" values={{ name: data.name }} components={{ strong: <strong /> }} />
+          )}
         </ConfirmDialog>
       )}
       {dialog?.kind === 'delete' && (
