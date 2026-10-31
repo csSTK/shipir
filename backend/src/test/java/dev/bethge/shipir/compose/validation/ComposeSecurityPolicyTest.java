@@ -156,6 +156,52 @@ class ComposeSecurityPolicyTest {
         assertThat(check(json)).containsExactly("volume v: network filesystem via driver_opts");
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"fuse.sshfs", "fuse.glusterfs", "ceph", "glusterfs", "sshfs", "9p", "ext4", "overlay", "davfs", "nfs4 ", "x"})
+    void deniesNamedVolumeWithAnyOtherFilesystemType(String type) {
+        String json = "{\"volumes\":{\"v\":{\"driver\":\"local\",\"driver_opts\":{\"type\":\"" + type
+                + "\",\"device\":\"host:/x\"}}}}";
+        assertThat(check(json)).hasSize(1).first().asString().startsWith("volume v: ");
+        assertThat(check(json.replace("\"driver\":\"local\",", ""))).hasSize(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"rexray/ebs", "vieux/sshfs", "local-persist", "Local", "tmpfs"})
+    void deniesNamedVolumeWithNonLocalDriver(String driver) {
+        String json = "{\"volumes\":{\"v\":{\"driver\":\"" + driver + "\"}}}";
+        assertThat(check(json)).containsExactly("volume v: driver " + driver + " not allowed (only local)");
+    }
+
+    @Test
+    void allowsBindViaDriverOptsOnlyInsideTheDeploymentDirectory() throws IOException {
+        Files.createDirectories(dir.resolve("data"));
+        String inside = "{\"volumes\":{\"v\":{\"driver_opts\":{\"type\":\"none\",\"o\":\"bind\",\"device\":\"%s/data\"}}}}"
+                .formatted(dir);
+        assertThat(check(inside)).isEmpty();
+        String outside = inside.replace(dir + "/data", "/etc");
+        assertThat(check(outside)).containsExactly("volume v: bind mount via driver_opts");
+        String noDevice = "{\"volumes\":{\"v\":{\"driver_opts\":{\"type\":\"none\",\"o\":\"bind\"}}}}";
+        assertThat(check(noDevice)).containsExactly("volume v: bind mount via driver_opts");
+        String notBind = "{\"volumes\":{\"v\":{\"driver_opts\":{\"type\":\"none\",\"device\":\"%s/data\"}}}}".formatted(dir);
+        assertThat(check(notBind)).containsExactly("volume v: bind mount via driver_opts");
+    }
+
+    @Test
+    void deniesBindViaDriverOptsThroughSymlinkOutOfTheDirectory() throws IOException {
+        Files.createSymbolicLink(dir.resolve("escape"), Path.of("/etc"));
+        String json = "{\"volumes\":{\"v\":{\"driver_opts\":{\"type\":\"none\",\"o\":\"rbind\",\"device\":\"%s/escape\"}}}}"
+                .formatted(dir);
+        assertThat(check(json)).containsExactly("volume v: bind mount via driver_opts");
+    }
+
+    @Test
+    void allowsLocalAndUnsetDriverWithoutTypeAndTmpfs() {
+        String json = "{\"volumes\":{\"a\":{},\"b\":{\"driver\":\"local\",\"driver_opts\":{}},"
+                + "\"c\":{\"driver\":\"local\",\"driver_opts\":{\"type\":\"TMPFS\",\"device\":\"tmpfs\"}},"
+                + "\"d\":{\"external\":true,\"name\":\"shared\"}}}";
+        assertThat(check(json)).isEmpty();
+    }
+
     @Test
     void allowsNamedVolumesWithHarmlessDriverOptsAndWithout() {
         String json = "{\"volumes\":{\"a\":{\"driver\":\"local\"},\"b\":{\"driver\":\"local\",\"driver_opts\":{\"type\":\"tmpfs\",\"device\":\"tmpfs\",\"o\":\"size=100m\"}}}}";

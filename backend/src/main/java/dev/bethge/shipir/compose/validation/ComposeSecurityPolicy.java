@@ -30,7 +30,7 @@ import java.util.UUID;
  * (including the Docker socket), {@code use_api_socket}, {@code uts}/{@code cgroup} host, {@code cgroup_parent},
  * {@code device_cgroup_rules}, {@code gpus}, device reservations, {@code container:} namespaces, {@code volumes_from}, build
  * {@code privileged}/{@code network: host}/{@code entitlements} and build {@code context}/{@code dockerfile}/{@code additional_contexts}
- * outside the directory ({@code sysctls} and {@code group_add} are allowed by decision), and named volumes that are bind mounts or network filesystems (nfs, nfs4, cifs, smbfs) in disguise ({@code driver_opts}), plus {@code secrets}/{@code configs} files outside the
+ * outside the directory ({@code sysctls} and {@code group_add} are allowed by decision), and named volumes outside the allowlist (driver local or unset; no {@code driver_opts.type}, tmpfs, or a bind inside the directory; any other driver or filesystem type such as nfs, cifs, fuse.* is denied, shipr-kqbc.19), plus {@code secrets}/{@code configs} files outside the
  * deployment directory and (see {@link ComposeFilePolicy}) {@code env_file}/{@code include}/{@code extends} paths outside it. Named volumes
  * and paths inside the deployment directory stay allowed. Callers decide who is ADMIN; this class only evaluates.
  */
@@ -173,17 +173,38 @@ public class ComposeSecurityPolicy {
                 }
             });
         }
-        config.path("volumes").propertyStream().forEach(entry -> {
-            JsonNode opts = entry.getValue().path("driver_opts");
-            String type = opts.path("type").asString("");
-            String options = opts.path("o").asString("");
-            if ("none".equals(type) || "bind".equals(type) || options.contains("bind")) {
-                violations.add("volume " + entry.getKey() + ": bind mount via driver_opts");
-            } else if (NETWORK_FILESYSTEM_TYPES.contains(type.strip().toLowerCase(Locale.ROOT))) {
-                violations.add("volume " + entry.getKey() + ": network filesystem via driver_opts");
-            }
-        });
+        config.path("volumes").propertyStream().forEach(entry -> volumeViolations(entry.getKey(), entry.getValue(), allowed, violations));
         return violations;
+    }
+
+    /**
+     * Allowlist for a top-level volume (shipr-kqbc.19): driver {@code local} (or unset) with no {@code driver_opts.type},
+     * or type {@code tmpfs}, or a bind ({@code none}/{@code bind}, option {@code bind}/{@code rbind}) whose device is inside
+     * the deployment directory. Every other driver or filesystem type (nfs, cifs, fuse.*, ceph, ...) is denied.
+     */
+    private static void volumeViolations(String name, JsonNode volume, Path allowed, List<String> violations) {
+        String prefix = "volume " + name + ": ";
+        String driver = volume.path("driver").asString("");
+        if (!driver.isEmpty() && !"local".equals(driver)) {
+            violations.add(prefix + "driver " + driver + " not allowed (only local)");
+            return;
+        }
+        JsonNode opts = volume.path("driver_opts");
+        String type = opts.path("type").asString("").strip().toLowerCase(Locale.ROOT);
+        String options = opts.path("o").asString("").toLowerCase(Locale.ROOT);
+        boolean bindOption = options.contains("bind");
+        if (type.isEmpty() && !bindOption || "tmpfs".equals(type) && !bindOption) {
+            return;
+        }
+        if (!("none".equals(type) || "bind".equals(type)) || !bindOption || !insideOf(allowed, opts.path("device").asString(""))) {
+            if (NETWORK_FILESYSTEM_TYPES.contains(type)) {
+                violations.add(prefix + "network filesystem via driver_opts");
+            } else if (type.isEmpty() || "none".equals(type) || "bind".equals(type) || "tmpfs".equals(type)) {
+                violations.add(prefix + "bind mount via driver_opts");
+            } else {
+                violations.add(prefix + "filesystem type " + type + " via driver_opts not allowed");
+            }
+        }
     }
 
     /** Filesystem types of the local volume driver that mount remote shares from the Shipir host (denied by decision, shipr-kqbc.4). */

@@ -162,6 +162,26 @@ class HostCreateResourcesTest extends HostApiTestBase {
         assertThat(audit("NETWORK_CREATE")).contains("SUCCESS:backend");
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"nfs", "cifs", "fuse.sshfs", "rexray/ebs", "local-persist", "tmpfs", "Local", "local "})
+    void volumeCreateDeniesEveryDriverButLocalForAllRoles(String driver) throws Exception {
+        String host = localHostId();
+        for (String user : List.of("operator", "admin")) {
+            mvc.perform(create(login(user), host, "volumes", "{'name':'data','driver':'" + driver + "'}"))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_VOLUME_SPEC"))
+                    .andExpect(jsonPath("$.details[0]").value("driver: only local is supported"));
+        }
+        verify(volumes, never()).createVolume(any(), any(), any());
+    }
+
+    @Test
+    void volumeCreateAllowsLocalAndUnsetDriver() throws Exception {
+        String host = localHostId();
+        when(volumes.createVolume(any(), any(), any())).thenReturn(new CreatedResourceDto("data", "data"));
+        mvc.perform(create(login("operator"), host, "volumes", "{'name':'data','driver':'local'}")).andExpect(status().isCreated());
+        mvc.perform(create(login("operator"), host, "volumes", "{'name':'data2','driver':''}")).andExpect(status().isCreated());
+    }
+
     @Test
     void volumeCreateValidatesAndMapsNameTaken() throws Exception {
         String host = localHostId();
