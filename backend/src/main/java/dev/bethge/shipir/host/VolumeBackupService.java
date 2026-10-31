@@ -5,6 +5,7 @@ import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.client.VolumeArchiveService;
 import dev.bethge.shipir.host.dto.StoredVolumeBackup;
 import dev.bethge.shipir.host.dto.VolumeBackupDownload;
@@ -20,12 +21,15 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.time.Clock;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.regex.Pattern;
 
@@ -152,12 +156,21 @@ public class VolumeBackupService {
             throw new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found");
         }
         AtomicBoolean vanished = new AtomicBoolean();
+        AtomicReference<ArchiveIdentity> firstOpen = new AtomicReference<>();
         try {
             call(hostId, (id, endpoint) -> {
                 // NOFOLLOW on every open: a symlink swapped in after resolve() must not be followed
                 archives.restore(id, endpoint, volume, properties.helperImage(), () -> {
                     try {
-                        return Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS);
+                        InputStream in = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS);
+                        try {
+                            // the pipeline opens the archive to validate and again to stream: both must be the same file
+                            requireSameFile(firstOpen, ArchiveIdentity.of(file));
+                        } catch (IOException | RuntimeException e) {
+                            in.close();
+                            throw e;
+                        }
+                        return in;
                     } catch (NoSuchFileException e) {
                         vanished.set(true); // deleted or pruned since resolve(); the pipeline wraps this as 400/502
                         throw e;
@@ -173,6 +186,22 @@ public class VolumeBackupService {
                 throw new HostException(HttpStatus.BAD_REQUEST, "INVALID_ARCHIVE", "The stored archive is not a valid, safe volume archive");
             }
             throw e;
+        }
+    }
+
+    /** Remembers the identity at the first open; a later open that sees another file, size or mtime is refused. */
+    private static void requireSameFile(AtomicReference<ArchiveIdentity> first, ArchiveIdentity current) {
+        if (!first.compareAndSet(null, current) && !current.equals(first.get())) {
+            throw new DockerConnectionException(DockerErrorCode.INVALID_ARCHIVE,
+                    "The stored archive changed while it was being restored.", null);
+        }
+    }
+
+    /** File key, size and mtime of a regular file; equal values mean the same file with the same content state. */
+    private record ArchiveIdentity(Object fileKey, long size, FileTime modified) {
+        static ArchiveIdentity of(Path file) throws IOException {
+            BasicFileAttributes a = Files.readAttributes(file, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+            return new ArchiveIdentity(a.fileKey(), a.size(), a.lastModifiedTime());
         }
     }
 
