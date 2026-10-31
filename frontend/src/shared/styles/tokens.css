@@ -46,6 +46,11 @@
   --space-7: 3rem;
   --space-8: 4rem;
 
+  /* Safe-area insets (notch, home indicator); 0 where the device has none. index.html uses viewport-fit=cover. */
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+
   /* Hairline width, for overlapping a neighbouring 1px border (calc(var(--border-width) * -1)) */
   --border-width: 1px;
   /* Thicker ring for spinners and badge/dot cut-outs */

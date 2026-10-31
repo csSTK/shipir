@@ -2,7 +2,7 @@
   display: grid;
   grid-template-columns: 16rem minmax(0, 1fr);
   gap: var(--space-5);
-  height: calc(100dvh - 8rem);
+  height: calc(100dvh - 8rem - var(--safe-bottom));
   min-height: 26rem;
 }
 
