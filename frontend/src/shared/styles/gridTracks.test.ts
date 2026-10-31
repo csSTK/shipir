@@ -17,11 +17,17 @@ const cssFiles = (dir: string): string[] =>
 const MINMAX = /minmax\((?:[^()]|\([^()]*\))*\)/g
 const FR = /(?<![\w.-])\d*\.?\d+fr\b/
 
-const bareFrLines = (css: string): string[] =>
+// Declarations end at ';', '{' or '}', so a value wrapped onto the next line is still one declaration.
+const declarations = (css: string): string[] =>
   strip(css)
-    .split('\n')
-    .filter((l) => /grid-template-(columns|rows)|grid-auto-(columns|rows)/.test(l) && FR.test(l.replace(MINMAX, '')))
-    .map((l) => l.trim())
+    .split(/[;{}]/)
+    .map((d) => d.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+
+const bareFrDeclarations = (css: string): string[] =>
+  declarations(css).filter(
+    (d) => /(grid-template-(columns|rows)|grid-auto-(columns|rows))\s*:/.test(d) && FR.test(d.replace(MINMAX, '')),
+  )
 
 const sheets = cssFiles(srcRoot).map((f) => ({
   path: '/' + relative(srcRoot, f).split('\\').join('/'),
@@ -34,14 +40,19 @@ describe('grid tracks in CSS', () => {
   })
 
   it('detects a bare fr track (self-check)', () => {
-    expect(bareFrLines('.a { grid-template-columns: 1fr 1fr; }')).toHaveLength(1)
-    expect(bareFrLines('.a { grid-template-columns: max-content 1.5fr; }')).toHaveLength(1)
-    expect(bareFrLines('.a { grid-template-columns: repeat(2, minmax(0, 1fr)); }')).toHaveLength(0)
-    expect(bareFrLines('.a { grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr)); }')).toHaveLength(0)
+    expect(bareFrDeclarations('.a { grid-template-columns: 1fr 1fr; }')).toHaveLength(1)
+    expect(bareFrDeclarations('.a { grid-template-columns: max-content 1.5fr; }')).toHaveLength(1)
+    expect(bareFrDeclarations('.a { grid-template-columns: repeat(2, minmax(0, 1fr)); }')).toHaveLength(0)
+    expect(bareFrDeclarations('.a { grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr)); }')).toHaveLength(0)
+  })
+
+  it('detects a bare fr track whose declaration wraps onto another line (self-check)', () => {
+    expect(bareFrDeclarations('.a {\n  grid-template-columns:\n    1fr 1fr;\n}')).toHaveLength(1)
+    expect(bareFrDeclarations('.a {\n  grid-template-columns: repeat(2,\n    minmax(0, 1fr));\n}')).toHaveLength(0)
   })
 
   it('uses no bare fr track', () => {
-    const offenders = sheets.flatMap((s) => bareFrLines(s.css).map((l) => `${s.path}: ${l}`))
+    const offenders = sheets.flatMap((s) => bareFrDeclarations(s.css).map((l) => `${s.path}: ${l}`))
     expect(offenders).toEqual([])
   })
 
