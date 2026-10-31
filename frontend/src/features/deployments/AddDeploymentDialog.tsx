@@ -112,9 +112,7 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
   }
 
   /** Puts the picked files into the editors: the wizard when it can represent the compose file, else YAML mode with the reason. */
-  function applyImport() {
-    const { yaml: text, env: entries } = picked.current
-    if (text === null) return
+  function applyImport(text: string, entries: EnvEntry[] | null) {
     const rows = entries ?? []
     setImported(true)
     setYaml(text)
@@ -137,21 +135,21 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
     const suggestion = suggestName(fileName)
     if (suggestion) setName((current) => (current.trim() === '' ? suggestion : current))
     picked.current.yaml = text
-    applyImport()
+    applyImport(text, picked.current.env)
   }
 
   /** A fetched Portainer stack goes through the same prefill as the picked files. */
   function importStack({ name: stackName, yaml: text, env: entries }: PortainerStackFile) {
     const suggestion = sanitizeName(stackName)
     if (suggestion) setName((current) => (current.trim() === '' ? suggestion : current))
-    picked.current = { yaml: text, env: entries }
-    applyImport()
+    // Not stored in `picked`: a Portainer stack's env must never leak into a later file import.
+    applyImport(text, entries)
   }
 
   function importEnv({ entries }: ImportedEnv) {
     picked.current.env = entries
     if (picked.current.yaml === null) setEnv(entries)
-    else applyImport()
+    else applyImport(picked.current.yaml, entries)
   }
 
   function submit(e: FormEvent) {

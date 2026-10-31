@@ -186,6 +186,22 @@ describe('AddDeploymentDialog, Import from Portainer source', () => {
     expect(screen.getByLabelText('Portainer URL')).toHaveValue('')
   })
 
+  it('does not carry the Portainer env into a later file import without an env file', async () => {
+    serve()
+    renderDialog()
+    await connect()
+    fireEvent.click(await screen.findByRole('button', { name: 'Import shop' }))
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Form wizard' })).toBeChecked())
+    fireEvent.click(screen.getByRole('radio', { name: 'Import file' }))
+    fireEvent.change(screen.getByLabelText('Compose file (.yml, .yaml)'), {
+      target: { files: [new File([SIMPLE], 'other.yml', { type: 'application/yaml' })] },
+    })
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Form wizard' })).toBeChecked())
+    fireEvent.click(screen.getByRole('radio', { name: 'YAML' }))
+    expect(screen.queryByDisplayValue('PORT')).not.toBeInTheDocument()
+    expect(screen.queryByDisplayValue('8080')).not.toBeInTheDocument()
+  })
+
   it('does not run the import form on Enter before a stack was imported', async () => {
     serve()
     renderDialog()
