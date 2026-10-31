@@ -250,7 +250,7 @@ export function DeploymentDetailPage() {
         />
       )}
 
-      {/* Keyed by deployment only: a key on the saved values would remount the panel when the save refetches the detail and drop its 'Saved' message. */}
+      {/* Keyed by deployment only (the panels resync with refetched values themselves): a key on the saved values would remount the panel when the save refetches the detail and drop its 'Saved' message. */}
       {data.git && <GitSourcePanel key={deploymentId} deploymentId={deploymentId} hostId={hostId} git={data.git} canWrite={canWrite} />}
 
       {data.imageAutoUpdate && (

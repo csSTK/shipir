@@ -35,6 +35,18 @@ export function ImageAutoUpdatePanel({
   const [end, setEnd] = useState(info.windowEnd ?? '')
   const [problem, setProblem] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  // Resync with the server values (e.g. changed by another user) unless the user has unsaved edits.
+  const serverKey = `${info.enabled}|${info.windowStart ?? ''}|${info.windowEnd ?? ''}`
+  const [syncedKey, setSyncedKey] = useState(serverKey)
+  const [dirty, setDirty] = useState(false)
+  if (serverKey !== syncedKey) {
+    setSyncedKey(serverKey)
+    if (!dirty) {
+      setEnabled(info.enabled)
+      setStart(info.windowStart ?? '')
+      setEnd(info.windowEnd ?? '')
+    }
+  }
   const titleId = `image-auto-${deploymentId}`
 
   function submit() {
@@ -48,7 +60,10 @@ export function ImageAutoUpdatePanel({
     save.mutate(
       { deploymentId, enabled, windowStart: start || null, windowEnd: end || null },
       {
-        onSuccess: () => setSaved(true),
+        onSuccess: () => {
+          setSaved(true)
+          setDirty(false)
+        },
         onError: (err) => setProblem(describeDeploymentError(err, t('ImageAutoUpdatePanel.couldNotSaveTheSettings'))),
       },
     )
@@ -70,6 +85,7 @@ export function ImageAutoUpdatePanel({
           onChange={(e) => {
             setEnabled(e.target.checked)
             setSaved(false)
+            setDirty(true)
           }}
         />
         <fieldset className="ia-window" disabled={!canWrite}>
@@ -82,6 +98,7 @@ export function ImageAutoUpdatePanel({
               onChange={(e) => {
                 setStart(e.target.value)
                 setSaved(false)
+                setDirty(true)
               }}
             />
             <TextField
@@ -91,6 +108,7 @@ export function ImageAutoUpdatePanel({
               onChange={(e) => {
                 setEnd(e.target.value)
                 setSaved(false)
+                setDirty(true)
               }}
             />
           </div>

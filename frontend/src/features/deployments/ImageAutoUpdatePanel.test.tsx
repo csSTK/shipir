@@ -19,12 +19,16 @@ afterEach(() => {
 const URL = '/hosts/h1/managed-deployments/s1/image-auto-update'
 const off: ImageAutoUpdateInfo = { enabled: false, windowStart: null, windowEnd: null, lastAttemptAt: null, lastResult: null }
 
-function renderPanel(info: ImageAutoUpdateInfo = off, canWrite = true) {
-  render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+function panel(info: ImageAutoUpdateInfo, canWrite = true) {
+  return (
+    <QueryClientProvider client={queryClient}>
       <ImageAutoUpdatePanel deploymentId="s1" hostId="h1" info={info} canWrite={canWrite} />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
+}
+function renderPanel(info: ImageAutoUpdateInfo = off, canWrite = true) {
+  return render(panel(info, canWrite))
 }
 
 describe('ImageAutoUpdatePanel', () => {
@@ -99,5 +103,21 @@ describe('ImageAutoUpdatePanel', () => {
     renderPanel({ ...off, enabled: true }, false)
     expect(screen.getByRole('switch', { name: 'Automatic image updates' })).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+  })
+
+  it('shows settings changed elsewhere while the form is untouched', () => {
+    const view = renderPanel()
+    expect(screen.getByRole('switch', { name: 'Automatic image updates' })).not.toBeChecked()
+    view.rerender(panel({ ...off, enabled: true, windowStart: '02:00', windowEnd: '04:00' }))
+    expect(screen.getByRole('switch', { name: 'Automatic image updates' })).toBeChecked()
+    expect(screen.getByLabelText('Window start (UTC)')).toHaveValue('02:00')
+  })
+
+  it('keeps unsaved edits when the settings refetch with other values', () => {
+    const view = renderPanel()
+    fireEvent.click(screen.getByRole('switch', { name: 'Automatic image updates' }))
+    view.rerender(panel({ ...off, windowStart: '02:00', windowEnd: '04:00' }))
+    expect(screen.getByRole('switch', { name: 'Automatic image updates' })).toBeChecked()
+    expect(screen.getByLabelText('Window start (UTC)')).toHaveValue('')
   })
 })

@@ -15,6 +15,17 @@ export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploy
   const [minutes, setMinutes] = useState(String(Math.round((git.autoUpdateIntervalSeconds ?? DEFAULT_INTERVAL_MINUTES * 60) / 60)))
   const [problem, setProblem] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  // Resync with the server values (e.g. changed by another user) unless the user has unsaved edits.
+  const serverKey = `${git.autoUpdateEnabled}|${git.autoUpdateIntervalSeconds ?? ''}`
+  const [syncedKey, setSyncedKey] = useState(serverKey)
+  const [dirty, setDirty] = useState(false)
+  if (serverKey !== syncedKey) {
+    setSyncedKey(serverKey)
+    if (!dirty) {
+      setEnabled(git.autoUpdateEnabled)
+      setMinutes(String(Math.round((git.autoUpdateIntervalSeconds ?? DEFAULT_INTERVAL_MINUTES * 60) / 60)))
+    }
+  }
 
   function submit() {
     setSaved(false)
@@ -27,7 +38,10 @@ export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploy
     save.mutate(
       { deploymentId, enabled, intervalSeconds: value * 60 },
       {
-        onSuccess: () => setSaved(true),
+        onSuccess: () => {
+          setSaved(true)
+          setDirty(false)
+        },
         onError: (err) => setProblem(describeDeploymentError(err, t('GitSourcePanel.couldNotSaveTheAuto'))),
       },
     )
@@ -59,6 +73,7 @@ export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploy
           onChange={(e) => {
             setEnabled(e.target.checked)
             setSaved(false)
+            setDirty(true)
           }}
         />
         <p className="sd-muted">{t('GitSourcePanel.checksTheRepositoryRegularlyAnd')}</p>
@@ -74,6 +89,7 @@ export function GitSourcePanel({ deploymentId, hostId, git, canWrite }: { deploy
             onChange={(e) => {
               setMinutes(e.target.value)
               setSaved(false)
+              setDirty(true)
             }}
           />
         </div>
