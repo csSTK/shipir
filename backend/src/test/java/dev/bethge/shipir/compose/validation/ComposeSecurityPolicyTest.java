@@ -118,6 +118,13 @@ class ComposeSecurityPolicyTest {
         assertThat(check(json)).isEmpty();
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"[]", "{}"})
+    void allowsEmptyBuildSshListOrMap(String emptySsh) {
+        String json = "{\"services\":{\"x\":{\"build\":{\"context\":\"%s\",\"ssh\":%s}}}}".formatted(dir, emptySsh);
+        assertThat(check(json)).isEmpty();
+    }
+
     @Test
     void deniesSymlinkedBuildContextPointingOut() throws IOException {
         Files.createSymbolicLink(dir.resolve("escape"), Path.of("/etc"));
