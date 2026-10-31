@@ -216,6 +216,20 @@ class OidcLoginTest extends OidcTestBase {
     }
 
     @Test
+    void providerNameDifferingOnlyByCaseDoesNotClashWithExistingUsername() throws Exception {
+        configure(true, true);
+        Flow f = signIn(claims("sub-case", "Operator", "ops"));
+
+        assertThat(f.callbackLocation()).isEqualTo("/");
+        List<String> names = jdbc.queryForList(
+                "SELECT username FROM users WHERE lower(username) LIKE 'operator%' ORDER BY username", String.class);
+        assertThat(names).hasSize(2).contains("operator");
+        String created = jdbc.queryForObject(
+                "SELECT username FROM users WHERE external_subject = 'sub-case'", String.class);
+        assertThat(created).startsWith("Operator-").isNotEqualToIgnoringCase("operator");
+    }
+
+    @Test
     void ssoUserHasNoUsablePasswordAndIsNotTrappedInSetup() throws Exception {
         configure(true, true);
         signIn(claims("sub-10", "ivy", "ops"));

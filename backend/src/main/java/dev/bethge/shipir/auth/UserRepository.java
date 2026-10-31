@@ -13,6 +13,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByUsername(String username);
 
+    boolean existsByUsernameIgnoreCase(String username);
+
     /** Row lock, so concurrent code checks of one user serialize (replay protection, recovery code use). */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from User u where u.username = :username")

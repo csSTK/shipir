@@ -87,19 +87,19 @@ class OidcUserResolver {
         return new OidcException("ROLE_DENIED", "None of the user's groups maps to a Shipir role");
     }
 
-    /** The provider's preferred name made safe for a username; on a clash a short hash of the subject is appended. */
+    /** The provider's preferred name made safe for a username; on a clash (ignoring case, so 'Admin' never sits beside 'admin') a short hash of the subject is appended. */
     private String freeUsername(String preferred, String subject) {
         String base = preferred.replaceAll("[^A-Za-z0-9._@-]", "_");
         if (base.isBlank()) {
             base = "sso";
         }
         base = base.length() > 50 ? base.substring(0, 50) : base;
-        if (users.findByUsername(base).isEmpty()) {
+        if (!users.existsByUsernameIgnoreCase(base)) {
             return base;
         }
         String suffix = "-" + sha256Hex(subject).substring(0, 8);
         String candidate = base.substring(0, Math.min(base.length(), 50 - suffix.length())) + suffix;
-        if (users.findByUsername(candidate).isPresent()) {
+        if (users.existsByUsernameIgnoreCase(candidate)) {
             throw new OidcException("PROVISIONING_FAILED", "The account could not be created");
         }
         return candidate;
