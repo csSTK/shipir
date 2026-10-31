@@ -14,6 +14,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
@@ -25,6 +26,9 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doReturn;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -54,6 +58,8 @@ class TeamApiTest {
     private PermissionService permissions;
     @Autowired
     private TeamService teamService;
+    @MockitoSpyBean
+    private TeamRepository teamRepository;
 
     private UUID host;
     private UUID dep;
@@ -170,6 +176,25 @@ class TeamApiTest {
         assertThat(audit("TEAM_CREATE", "SUCCESS")).isEqualTo(1);
         assertThat(audit("TEAM_UPDATE", "SUCCESS")).isEqualTo(1);
         assertThat(audit("TEAM_DELETE", "SUCCESS")).isEqualTo(1);
+    }
+
+    @Test
+    void racingDuplicateNameIsStill409WhenThePreCheckMisses() throws Exception {
+        Session admin = login("admin", ADMIN_PASSWORD);
+        createTeam(admin, "Ops");
+        UUID other = createTeam(admin, "Dev");
+        // simulates the loser of a race: the existence pre-checks see nothing, the DB index decides
+        doReturn(false).when(teamRepository).existsByNameIgnoreCase(anyString());
+        doReturn(false).when(teamRepository).existsByNameIgnoreCaseAndIdNot(anyString(), any());
+        try {
+            send(admin, post("/api/teams"), "{\"name\":\"ops\"}").andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("TEAM_NAME_TAKEN"));
+            send(admin, put("/api/teams/" + other), "{\"name\":\"OPS\"}").andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("TEAM_NAME_TAKEN"));
+        } finally {
+            org.mockito.Mockito.reset(teamRepository);
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM teams", Long.class)).isEqualTo(2);
     }
 
     @Test
