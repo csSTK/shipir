@@ -187,6 +187,7 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/hosts", "/api/hosts/**").authenticated()
                         .requestMatchers("/api/hosts", "/api/hosts/**").hasRole("ADMIN")
                         .requestMatchers("/api/compose/generate").hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers("/api/portainer-import/**").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers("/api/audit-log", "/api/audit-log/**").hasRole("ADMIN")
                         .requestMatchers("/api/notifications/webhooks", "/api/notifications/webhooks/**").hasRole("ADMIN")
                         .requestMatchers("/api/users", "/api/users/**").hasRole("ADMIN")
