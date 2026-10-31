@@ -373,6 +373,129 @@ class AiToolRegistryTest {
         assertThat(node.get("omittedItems").asInt()).isEqualTo(30 - node.get("content").size());
     }
 
+    private static String resultOf(Object value, int cap) {
+        return new AiToolRegistry(List.of(tool("t", Role.VIEWER, false, (a, c) -> value)), MAPPER, cap)
+                .execute("t", args(), ctx(Role.VIEWER)).content();
+    }
+
+    @Test
+    void shortensTheArrayWithTheLargestSerializedSizeNotTheMostElements() throws Exception {
+        List<Map<String, Object>> few = new java.util.ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            few.add(Map.of("id", "f" + i, "blob", "x".repeat(400)));
+        }
+        List<Integer> many = new java.util.ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            many.add(i);
+        }
+
+        String content = resultOf(Map.of("few", few, "many", many), 800);
+
+        JsonNode node = MAPPER.readTree(content);
+        assertThat(content.length()).isLessThanOrEqualTo(800);
+        assertThat(node.get("many").size()).isEqualTo(40);
+        assertThat(node.get("few").size()).isEqualTo(1);
+        assertThat(node.get("omittedItems").asInt()).isEqualTo(1);
+    }
+
+    @Test
+    void oneItemBiggerThanTheCapFallsBackToACharCutInsteadOfEmptyingTheList() {
+        String content = resultOf(List.of(Map.of("id", "huge", "blob", "x".repeat(5000))), 1000);
+
+        assertThat(content).doesNotContain("omittedItems").contains("more characters omitted");
+    }
+
+    @Test
+    void objectWithOnlyAnEmptyArrayAndAnOversizedStringFallsBackToACharCut() {
+        String content = resultOf(Map.of("empty", List.of(), "blob", "x".repeat(500)), 100);
+
+        assertThat(content).doesNotContain("omittedItems").contains("more characters omitted");
+    }
+
+    @Test
+    void nestedArrayItemsAreDroppedWholeAndTheOutputStaysValidJson() throws Exception {
+        List<List<String>> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+            rows.add(List.of("r" + i, "y".repeat(100)));
+        }
+
+        JsonNode node = MAPPER.readTree(resultOf(Map.of("rows", rows), 1000));
+
+        assertThat(node.get("rows").size()).isBetween(1, 29);
+        assertThat(node.get("omittedItems").asInt()).isEqualTo(30 - node.get("rows").size());
+        assertThat(node.get("rows").get(0).get(0).asString()).isEqualTo("r0");
+        for (JsonNode row : node.get("rows")) {
+            assertThat(row.size()).isEqualTo(2);
+        }
+    }
+
+    @Test
+    void unicodeItemsAreDroppedWholeAndTheOutputStaysValidJson() throws Exception {
+        List<Map<String, String>> items = new java.util.ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+            items.add(Map.of("name", "Zürich 東京 😀 " + i, "pad", "ü€".repeat(40)));
+        }
+
+        String content = resultOf(items, 1000);
+
+        JsonNode node = MAPPER.readTree(content);
+        assertThat(content.length()).isLessThanOrEqualTo(1000);
+        assertThat(node.get("items").size()).isBetween(1, 29);
+        assertThat(node.get("items").get(0).get("name").asString()).isEqualTo("Zürich 東京 😀 0");
+        assertThat(node.get("items").size() + node.get("omittedItems").asInt()).isEqualTo(30);
+    }
+
+    @Test
+    void manyItemsAreShortenedToTheCapWithoutLosingTrackOfTheCount() throws Exception {
+        List<Map<String, Integer>> items = new java.util.ArrayList<>();
+        for (int i = 0; i < 3000; i++) {
+            items.add(Map.of("id", i));
+        }
+
+        String content = resultOf(items, 4000);
+
+        JsonNode node = MAPPER.readTree(content);
+        assertThat(content.length()).isLessThanOrEqualTo(4000);
+        assertThat(node.get("items").get(0).get("id").asInt()).isEqualTo(0);
+        assertThat(node.get("items").size() + node.get("omittedItems").asInt()).isEqualTo(3000);
+    }
+
+    @Test
+    void charCutNeverSplitsASurrogatePair() {
+        // the JSON string starts with a quote, so a cap of 12 would cut right between the emoji's two chars
+        String content = resultOf("0123456789" + "\uD83D\uDE00".repeat(20), 12);
+
+        String kept = content.substring(0, content.indexOf("\n...[RESULT TRUNCATED"));
+        assertThat(kept).endsWith("0123456789");
+        assertThat(Character.isHighSurrogate(kept.charAt(kept.length() - 1))).isFalse();
+    }
+
+    @Test
+    void existingNoteFieldIsNotOverwrittenByTheTruncationNote() throws Exception {
+        List<Map<String, String>> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+            rows.add(Map.of("id", "r" + i, "blob", "y".repeat(100)));
+        }
+
+        JsonNode node = MAPPER.readTree(resultOf(Map.of("note", "original note", "rows", rows), 1000));
+
+        assertThat(node.get("note").asString()).isEqualTo("original note");
+        assertThat(node.get("rows").size()).isBetween(1, 29);
+    }
+
+    @Test
+    void existingOmittedItemsFieldIsNotOverwrittenByTheCount() throws Exception {
+        List<Map<String, String>> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+            rows.add(Map.of("id", "r" + i, "blob", "y".repeat(100)));
+        }
+
+        JsonNode node = MAPPER.readTree(resultOf(Map.of("omittedItems", "kept", "rows", rows), 1000));
+
+        assertThat(node.get("omittedItems").asString()).isEqualTo("kept");
+        assertThat(node.get("rows").size()).isBetween(1, 29);
+    }
+
     @Test
     void truncationNoteTellsTheModelTheResultWasCutAndHowManyCharsAreMissing() {
         AiToolRegistry registry = new AiToolRegistry(List.of(

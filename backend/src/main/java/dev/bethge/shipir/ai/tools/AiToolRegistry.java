@@ -344,16 +344,24 @@ public class AiToolRegistry {
         if (shortened != null) {
             return shortened;
         }
-        int omitted = content.length() - maxResultChars;
-        return new ToolResult(result.error(), content.substring(0, maxResultChars)
+        int cut = maxResultChars;
+        if (cut > 0 && Character.isHighSurrogate(content.charAt(cut - 1))) {
+            cut--; // never split a surrogate pair
+        }
+        int omitted = content.length() - cut;
+        return new ToolResult(result.error(), content.substring(0, cut)
                 + "\n...[RESULT TRUNCATED: the result was cut (truncated), " + omitted + " more characters omitted. "
                 + "Do not assume the list is complete; narrow the request (filters, smaller limit, a single id)]");
     }
 
     /**
      * Keeps a cut list result valid JSON: drops whole trailing items of the top-level array (wrapped as {@code items})
-     * or of the largest array field of a top-level object until it fits, and adds {@code omittedItems} and a note.
-     * Returns null when the content has no such array or not even one item fits (caller falls back to a char cut).
+     * or of the array field with the largest serialized size of a top-level object, keeping the largest prefix that
+     * fits (binary search, so only O(log n) serializations), and adds an omitted-items count and a note.
+     * The keys are {@code omittedItems} and {@code note}; if the result already has a field of that name it is never
+     * overwritten, the keys {@code truncatedOmittedItems} / {@code truncationNote} (numbered further if needed) are
+     * used instead. Returns null when the content has no such array or not even one item fits (caller falls back to
+     * a char cut).
      */
     private ToolResult dropTrailingItems(ToolResult result, String content) {
         try {
@@ -367,11 +375,14 @@ public class AiToolRegistry {
             } else if (root.isObject()) {
                 holder = (ObjectNode) root;
                 field = null;
-                int largest = 0;
+                int largest = -1;
                 for (Map.Entry<String, JsonNode> e : holder.properties()) {
-                    if (e.getValue().isArray() && e.getValue().size() > largest) {
-                        largest = e.getValue().size();
-                        field = e.getKey();
+                    if (e.getValue().isArray() && e.getValue().size() > 0) {
+                        int size = mapper.writeValueAsString(e.getValue()).length();
+                        if (size > largest) {
+                            largest = size;
+                            field = e.getKey();
+                        }
                     }
                 }
                 if (field == null) {
@@ -380,22 +391,51 @@ public class AiToolRegistry {
             } else {
                 return null;
             }
-            ArrayNode items = (ArrayNode) holder.get(field);
-            int total = items.size();
-            holder.put("omittedItems", 0);
-            holder.put("note", "RESULT TRUNCATED: the result was cut (truncated), the last items of '" + field
+            ArrayNode all = (ArrayNode) holder.get(field);
+            int total = all.size();
+            String countKey = freeKey(holder, "omittedItems", "truncatedOmittedItems");
+            String noteKey = freeKey(holder, "note", "truncationNote");
+            holder.put(countKey, 0);
+            holder.put(noteKey, "RESULT TRUNCATED: the result was cut (truncated), the last items of '" + field
                     + "' were omitted. Do not assume the list is complete; narrow the request (filters, smaller limit, a single id)");
-            while (items.size() > 0) {
-                holder.put("omittedItems", total - items.size());
-                String out = mapper.writeValueAsString(holder);
+            int lo = 0; // largest kept count known to fit (0 = none yet)
+            String best = null;
+            int hi = total - 1;
+            while (lo < hi) {
+                int mid = (lo + hi + 1) >>> 1;
+                String out = serializeWithPrefix(holder, field, all, mid, countKey, total);
                 if (out.length() <= maxResultChars) {
-                    return new ToolResult(result.error(), out);
+                    lo = mid;
+                    best = out;
+                } else {
+                    hi = mid - 1;
                 }
-                items.remove(items.size() - 1);
             }
-            return null;
+            return best == null ? null : new ToolResult(result.error(), best);
         } catch (JacksonException e) {
             return null;
         }
+    }
+
+    private String serializeWithPrefix(ObjectNode holder, String field, ArrayNode all, int keep, String countKey,
+            int total) {
+        ArrayNode prefix = mapper.createArrayNode();
+        for (int i = 0; i < keep; i++) {
+            prefix.add(all.get(i));
+        }
+        holder.set(field, prefix);
+        holder.put(countKey, total - keep);
+        return mapper.writeValueAsString(holder);
+    }
+
+    private static String freeKey(ObjectNode holder, String preferred, String fallback) {
+        if (!holder.has(preferred)) {
+            return preferred;
+        }
+        String key = fallback;
+        for (int n = 2; holder.has(key); n++) {
+            key = fallback + n;
+        }
+        return key;
     }
 }
