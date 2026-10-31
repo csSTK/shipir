@@ -179,11 +179,21 @@ public class LogStreamHandler {
                 own = stream.subscribers.stream().filter(s -> username.equals(s.username)).toList();
             }
             // the predicate may look the container up in Docker: only ask for streams this user is on
-            if (own.isEmpty() || stillAllowed.test(stream.target)) {
+            if (own.isEmpty()) {
                 continue;
             }
-            List<Subscription> revoked = own;
-            revoked.forEach(s -> unsubscribe(s.sessionId, s.subscriptionId));
+            boolean allowed;
+            try {
+                allowed = stillAllowed.test(stream.target);
+            } catch (RuntimeException e) {
+                // fail closed for this stream only; the remaining streams are still checked
+                log.warn("Log access revalidation failed for {} on host {}, dropping the subscription: {}",
+                        stream.target.containerId(), stream.target.hostId(), e.toString());
+                allowed = false;
+            }
+            if (!allowed) {
+                own.forEach(s -> unsubscribe(s.sessionId, s.subscriptionId));
+            }
         }
     }
 
