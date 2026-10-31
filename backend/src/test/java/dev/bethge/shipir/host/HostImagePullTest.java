@@ -108,6 +108,31 @@ class HostImagePullTest extends HostApiTestBase {
     }
 
     @Test
+    void pullFailureCodeIsGenericForOperatorsAndDetailedForAdmins() throws Exception {
+        String host = localHostId();
+        doThrow(new DockerConnectionException(DockerErrorCode.TLS_ERROR, "handshake", null))
+                .when(images).pull(any(), any(), any(), any(), any());
+        mvc.perform(login("operator").write(pull(host, "busybox:a"))).andExpect(status().isAccepted());
+        verify(streams, timeout(5000)).complete(any(), eq(RunStatus.FAILED));
+        assertThat(lines).contains("Pull failed (UNREACHABLE)").doesNotContain("Pull failed (TLS_ERROR)");
+
+        lines.clear();
+        mvc.perform(login("admin").write(pull(host, "busybox:b"))).andExpect(status().isAccepted());
+        verify(streams, timeout(5000).times(2)).complete(any(), eq(RunStatus.FAILED));
+        assertThat(lines).contains("Pull failed (TLS_ERROR)");
+    }
+
+    @Test
+    void registryDenialStaysVisibleToOperators() throws Exception {
+        String host = localHostId();
+        doThrow(new DockerConnectionException(DockerErrorCode.PULL_FAILED, "denied: secret", null))
+                .when(images).pull(any(), any(), any(), any(), any());
+        mvc.perform(login("operator").write(pull(host, "busybox:c"))).andExpect(status().isAccepted());
+        verify(streams, timeout(5000)).complete(any(), eq(RunStatus.FAILED));
+        assertThat(lines).contains("Pull failed (PULL_FAILED)");
+    }
+
+    @Test
     void failedPullEndsRunAsFailedWithoutDaemonText() throws Exception {
         String host = localHostId();
         doThrow(new DockerConnectionException(DockerErrorCode.PULL_FAILED, "denied: secret details", null))

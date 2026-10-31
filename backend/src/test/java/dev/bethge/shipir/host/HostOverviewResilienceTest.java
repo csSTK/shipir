@@ -85,10 +85,51 @@ class HostOverviewResilienceTest extends HostApiTestBase {
                 .andExpect(jsonPath("$[1].containers").value(org.hamcrest.Matchers.nullValue()))
                 .andExpect(jsonPath("$[2].name").value("c-hang"))
                 .andExpect(jsonPath("$[2].status").value("DOWN"))
-                .andExpect(jsonPath("$[2].error").value("TIMEOUT"))
+                .andExpect(jsonPath("$[2].error").value("UNREACHABLE"))
                 .andExpect(jsonPath("$[3].name").value("d-ok"))
                 .andExpect(jsonPath("$[3].status").value("UP"));
         assertThat((System.nanoTime() - start) / 1_000_000).isLessThan(5_000);
+    }
+
+    @Test
+    void adminKeepsDetailedErrorCodesWhileNonAdminsGetOneGenericCode() throws Exception {
+        insertTcp("a-tls", "203.0.113.2");
+        insertTcp("b-hang", "203.0.113.3");
+        when(docker.info(any(), any())).thenAnswer(inv -> {
+            DockerEndpoint.Tcp endpoint = (DockerEndpoint.Tcp) inv.getArgument(1);
+            if (endpoint.host().equals("203.0.113.2")) {
+                throw new DockerConnectionException(DockerErrorCode.TLS_ERROR, "handshake", null);
+            }
+            Thread.sleep(60_000);
+            return null;
+        });
+
+        for (String user : new String[]{"viewer", "operator"}) {
+            mvc.perform(get("/api/hosts/overview").session(login(user).session()))
+                    .andExpect(jsonPath("$[0].error").value("UNREACHABLE"))
+                    .andExpect(jsonPath("$[1].error").value("UNREACHABLE"));
+        }
+        mvc.perform(get("/api/hosts/overview").session(login("admin").session()))
+                .andExpect(jsonPath("$[0].error").value("TLS_ERROR"))
+                .andExpect(jsonPath("$[1].error").value("TIMEOUT"));
+    }
+
+    @Test
+    void invalidResponseAndNotFoundAreGenericForViewersDetailedForAdmins() throws Exception {
+        insertTcp("a-http", "203.0.113.2");
+        insertTcp("b-404", "203.0.113.3");
+        when(docker.info(any(), any())).thenAnswer(inv -> {
+            DockerEndpoint.Tcp endpoint = (DockerEndpoint.Tcp) inv.getArgument(1);
+            throw new DockerConnectionException(endpoint.host().equals("203.0.113.2")
+                    ? DockerErrorCode.INVALID_RESPONSE : DockerErrorCode.NOT_FOUND, "x", null);
+        });
+
+        mvc.perform(get("/api/hosts/overview").session(login("viewer").session()))
+                .andExpect(jsonPath("$[0].error").value("UNREACHABLE"))
+                .andExpect(jsonPath("$[1].error").value("UNREACHABLE"));
+        mvc.perform(get("/api/hosts/overview").session(login("admin").session()))
+                .andExpect(jsonPath("$[0].error").value("INVALID_RESPONSE"))
+                .andExpect(jsonPath("$[1].error").value("NOT_FOUND"));
     }
 
     @Test

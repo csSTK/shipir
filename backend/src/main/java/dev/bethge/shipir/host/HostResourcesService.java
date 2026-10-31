@@ -382,12 +382,14 @@ public class HostResourcesService {
         String runId = UUID.randomUUID().toString();
         streams.registerRun(runId, hostId, null);
         Consumer<String> sink = streams.start(runId);
-        Thread.ofVirtual().name("image-pull-" + runId).start(() -> runPull(hostId, endpoint, reference, login, runId, sink));
+        boolean admin = access.isAdmin();
+        Thread.ofVirtual().name("image-pull-" + runId)
+                .start(() -> runPull(hostId, endpoint, reference, login, runId, sink, admin));
         return new PullImageResponse(runId);
     }
 
     private void runPull(UUID hostId, DockerEndpoint endpoint, String reference, RegistryLogin login, String runId,
-                         Consumer<String> sink) {
+                         Consumer<String> sink, boolean admin) {
         RunStatus status = RunStatus.FAILED;
         try {
             sink.accept("Pulling " + reference);
@@ -395,7 +397,7 @@ public class HostResourcesService {
             sink.accept("Pulled " + reference);
             status = RunStatus.DONE;
         } catch (DockerConnectionException e) {
-            sink.accept("Pull failed (" + e.getCode() + ")");
+            sink.accept("Pull failed (" + HostFailureCodes.forViewer(e.getCode(), admin) + ")");
         } catch (RuntimeException e) {
             log.warn("Image pull {} failed unexpectedly: {}", runId, e.toString());
             sink.accept("Pull failed (UNKNOWN)");
@@ -856,7 +858,7 @@ public class HostResourcesService {
                 throw new HostException(HttpStatus.CONFLICT, "RESOURCE_IN_USE",
                         "Built-in networks cannot be removed");
             }
-            throw badGateway(e.getCode().name(), "Environment could not be reached");
+            throw badGateway(HostFailureCodes.forViewer(e.getCode(), access.isAdmin()), "Environment could not be reached");
         } catch (EncryptionKeyMissingException e) {
             throw badGateway("ENCRYPTION_KEY_MISSING", "No encryption key is configured");
         } catch (SecretDecryptionException e) {

@@ -71,18 +71,19 @@ public class HostOverviewService {
      */
     public List<HostOverviewResponse> overview() {
         var visible = access.visibleHostIds();
+        boolean admin = access.isAdmin();
         List<DockerHost> all = hosts.findAll().stream()
                 .filter(h -> visible.isEmpty() || visible.get().contains(h.getId()))
                 .sorted(Comparator.comparing(DockerHost::getName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
         Map<UUID, List<String>> tagsByHost = tags.tagsByHost(all.stream().map(DockerHost::getId).toList());
         List<Future<HostOverviewResponse>> futures = all.stream()
-                .map(h -> executor.submit(() -> query(h, tagsOf(tagsByHost, h))))
+                .map(h -> executor.submit(() -> query(h, tagsOf(tagsByHost, h), admin)))
                 .toList();
         long deadline = System.nanoTime() + properties.overviewTimeout().toNanos();
         List<HostOverviewResponse> result = new ArrayList<>(all.size());
         for (int i = 0; i < all.size(); i++) {
-            result.add(await(all.get(i), futures.get(i), deadline, tagsOf(tagsByHost, all.get(i))));
+            result.add(await(all.get(i), futures.get(i), deadline, tagsOf(tagsByHost, all.get(i)), admin));
         }
         return result;
     }
@@ -92,12 +93,12 @@ public class HostOverviewService {
     }
 
     private HostOverviewResponse await(DockerHost host, Future<HostOverviewResponse> future, long deadline,
-                                       List<String> tagList) {
+                                       List<String> tagList, boolean admin) {
         try {
             return future.get(Math.max(0, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
         } catch (TimeoutException e) {
             future.cancel(true);
-            return down(host, "TIMEOUT", tagList);
+            return down(host, HostFailureCodes.forViewer("TIMEOUT", admin), tagList);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             future.cancel(true);
@@ -108,7 +109,7 @@ public class HostOverviewService {
     }
 
     /** Never throws: every failure of one environment is reported as {@code DOWN}. */
-    private HostOverviewResponse query(DockerHost host, List<String> tagList) {
+    private HostOverviewResponse query(DockerHost host, List<String> tagList, boolean admin) {
         try {
             DockerSystemInfoDto info = docker.info(host.getId(), endpoints.endpointOf(host));
             return new HostOverviewResponse(host.getId(), host.getName(), host.getConnectionType(), endpointOf(host),
@@ -117,7 +118,7 @@ public class HostOverviewService {
                             info.containersUnhealthy()),
                     info.images(), info.volumes(), tagList);
         } catch (DockerConnectionException e) {
-            return down(host, e.getCode().name(), tagList);
+            return down(host, HostFailureCodes.forViewer(e.getCode(), admin), tagList);
         } catch (EncryptionKeyMissingException e) {
             return down(host, "ENCRYPTION_KEY_MISSING", tagList);
         } catch (SecretDecryptionException e) {

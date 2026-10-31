@@ -69,10 +69,23 @@ class HostResourcesResilienceTest extends HostApiTestBase {
         for (String r : new String[]{"deployments", "containers", "images", "networks", "volumes"}) {
             mvc.perform(get("/api/hosts/{id}/{r}", id, r).session(viewer.session()))
                     .andExpect(status().isBadGateway())
-                    .andExpect(jsonPath("$.code").value(code.name()))
+                    .andExpect(jsonPath("$.code").value("UNREACHABLE"))
                     .andExpect(content().string(org.hamcrest.Matchers.not(
                             org.hamcrest.Matchers.containsString("203.0.113.7"))));
         }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = DockerErrorCode.class, names = {"UNREACHABLE", "TIMEOUT", "TLS_ERROR", "PERMISSION_DENIED"})
+    void adminKeepsTheDetailedErrorCode(DockerErrorCode code) throws Exception {
+        String id = insertTcp("h");
+        when(containers.listContainers(any(), any()))
+                .thenThrow(new DockerConnectionException(code, "connect failed", null));
+        Login admin = login("admin");
+
+        mvc.perform(get("/api/hosts/{id}/containers", id).session(admin.session()))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value(code.name()));
     }
 
     @Test
