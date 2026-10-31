@@ -1,6 +1,7 @@
 package dev.bethge.shipir.docker.client;
 
 import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.exception.NotFoundException;
 import com.github.dockerjava.api.model.Container;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
@@ -33,6 +34,7 @@ class ContainerRecreateIntegrationTest {
     private final UUID hostId = UUID.randomUUID();
     private final String prefix = "shipir-rc-" + UUID.randomUUID().toString().substring(0, 8);
     private final List<String> containerIds = new ArrayList<>();
+    private final List<String> networkIds = new ArrayList<>();
     private final List<String> volumes = new ArrayList<>();
     private DockerHostConnectionManager manager;
     private ContainerService service;
@@ -78,7 +80,21 @@ class ContainerRecreateIntegrationTest {
                 // already gone
             }
         }
+        // networks only after the containers above are gone, otherwise removal fails while they are attached
+        List<String> networkFailures = new ArrayList<>();
+        for (String id : networkIds) {
+            try {
+                docker.removeNetworkCmd(id).exec();
+            } catch (NotFoundException alreadyGone) {
+                // already gone
+            } catch (RuntimeException e) {
+                networkFailures.add(id + " (" + e.getMessage() + ")");
+            }
+        }
         manager.evict(hostId);
+        if (!networkFailures.isEmpty()) {
+            throw new IllegalStateException("Test networks were not removed and would leak: " + networkFailures);
+        }
     }
 
     private ContainerCreateSpec spec(String name, Map<String, String> env, List<ContainerCreateSpec.Port> ports,
@@ -103,30 +119,20 @@ class ContainerRecreateIntegrationTest {
     void recreateReconnectsEveryNetworkIncludingAliases() {
         String netA = prefix + "-a";
         String netB = prefix + "-b";
-        String idA = docker.createNetworkCmd().withName(netA).exec().getId();
-        String idB = docker.createNetworkCmd().withName(netB).exec().getId();
-        try {
-            var nets = List.of(new ContainerCreateSpec.Network(netA, List.of("alias-a")),
-                    new ContainerCreateSpec.Network(netB, List.of()));
-            String name = prefix + "-multi";
-            String oldId = create(withNetworks(spec(name, Map.of(), List.of(), List.of(), true), nets));
+        networkIds.add(docker.createNetworkCmd().withName(netA).exec().getId());
+        networkIds.add(docker.createNetworkCmd().withName(netB).exec().getId());
+        var nets = List.of(new ContainerCreateSpec.Network(netA, List.of("alias-a")),
+                new ContainerCreateSpec.Network(netB, List.of()));
+        String name = prefix + "-multi";
+        String oldId = create(withNetworks(spec(name, Map.of(), List.of(), List.of(), true), nets));
 
-            var result = service.recreateContainer(hostId, endpoint, oldId,
-                    withNetworks(spec(name, Map.of("A", "2"), List.of(), List.of(), false), nets));
-            containerIds.add(result.id());
+        var result = service.recreateContainer(hostId, endpoint, oldId,
+                withNetworks(spec(name, Map.of("A", "2"), List.of(), List.of(), false), nets));
+        containerIds.add(result.id());
 
-            var attached = docker.inspectContainerCmd(result.id()).exec().getNetworkSettings().getNetworks();
-            assertThat(attached).containsOnlyKeys(netA, netB);
-            assertThat(attached.get(netA).getAliases()).contains("alias-a");
-        } finally {
-            for (String id : List.of(idA, idB)) {
-                try {
-                    docker.removeNetworkCmd(id).exec();
-                } catch (RuntimeException ignored) {
-                    // still attached to a leftover; tearDown removes containers first on the next run
-                }
-            }
-        }
+        var attached = docker.inspectContainerCmd(result.id()).exec().getNetworkSettings().getNetworks();
+        assertThat(attached).containsOnlyKeys(netA, netB);
+        assertThat(attached.get(netA).getAliases()).contains("alias-a");
     }
 
     private static ContainerCreateSpec withNetworks(ContainerCreateSpec s, List<ContainerCreateSpec.Network> networks) {
