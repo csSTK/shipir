@@ -148,6 +148,25 @@ describe('ContainerResourcesDialog', () => {
     expect((call('PATCH')![1] as { body: unknown }).body).toEqual({ memoryBytes: 512 * 1024 * 1024, cpus: 0, restartPolicy: 'always' })
   })
 
+  it('prefills the current memory and CPU limits and sends them as unchanged', async () => {
+    apiFetch.mockResolvedValue(undefined)
+    const onClose = vi.fn()
+    wrap(<ContainerResourcesDialog hostId="h1" container={{ ...sample, memoryBytes: 512 * 1024 * 1024, cpus: 1.5 }} onClose={onClose} />)
+    expect(screen.getByLabelText('Memory limit (MiB)')).toHaveValue('512')
+    expect(screen.getByLabelText('CPUs')).toHaveValue('1.5')
+    fireEvent.change(screen.getByLabelText('Restart policy'), { target: { value: 'always' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply limits' }))
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+    expect((call('PATCH')![1] as { body: unknown }).body).toEqual({ memoryBytes: null, cpus: null, restartPolicy: 'always' })
+  })
+
+  it('rejects an empty change when the prefilled limits are untouched', () => {
+    wrap(<ContainerResourcesDialog hostId="h1" container={{ ...sample, memoryBytes: 512 * 1024 * 1024, cpus: 1.5 }} onClose={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Apply limits' }))
+    expect(screen.getByText('Change at least one value.')).toBeInTheDocument()
+    expect(call('PATCH')).toBeUndefined()
+  })
+
   it('rejects memory below 6 MiB and an empty change without a request', () => {
     wrap(<ContainerResourcesDialog hostId="h1" container={sample} onClose={() => {}} />)
     fireEvent.click(screen.getByRole('button', { name: 'Apply limits' }))

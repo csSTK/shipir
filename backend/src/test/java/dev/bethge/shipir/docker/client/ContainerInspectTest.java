@@ -142,6 +142,33 @@ class ContainerInspectTest {
     }
 
     @Test
+    void mapsMemoryLimitInBytesAndNanoCpusAsCpus() throws Exception {
+        InspectContainerResponse limited = readJson(JSON.replace("\"HostConfig\":{\"Privileged\":true,",
+                "\"HostConfig\":{\"Memory\":536870912,\"NanoCpus\":1500000000,\"Privileged\":true,"));
+        when(client.inspectContainerCmd("limited").exec()).thenReturn(limited);
+
+        ContainerDetailsDto d = service.inspect(hostId, ENDPOINT, "limited");
+
+        assertThat(d.memoryBytes()).isEqualTo(536870912L);
+        assertThat(d.cpus()).isEqualTo(1.5);
+    }
+
+    @Test
+    void resourceLimitsAreNullWhenUnsetOrZero() throws Exception {
+        InspectContainerResponse zero = readJson(JSON.replace("\"HostConfig\":{\"Privileged\":true,",
+                "\"HostConfig\":{\"Memory\":0,\"NanoCpus\":0,\"Privileged\":true,"));
+        when(client.inspectContainerCmd("zero").exec()).thenReturn(zero);
+
+        ContainerDetailsDto unset = service.inspect(hostId, ENDPOINT, "abc");
+        ContainerDetailsDto unlimited = service.inspect(hostId, ENDPOINT, "zero");
+
+        assertThat(unset.memoryBytes()).isNull();
+        assertThat(unset.cpus()).isNull();
+        assertThat(unlimited.memoryBytes()).isNull();
+        assertThat(unlimited.cpus()).isNull();
+    }
+
+    @Test
     void healthKeepsOnlyLastFiveLogs() {
         ContainerDetailsDto.Health h = service.inspect(hostId, ENDPOINT, "abc").health();
 

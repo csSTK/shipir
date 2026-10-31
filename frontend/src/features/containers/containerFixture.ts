@@ -31,4 +31,6 @@ export const sample: ContainerDetails = {
   health: null,
   composeProject: null,
   composeService: null,
+  memoryBytes: null,
+  cpus: null,
 }

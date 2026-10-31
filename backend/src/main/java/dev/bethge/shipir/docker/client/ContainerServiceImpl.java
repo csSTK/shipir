@@ -145,6 +145,9 @@ public class ContainerServiceImpl implements ContainerService {
         List<String> cmd = config == null || config.getCmd() == null ? List.of() : List.of(config.getCmd());
         boolean privileged = r.getHostConfig() != null && Boolean.TRUE.equals(r.getHostConfig().getPrivileged());
         boolean hostNetwork = r.getHostConfig() != null && "host".equals(r.getHostConfig().getNetworkMode());
+        Long memoryBytes = r.getHostConfig() == null ? null : positiveOrNull(r.getHostConfig().getMemory());
+        Double cpus = r.getHostConfig() == null || r.getHostConfig().getNanoCPUs() == null || r.getHostConfig().getNanoCPUs() <= 0
+                ? null : r.getHostConfig().getNanoCPUs() / 1_000_000_000d;
         RestartPolicy policy = r.getHostConfig() == null ? null : r.getHostConfig().getRestartPolicy();
         return new ContainerDetailsDto(r.getId(), name, config == null ? null : config.getImage(),
                 state == null ? null : state.getStatus(),
@@ -154,7 +157,13 @@ public class ContainerServiceImpl implements ContainerService {
                         ? "no" : policy.getName(), policy == null || policy.getMaximumRetryCount() == null ? 0 : policy.getMaximumRetryCount()),
                 command, cmd, privileged, hostNetwork, env, imageEnv, mounts, labels, networks, ports(settings == null ? null : settings.getPorts()),
                 state == null ? null : health(state.getHealth()),
-                project == null || project.isBlank() ? null : project, service == null || service.isBlank() ? null : service);
+                project == null || project.isBlank() ? null : project, service == null || service.isBlank() ? null : service,
+                memoryBytes, cpus);
+    }
+
+    /** Docker reports 0 for an unset limit. */
+    private static Long positiveOrNull(Long value) {
+        return value == null || value <= 0 ? null : value;
     }
 
     private static ContainerDetailsDto.Network network(String name, ContainerNetwork n) {

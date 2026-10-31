@@ -9,16 +9,24 @@ const MIB = 1024 * 1024
 const MIN_MEMORY_MIB = 6
 const POLICIES: RestartPolicy[] = ['no', 'always', 'unless-stopped', 'on-failure']
 
-/** Field problems and the request body; blank memory/CPUs stay unchanged, 0 removes the limit. */
-function build(memory: string, cpus: string, policy: RestartPolicy, current: RestartPolicy): { spec: ResourcesSpec; problems: Record<string, string> } {
+interface ResourcesForm {
+  memory: string
+  cpus: string
+  policy: RestartPolicy
+}
+
+/** Field problems and the request body; a field equal to its prefilled value or left blank stays unchanged, 0 removes the limit. */
+function build(form: ResourcesForm, original: ResourcesForm): { spec: ResourcesSpec; problems: Record<string, string> } {
   const problems: Record<string, string> = {}
-  const spec: ResourcesSpec = { memoryBytes: null, cpus: null, restartPolicy: policy === current ? null : policy }
-  if (memory.trim()) {
+  const spec: ResourcesSpec = { memoryBytes: null, cpus: null, restartPolicy: form.policy === original.policy ? null : form.policy }
+  const memory = form.memory.trim()
+  if (memory && memory !== original.memory) {
     const mib = Number(memory)
     if (!Number.isFinite(mib) || (mib !== 0 && mib < MIN_MEMORY_MIB)) problems.memory = i18n.t('containers:ContainerResourcesDialog.use0UnlimitedOrAt', { MIN_MEMORY_MIB })
     else spec.memoryBytes = Math.round(mib * MIB)
   }
-  if (cpus.trim()) {
+  const cpus = form.cpus.trim()
+  if (cpus && cpus !== original.cpus) {
     const n = Number(cpus)
     if (!Number.isFinite(n) || (n !== 0 && (n < 0.01 || n > 1024))) problems.cpus = i18n.t('containers:ContainerResourcesDialog.use0UnlimitedOr0')
     else spec.cpus = n
@@ -34,17 +42,26 @@ function currentPolicy(c: ContainerDetails): RestartPolicy {
   return n === 'always' || n === 'unless-stopped' || n === 'on-failure' ? n : 'no'
 }
 
-/** Changes memory, CPU and restart policy of a container in place (no restart). The current limits are not part of inspect, so empty fields stay unchanged. */
+/** The limits as the form shows them: MiB and fractional CPUs, empty when unset. */
+function currentForm(c: ContainerDetails): ResourcesForm {
+  return {
+    memory: c.memoryBytes == null ? '' : String(c.memoryBytes / MIB),
+    cpus: c.cpus == null ? '' : String(c.cpus),
+    policy: currentPolicy(c),
+  }
+}
+
+/** Changes memory, CPU and restart policy of a container in place (no restart). Fields start with the current limits; unchanged or empty ones are not sent. */
 export function ContainerResourcesDialog({ hostId, container, onClose }: { hostId: string; container: ContainerDetails; onClose: () => void }) {
   const { t } = useTranslation('containers')
-  const current = currentPolicy(container)
-  const [memory, setMemory] = useState('')
-  const [cpus, setCpus] = useState('')
-  const [policy, setPolicy] = useState<RestartPolicy>(current)
+  const original = currentForm(container)
+  const [memory, setMemory] = useState(original.memory)
+  const [cpus, setCpus] = useState(original.cpus)
+  const [policy, setPolicy] = useState<RestartPolicy>(original.policy)
   const [touched, setTouched] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const update = useUpdateContainerResources(hostId, container.id)
-  const { spec, problems } = build(memory, cpus, policy, current)
+  const { spec, problems } = build({ memory, cpus, policy }, original)
 
   function submit(e: FormEvent) {
     e.preventDefault()

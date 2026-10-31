@@ -65,6 +65,10 @@ export interface ContainerDetails {
   health: ContainerHealth | null
   composeProject: string | null
   composeService: string | null
+  /** Memory limit in bytes, null when unset or unlimited. */
+  memoryBytes: number | null
+  /** CPU limit as fractional CPUs, null when unset or unlimited. */
+  cpus: number | null
 }
 
 export function useContainerDetails(hostId: string, containerId: string) {

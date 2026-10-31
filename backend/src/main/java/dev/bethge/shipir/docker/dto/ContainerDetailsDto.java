@@ -10,6 +10,8 @@ import java.util.Map;
  * {@code command} is entrypoint plus cmd as the daemon reports it; {@code cmd} is the configured Cmd only (what create
  * takes), {@code imageEnv} the environment baked into the image (what the container inherits unless overridden; empty if
  * the image cannot be inspected), {@code hostNetwork} means network mode host. {@code startedAt} null if the container never ran, compose fields null for non-Compose containers.
+ * {@code memoryBytes} and {@code cpus} are the configured limits (memory in bytes, CPUs as fractions like the limits API
+ * takes), null when unset or unlimited.
  */
 public record ContainerDetailsDto(
         String id,
@@ -32,16 +34,19 @@ public record ContainerDetailsDto(
         List<Port> ports,
         Health health,
         String composeProject,
-        String composeService) {
+        String composeService,
+        Long memoryBytes,
+        Double cpus) {
 
-    /** Without image env (not known to the caller). */
+    /** Without image env and resource limits (not known to the caller). */
     public ContainerDetailsDto(String id, String name, String image, String state, Instant created, Instant startedAt,
                                int restartCount, RestartPolicy restartPolicy, List<String> command, List<String> cmd,
                                boolean privileged, boolean hostNetwork, List<EnvVar> env, List<Mount> mounts,
                                Map<String, String> labels, List<Network> networks, List<Port> ports, Health health,
                                String composeProject, String composeService) {
         this(id, name, image, state, created, startedAt, restartCount, restartPolicy, command, cmd, privileged,
-                hostNetwork, env, List.of(), mounts, labels, networks, ports, health, composeProject, composeService);
+                hostNetwork, env, List.of(), mounts, labels, networks, ports, health, composeProject, composeService,
+                null, null);
     }
 
     /** {@code name} is Docker's policy name ({@code no}, {@code always}, {@code on-failure}, {@code unless-stopped}). */
@@ -74,6 +79,6 @@ public record ContainerDetailsDto(
         return new ContainerDetailsDto(id, name, image, state, created, startedAt, restartCount, restartPolicy,
                 command, cmd, privileged, hostNetwork, env.stream().map(e -> new EnvVar(e.key(), null)).toList(),
                 imageEnv.stream().map(e -> new EnvVar(e.key(), null)).toList(), mounts, labels, networks, ports,
-                health, composeProject, composeService);
+                health, composeProject, composeService, memoryBytes, cpus);
     }
 }

@@ -39,6 +39,8 @@ const details = {
   health: null,
   composeProject: null,
   composeService: null,
+  memoryBytes: null,
+  cpus: null,
 }
 const as = (role: string) => ({ body: { username: 'u', role, setupRequired: false } })
 
@@ -99,6 +101,16 @@ test('resource limits are sent as bytes, CPUs and policy', async ({ page, api })
   await dialog.getByRole('button', { name: 'Apply limits' }).click()
   expect((await request).postDataJSON()).toEqual({ memoryBytes: 256 * 1024 * 1024, cpus: 1.5, restartPolicy: null })
   await expect(dialog).toHaveCount(0)
+})
+
+test('resource limits dialog starts with the current limits', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', as('OPERATOR'))
+  api.mock('GET', '/api/hosts/a/containers/c1', { body: { ...details, memoryBytes: 512 * 1024 * 1024, cpus: 1.5 } })
+  await page.goto('/environments/a/containers/c1')
+  await page.getByRole('button', { name: 'Resource limits' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Resource limits' })
+  await expect(dialog.getByLabel('Memory limit (MiB)')).toHaveValue('512')
+  await expect(dialog.getByLabel('CPUs')).toHaveValue('1.5')
 })
 
 test('viewers get no change actions; compose-managed containers show why they are disabled', async ({ page, api }) => {
