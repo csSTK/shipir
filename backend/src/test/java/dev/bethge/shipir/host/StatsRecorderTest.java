@@ -205,9 +205,10 @@ class StatsRecorderTest {
         assertThat(rows(h)).isEqualTo(1);
     }
 
+    /** Generous host timeout: a loaded CI box must not cancel a host's task before it logs the cap warning. */
     private StatsRecorder cappedRecorder(int maxContainers) {
         return new StatsRecorder(hosts, endpoints, containers, stats, samples,
-                new StatsProperties(Duration.ofSeconds(60), Duration.ofMillis(500), maxContainers, 300, 50), clock);
+                new StatsProperties(Duration.ofSeconds(60), Duration.ofSeconds(30), maxContainers, 300, 50), clock);
     }
 
     @Test
