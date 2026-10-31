@@ -453,6 +453,60 @@ class ProxyRouteApiTest {
     }
 
     @Test
+    void aSyncFailureOnPublishRepairsTheProxyWithASecondSyncAndKeepsTheOriginalError() throws Exception {
+        doThrow(syncFailure()).when(sync).sync(any());
+        mvc.perform(login("admin").write(post(url())).contentType(APPLICATION_JSON)
+                        .content(body("shop.example.com", "shop-web-1", "")))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("PROXY_SYNC_FAILED"));
+        // first sync with the route, second (repair) after the rollback removed it
+        verify(sync, times(2)).sync(hostId);
+    }
+
+    @Test
+    void aSyncFailureOnUpdateRepairsWithASecondSyncAndKeepsTheOriginalError() throws Exception {
+        Login admin = login("admin");
+        UUID id = routeFor(admin);
+        org.mockito.Mockito.clearInvocations(sync);
+        doThrow(syncFailure()).doNothing().when(sync).sync(any());
+
+        mvc.perform(admin.write(put(url() + "/" + id)).contentType(APPLICATION_JSON)
+                        .content(body("shop.example.com", "shop-web-1", ",\"port\":81")))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("PROXY_SYNC_FAILED"));
+
+        verify(sync, times(2)).sync(hostId);
+        assertThat(jdbc.queryForObject("SELECT target_port FROM proxy_routes", Integer.class)).isEqualTo(81);
+    }
+
+    @Test
+    void aSyncFailureOnUnpublishRepairsWithASecondSyncAndKeepsTheOriginalError() throws Exception {
+        Login admin = login("admin");
+        UUID id = routeFor(admin);
+        org.mockito.Mockito.clearInvocations(sync);
+        doThrow(syncFailure()).doNothing().when(sync).sync(any());
+
+        mvc.perform(admin.write(delete(url() + "/" + id)))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("PROXY_SYNC_FAILED"));
+
+        verify(sync, times(2)).sync(hostId);
+    }
+
+    @Test
+    void aFailingRepairSyncDoesNotReplaceTheOriginalError() throws Exception {
+        Login admin = login("admin");
+        UUID id = routeFor(admin);
+        org.mockito.Mockito.clearInvocations(sync);
+        doThrow(syncFailure()).when(sync).sync(any());
+
+        mvc.perform(admin.write(delete(url() + "/" + id)))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("PROXY_SYNC_FAILED"));
+        verify(sync, times(2)).sync(hostId);
+    }
+
+    @Test
     void aFailingDetachOnUnpublishStillSyncsFirst() throws Exception {
         Login admin = login("admin");
         UUID id = routeFor(admin);

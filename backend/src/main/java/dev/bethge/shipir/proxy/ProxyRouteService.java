@@ -13,6 +13,8 @@ import dev.bethge.shipir.permission.CurrentAccess;
 import dev.bethge.shipir.proxy.dto.ProxyRouteCandidate;
 import dev.bethge.shipir.proxy.dto.ProxyRouteRequest;
 import dev.bethge.shipir.proxy.dto.ProxyRouteView;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -40,6 +42,7 @@ import java.util.UUID;
 @Service
 public class ProxyRouteService {
 
+    private static final Logger log = LoggerFactory.getLogger(ProxyRouteService.class);
     private static final BCryptPasswordEncoder BCRYPT = new BCryptPasswordEncoder(10);
     private static final int MAX_PORT_OPTIONS = 50;
 
@@ -143,6 +146,30 @@ public class ProxyRouteService {
         } catch (RuntimeException ignored) {
             // the sync failure is the error to report
         }
+        repairSync(hostId);
+    }
+
+    /**
+     * After a failed sync the stored state is already committed; sync once more from it so the proxy does not keep
+     * a stale or rejected configuration. Best effort: the caller rethrows the original error, a failing repair is
+     * only logged (exception type only, never the message).
+     */
+    private void repairSync(UUID hostId) {
+        try {
+            sync.sync(hostId);
+        } catch (RuntimeException again) {
+            log.warn("Could not repair the proxy configuration on host {} after a failed sync: {}", hostId,
+                    again.getClass().getSimpleName());
+        }
+    }
+
+    private void syncWithRepair(UUID hostId) {
+        try {
+            sync.sync(hostId);
+        } catch (RuntimeException e) {
+            repairSync(hostId);
+            throw e;
+        }
     }
 
     @Auditable(action = "PROXY_ROUTE_UPDATE", targetType = "PROXY_ROUTE", targetId = "#routeId",
@@ -179,7 +206,7 @@ public class ProxyRouteService {
         route.apply(r.hostname(), r.aliases(), container.name(), port, scheme(r), r.pathPrefix(), r.entrypoint(), mode,
                 r.certificateId(), redirect(r), hashes, r.responseHeaders());
         route = save(route);
-        sync.sync(hostId);
+        syncWithRepair(hostId);
         if (moved) {
             detachIfUnused(hostId, endpoint, oldContainer, byName.get(oldContainer));
         }
@@ -202,7 +229,7 @@ public class ProxyRouteService {
         requireOperable(hostId, container);
         routes.delete(route);
         // sync first: a failing detach must not leave the proxy serving the removed route
-        sync.sync(hostId);
+        syncWithRepair(hostId);
         detachIfUnused(hostId, endpoint, route.getContainerName(), container);
     }
 
