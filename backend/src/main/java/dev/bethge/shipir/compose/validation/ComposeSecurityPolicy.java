@@ -144,6 +144,8 @@ public class ComposeSecurityPolicy {
                 violations.add(service + ": deploy reservations devices");
             }
             buildViolations(service, s.path("build"), allowed, violations);
+            composeLabelViolations(service, "labels", s.path("labels"), violations);
+            composeLabelViolations(service, "deploy.labels", s.path("deploy").path("labels"), violations);
             if (nonEmpty(s.path("devices"))) {
                 violations.add(service + ": devices");
             }
@@ -175,6 +177,32 @@ public class ComposeSecurityPolicy {
         }
         config.path("volumes").propertyStream().forEach(entry -> volumeViolations(entry.getKey(), entry.getValue(), allowed, violations));
         return violations;
+    }
+
+    private static final String COMPOSE_LABEL_PREFIX = "com.docker.compose.";
+
+    /**
+     * Denies user-set {@code com.docker.compose.*} labels (shipr-kqbc.28). Real {@code docker compose up} overwrites them on
+     * the created container (see {@code ComposeProjectLabelRealDockerTest}), but {@code ManagedDeploymentLookup} maps a
+     * container to a deployment grant by the project label, so this stays rejected as defence in depth. Handles the map
+     * form and the list form ({@code key=value}); compared case-insensitively.
+     */
+    private static void composeLabelViolations(String service, String where, JsonNode labels, List<String> violations) {
+        List<String> keys = new ArrayList<>();
+        if (labels.isObject()) {
+            labels.propertyNames().forEach(keys::add);
+        } else if (labels.isArray()) {
+            for (JsonNode item : labels) {
+                String entry = item.asString("");
+                int eq = entry.indexOf('=');
+                keys.add(eq < 0 ? entry : entry.substring(0, eq));
+            }
+        }
+        for (String key : keys) {
+            if (key.strip().toLowerCase(java.util.Locale.ROOT).startsWith(COMPOSE_LABEL_PREFIX)) {
+                violations.add(service + ": " + where + " " + key);
+            }
+        }
     }
 
     /**

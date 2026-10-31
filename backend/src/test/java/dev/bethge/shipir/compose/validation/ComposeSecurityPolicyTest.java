@@ -61,6 +61,27 @@ class ComposeSecurityPolicyTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"labels\":{\"com.docker.compose.project\":\"other\"}}|labels com.docker.compose.project",
+            "{\"labels\":{\"com.docker.compose.service\":\"db\"}}|labels com.docker.compose.service",
+            "{\"labels\":{\"COM.Docker.Compose.Project\":\"other\"}}|labels COM.Docker.Compose.Project",
+            "{\"labels\":[\"com.docker.compose.project=other\"]}|labels com.docker.compose.project",
+            "{\"deploy\":{\"labels\":{\"com.docker.compose.project\":\"other\"}}}|deploy.labels com.docker.compose.project",
+            "{\"deploy\":{\"labels\":[\"com.docker.compose.oneoff=True\"]}}|deploy.labels com.docker.compose.oneoff"})
+    void deniesUserSetComposeLabels(String caseDef) {
+        String[] parts = caseDef.split("\\|");
+        String service = parts[0].substring(0, parts[0].length() - 1) + ",\"image\":\"alpine\"}";
+        assertThat(check("{\"services\":{\"x\":" + service + "}}")).containsExactly("x: " + parts[1]);
+    }
+
+    @Test
+    void allowsOtherLabelsIncludingLookalikePrefixes() {
+        assertThat(check("""
+                {"services":{"x":{"image":"alpine","labels":{"traefik.enable":"true","com.docker.composer":"1",
+                "com.example.com.docker.compose.project":"1"},"deploy":{"labels":{"app":"x"}}}}}""")).isEmpty();
+    }
+
+    @ParameterizedTest
     @CsvSource(delimiter = '|', value = {
             "privileged|true|build privileged",
             "network|\"host\"|build network host",
