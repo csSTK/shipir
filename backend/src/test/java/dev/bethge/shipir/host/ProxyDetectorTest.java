@@ -28,6 +28,50 @@ class ProxyDetectorTest {
                 List.of(), null, null, null);
     }
 
+    private static Function<String, ContainerDetailsDto> withCommand(List<String> networks, List<String> command) {
+        Function<String, ContainerDetailsDto> base = networks(Map.of("t", networks));
+        return id -> {
+            ContainerDetailsDto d = base.apply(id);
+            return new ContainerDetailsDto(d.id(), d.name(), d.image(), d.state(), null, null, 0, null, command,
+                    List.of(), false, false, List.of(), List.of(), Map.of(), d.networks(), List.of(), null, null, null);
+        };
+    }
+
+    private static String networkFor(String image, List<String> networks, List<String> command) {
+        return ProxyDetector.detect(List.of(container("t", image, "running")), withCommand(networks, command))
+                .network();
+    }
+
+    @Test
+    void traefikProviderNetworkArgBeatsAlphabeticalOrder() {
+        assertThat(networkFor("traefik:v3", List.of("alpha", "web"),
+                List.of("--providers.docker=true", "--providers.docker.network=web"))).isEqualTo("web");
+    }
+
+    @Test
+    void traefikProviderNetworkArgWithSpaceSeparatedValue() {
+        assertThat(networkFor("traefik:v3", List.of("alpha", "web"),
+                List.of("--providers.docker.network", "web"))).isEqualTo("web");
+    }
+
+    @Test
+    void providerNetworkArgNotAttachedToProxyFallsBackToAlphabetical() {
+        assertThat(networkFor("traefik:v3", List.of("alpha", "web"),
+                List.of("--providers.docker.network=gone"))).isEqualTo("alpha");
+    }
+
+    @Test
+    void builtInProviderNetworkArgIsIgnored() {
+        assertThat(networkFor("traefik:v3", List.of("bridge", "web"),
+                List.of("--providers.docker.network=bridge"))).isEqualTo("web");
+    }
+
+    @Test
+    void noProviderNetworkArgFallsBackToAlphabetical() {
+        assertThat(networkFor("traefik:v3", List.of("web", "alpha"), List.of("--api.insecure=true")))
+                .isEqualTo("alpha");
+    }
+
     @Test
     void detectsRunningTraefikAndItsUserDefinedNetwork() {
         ProxyDetectionResponse r = ProxyDetector.detect(
