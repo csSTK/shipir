@@ -89,6 +89,13 @@ public class Deployment {
     @Column(nullable = false, columnDefinition = "text[]")
     private List<String> profiles = List.of();
 
+    /**
+     * Operated through its own feature (the managed proxy), not the generic deployment endpoints: its env holds
+     * ADMIN-only secrets, so non-ADMIN callers are refused on those endpoints.
+     */
+    @Column(name = "system_managed", nullable = false, updatable = false)
+    private boolean systemManaged;
+
     @Column(name = "created_by", nullable = false, updatable = false)
     private UUID createdBy;
 
@@ -121,6 +128,11 @@ public class Deployment {
         this.gitCredentialId = credentialId;
     }
 
+    /** Flags this deployment as system-managed; only at creation, never reverted. */
+    void markSystemManaged() {
+        this.systemManaged = true;
+    }
+
     public UUID getId() { return id; }
     public String getName() { return name; }
     public UUID getHostId() { return hostId; }
@@ -142,6 +154,7 @@ public class Deployment {
     public Instant getImageUpdateLastAttemptAt() { return imageUpdateLastAttemptAt; }
     public String getImageUpdateLastResult() { return imageUpdateLastResult; }
     public List<String> getProfiles() { return profiles; }
+    public boolean isSystemManaged() { return systemManaged; }
     public UUID getCreatedBy() { return createdBy; }
     public Instant getLastDeployedAt() { return lastDeployedAt; }
     public Instant getCreatedAt() { return createdAt; }

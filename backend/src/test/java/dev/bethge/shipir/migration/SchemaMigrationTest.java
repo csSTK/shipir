@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V1-V42 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
+ * Verifies the V1-V43 schema. Each test rolls back, so the shared Testcontainers DB stays clean.
  * A failing insert aborts the Postgres transaction, so each test asserts at most one violation, as its last statement.
  */
 @SpringBootTest
@@ -32,10 +32,49 @@ class SchemaMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    void flywayAppliedVersions1To42Successfully() {
+    void flywayAppliedVersions1To43Successfully() {
         List<String> versions = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42");
+        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43");
+    }
+
+    @Test
+    void deploymentsSystemManagedIsNotNullAndDefaultsToFalse() {
+        List<Map<String, Object>> columns = jdbc.queryForList("""
+                SELECT data_type, is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'deployments' AND column_name = 'system_managed'
+                """);
+        assertThat(columns).hasSize(1);
+        assertThat(columns.get(0).get("data_type")).isEqualTo("boolean");
+        assertThat(columns.get(0).get("is_nullable")).isEqualTo("NO");
+        UUID user = insertUser("alice");
+        UUID deployment = insertDeployment(insertHost(user), user, "web");
+        assertThat(jdbc.queryForObject("SELECT system_managed FROM deployments WHERE id = ?", Boolean.class, deployment))
+                .isFalse();
+    }
+
+    @Test
+    void systemManagedBackfillFlagsTheProxyDeploymentsOnly() throws Exception {
+        UUID user = insertUser("alice");
+        UUID host1 = insertHost(user);
+        UUID host2 = insertHost("second", "TCP", "second.local", 2375, user);
+        UUID byName = insertDeployment(host1, user, "shipir-proxy");
+        UUID linked = insertDeployment(host2, user, "renamed-proxy");
+        UUID other = insertDeployment(host1, user, "web");
+        jdbc.update("INSERT INTO proxy_instances (host_id, type, deployment_id, acme_email, default_cert_mode) "
+                + "VALUES (?, 'TRAEFIK', ?, 'a@example.com', 'ACME_HTTP')", host2, linked);
+        String script = new String(getClass().getResourceAsStream("/db/migration/V43__deployments_system_managed.sql")
+                .readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        jdbc.update(script.substring(script.indexOf("UPDATE deployments")));
+
+        assertThat(flag(byName)).isTrue();
+        assertThat(flag(linked)).isTrue();
+        assertThat(flag(other)).isFalse();
+    }
+
+    private boolean flag(UUID deployment) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT system_managed FROM deployments WHERE id = ?",
+                Boolean.class, deployment));
     }
 
     @Test

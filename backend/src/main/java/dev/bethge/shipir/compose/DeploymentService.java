@@ -123,6 +123,7 @@ public class DeploymentService {
         requireView(hostId, id);
         requireHost(hostId);
         Deployment deployment = requireDeployment(hostId, id);
+        requireAdminIfSystemManaged(deployment);
         String yaml = currentVersion(deployment).getYamlContent();
         List<String> keys = files.readEnv(hostId, deployment.getName())
                 .map(text -> EnvFile.parse(text).stream().map(EnvEntry::key).toList())
@@ -135,6 +136,7 @@ public class DeploymentService {
         requireView(hostId, id);
         requireHost(hostId);
         Deployment deployment = requireDeployment(hostId, id);
+        requireAdminIfSystemManaged(deployment);
         byte[] ciphertext = currentVersion(deployment).getEnvCiphertext();
         if (ciphertext == null) {
             return new DeploymentEnvResponse(List.of());
@@ -163,9 +165,32 @@ public class DeploymentService {
                 VersionSource.MANUAL);
     }
 
-    /** FILE deployment from pasted or adopted YAML; the caller has already checked permissions. */
+    /**
+     * Creates the deployment of a system feature (the managed proxy) flagged system-managed from the start, so it is
+     * never readable by non-ADMIN callers, not even between creation and a later flagging. ADMIN only.
+     */
+    @Auditable(action = "DEPLOYMENT_CREATE", targetType = "DEPLOYMENT", targetId = "#result?.id")
+    public DeploymentDetailResponse createSystemManaged(UUID hostId, DeploymentCreateRequest request, String username) {
+        requireHostOperate(hostId);
+        if (!access.isAdmin()) {
+            throw forbidden();
+        }
+        DockerHost host = requireHost(hostId);
+        if (request.source() == DeploymentSource.GIT || request.yaml() == null || request.yaml().isBlank()) {
+            throw missing("yaml");
+        }
+        return createFile(hostId, host, validName(request.name()), request.yaml(), request.env(), username,
+                VersionSource.MANUAL, true);
+    }
+
     DeploymentDetailResponse createFile(UUID hostId, DockerHost host, String name, String yaml, List<EnvEntry> env,
                                         String username, VersionSource source) {
+        return createFile(hostId, host, name, yaml, env, username, source, false);
+    }
+
+    /** FILE deployment from pasted or adopted YAML; the caller has already checked permissions. */
+    private DeploymentDetailResponse createFile(UUID hostId, DockerHost host, String name, String yaml, List<EnvEntry> env,
+                                                String username, VersionSource source, boolean systemManaged) {
         String envText = renderEnv(env);
         UUID userId = users.findByUsername(username).orElseThrow().getId();
         DockerEndpoint endpoint = endpointOf(host);
@@ -173,8 +198,12 @@ public class DeploymentService {
         Deployment deployment;
         try {
             deployment = tx.execute(status -> {
-                Deployment s = deployments.saveAndFlush(new Deployment(name, hostId,
-                        hostId + "/" + name + "/" + ComposeFileRepository.COMPOSE_FILE, userId, clock.instant()));
+                Deployment fresh = new Deployment(name, hostId,
+                        hostId + "/" + name + "/" + ComposeFileRepository.COMPOSE_FILE, userId, clock.instant());
+                if (systemManaged) {
+                    fresh.markSystemManaged();
+                }
+                Deployment s = deployments.saveAndFlush(fresh);
                 DeploymentVersion v = versions.save(new DeploymentVersion(s.getId(), yaml, encrypt(envText), source, userId,
                         clock.instant()));
                 s.setCurrentVersionId(v.getId());
@@ -631,6 +660,13 @@ public class DeploymentService {
     public void requireOperate(UUID hostId, UUID id) {
         requireView(hostId, id);
         if (!access.canOperate(hostId, id)) {
+            throw forbidden();
+        }
+    }
+
+    /** 403 FORBIDDEN for a non-ADMIN caller on a system-managed deployment (its env holds ADMIN-only secrets). */
+    void requireAdminIfSystemManaged(Deployment deployment) {
+        if (deployment.isSystemManaged() && !access.isAdmin()) {
             throw forbidden();
         }
     }

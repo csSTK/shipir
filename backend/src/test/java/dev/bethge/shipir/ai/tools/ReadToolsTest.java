@@ -259,6 +259,21 @@ class ReadToolsTest {
     }
 
     @Test
+    void systemManagedDeploymentIsForbiddenForNonAdminToolCallsAndOpenToAdmin() {
+        jdbc.update("UPDATE deployments SET system_managed = TRUE WHERE id = ?", deploymentId);
+
+        for (Role role : List.of(Role.OPERATOR, Role.VIEWER)) {
+            ToolResult denied = run("get_managed_deployment", stack(hostId, deploymentId), role);
+            assertThat(denied.error()).as(role.name()).isTrue();
+            assertThat(denied.content()).contains("FORBIDDEN").doesNotContain("nginx").doesNotContain("API_TOKEN")
+                    .doesNotContain(ENV_SECRET);
+        }
+        ToolResult admin = run("get_managed_deployment", stack(hostId, deploymentId), Role.ADMIN);
+        assertThat(admin.error()).as(admin.content()).isFalse();
+        assertThat(admin.content()).contains("nginx").doesNotContain(ENV_SECRET);
+    }
+
+    @Test
     void getManagedStackReturnsYamlAndEnvKeysButNoValues() {
         ToolResult result = run("get_managed_deployment", stack(hostId, deploymentId), Role.VIEWER);
 

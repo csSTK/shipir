@@ -126,4 +126,32 @@ class HostContainerInspectTest extends HostApiTestBase {
         mvc.perform(get("/api/hosts/{h}/containers/plain1", host).session(op.session()))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
     }
+
+    @Test
+    void containerOfASystemManagedDeploymentHidesEnvAndImageEnvValuesFromNonAdmins() throws Exception {
+        grantHost("operator", host, "OPERATE");
+        jdbc.update("INSERT INTO deployments (name, host_id, compose_file_path, created_by, system_managed) "
+                + "SELECT 'shipir-proxy', ?, 'x', id, TRUE FROM users WHERE username = 'admin'", host);
+        jdbc.update("INSERT INTO deployments (name, host_id, compose_file_path, created_by) "
+                + "SELECT 'shop', ?, 'x', id FROM users WHERE username = 'admin'", host);
+        ContainerDetailsDto proxy = new ContainerDetailsDto("id2", "proxy", "traefik:3", "running", null, null, 0,
+                new ContainerDetailsDto.RestartPolicy("always", 0), List.of(), List.of(), false, false,
+                List.of(new ContainerDetailsDto.EnvVar("CF_DNS_API_TOKEN", "dns-s3cr3t")),
+                List.of(new ContainerDetailsDto.EnvVar("IMG_SECRET", "img-s3cr3t")), List.of(), Map.of(), List.of(),
+                List.of(), null, "shipir-proxy", "traefik", null, null);
+        when(containers.inspect(any(), any(), eq("proxy1"))).thenReturn(proxy);
+
+        mvc.perform(get("/api/hosts/{h}/containers/proxy1", host).session(login("operator").session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.env[0].key").value("CF_DNS_API_TOKEN"))
+                .andExpect(jsonPath("$.env[0].value").doesNotExist())
+                .andExpect(jsonPath("$.imageEnv[0].key").value("IMG_SECRET"))
+                .andExpect(jsonPath("$.imageEnv[0].value").doesNotExist());
+        mvc.perform(get("/api/hosts/{h}/containers/proxy1", host).session(login("admin").session()))
+                .andExpect(jsonPath("$.env[0].value").value("dns-s3cr3t"))
+                .andExpect(jsonPath("$.imageEnv[0].value").value("img-s3cr3t"));
+        // an ordinary deployment's container is unchanged for the operator
+        mvc.perform(get("/api/hosts/{h}/containers/web1", host).session(login("operator").session()))
+                .andExpect(jsonPath("$.env[0].value").value("hunter2"));
+    }
 }

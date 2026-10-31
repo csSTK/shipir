@@ -146,7 +146,7 @@ public class ProxySetupService {
         }
         DeploymentDetailResponse deployment;
         try {
-            deployment = deployments.create(hostId, new DeploymentCreateRequest(ProxySyncService.PROXY_DEPLOYMENT,
+            deployment = deployments.createSystemManaged(hostId, new DeploymentCreateRequest(ProxySyncService.PROXY_DEPLOYMENT,
                     templates.yaml(r.type()), ProxyEnv.entries(r.type(), email, r.dnsProvider(), credentials)), username);
         } catch (DeploymentException e) {
             instances.delete(instance);

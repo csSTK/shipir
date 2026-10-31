@@ -299,6 +299,7 @@ public class DeploymentRunService {
         deploymentService.requireView(hostId, id);
         deploymentService.requireHost(hostId);
         Deployment deployment = deploymentService.requireDeployment(hostId, id);
+        deploymentService.requireAdminIfSystemManaged(deployment);
         List<DeploymentVersion> all = versions.findByDeploymentIdOrderByCreatedAtDesc(deployment.getId());
         UUID currentId = currentVersionId(all);
         Map<UUID, String> names = users.findAllById(all.stream().map(DeploymentVersion::getCreatedBy).distinct().toList())
@@ -326,6 +327,7 @@ public class DeploymentRunService {
         deploymentService.requireView(hostId, id);
         deploymentService.requireHost(hostId);
         Deployment deployment = deploymentService.requireDeployment(hostId, id);
+        deploymentService.requireAdminIfSystemManaged(deployment);
         DeploymentVersion version = versionOf(deployment, versionId);
         // current_version_id may point at a newer draft; the baseline is the latest version whose deploy succeeded
         List<DeploymentVersion> history = versions.findByDeploymentIdOrderByCreatedAtDesc(deployment.getId());

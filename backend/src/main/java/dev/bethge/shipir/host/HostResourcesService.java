@@ -178,6 +178,10 @@ public class HostResourcesService {
             }
         }
         boolean mayReadValues = access.subject().map(s -> s.role() != Role.VIEWER).orElse(true);
+        if (details.composeProject() != null && !access.isAdmin()
+                && managedDeployments.systemManagedNames(hostId).contains(details.composeProject())) {
+            mayReadValues = false; // the managed proxy loads ADMIN-only DNS credentials via env_file
+        }
         return mayReadValues ? details : details.withoutEnvValues();
     }
 

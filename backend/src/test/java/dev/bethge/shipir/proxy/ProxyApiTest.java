@@ -251,6 +251,8 @@ class ProxyApiTest {
         String env = composeFiles.readEnv(hostId, "shipir-proxy").orElseThrow();
         assertThat(env).contains("ACME_EMAIL=ops@example.com").contains("DNS_PROVIDER=manual");
         assertThat(jdbc.queryForObject("SELECT deployment_id IS NOT NULL FROM proxy_instances", Boolean.class)).isTrue();
+        assertThat(jdbc.queryForObject("SELECT system_managed FROM deployments WHERE name = 'shipir-proxy'", Boolean.class))
+                .as("the proxy deployment is flagged system-managed").isTrue();
         assertThat(jdbc.queryForList("SELECT action FROM audit_log WHERE action = 'PROXY_SETUP'", String.class)).hasSize(1);
     }
 
