@@ -222,6 +222,36 @@ class UserAdminApiTest {
     }
 
     @Test
+    void createRejectsAUsernameThatDiffersOnlyByCase() throws Exception {
+        Session admin = admin();
+        create(admin, "Casey", "VIEWER");
+        for (String clash : List.of("casey", "CASEY", "Admin")) {
+            call(admin, "POST", "/api/users", "{\"username\":\"%s\",\"role\":\"VIEWER\"}".formatted(clash))
+                    .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("USERNAME_TAKEN"));
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM users WHERE lower(username) = 'casey'", Integer.class))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void loginWithAnotherCaseWorksForTheSameUserAndAuditsTheStoredName() throws Exception {
+        String password = create(admin(), "Dana", "VIEWER").get("oneTimePassword").asString();
+        jdbc.update("DELETE FROM audit_log");
+
+        MvcResult login = tryLogin("dANA", password);
+
+        assertThat(login.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json.readTree(login.getResponse().getContentAsString()).get("username").asString()).isEqualTo("Dana");
+        MockHttpSession s = (MockHttpSession) login.getRequest().getSession(false);
+        mvc.perform(get("/api/auth/me").session(s)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("Dana"));
+        assertThat(jdbc.queryForList("SELECT username FROM audit_log WHERE action = 'LOGIN' AND outcome = 'SUCCESS'",
+                String.class)).containsExactly("Dana");
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM audit_log WHERE action = 'LOGIN' AND user_id IS NOT NULL", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
     void createRejectsDuplicateAndInvalidUsername() throws Exception {
         Session admin = admin();
         create(admin, "dupe", "VIEWER");

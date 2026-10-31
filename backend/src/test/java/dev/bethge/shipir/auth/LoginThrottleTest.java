@@ -87,6 +87,17 @@ class LoginThrottleTest {
     }
 
     @Test
+    void usernamesDifferingOnlyByCaseOrWhitespaceShareTheLimit() {
+        String[] spellings = {"alice", "Alice", "ALICE", " aLiCe ", "alice"};
+        LoginThrottle.Admission last = null;
+        for (int i = 0; i < 5; i++) {
+            last = throttle.admit(SCOPE, spellings[i], "10.0.0." + i);
+        }
+        assertThat(last.lockoutStarted()).isTrue();
+        assertThat(throttle.admit(SCOPE, "aLICE", "10.0.0.9").admitted()).isFalse();
+    }
+
+    @Test
     void scopesAreCountedSeparately() {
         admitFour();
 

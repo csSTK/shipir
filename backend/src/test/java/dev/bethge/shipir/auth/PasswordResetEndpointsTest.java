@@ -115,6 +115,16 @@ class PasswordResetEndpointsTest {
     }
 
     @Test
+    void resetByUsernameInAnotherCaseResetsTheSameUser() throws Exception {
+        String shouted = username.toUpperCase();
+        requestReset(shouted);
+        assertThat(sender.codes).hasSize(1);
+
+        assertThat(confirm(shouted, sender.codes.get(0), NEW_PASSWORD).getResponse().getStatus()).isEqualTo(204);
+        assertThat(login(NEW_PASSWORD)).isEqualTo(200);
+    }
+
+    @Test
     void validCodeResetsPasswordWithoutLoggingIn() throws Exception {
         requestReset(username);
         MvcResult result = confirm(username, sender.codes.get(0), NEW_PASSWORD);
