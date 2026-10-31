@@ -1,5 +1,7 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.docker.DockerConnectionException;
+import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.client.ContainerService;
 import dev.bethge.shipir.docker.client.ImageService;
 import dev.bethge.shipir.docker.client.NetworkService;
@@ -47,6 +49,8 @@ class HostContainerLifecycleAccessTest extends HostApiTestBase {
         when(containers.inspect(any(), any(), eq("shop1"))).thenReturn(details("shop"));
         when(containers.inspect(any(), any(), eq("blog1"))).thenReturn(details("blog"));
         when(containers.inspect(any(), any(), eq("plain1"))).thenReturn(details(null));
+        when(containers.inspect(any(), any(), eq("missing1")))
+                .thenThrow(new DockerConnectionException(DockerErrorCode.NOT_FOUND, "no such container", null));
     }
 
     private UUID deployment(String name) {
@@ -125,5 +129,36 @@ class HostContainerLifecycleAccessTest extends HostApiTestBase {
                 .andExpect(status().isForbidden());
         verify(containers, never()).inspect(any(), any(), any());
         verify(containers, never()).startContainer(any(), any(), any());
+    }
+
+    @Test
+    void missingAndNotVisibleContainersAnswerIdenticallyForDeploymentOnlyUsers() throws Exception {
+        grantDeployment("operator", shop, "OPERATE");
+        var op = login("operator");
+
+        String missing = mvc.perform(op.write(post("/api/hosts/{h}/containers/missing1/kill", host)))
+                .andExpect(status().isNotFound()).andReturn().getResponse().getContentAsString();
+        String foreign = mvc.perform(op.write(post("/api/hosts/{h}/containers/blog1/kill", host)))
+                .andExpect(status().isNotFound()).andReturn().getResponse().getContentAsString();
+        String unmanaged = mvc.perform(op.write(post("/api/hosts/{h}/containers/plain1/kill", host)))
+                .andExpect(status().isNotFound()).andReturn().getResponse().getContentAsString();
+
+        org.assertj.core.api.Assertions.assertThat(foreign).isEqualTo(missing);
+        org.assertj.core.api.Assertions.assertThat(unmanaged).isEqualTo(missing);
+        verify(containers, never()).killContainer(any(), any(), any());
+    }
+
+    @Test
+    void daemonErrorsOtherThanNotFoundDoNotTellMissingFromForeign() throws Exception {
+        grantDeployment("operator", shop, "OPERATE");
+        when(containers.inspect(any(), any(), eq("odd1")))
+                .thenThrow(new DockerConnectionException(DockerErrorCode.INVALID_STATE, "bad id", null));
+        var op = login("operator");
+
+        String odd = mvc.perform(op.write(post("/api/hosts/{h}/containers/odd1/kill", host)))
+                .andExpect(status().isNotFound()).andReturn().getResponse().getContentAsString();
+        String foreign = mvc.perform(op.write(post("/api/hosts/{h}/containers/blog1/kill", host)))
+                .andExpect(status().isNotFound()).andReturn().getResponse().getContentAsString();
+        org.assertj.core.api.Assertions.assertThat(odd).isEqualTo(foreign);
     }
 }

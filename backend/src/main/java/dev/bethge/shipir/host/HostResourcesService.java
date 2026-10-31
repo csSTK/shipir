@@ -255,7 +255,16 @@ public class HostResourcesService {
         if (!access.canOperateAnyDeployment(hostId)) {
             throw new HostException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied");
         }
-        ContainerDetailsDto details = call(hostId, (id, endpoint) -> containers.inspect(id, endpoint, containerId));
+        ContainerDetailsDto details;
+        try {
+            details = call(hostId, (id, endpoint) -> containers.inspect(id, endpoint, containerId));
+        } catch (HostException e) {
+            // A container-specific refusal (missing, odd id) must look like "not visible"; host-level 5xx failures pass through.
+            if (e.status().is4xxClientError()) {
+                throw containerNotFound();
+            }
+            throw e;
+        }
         UUID deployment = details.composeProject() == null ? null
                 : managedDeployments.managedDeploymentIds(hostId).get(details.composeProject());
         if (deployment != null && access.canOperate(hostId, deployment)) {
@@ -264,9 +273,13 @@ public class HostResourcesService {
         boolean visible = access.hostFullyVisible(hostId)
                 || (deployment != null && access.visibleDeploymentIds(hostId).orElseThrow().contains(deployment));
         if (!visible) {
-            throw new HostException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Resource not found");
+            throw containerNotFound();
         }
         throw new HostException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied");
+    }
+
+    private static HostException containerNotFound() {
+        return new HostException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Resource not found");
     }
 
     /** Everything a prune with the given scope would remove now. Host-level OPERATE, like the prune itself. */
