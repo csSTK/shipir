@@ -25,13 +25,17 @@
 .ccd__row--mount {
   grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto auto;
 }
+.ccd__row--network {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
 .ccd__row-error {
   grid-column: 1 / -1;
   margin: 0;
 }
 @media (max-width: 600px) {
   .ccd__row,
-  .ccd__row--mount {
+  .ccd__row--mount,
+  .ccd__row--network {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 }

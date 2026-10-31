@@ -76,7 +76,6 @@
   "CreateContainerDialog.readOnly": "Schreibgeschützt",
   "CreateContainerDialog.removeMountValue": "Mount {{value}} entfernen",
   "CreateContainerDialog.addMount": "Mount hinzufügen",
-  "CreateContainerDialog.networkOptional": "Netzwerk (optional)",
   "CreateContainerDialog.bridge": "bridge",
   "CreateContainerDialog.restartPolicy": "Neustart-Richtlinie",
   "CreateContainerDialog.no": "no",
@@ -264,9 +263,17 @@
   "ContainerDetailsPage.ipAddress": "IP-Adresse",
   "ContainerDetailsPage.macAddress": "MAC-Adresse",
   "ContainerDetailsPage.restartPolicyMax": "{{policy}} (max. {{max}})",
-  "CreateContainerDialog.thisContainerIsConnectedTo_other": "Dieser Container ist mit {{count}} Netzwerken verbunden. Nur eines bleibt erhalten; verbinde die anderen anschließend neu.",
-  "CreateContainerDialog.thisContainerIsConnectedTo_one": "Dieser Container ist mit {{count}} Netzwerk verbunden. Nur eines bleibt erhalten; verbinde die anderen anschließend neu.",
   "ContainersPage.actionFailed": "{{name}}: {{action}} fehlgeschlagen. {{error}}",
   "ContainersPage.publish": "Mit Domain veröffentlichen",
-  "ContainerDetailsPage.publish": "Mit Domain veröffentlichen"
+  "ContainerDetailsPage.publish": "Mit Domain veröffentlichen",
+  "CreateContainerDialog.networks": "Netzwerke",
+  "CreateContainerDialog.networkValueName": "Netzwerk {{value}} Name",
+  "CreateContainerDialog.networkValueAliases": "Netzwerk {{value}} Aliase",
+  "CreateContainerDialog.aliasesPlaceholder": "alias, anderer-alias (optional)",
+  "CreateContainerDialog.removeNetworkValue": "Netzwerk {{value}} entfernen",
+  "CreateContainerDialog.addNetwork": "Netzwerk hinzufügen",
+  "CreateContainerDialog.anonymousVolumesKept": "Anonyme Volumes ({{paths}}) bleiben mit ihren Daten erhalten.",
+  "CreateContainerDialog.anonymousVolumesFresh": "Anonyme Volumes ({{paths}}) werden nicht kopiert; die Kopie bekommt neue, leere.",
+  "containerForm.enterANetworkName": "Gib einen Netzwerknamen ein oder entferne die Zeile.",
+  "containerForm.eachNetworkOnlyOnce": "Jedes Netzwerk darf nur einmal vorkommen."
 }

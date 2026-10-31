@@ -303,7 +303,7 @@ public class ContainerServiceImpl implements ContainerService {
         if (spec.hostNetwork()) {
             host.withNetworkMode("host");
         } else {
-            host.withNetworkMode(spec.network() == null ? "default" : spec.network());
+            host.withNetworkMode(spec.networks().isEmpty() ? "default" : spec.networks().get(0).name());
         }
         var cmd = client.createContainerCmd(spec.image()).withHostConfig(host).withExposedPorts(exposed)
                 .withEnv(spec.env().entrySet().stream().map(e -> e.getKey() + "=" + e.getValue()).toList());
@@ -328,10 +328,45 @@ public class ContainerServiceImpl implements ContainerService {
         if (!spec.command().isEmpty()) {
             cmd.withCmd(spec.command());
         }
+        String id;
         try {
-            return cmd.exec().getId();
+            id = cmd.exec().getId();
         } catch (ConflictException e) {
             throw new DockerConnectionException(DockerErrorCode.NAME_TAKEN, "The container name is taken.", e);
+        }
+        if (!spec.hostNetwork()) {
+            try {
+                attachNetworks(client, id, spec.networks());
+            } catch (RuntimeException e) {
+                try {
+                    client.removeContainerCmd(id).withForce(true).withRemoveVolumes(true).exec();
+                } catch (RuntimeException ignored) {
+                    // best effort: the attach failure is what the caller needs to hear about
+                }
+                throw e;
+            }
+        }
+        return id;
+    }
+
+    /**
+     * The first network is the create-time network mode (create cannot carry aliases, so a first network with aliases
+     * is re-connected with them); every further network is connected with its aliases. The container is not started yet.
+     */
+    private static void attachNetworks(DockerClient client, String containerId, List<ContainerCreateSpec.Network> networks) {
+        for (int i = 0; i < networks.size(); i++) {
+            ContainerCreateSpec.Network n = networks.get(i);
+            if (i == 0 && n.aliases().isEmpty()) {
+                continue;
+            }
+            if (i == 0) {
+                client.disconnectFromNetworkCmd().withNetworkId(n.name()).withContainerId(containerId).exec();
+            }
+            var cmd = client.connectToNetworkCmd().withNetworkId(n.name()).withContainerId(containerId);
+            if (!n.aliases().isEmpty()) {
+                cmd.withContainerNetwork(new ContainerNetwork().withAliases(n.aliases()));
+            }
+            cmd.exec();
         }
     }
 

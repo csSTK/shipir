@@ -95,7 +95,7 @@ class HostCreateResourcesTest extends HostApiTestBase {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"'privileged':true", "'hostNetwork':true", "'network':'host'",
+    @ValueSource(strings = {"'privileged':true", "'hostNetwork':true", "'networks':[{'name':'host'}]",
             "'mounts':[{'type':'BIND','source':'/etc','target':'/host'}]"})
     void operatorCannotUseAdminOnlyOptionsButAdminCan(String option) throws Exception {
         String host = localHostId();

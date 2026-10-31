@@ -582,7 +582,7 @@ public class HostResourcesService {
     }
 
     private static ContainerCreateSpec withName(ContainerCreateSpec s, String name) {
-        return new ContainerCreateSpec(name, s.image(), s.command(), s.env(), s.ports(), s.mounts(), s.network(),
+        return new ContainerCreateSpec(name, s.image(), s.command(), s.env(), s.ports(), s.mounts(), s.networks(),
                 s.restartPolicy(), s.privileged(), s.hostNetwork(), s.start());
     }
 
@@ -733,26 +733,52 @@ public class HostResourcesService {
                 mounts.add(new ContainerCreateSpec.Mount(m.type(), m.source(), m.target(), Boolean.TRUE.equals(m.readOnly())));
             }
         }
-        String network = r.network() == null || r.network().isBlank() ? null : r.network();
-        if (network != null && !RESOURCE_NAME.matcher(network).matches()) {
-            v.add("network: invalid network name");
+        List<ContainerCreateSpec.Network> networks = new java.util.ArrayList<>();
+        List<ContainerCreateSpec.Network> inNetworks = r.networks() == null ? List.of() : r.networks();
+        if (inNetworks.size() > MAX_LIST) {
+            v.add("networks: at most " + MAX_LIST);
+        }
+        boolean hostNetwork = Boolean.TRUE.equals(r.hostNetwork());
+        java.util.Set<String> networkNames = new java.util.HashSet<>();
+        for (ContainerCreateSpec.Network n : inNetworks) {
+            String nName = n == null || n.name() == null ? "" : n.name().trim();
+            if (nName.isEmpty()) {
+                v.add("networks: name must not be empty");
+                continue;
+            }
+            if (!RESOURCE_NAME.matcher(nName).matches()) {
+                v.add("networks: invalid network name");
+                continue;
+            }
+            if (nName.equalsIgnoreCase("host")) {
+                // "host" is the daemon's host-networking mode, not a user network: same ADMIN gate as hostNetwork
+                hostNetwork = true;
+                continue;
+            }
+            if (!networkNames.add(nName)) {
+                v.add("networks: " + nName + " is listed twice");
+                continue;
+            }
+            List<String> aliases = new java.util.ArrayList<>();
+            for (String a : n.aliases() == null ? List.<String>of() : n.aliases()) {
+                if (a == null || !RESOURCE_NAME.matcher(a.trim()).matches()) {
+                    v.add("networks: invalid alias on " + nName);
+                } else if (!aliases.contains(a.trim())) {
+                    aliases.add(a.trim());
+                }
+            }
+            networks.add(new ContainerCreateSpec.Network(nName, List.copyOf(aliases)));
         }
         String restart = r.restartPolicy() == null || r.restartPolicy().isBlank() ? null : r.restartPolicy();
         if (restart != null && !RESTART_POLICIES.contains(restart)) {
             v.add("restartPolicy: one of " + new java.util.TreeSet<>(RESTART_POLICIES));
         }
-        boolean hostNetwork = Boolean.TRUE.equals(r.hostNetwork());
-        if (network != null && network.equalsIgnoreCase("host")) {
-            // "host" is the daemon's host-networking mode, not a user network: same ADMIN gate as hostNetwork
-            hostNetwork = true;
-            network = null;
-        }
-        if (hostNetwork && (network != null || !ports.isEmpty())) {
+        if (hostNetwork && (!networks.isEmpty() || !ports.isEmpty())) {
             v.add("hostNetwork: cannot be combined with a network or published ports");
         }
         failIfAny("INVALID_CONTAINER_SPEC", "Invalid container", v);
         return new ContainerCreateSpec(name, image, List.copyOf(command), Map.copyOf(env), List.copyOf(ports),
-                List.copyOf(mounts), network, restart, Boolean.TRUE.equals(r.privileged()), hostNetwork,
+                List.copyOf(mounts), List.copyOf(networks), restart, Boolean.TRUE.equals(r.privileged()), hostNetwork,
                 Boolean.TRUE.equals(r.start()));
     }
 

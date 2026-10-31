@@ -76,7 +76,6 @@
   "CreateContainerDialog.readOnly": "Read-only",
   "CreateContainerDialog.removeMountValue": "Remove mount {{value}}",
   "CreateContainerDialog.addMount": "Add mount",
-  "CreateContainerDialog.networkOptional": "Network (optional)",
   "CreateContainerDialog.bridge": "bridge",
   "CreateContainerDialog.restartPolicy": "Restart policy",
   "CreateContainerDialog.no": "no",
@@ -264,9 +263,17 @@
   "ContainerDetailsPage.ipAddress": "IP address",
   "ContainerDetailsPage.macAddress": "MAC address",
   "ContainerDetailsPage.restartPolicyMax": "{{policy}} (max {{max}})",
-  "CreateContainerDialog.thisContainerIsConnectedTo_other": "This container is connected to {{count}} networks. Only one is kept; reconnect the others afterwards.",
-  "CreateContainerDialog.thisContainerIsConnectedTo_one": "This container is connected to {{count}} network. Only one is kept; reconnect the others afterwards.",
   "ContainersPage.actionFailed": "{{action}} {{name}}: {{error}}",
   "ContainersPage.publish": "Publish with a domain",
-  "ContainerDetailsPage.publish": "Publish with a domain"
+  "ContainerDetailsPage.publish": "Publish with a domain",
+  "CreateContainerDialog.networks": "Networks",
+  "CreateContainerDialog.networkValueName": "Network {{value}} name",
+  "CreateContainerDialog.networkValueAliases": "Network {{value}} aliases",
+  "CreateContainerDialog.aliasesPlaceholder": "alias, other-alias (optional)",
+  "CreateContainerDialog.removeNetworkValue": "Remove network {{value}}",
+  "CreateContainerDialog.addNetwork": "Add network",
+  "CreateContainerDialog.anonymousVolumesKept": "Anonymous volumes ({{paths}}) are kept with their data.",
+  "CreateContainerDialog.anonymousVolumesFresh": "Anonymous volumes ({{paths}}) are not copied; the copy gets new empty ones.",
+  "containerForm.enterANetworkName": "Enter a network name or remove the row.",
+  "containerForm.eachNetworkOnlyOnce": "Each network can be listed only once."
 }

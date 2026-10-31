@@ -3,6 +3,7 @@ import { EnvEditor } from '../deployments/editor/EnvEditor.tsx'
 import { describeCreateError } from '../hosts/createResource.ts'
 import { describeEditError, useContainerSpecMutation, useCreateContainer, type RestartPolicy } from './api.ts'
 import {
+  anonymousVolumeTargets,
   buildContainerSpec,
   formFromDetails,
   INITIAL_CONTAINER_FORM,
@@ -10,6 +11,7 @@ import {
   type ContainerFormMode,
   type FormState,
   type MountRow,
+  type NetworkRow,
   type PortRow,
 } from './containerForm.ts'
 import type { ContainerDetails } from './details/api.ts'
@@ -54,6 +56,8 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
   const show = (key: string) => (touched ? problems[key] : undefined)
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }))
   const setPort = (i: number, patch: Partial<PortRow>) => set('ports', form.ports.map((p, j) => (j === i ? { ...p, ...patch } : p)))
+  const setNetwork = (i: number, patch: Partial<NetworkRow>) => set('networks', form.networks.map((n, j) => (j === i ? { ...n, ...patch } : n)))
+  const anonymous = mode !== 'create' && source ? anonymousVolumeTargets(source) : []
   const setMount = (i: number, patch: Partial<MountRow>) => set('mounts', form.mounts.map((m, j) => (j === i ? { ...m, ...patch } : m)))
 
   function submit(e: FormEvent) {
@@ -125,11 +129,6 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
           spellCheck={false}
         />
         {mode !== 'create' && <p className="ui-hint">{t('CreateContainerDialog.theEntrypointOfTheImage')}</p>}
-        {mode !== 'create' && (source?.networks.length ?? 0) > 1 && (
-          <p role="note" className="ui-hint">
-            {t('CreateContainerDialog.thisContainerIsConnectedTo', { count: source?.networks.length ?? 0 })}
-          </p>
-        )}
 
         <fieldset className="ccd__group">
           <legend>{t('CreateContainerDialog.ports')}</legend>
@@ -240,19 +239,51 @@ export function CreateContainerDialog({ hostId, isAdmin, onClose, mode = 'create
           </div>
         </fieldset>
 
+        {anonymous.length > 0 && (
+          <p className="ui-hint">
+            {mode === 'edit'
+              ? t('CreateContainerDialog.anonymousVolumesKept', { paths: anonymous.join(', ') })
+              : t('CreateContainerDialog.anonymousVolumesFresh', { paths: anonymous.join(', ') })}
+          </p>
+        )}
+
         <EnvEditor value={form.env} onChange={(env) => set('env', env)} />
         {fieldError('env')}
 
+        <fieldset className="ccd__group">
+          <legend>{t('CreateContainerDialog.networks')}</legend>
+          {form.networks.map((n, i) => (
+            <div className="ccd__row ccd__row--network" key={i}>
+              <TextField
+                label={t('CreateContainerDialog.networkValueName', { value: i + 1 })}
+                value={n.name}
+                onChange={(e) => setNetwork(i, { name: e.target.value })}
+                placeholder={t('CreateContainerDialog.bridge')}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <TextField
+                label={t('CreateContainerDialog.networkValueAliases', { value: i + 1 })}
+                value={n.aliases}
+                onChange={(e) => setNetwork(i, { aliases: e.target.value })}
+                placeholder={t('CreateContainerDialog.aliasesPlaceholder')}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <Button variant="ghost" aria-label={t('CreateContainerDialog.removeNetworkValue', { value: i + 1 })} onClick={() => set('networks', form.networks.filter((_, j) => j !== i))}>
+                {t('CreateContainerDialog.remove')}
+              </Button>
+            </div>
+          ))}
+          {fieldError('network')}
+          <div>
+            <Button variant="ghost" onClick={() => set('networks', [...form.networks, { name: '', aliases: '' }])}>
+              {t('CreateContainerDialog.addNetwork')}
+            </Button>
+          </div>
+        </fieldset>
+
         <div className="ui-form-row">
-          <TextField
-            label={t('CreateContainerDialog.networkOptional')}
-            value={form.network}
-            onChange={(e) => set('network', e.target.value)}
-            placeholder={t('CreateContainerDialog.bridge')}
-            error={show('network')}
-            autoComplete="off"
-            spellCheck={false}
-          />
           <Select label={t('CreateContainerDialog.restartPolicy')} value={form.restartPolicy} onChange={(e) => set('restartPolicy', e.target.value as RestartPolicy)}>
             <option value="no">{t('CreateContainerDialog.no')}</option>
             <option value="always">{t('CreateContainerDialog.always')}</option>

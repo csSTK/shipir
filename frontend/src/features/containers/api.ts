@@ -88,6 +88,11 @@ export interface MountSpec {
 
 export type RestartPolicy = 'no' | 'always' | 'unless-stopped' | 'on-failure'
 
+export interface NetworkSpec {
+  name: string
+  aliases: string[]
+}
+
 export interface ContainerSpec {
   name?: string
   image: string
@@ -95,7 +100,7 @@ export interface ContainerSpec {
   env?: Record<string, string>
   ports?: PortSpec[]
   mounts?: MountSpec[]
-  network?: string
+  networks?: NetworkSpec[]
   restartPolicy?: RestartPolicy
   privileged?: boolean
   hostNetwork?: boolean

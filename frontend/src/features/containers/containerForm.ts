@@ -16,6 +16,12 @@ export interface MountRow {
   readOnly: boolean
 }
 
+/** One attached network; `aliases` is a comma-separated list of extra DNS names on it. */
+export interface NetworkRow {
+  name: string
+  aliases: string
+}
+
 export interface FormState {
   name: string
   image: string
@@ -23,7 +29,7 @@ export interface FormState {
   env: EnvEntry[]
   ports: PortRow[]
   mounts: MountRow[]
-  network: string
+  networks: NetworkRow[]
   restartPolicy: RestartPolicy
   privileged: boolean
   hostNetwork: boolean
@@ -37,7 +43,7 @@ export const INITIAL_CONTAINER_FORM: FormState = {
   env: [],
   ports: [],
   mounts: [],
-  network: '',
+  networks: [],
   restartPolicy: 'no',
   privileged: false,
   hostNetwork: false,
@@ -51,7 +57,8 @@ export function validateContainerForm(f: FormState, isAdmin: boolean, requireNam
   if (f.name && !CONTAINER_NAME_PATTERN.test(f.name)) e.name = i18n.t('containers:containerForm.useLettersDigitsAndStart')
   if (!f.image.trim()) e.image = i18n.t('containers:containerForm.enterAnImageForExample')
   if (validateEnv(f.env.filter((r) => r.key !== '' || r.value !== '')).size > 0) e.env = i18n.t('containers:containerForm.fixTheVariableNames')
-  const hostMode = f.hostNetwork || f.network.trim() === 'host'
+  const names = f.networks.map((n) => n.name.trim())
+  const hostMode = f.hostNetwork || names.includes('host')
   f.ports.forEach((p, i) => {
     const hp = validatePort(p.hostPort, true)
     const cp = validatePort(p.containerPort, false)
@@ -63,8 +70,10 @@ export function validateContainerForm(f: FormState, isAdmin: boolean, requireNam
     if (!m.target.startsWith('/')) e[`mount${i}target`] = i18n.t('containers:containerForm.useAnAbsolutePath')
   })
   if (hostMode && f.ports.length > 0) e.ports = i18n.t('containers:containerForm.hostNetworkingCannotPublishPorts')
-  if (f.hostNetwork && f.network.trim()) e.network = i18n.t('containers:containerForm.hostNetworkingCannotBeCombined')
-  if (!isAdmin && f.network.trim() === 'host') e.network = i18n.t('containers:containerForm.onlyAdministratorsMayUseThe')
+  if (names.some((n) => !n)) e.network = i18n.t('containers:containerForm.enterANetworkName')
+  else if (new Set(names).size < names.length) e.network = i18n.t('containers:containerForm.eachNetworkOnlyOnce')
+  else if ((f.hostNetwork && names.length > 0) || (names.includes('host') && names.length > 1)) e.network = i18n.t('containers:containerForm.hostNetworkingCannotBeCombined')
+  else if (!isAdmin && names.includes('host')) e.network = i18n.t('containers:containerForm.onlyAdministratorsMayUseThe')
   return e
 }
 
@@ -82,7 +91,9 @@ export function buildContainerSpec(f: FormState, isAdmin: boolean): ContainerSpe
       ? { ports: f.ports.map((p) => ({ hostPort: p.hostPort.trim() ? Number(p.hostPort) : null, containerPort: Number(p.containerPort), protocol: p.protocol })) }
       : {}),
     ...(f.mounts.length ? { mounts: f.mounts.map((m) => ({ ...m, source: m.source.trim() })) } : {}),
-    ...(f.network.trim() ? { network: f.network.trim() } : {}),
+    ...(f.networks.length
+      ? { networks: f.networks.map((n) => ({ name: n.name.trim(), aliases: n.aliases.split(',').map((a) => a.trim()).filter(Boolean) })) }
+      : {}),
   }
   if (isAdmin) {
     if (f.privileged) spec.privileged = true
@@ -91,6 +102,33 @@ export function buildContainerSpec(f: FormState, isAdmin: boolean): ContainerSpe
   return spec
 }
 
+
+type DetailMount = ContainerDetails['mounts'][number]
+
+/** Docker names the volumes it creates for an image's VOLUME declarations with a 64-character hex id. */
+const ANONYMOUS_VOLUME = /^[0-9a-f]{64}$/
+
+function isAnonymousVolume(m: DetailMount): boolean {
+  return m.type === 'volume' && m.name != null && ANONYMOUS_VOLUME.test(m.name)
+}
+
+/** Mount paths of the container's anonymous volumes: the backend carries them over on edit, so they are not form rows. */
+export function anonymousVolumeTargets(d: ContainerDetails): string[] {
+  return d.mounts.filter(isAnonymousVolume).map((m) => m.destination)
+}
+
+/**
+ * All attached networks except the host mode. A lone default bridge means "no network chosen". Docker lists the short
+ * container id as an alias on every network; it is dropped as it is not a user choice.
+ */
+function networksFromDetails(d: ContainerDetails): NetworkRow[] {
+  const nets = d.networks.filter((n) => n.name !== 'host')
+  if (nets.length === 1 && nets[0].name === 'bridge') return []
+  return nets.map((n) => ({
+    name: n.name,
+    aliases: n.aliases.filter((a) => !(a.length >= 12 && d.id.startsWith(a))).join(', '),
+  }))
+}
 
 export type ContainerFormMode = 'create' | 'edit' | 'duplicate'
 
@@ -110,6 +148,7 @@ export function formFromDetails(d: ContainerDetails, mode: 'edit' | 'duplicate')
     ports.push({ hostPort: mode === 'edit' ? String(p.hostPort) : '', containerPort: String(p.containerPort), protocol: p.protocol === 'udp' ? 'udp' : 'tcp' })
   }
   const mounts: MountRow[] = d.mounts.flatMap((m): MountRow[] => {
+    if (isAnonymousVolume(m)) return []
     if (m.type === 'volume' && m.name) return [{ type: 'VOLUME', source: m.name, target: m.destination, readOnly: m.readOnly }]
     if (m.type === 'bind' && m.source) return [{ type: 'BIND', source: m.source, target: m.destination, readOnly: m.readOnly }]
     return []
@@ -125,7 +164,7 @@ export function formFromDetails(d: ContainerDetails, mode: 'edit' | 'duplicate')
     env: d.env.map((e) => ({ key: e.key, value: e.value ?? '' })),
     ports,
     mounts,
-    network: d.networks.find((n) => n.name !== 'bridge' && n.name !== 'host')?.name ?? '',
+    networks: networksFromDetails(d),
     restartPolicy: policy === 'always' || policy === 'unless-stopped' || policy === 'on-failure' ? policy : 'no',
     start: mode === 'edit' ? d.state === 'running' : true,
   }

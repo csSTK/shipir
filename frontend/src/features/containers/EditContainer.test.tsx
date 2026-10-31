@@ -42,7 +42,7 @@ describe('CreateContainerDialog in edit mode', () => {
     await waitFor(() => expect(onDone).toHaveBeenCalledWith('c2'))
     expect(call('POST')![0]).toBe('/hosts/h1/containers/c1/recreate')
     const body = (call('POST')![1] as { body: Record<string, unknown> }).body
-    expect(body).toMatchObject({ image: 'nginx:2', name: 'web', start: true, network: 'shop_net' })
+    expect(body).toMatchObject({ image: 'nginx:2', name: 'web', start: true, networks: [{ name: 'shop_net', aliases: [] }] })
     expect(body.command).toEqual(['nginx', '-g', 'daemon off;'])
     expect(body.mounts).toHaveLength(2)
   })
@@ -82,10 +82,33 @@ describe('CreateContainerDialog edit mode keeps privileged and host network', ()
     expect((call('POST')![1] as { body: unknown }).body).toMatchObject({ privileged: true, hostNetwork: true })
   })
 
-  it('warns that only one network is kept when the container has several', () => {
-    const two = [sample.networks[0], { ...sample.networks[0], name: 'other_net' }]
+  it('shows every network of the container, lets you edit them and posts them all', async () => {
+    apiFetch.mockResolvedValue({ id: 'c2', name: 'web' })
+    const two = [sample.networks[0], { ...sample.networks[0], name: 'other_net', aliases: ['www'] }]
     wrap(<CreateContainerDialog hostId="h1" isAdmin={false} mode="edit" source={{ ...sample, networks: two }} onClose={() => {}} />)
-    expect(screen.getByText(/connected to 2 networks/)).toBeInTheDocument()
+    expect(screen.queryByText(/Only one is kept/)).toBeNull()
+    expect(screen.getByLabelText('Network 1 name')).toHaveValue('shop_net')
+    expect(screen.getByLabelText('Network 2 name')).toHaveValue('other_net')
+    expect(screen.getByLabelText('Network 2 aliases')).toHaveValue('www')
+    fireEvent.change(screen.getByLabelText('Network 2 aliases'), { target: { value: 'www, shop' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add network' }))
+    fireEvent.change(screen.getByLabelText('Network 3 name'), { target: { value: 'third' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Recreate container' }))
+    await waitFor(() => expect(call('POST')).toBeDefined())
+    expect((call('POST')![1] as { body: { networks: unknown } }).body.networks).toEqual([
+      { name: 'shop_net', aliases: [] },
+      { name: 'other_net', aliases: ['www', 'shop'] },
+      { name: 'third', aliases: [] },
+    ])
+  })
+
+  it('lists anonymous volumes as anonymous instead of as hash-named mounts', () => {
+    const hash = 'b'.repeat(64)
+    const mounts = [...sample.mounts, { type: 'volume', name: hash, source: '/x', destination: '/var/lib/anon', readOnly: false }]
+    wrap(<CreateContainerDialog hostId="h1" isAdmin={false} mode="edit" source={{ ...sample, mounts }} onClose={() => {}} />)
+    expect(screen.getByText(/Anonymous volumes/)).toHaveTextContent('/var/lib/anon')
+    expect(screen.queryByDisplayValue(hash)).toBeNull()
   })
 })
 

@@ -5,7 +5,7 @@ import java.util.Map;
 
 /**
  * What to create: already validated by the caller. {@code restartPolicy} is one of no, always, unless-stopped,
- * on-failure (null = Docker default). {@code network} is a network name (null = default bridge).
+ * on-failure (null = Docker default). {@code networks} are the networks to attach (empty = default bridge); the first one is the container's primary network.
  */
 public record ContainerCreateSpec(
         String name,
@@ -14,11 +14,15 @@ public record ContainerCreateSpec(
         Map<String, String> env,
         List<Port> ports,
         List<Mount> mounts,
-        String network,
+        List<Network> networks,
         String restartPolicy,
         boolean privileged,
         boolean hostNetwork,
         boolean start) {
+
+    /** A network by name with optional extra DNS aliases on it (empty = none). */
+    public record Network(String name, List<String> aliases) {
+    }
 
     /** {@code hostPort} null = Docker picks a free port; {@code protocol} is tcp or udp. */
     public record Port(Integer hostPort, Integer containerPort, String protocol) {

@@ -54,7 +54,7 @@ class ContainerRecreateRollbackTest {
         when(client.stopContainerCmd("old1").withTimeout(any()).exec()).thenThrow(new InternalServerErrorException("boom"));
 
         var spec = new ContainerCreateSpec("web", "busybox:1.36", List.of("sleep", "300"), Map.of(), List.of(), List.of(),
-                null, null, false, false, true);
+                List.of(), null, false, false, true);
 
         assertThatThrownBy(() -> new ContainerServiceImpl(manager).recreateContainer(UUID.randomUUID(),
                 new DockerEndpoint.Local("unix:///x.sock"), "old1", spec))
@@ -98,7 +98,7 @@ class ContainerRecreateRollbackTest {
         when(client.stopContainerCmd("old1").withTimeout(any()).exec()).thenThrow(new InternalServerErrorException("boom"));
 
         var spec = new ContainerCreateSpec("web", "busybox:1.37", List.of("sleep", "300"), Map.of(), List.of(), List.of(),
-                null, null, false, false, true);
+                List.of(), null, false, false, true);
 
         assertThatThrownBy(() -> new ContainerServiceImpl(manager).recreateContainer(UUID.randomUUID(),
                 new DockerEndpoint.Local("unix:///x.sock"), "old1", spec))

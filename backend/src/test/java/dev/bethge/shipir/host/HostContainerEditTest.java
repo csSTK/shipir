@@ -99,6 +99,31 @@ class HostContainerEditTest extends HostApiTestBase {
     }
 
     @Test
+    void recreateKeepsEveryNetworkWithItsAliases() throws Exception {
+        when(containers.recreateContainer(any(), any(), eq("web1"), any())).thenReturn(new CreatedResourceDto("new1", "web"));
+        mvc.perform(recreate(login("operator"), "web1", "recreate",
+                        "{'image':'nginx','networks':[{'name':'front','aliases':['www']},{'name':'back'}]}"))
+                .andExpect(status().isOk());
+        ArgumentCaptor<ContainerCreateSpec> spec = ArgumentCaptor.forClass(ContainerCreateSpec.class);
+        verify(containers).recreateContainer(any(), any(), eq("web1"), spec.capture());
+        assertThat(spec.getValue().networks()).containsExactly(
+                new ContainerCreateSpec.Network("front", List.of("www")), new ContainerCreateSpec.Network("back", List.of()));
+    }
+
+    @Test
+    void invalidDuplicateOrHostCombinedNetworksAreRejected() throws Exception {
+        for (String networks : List.of("[{'name':'a'},{'name':'a'}]", "[{'name':'-x'}]", "[{'name':'a','aliases':['--bad']}]",
+                "[{'name':''}]")) {
+            mvc.perform(recreate(login("operator"), "web1", "recreate", "{'image':'nginx','networks':" + networks + "}"))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_CONTAINER_SPEC"));
+        }
+        mvc.perform(recreate(login("admin"), "web1", "recreate",
+                        "{'image':'nginx','networks':[{'name':'host'},{'name':'a'}]}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_CONTAINER_SPEC"));
+        verify(containers, never()).recreateContainer(any(), any(), any(), any());
+    }
+
+    @Test
     void recreateValidatesLikeCreateAndListsEveryViolation() throws Exception {
         mvc.perform(recreate(login("operator"), "web1", "recreate",
                         "{'name':'-bad','image':'--evil','env':{'1x':'v'},'ports':[{'containerPort':70000}],"
@@ -115,7 +140,7 @@ class HostContainerEditTest extends HostApiTestBase {
     void operatorCannotUseAdminOnlyOptionsButAdminCan(String action) throws Exception {
         when(containers.recreateContainer(any(), any(), any(), any())).thenReturn(new CreatedResourceDto("n", "web"));
         when(containers.createContainer(any(), any(), any())).thenReturn(new CreatedResourceDto("n", "copy"));
-        for (String option : List.of("'privileged':true", "'hostNetwork':true", "'network':'host'",
+        for (String option : List.of("'privileged':true", "'hostNetwork':true", "'networks':[{'name':'host'}]",
                 "'mounts':[{'type':'BIND','source':'/etc','target':'/host'}]")) {
             String body = "{'image':'busybox'," + option + "}";
             mvc.perform(recreate(login("operator"), "web1", action, body))

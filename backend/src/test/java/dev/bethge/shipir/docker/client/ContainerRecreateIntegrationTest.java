@@ -83,7 +83,7 @@ class ContainerRecreateIntegrationTest {
 
     private ContainerCreateSpec spec(String name, Map<String, String> env, List<ContainerCreateSpec.Port> ports,
                                      List<ContainerCreateSpec.Mount> mounts, boolean start) {
-        return new ContainerCreateSpec(name, IMAGE, List.of("sleep", "300"), env, ports, mounts, null, null,
+        return new ContainerCreateSpec(name, IMAGE, List.of("sleep", "300"), env, ports, mounts, List.of(), null,
                 false, false, start);
     }
 
@@ -97,6 +97,41 @@ class ContainerRecreateIntegrationTest {
         try (ServerSocket s = new ServerSocket(0)) {
             return s.getLocalPort();
         }
+    }
+
+    @Test
+    void recreateReconnectsEveryNetworkIncludingAliases() {
+        String netA = prefix + "-a";
+        String netB = prefix + "-b";
+        String idA = docker.createNetworkCmd().withName(netA).exec().getId();
+        String idB = docker.createNetworkCmd().withName(netB).exec().getId();
+        try {
+            var nets = List.of(new ContainerCreateSpec.Network(netA, List.of("alias-a")),
+                    new ContainerCreateSpec.Network(netB, List.of()));
+            String name = prefix + "-multi";
+            String oldId = create(withNetworks(spec(name, Map.of(), List.of(), List.of(), true), nets));
+
+            var result = service.recreateContainer(hostId, endpoint, oldId,
+                    withNetworks(spec(name, Map.of("A", "2"), List.of(), List.of(), false), nets));
+            containerIds.add(result.id());
+
+            var attached = docker.inspectContainerCmd(result.id()).exec().getNetworkSettings().getNetworks();
+            assertThat(attached).containsOnlyKeys(netA, netB);
+            assertThat(attached.get(netA).getAliases()).contains("alias-a");
+        } finally {
+            for (String id : List.of(idA, idB)) {
+                try {
+                    docker.removeNetworkCmd(id).exec();
+                } catch (RuntimeException ignored) {
+                    // still attached to a leftover; tearDown removes containers first on the next run
+                }
+            }
+        }
+    }
+
+    private static ContainerCreateSpec withNetworks(ContainerCreateSpec s, List<ContainerCreateSpec.Network> networks) {
+        return new ContainerCreateSpec(s.name(), s.image(), s.command(), s.env(), s.ports(), s.mounts(), networks,
+                s.restartPolicy(), s.privileged(), s.hostNetwork(), s.start());
     }
 
     @Test
@@ -184,7 +219,7 @@ class ContainerRecreateIntegrationTest {
         docker.startContainerCmd(oldId).exec();
 
         var result = service.recreateContainer(hostId, endpoint, oldId,
-                new ContainerCreateSpec(name, IMAGE, List.of("300"), Map.of(), List.of(), List.of(), null, null,
+                new ContainerCreateSpec(name, IMAGE, List.of("300"), Map.of(), List.of(), List.of(), List.of(), null,
                         false, false, true));
 
         containerIds.add(result.id());
@@ -207,7 +242,7 @@ class ContainerRecreateIntegrationTest {
     }
 
     private ContainerCreateSpec specOf(String name, String image, List<String> command) {
-        return new ContainerCreateSpec(name, image, command, Map.of(), List.of(), List.of(), null, null, false, false, true);
+        return new ContainerCreateSpec(name, image, command, Map.of(), List.of(), List.of(), List.of(), null, false, false, true);
     }
 
     @Test
@@ -275,14 +310,14 @@ class ContainerRecreateIntegrationTest {
         docker.buildImageCmd(dir.toFile()).withTags(java.util.Set.of(tag)).start().awaitImageId();
         String name = prefix + "-anon";
         String oldId = create(new ContainerCreateSpec(name, tag, List.of("sleep", "300"), Map.of(), List.of(), List.of(),
-                null, null, false, false, true));
+                List.of(), null, false, false, true));
         String volume = docker.inspectContainerCmd(oldId).exec().getMounts().stream()
                 .filter(m -> "/vol".equals(m.getDestination().getPath())).findFirst().orElseThrow().getName();
         volumes.add(volume);
 
         var result = service.recreateContainer(hostId, endpoint, oldId,
                 new ContainerCreateSpec(name, tag, List.of("sleep", "300"), Map.of("A", "2"), List.of(), List.of(),
-                        null, null, false, false, true));
+                        List.of(), null, false, false, true));
 
         containerIds.add(result.id());
         try {
