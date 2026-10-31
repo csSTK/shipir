@@ -98,6 +98,27 @@ class LogErrorExtractorTest {
     }
 
     @Test
+    void textThatOnlyLooksLikeIpv6IsLeftAlone() {
+        String m = message("level=error error=\"shop.example.com failed at 12:34:56 with status 429 :: retry later\"");
+
+        assertThat(m).contains("12:34:56").contains("429 :: retry later").doesNotContain("<ip>");
+    }
+
+    @Test
+    void ipv4MappedIpv6AddressesAreRedactedCompletely() {
+        String m = message("level=error error=\"shop.example.com peer ::ffff:1.2.3.4 refused\"");
+
+        assertThat(m).doesNotContain("1.2.3.4").doesNotContain(".2.3.4").doesNotContain("ffff").contains("<ip>");
+    }
+
+    @Test
+    void fullFormIpv6AddressesAreRedacted() {
+        String m = message("level=error error=\"shop.example.com peer 2001:0db8:0000:0000:0000:0000:0000:0001 refused\"");
+
+        assertThat(m).doesNotContain("2001").doesNotContain("0db8").contains("<ip>");
+    }
+
+    @Test
     void emailAddressesAreRedacted() {
         String m = message("level=error error=\"shop.example.com account ops@tenant-b.example.net rejected\"");
 

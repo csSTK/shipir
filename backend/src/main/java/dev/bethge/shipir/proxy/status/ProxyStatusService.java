@@ -51,6 +51,8 @@ public class ProxyStatusService {
     private static final Logger log = LoggerFactory.getLogger(ProxyStatusService.class);
     static final String ACME_HTTP_FILE = "/letsencrypt/acme-http.json";
     static final String ACME_DNS_FILE = "/letsencrypt/acme-dns.json";
+    /** Last good facts are served during an outage for at most this many cache TTLs. */
+    static final int STALE_FACTOR = 10;
     static final int LOG_TAIL = 500;
     static final int MAX_LOG_LINE = 2000;
 
@@ -82,7 +84,7 @@ public class ProxyStatusService {
         this.logs = logs;
         this.caddy = new CaddyStorageReader(files);
         this.clock = clock;
-        this.cache = new StatusCache(clock, cacheTtl, refreshFloor);
+        this.cache = new StatusCache(clock, cacheTtl, refreshFloor, cacheTtl.multipliedBy(STALE_FACTOR));
         this.logTimeout = logTimeout;
     }
 
@@ -159,8 +161,12 @@ public class ProxyStatusService {
             // AcmeJsonParser sees it and it keeps names and end dates only
             return AcmeJsonParser.parse(files.readFile(hostId, endpoint, containerId, path, AcmeJsonParser.MAX_BYTES));
         } catch (DockerConnectionException e) {
-            if (e.getCode() == DockerErrorCode.NOT_FOUND || e.getCode() == DockerErrorCode.SIZE_LIMIT_EXCEEDED
-                    || e.getCode() == DockerErrorCode.INVALID_PATH) {
+            if (e.getCode() == DockerErrorCode.NOT_FOUND) {
+                // normal: the store is only created once a route of that mode asks for a certificate (an HTTP-only
+                // setup never has acme-dns.json), so it must not shorten the cache lifetime
+                return List.of();
+            }
+            if (e.getCode() == DockerErrorCode.SIZE_LIMIT_EXCEEDED || e.getCode() == DockerErrorCode.INVALID_PATH) {
                 degraded[0] = true;
                 return List.of();
             }

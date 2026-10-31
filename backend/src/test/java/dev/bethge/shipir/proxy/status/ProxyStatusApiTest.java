@@ -56,15 +56,34 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @AutoConfigureMockMvc
-@Import(PostgresTestConfiguration.class)
+@Import({PostgresTestConfiguration.class, ProxyStatusApiTest.ClockConfig.class})
 @TestPropertySource(properties = {"shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
         "shipir.proxy.status.log-timeout=300ms", "shipir.proxy.status.cache-ttl=3s", "shipir.proxy.status.refresh-floor=2s"})
 class ProxyStatusApiTest {
+
+    static class MutableClock extends java.time.Clock {
+        volatile Instant now = Instant.now();
+
+        @Override public java.time.ZoneId getZone() { return java.time.ZoneOffset.UTC; }
+        @Override public java.time.Clock withZone(java.time.ZoneId zone) { return this; }
+        @Override public Instant instant() { return now; }
+    }
+
+    @org.springframework.boot.test.context.TestConfiguration
+    static class ClockConfig {
+        @org.springframework.context.annotation.Bean
+        @org.springframework.context.annotation.Primary
+        MutableClock testClock() {
+            return new MutableClock();
+        }
+    }
 
     static final String PASSWORD = "A-test-Passw0rd-for-proxies!";
 
     @Autowired
     MockMvc mvc;
+    @Autowired
+    MutableClock clock;
     @Autowired
     JdbcTemplate jdbc;
     @Autowired
@@ -233,6 +252,17 @@ class ProxyStatusApiTest {
     }
 
     @Test
+    void aMissingDnsStoreIsNormalForHttpOnlySetupsSoFactsLiveForTheFullTtl() throws Exception {
+        MockHttpSession admin = login("admin");
+
+        body(admin);
+        clock.now = clock.now.plusSeconds(2).plusMillis(500); // past the refresh floor (2s), within the ttl (3s)
+        body(admin);
+
+        verify(files, times(1)).readFile(any(), any(), eq("proxy1"), eq("/letsencrypt/acme-http.json"), anyLong());
+    }
+
+    @Test
     void aProxyThatCannotBeReadLeavesRoutesPendingInsteadOfFailingTheRequest() throws Exception {
         org.mockito.Mockito.doThrow(new dev.bethge.shipir.proxy.ProxyException(
                 org.springframework.http.HttpStatus.BAD_GATEWAY, "PROXY_SYNC_FAILED", "none"))
@@ -386,7 +416,7 @@ class ProxyStatusApiTest {
         org.mockito.Mockito.doThrow(new dev.bethge.shipir.proxy.ProxyException(
                 org.springframework.http.HttpStatus.BAD_GATEWAY, "PROXY_SYNC_FAILED", "none"))
                 .when(sync).proxyContainerId(any(), any());
-        Thread.sleep(3200);
+        clock.now = clock.now.plusSeconds(4);
 
         assertThat(statusOf(body(admin), "shop.example.com")).isEqualTo("ISSUED");
     }

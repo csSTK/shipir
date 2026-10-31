@@ -28,7 +28,14 @@ final class LogErrorExtractor {
     private static final Pattern AT_TOKEN = Pattern.compile("\\S*@\\S*");
     private static final Pattern PATH_TOKEN = Pattern.compile("\\S*/\\S*");
     private static final Pattern LONG_TOKEN = Pattern.compile("\\S{40,}");
-    private static final Pattern IPV6 = Pattern.compile("(?i)(?<![A-Za-z0-9])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}");
+    // full form (8 groups) or compressed form with "::" and at least one hex digit, optional IPv4 tail; plain "::",
+    // "12:34:56" and similar text are not addresses
+    private static final String HEX = "[0-9a-f]{1,4}";
+    private static final Pattern IPV6 = Pattern.compile("(?i)(?<![A-Za-z0-9:])(?:"
+            + "(?:" + HEX + ":){7}" + HEX
+            + "|(?=:*[0-9a-f])(?:" + HEX + "(?::" + HEX + "){0,6})?::"
+            + "(?:(?:" + HEX + ":){0,5}\\d{1,3}(?:\\.\\d{1,3}){3}|" + HEX + "(?::" + HEX + "){0,6})?"
+            + ")(?![A-Za-z0-9])");
     private static final Pattern ADDRESS = Pattern.compile(
             "\\b\\d{1,3}(?:\\.\\d{1,3}){3}\\b|(?:[A-Za-z0-9_-]+\\.)+[A-Za-z]{2,}");
     private static final Pattern FIELD_ERROR = field("error");

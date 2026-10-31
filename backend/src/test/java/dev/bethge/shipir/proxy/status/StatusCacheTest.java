@@ -23,7 +23,7 @@ class StatusCacheTest {
     }
 
     final MutableClock clock = new MutableClock();
-    final StatusCache cache = new StatusCache(clock, Duration.ofSeconds(30), Duration.ofSeconds(5));
+    final StatusCache cache = new StatusCache(clock, Duration.ofSeconds(30), Duration.ofSeconds(5), Duration.ofMinutes(5));
     final AtomicInteger loads = new AtomicInteger();
     final UUID host = UUID.randomUUID();
 
@@ -106,5 +106,41 @@ class StatusCacheTest {
         clock.now = clock.now.plusSeconds(2);
         cache.get(host, false, degraded);
         assertThat(loads).hasValue(2);
+    }
+
+    @Test
+    void staleFactsAreNotServedBeyondTheMaximumAge() {
+        StatusCache capped = new StatusCache(clock, Duration.ofSeconds(30), Duration.ofSeconds(5), Duration.ofMinutes(5));
+        ProxyFacts good = capped.get(host, false, this::load);
+        java.util.function.Supplier<ProxyFacts> failing = () -> { throw new IllegalStateException("docker down"); };
+
+        clock.now = clock.now.plusSeconds(120);
+        assertThat(capped.get(host, false, failing)).as("still within the cap").isSameAs(good);
+
+        clock.now = clock.now.plusSeconds(200);
+        assertThat(capped.get(host, false, failing)).as("older than the cap").isSameAs(ProxyFacts.EMPTY);
+    }
+
+    @Test
+    void aFailedLoadIsLoggedWithClassAndCodeButNotTheMessage() {
+        ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger)
+                org.slf4j.LoggerFactory.getLogger(StatusCache.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                new ch.qos.logback.core.read.ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            cache.get(host, false, () -> {
+                throw new dev.bethge.shipir.docker.DockerConnectionException(
+                        dev.bethge.shipir.docker.DockerErrorCode.UNREACHABLE, "secret-detail-token", null);
+            });
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        assertThat(appender.list).hasSize(1);
+        String text = appender.list.get(0).getFormattedMessage();
+        assertThat(text).contains("DockerConnectionException").contains("UNREACHABLE").contains(host.toString())
+                .doesNotContain("secret-detail-token");
     }
 }
