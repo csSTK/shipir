@@ -49,8 +49,14 @@ function strList(where: string, v: unknown): string[] {
   return v.map((item) => str(where, item))
 }
 
-function parsePort(where: string, v: unknown): NonNullable<Spec['ports']>[number] {
+function parsePort(doc: Document, serviceName: string, index: number, where: string, v: unknown): NonNullable<Spec['ports']>[number] {
   const text = typeof v === 'number' ? String(v) : typeof v === 'string' ? v : fail(tr('portShortOnly', { where }))
+  // YAML rewrites numbers (080 -> 80, 8e1 -> 80); keep only what was written, as parseEnv does.
+  if (typeof v === 'number') {
+    const node = doc.getIn(['services', serviceName, 'ports', index], true)
+    const written = isScalar(node) && node.source ? node.source : text
+    if (!isScalar(node) || written !== text) return fail(tr('portUnsupported', { where, value: written }))
+  }
   const m = /^(?:(\d+):)?(\d+)(?:\/(tcp|udp))?$/.exec(text)
   if (!m) return fail(tr('portUnsupported', { where, value: text }))
   return { host: m[1] === undefined ? null : Number(m[1]), container: Number(m[2]), protocol: m[3] ?? 'tcp' }
@@ -133,7 +139,7 @@ function parseService(doc: Document, name: string, raw: unknown, envKeys: readon
   }
   if ('ports' in raw) {
     if (!Array.isArray(raw.ports)) fail(tr('expectedList', { where: `${where}.ports` }))
-    s.ports = (raw.ports as unknown[]).map((p) => parsePort(`${where}.ports`, p))
+    s.ports = (raw.ports as unknown[]).map((p, i) => parsePort(doc, name, i, `${where}.ports`, p))
   }
   if ('environment' in raw) s.environment = parseEnv(doc, name, `${where}.environment`, raw.environment, envKeys)
   if ('volumes' in raw) {

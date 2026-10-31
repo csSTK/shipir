@@ -219,6 +219,16 @@ describe('fromYaml values kept exactly as written', () => {
   })
 })
 
+describe('fromYaml ports kept exactly as written', () => {
+  const port = (value: string) => `services:\n  a:\n    image: x\n    ports:\n      - ${value}\n`
+  it.each(['080', '8e1'])('rejects unquoted port %s, which YAML would rewrite', (v) => {
+    expect(reason(port(v))).toMatch(new RegExp(v))
+  })
+  it('keeps a plain decimal port', () => {
+    expect(buildSpec(ok(port('8080'))).services[0].ports).toEqual([{ host: null, container: 8080, protocol: 'tcp' }])
+  })
+})
+
 describe('fromYaml string commands', () => {
   const cmd = (value: string) => `services:\n  a:\n    image: x\n    command: ${value}\n`
   it.each([String.raw`echo a\ b`, `echo "unclosed`, `echo 'unclosed`])('rejects shell syntax the wizard would split differently: %s', (v) => {
