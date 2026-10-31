@@ -39,6 +39,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -242,6 +243,55 @@ class ProxySyncServiceTest {
         order.verify(containers).stopContainer(eq(HOST), eq(ENDPOINT), eq("proxy1"), anyInt());
         order.verify(fileService).writeFiles(any(), any(), eq("proxy1"), any(), any(), anyLong());
         order.verify(containers).restartContainer(eq(HOST), eq(ENDPOINT), eq("proxy1"), anyInt());
+    }
+
+    @Test
+    void aFailedWriteAfterStoppingARestartingContainerStillStartsItAgain() {
+        instance(ProxyType.TRAEFIK);
+        container(ProxyType.TRAEFIK, "restarting");
+        doThrow(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "x", null))
+                .when(fileService).writeFiles(any(), any(), any(), any(), any(), anyLong());
+
+        assertThatThrownBy(() -> service.sync(HOST)).isInstanceOfSatisfying(ProxyException.class,
+                e -> assertThat(e.code()).isEqualTo("PROXY_SYNC_FAILED"));
+
+        InOrder order = inOrder(containers, fileService);
+        order.verify(containers).stopContainer(eq(HOST), eq(ENDPOINT), eq("proxy1"), anyInt());
+        order.verify(fileService).writeFiles(any(), any(), any(), any(), any(), anyLong());
+        order.verify(containers).restartContainer(eq(HOST), eq(ENDPOINT), eq("proxy1"), anyInt());
+    }
+
+    @Test
+    void aFailedStartAfterAFailedWriteDoesNotHideTheWriteFailure() {
+        instance(ProxyType.TRAEFIK);
+        container(ProxyType.TRAEFIK, "restarting");
+        doThrow(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "x", null))
+                .when(fileService).writeFiles(any(), any(), any(), any(), any(), anyLong());
+        doThrow(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "y", null))
+                .when(containers).restartContainer(any(), any(), any(), anyInt());
+
+        assertThatThrownBy(() -> service.sync(HOST)).isInstanceOfSatisfying(ProxyException.class, e -> {
+            assertThat(e.code()).isEqualTo("PROXY_SYNC_FAILED");
+            assertThat(e.getMessage()).contains("could not be written");
+        });
+    }
+
+    @Test
+    void aFailedPurgeWriteAfterStoppingARestartingContainerStillStartsItAgain() {
+        instance(ProxyType.TRAEFIK);
+        container(ProxyType.TRAEFIK, "restarting");
+        doThrow(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "x", null))
+                .when(fileService).writeFiles(any(), any(), any(), any(), any(), anyLong());
+
+        assertThatThrownBy(() -> service.purgeCertificateFiles(HOST, List.of(UUID.randomUUID())))
+                .isInstanceOfSatisfying(ProxyException.class,
+                        e -> assertThat(e.code()).isEqualTo("PROXY_SYNC_FAILED"));
+
+        InOrder order = inOrder(containers, fileService);
+        order.verify(containers).stopContainer(eq(HOST), eq(ENDPOINT), eq("proxy1"), anyInt());
+        order.verify(fileService).writeFiles(any(), any(), any(), any(), any(), anyLong());
+        order.verify(containers).restartContainer(eq(HOST), eq(ENDPOINT), eq("proxy1"), anyInt());
+        verify(exec, never()).open(any(), any(), any(), any(), anyInt(), anyInt(), any(), any());
     }
 
     @Test

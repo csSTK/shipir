@@ -141,7 +141,7 @@ public class ProxySyncService {
                     containers.stopContainer(hostId, endpoint, proxy.id(), STOP_TIMEOUT_SECONDS);
                     stoppedByUs = true;
                 }
-                files.writeFiles(hostId, endpoint, proxy.id(), ProxyConfigRenderer.CONFIG_DIR, blanks, MAX_BYTES);
+                writeFiles(hostId, endpoint, proxy.id(), blanks, stoppedByUs);
                 if ("running".equals(proxy.state())) {
                     unlink(hostId, endpoint, proxy.id(), command);
                 } else if (stoppedByUs) {
@@ -203,7 +203,7 @@ public class ProxySyncService {
                 containers.stopContainer(hostId, endpoint, proxy.id(), STOP_TIMEOUT_SECONDS);
                 stoppedByUs = true;
             }
-            files.writeFiles(hostId, endpoint, proxy.id(), ProxyConfigRenderer.CONFIG_DIR, writes, MAX_BYTES);
+            writeFiles(hostId, endpoint, proxy.id(), writes, stoppedByUs);
             if (running && instance.getType() == ProxyType.CADDY) {
                 reloadCaddy(hostId, endpoint, proxy.id());
             } else if (!running && (stoppedByUs || instance.getType() == ProxyType.CADDY)) {
@@ -211,6 +211,29 @@ public class ProxySyncService {
             }
         } catch (DockerConnectionException e) {
             throw failed("The proxy configuration could not be written (" + e.getCode() + ")");
+        }
+    }
+
+    /**
+     * Writes into the proxy container. If the write fails after we stopped a restarting container, it is started again
+     * here, so a failed sync or purge does not leave the proxy down. A failing start is logged and attached to the write
+     * failure, which is what the caller sees.
+     */
+    private void writeFiles(UUID hostId, DockerEndpoint endpoint, String containerId, List<ContainerFileWrite> writes,
+                            boolean stoppedByUs) {
+        try {
+            files.writeFiles(hostId, endpoint, containerId, ProxyConfigRenderer.CONFIG_DIR, writes, MAX_BYTES);
+        } catch (RuntimeException writeFailure) {
+            if (stoppedByUs) {
+                try {
+                    containers.restartContainer(hostId, endpoint, containerId, STOP_TIMEOUT_SECONDS);
+                } catch (RuntimeException startFailure) {
+                    writeFailure.addSuppressed(startFailure);
+                    log.warn("Could not start the proxy container again after a failed write on host {}: {}", hostId,
+                            startFailure.getClass().getSimpleName());
+                }
+            }
+            throw writeFailure;
         }
     }
 
