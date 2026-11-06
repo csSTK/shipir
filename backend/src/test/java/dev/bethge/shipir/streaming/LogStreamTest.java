@@ -30,10 +30,7 @@ import org.springframework.web.socket.messaging.WebSocketStompClient;
 
 import java.io.Closeable;
 import java.lang.reflect.Type;
-import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HashMap;
@@ -46,7 +43,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -58,6 +54,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -91,8 +88,9 @@ class LogStreamTest {
     private UUID hostId;
     private User user;
 
-    private Consumer<LogLine> onLine;
-    private Consumer<Throwable> onEnd;
+    // written by the follow worker thread (virtual), read by the test thread
+    private volatile Consumer<LogLine> onLine;
+    private volatile Consumer<Throwable> onEnd;
     private final Closeable closeable = mock(Closeable.class);
     private final AtomicInteger follows = new AtomicInteger();
 
@@ -118,27 +116,8 @@ class LogStreamTest {
         hosts.deleteById(hostId);
     }
 
-    private HttpResponse<String> call(HttpRequest.Builder b) throws Exception {
-        if (!jar.isEmpty()) {
-            b.header("Cookie", jar.entrySet().stream().map(e -> e.getKey() + "=" + e.getValue())
-                    .collect(Collectors.joining("; ")));
-        }
-        HttpResponse<String> r = http.send(b.build(), HttpResponse.BodyHandlers.ofString());
-        r.headers().allValues("set-cookie").forEach(c -> {
-            String pair = c.split(";", 2)[0];
-            int i = pair.indexOf('=');
-            jar.put(pair.substring(0, i), pair.substring(i + 1));
-        });
-        return r;
-    }
-
     private void login() throws Exception {
-        call(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/me")));
-        HttpResponse<String> r = call(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/login"))
-                .header("Content-Type", "application/json").header("X-XSRF-TOKEN", jar.get("XSRF-TOKEN"))
-                .POST(HttpRequest.BodyPublishers.ofString("{\"username\":\"viewer\",\"password\":\"" + PASSWORD + "\"}")));
-        assertThat(r.statusCode()).isEqualTo(200);
-        csrf = jar.get("XSRF-TOKEN");
+        csrf = RealServerLogin.login(http, jar, port, "viewer", PASSWORD);
     }
 
     private WebSocketHttpHeaders handshakeHeaders() {
@@ -152,7 +131,7 @@ class LogStreamTest {
         c.setMessageConverter(new RawBytesConverter());
         StompHeaders connect = new StompHeaders();
         connect.add("X-XSRF-TOKEN", csrf);
-        CompletableFuture<StompSession> f = c.connectAsync("ws://localhost:" + port + "/ws", handshakeHeaders(),
+        CompletableFuture<StompSession> f = c.connectAsync("ws://127.0.0.1:" + port + "/ws", handshakeHeaders(),
                 connect, new StompSessionHandlerAdapter() {
                 });
         return f.get(5, TimeUnit.SECONDS);
@@ -234,7 +213,7 @@ class LogStreamTest {
 
         s2.disconnect();
         await().atMost(5, TimeUnit.SECONDS).until(() -> handler.subscriberCount(target) == 0);
-        verify(closeable, times(1)).close();
+        verify(closeable, timeout(5000).times(1)).close();
     }
 
     @Test
@@ -246,7 +225,7 @@ class LogStreamTest {
         sub.unsubscribe();
         var target = LogStreamHandler.parse(topic("again"));
         await().atMost(5, TimeUnit.SECONDS).until(() -> handler.subscriberCount(target) == 0);
-        verify(closeable, atLeastOnce()).close();
+        verify(closeable, timeout(5000).atLeastOnce()).close();
 
         subscribe(s, topic("again"));
         await().atMost(5, TimeUnit.SECONDS).until(() -> follows.get() == 2);
@@ -299,7 +278,7 @@ class LogStreamTest {
     @Test
     void unauthenticatedHandshakeIsRefused() {
         WebSocketStompClient c = new WebSocketStompClient(new StandardWebSocketClient());
-        assertThatThrownBy(() -> c.connectAsync("ws://localhost:" + port + "/ws", new WebSocketHttpHeaders(),
+        assertThatThrownBy(() -> c.connectAsync("ws://127.0.0.1:" + port + "/ws", new WebSocketHttpHeaders(),
                 new StompHeaders(), new StompSessionHandlerAdapter() {
                 }).get(5, TimeUnit.SECONDS)).isInstanceOf(ExecutionException.class);
     }
@@ -380,6 +359,9 @@ class LogStreamTest {
         assertThat(q.poll(5, TimeUnit.SECONDS)).contains("\"timestamp\":\"2026-01-02T03:04:05.123Z\"");
         s.disconnect();
 
+        // Root cause of a rare failure here (shipr-bq7o): onLine still held the first stream's consumer, so
+        // awaitFollowing("nots") returned before the second follow started and "plain" went to the closed first stream.
+        onLine = null;
         StompSession plain = connect();
         BlockingQueue<String> pq = subscribe(plain, topic("nots"));
         awaitFollowing("nots", 1);
@@ -397,6 +379,8 @@ class LogStreamTest {
         subscribe(b, topic("opts"), "tail", "100");
         var target = LogStreamHandler.parse(topic("opts"));
         await().atMost(5, TimeUnit.SECONDS).until(() -> handler.subscriberCount(target) == 2);
+        // the follow starts on a virtual thread, so wait for it; the assert then proves b joined a's stream
+        await().atMost(5, TimeUnit.SECONDS).until(() -> follows.get() >= 1);
         assertThat(follows.get()).isEqualTo(1);
         subscribe(c, topic("opts"), "tail", "100", "timestamps", "true");
         await().atMost(5, TimeUnit.SECONDS).until(() -> follows.get() == 2);
@@ -405,10 +389,10 @@ class LogStreamTest {
         a.disconnect();
         b.disconnect();
         await().atMost(5, TimeUnit.SECONDS).until(() -> handler.subscriberCount(target) == 1);
-        verify(closeable, times(1)).close();
+        verify(closeable, timeout(5000).times(1)).close();
         c.disconnect();
         await().atMost(5, TimeUnit.SECONDS).until(() -> handler.activeStreams() == 0);
-        verify(closeable, times(2)).close();
+        verify(closeable, timeout(5000).times(2)).close();
     }
 
     /** Accepts any content type so the test sees the raw JSON bytes the server sent. */
