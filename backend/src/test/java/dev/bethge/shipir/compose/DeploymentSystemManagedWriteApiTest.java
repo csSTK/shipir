@@ -9,9 +9,12 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -110,7 +113,23 @@ class DeploymentSystemManagedWriteApiTest extends DeploymentTestBase {
                 .content("{\"profiles\":[]}"))).andExpect(status().isOk());
         mvc.perform(admin.write(put(url() + "/" + managed + "/webhook"))).andExpect(status().isOk());
         mvc.perform(admin.write(post(url() + "/" + managed + "/deploy"))).andExpect(status().isAccepted());
-        mvc.perform(admin.write(delete(url() + "/" + managed))).andExpect(status().isNoContent());
+        // the deploy runs on a worker thread and holds the deployment lock until `up` returns; delete is refused (409)
+        // while it does, so wait for the run to finish instead of racing it
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() ->
+                mvc.perform(admin.write(delete(url() + "/" + managed))).andExpect(status().isNoContent()));
+    }
+
+    @Test
+    void deleteIsRefusedWhileADeployHoldsTheLockAndWorksOnceItFinished() throws Exception {
+        Login admin = login("admin");
+        CountDownLatch gate = new CountDownLatch(1);
+        upGate = gate;
+        mvc.perform(admin.write(post(url() + "/" + managed + "/deploy"))).andExpect(status().isAccepted());
+        mvc.perform(admin.write(delete(url() + "/" + managed))).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DEPLOYMENT_IN_PROGRESS"));
+        gate.countDown();
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() ->
+                mvc.perform(admin.write(delete(url() + "/" + managed))).andExpect(status().isNoContent()));
     }
 
     @Test
