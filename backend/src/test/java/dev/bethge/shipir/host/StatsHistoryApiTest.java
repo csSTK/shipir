@@ -99,10 +99,20 @@ class StatsHistoryApiTest extends HostApiTestBase {
 
     @Test
     void shortRangeKeepsTheRecordedResolution() throws Exception {
-        samples(host, "c-web", "web", 600);
+        // 30 samples, one per minute, all well inside the 1h window: the count does not depend on how long the
+        // run took between seeding and querying (600 samples put the oldest ones on the window edge, 57..61 points)
+        samples(host, "c-web", "web", 30);
+        // 60 older samples (2h..3h old) of the same container must be excluded by the 1h window
+        jdbc.update("""
+                INSERT INTO stats_samples (host_id, container_id, compose_project, ts, cpu_percent, mem_bytes,
+                    net_rx_bytes, net_tx_bytes, blk_read_bytes, blk_write_bytes)
+                SELECT ?, 'c-web', 'web', now() - make_interval(mins => 120 + g), 40, 1000, 1, 1, 5, 6
+                FROM generate_series(0, 59) g
+                """, host);
         JsonNode r = history("admin", host, "?range=1h");
         assertThat(r.get("bucketSeconds").asInt()).isEqualTo(60);
-        assertThat(r.get("series").get(0).get("points").size()).isBetween(59, 61);
+        // samples are exactly 60s apart, so each lands in its own 60s bucket
+        assertThat(r.get("series").get(0).get("points").size()).isEqualTo(30);
     }
 
     @Test
