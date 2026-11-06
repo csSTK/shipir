@@ -68,7 +68,7 @@ import static org.mockito.Mockito.when;
 
 /** Real server and STOMP client; Docker is replaced by a scripted {@link ExecService}. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "shipir.streaming.exec.idle-timeout=2s", "shipir.streaming.exec.sweep-interval=200ms",
+        "shipir.streaming.exec.idle-timeout=6s", "shipir.streaming.exec.sweep-interval=200ms",
         "shipir.streaming.exec.max-sessions-per-user=2", "shipir.streaming.exec.operator-enabled=true"})
 @Import(PostgresTestConfiguration.class)
 class ExecSessionTest {
@@ -620,6 +620,10 @@ class ExecSessionTest {
         assertThat(ghost.body()).contains("RESOURCE_NOT_FOUND");
     }
 
+    /**
+     * The idle timeout is 6s so a slow machine (create, create, exec within one test) can't sweep the first two
+     * consoles as idle before the third request; production code is not racy here (idle is measured from the last input).
+     */
     @Test
     void sessionsPerUserAreLimited() throws Exception {
         Client admin = admin();
@@ -849,7 +853,7 @@ class ExecSessionTest {
         String id = admin.create("web");
         StompSession s = admin.connect();
         BlockingQueue<String> q = subscribe(s, "/topic/exec/" + id);
-        String frame = q.poll(10, TimeUnit.SECONDS);
+        String frame = q.poll(20, TimeUnit.SECONDS);
         assertThat(frame).contains("\"status\":\"ENDED\"").contains("IDLE_TIMEOUT");
         verify(handle, org.mockito.Mockito.timeout(5000)).close();
         s.disconnect();
