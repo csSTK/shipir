@@ -23,6 +23,8 @@ const LIST = '/portainer-import/stacks'
 const created = { id: 's1', name: 'shop', status: 'STOPPED', source: 'FILE', yaml: '', envKeys: [] }
 const SIMPLE = 'services:\n  web:\n    image: nginx:1.27\n'
 const WITH_BUILD = 'services:\n  web:\n    build: .\n'
+/** Generous bound for the fetch -> wizard render after picking a stack; it only costs time when something is wrong. */
+const IMPORT_APPLIED_MS = 10_000
 const TOKEN = 'ptr_secret_token_123'
 const stacks = [
   { id: 7, name: 'shop', type: 'compose', endpointId: 1, supported: true },
@@ -128,7 +130,10 @@ describe('AddDeploymentDialog, Import from Portainer source', () => {
     fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'mine' } })
     await connect()
     fireEvent.click(await screen.findByRole('button', { name: 'Import shop' }))
-    await waitFor(() => expect(screen.getByRole('radio', { name: 'Form wizard' })).toBeChecked())
+    // The import is fetch -> state -> wizard render; under a loaded folder-wide run that can take longer than the 1s default.
+    // Waiting for the imported image proves the import was applied before the name is checked.
+    await screen.findByDisplayValue('nginx:1.27', {}, { timeout: IMPORT_APPLIED_MS })
+    expect(screen.getByRole('radio', { name: 'Form wizard' })).toBeChecked()
     expect(screen.getByLabelText('Name')).toHaveValue('mine')
   })
 
