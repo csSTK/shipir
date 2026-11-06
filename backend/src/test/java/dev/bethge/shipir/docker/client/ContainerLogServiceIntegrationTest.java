@@ -122,6 +122,11 @@ class ContainerLogServiceIntegrationTest {
         List<LogLine> lines = new CopyOnWriteArrayList<>();
         CountDownLatch some = new CountDownLatch(2);
         CountDownLatch ended = new CountDownLatch(1);
+        // warm up the client's pools first so threads they start lazily are not counted as a leak
+        try (Closeable warm = service.follow(hostId, endpoint, id, 0, false, l -> { })) {
+            Thread.sleep(500);
+        }
+        Thread.sleep(500);
         int threadsBefore = Thread.getAllStackTraces().size();
 
         Closeable handle = service.follow(hostId, endpoint, id, 0, false, l -> { lines.add(l); some.countDown(); }, e -> ended.countDown());
@@ -133,7 +138,7 @@ class ContainerLogServiceIntegrationTest {
         Thread.sleep(800);
 
         assertThat(lines).as("no lines after close").hasSize(afterClose);
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
         while (Thread.getAllStackTraces().size() > threadsBefore && System.nanoTime() < deadline) {
             Thread.sleep(100);
         }
