@@ -30,6 +30,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.mock.web.MockHttpSession;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -91,19 +92,27 @@ class LoginThrottleApiTest {
 
     private String username;
     private Cookie csrf;
-    private int ipCounter;
+
+    /**
+     * Root cause of the flake (shipr-k31n.13/.15): JUnit creates a new test instance per test, so an instance
+     * counter was always 1 and the peer address came only from {@code identityHashCode(this) % 200}. With ~20 tests
+     * two of them regularly landed on the same address in the shared Spring context (limiter and clock are shared),
+     * and the other test's failures (e.g. the 60 parallel attempts) pushed the address over its limit of 20, so the
+     * spoof test saw 429 instead of 401. A static counter hands out every address exactly once per JVM.
+     */
+    private static final AtomicInteger PEER_SEQUENCE = new AtomicInteger();
 
     @BeforeEach
     void setUp() throws Exception {
         username = "user-" + UUID.randomUUID().toString().substring(0, 8);
         users.save(new User(username, encoder.encode(PASSWORD), Role.OPERATOR));
         csrf = mvc.perform(get("/api/auth/me")).andReturn().getResponse().getCookie("XSRF-TOKEN");
-        ipCounter++;
     }
 
-    /** Each test works from its own peer address so tests do not share the address counter. */
+    /** A peer address no other call in this JVM has used, so tests never share an address counter. */
     private String peer() {
-        return "10.1." + (System.identityHashCode(this) % 200) + "." + ipCounter;
+        int n = PEER_SEQUENCE.incrementAndGet();
+        return "10." + (n / 65536 % 256) + "." + (n / 256 % 256) + "." + (n % 256);
     }
 
     private MvcResult send(String path, String json, String remoteAddr, String forwardedFor) throws Exception {
@@ -121,6 +130,15 @@ class LoginThrottleApiTest {
     private MvcResult login(String name, String pw, String remoteAddr) throws Exception {
         return send("/api/auth/login", "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(name, pw),
                 remoteAddr, null);
+    }
+
+    @Test
+    void peerAddressesAreNeverReusedAcrossTestInstances() {
+        // Guards the root cause above: a fresh instance (as JUnit creates per test) must not repeat an address.
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (int i = 0; i < 1_000; i++) {
+            assertThat(seen.add(peer())).as("address handed out twice").isTrue();
+        }
     }
 
     @Test
