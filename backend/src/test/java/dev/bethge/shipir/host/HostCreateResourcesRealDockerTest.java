@@ -29,17 +29,39 @@ class HostCreateResourcesRealDockerTest extends HostApiTestBase {
                 .andReturn().getResponse().getContentAsString();
     }
 
+    /**
+     * A random /24 in 10.0.0.0/8 (outside Docker's default pools) that no existing network overlaps. A fixed subnet
+     * collides with other runs sharing the daemon ("Pool overlaps", surfaced as 502).
+     */
+    private String freeSubnet() {
+        var used = docker.listNetworksCmd().exec().stream()
+                .flatMap(n -> n.getIpam() == null || n.getIpam().getConfig() == null
+                        ? java.util.stream.Stream.<String>empty()
+                        : n.getIpam().getConfig().stream().map(c -> c.getSubnet()))
+                .filter(java.util.Objects::nonNull).toList();
+        java.util.concurrent.ThreadLocalRandom rnd = java.util.concurrent.ThreadLocalRandom.current();
+        for (int i = 0; i < 200; i++) {
+            String prefix = "10." + rnd.nextInt(100, 250) + "." + rnd.nextInt(0, 256) + ".";
+            if (used.stream().noneMatch(u -> u.startsWith("10.") && (prefix.startsWith(u.substring(0, u.lastIndexOf('.') + 1))
+                    || u.startsWith(prefix)))) {
+                return prefix + "0/24";
+            }
+        }
+        throw new IllegalStateException("no free subnet found");
+    }
+
     @Test
     void networkAndVolumeCreateThenNameTaken() throws Exception {
         String host = localHostId();
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         String net = "shipir-net-" + suffix;
         String vol = "shipir-vol-" + suffix;
+        String subnet = freeSubnet();
         Login op = login("operator");
         String netId = null;
         try {
             mvc.perform(op.write(post("/api/hosts/{h}/networks", host)).contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"name\":\"" + net + "\",\"internal\":true,\"subnet\":\"172.31.77.0/24\"}"))
+                            .content("{\"name\":\"" + net + "\",\"internal\":true,\"subnet\":\"" + subnet + "\"}"))
                     .andExpect(status().isCreated()).andExpect(jsonPath("$.name").value(net));
             var inspected = docker.listNetworksCmd().withNameFilter(net).exec().get(0);
             netId = inspected.getId();
