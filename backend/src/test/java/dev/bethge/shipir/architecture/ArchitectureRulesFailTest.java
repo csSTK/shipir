@@ -53,4 +53,15 @@ class ArchitectureRulesFailTest {
     void controllerOnRepositoryFails() {
         fails(ArchitectureRules.controllersNotOnRepositories(ROOT), "ThingController");
     }
+
+    @Test
+    void unpinnedConnectionManagerConstructorFails() {
+        fails(ArchitectureRules.noUnpinnedConnectionManager(ROOT), "BadUnpinnedDockerUser");
+    }
+
+    @Test
+    void pinnedConnectionManagerConstructorIsAllowed() {
+        assertThatThrownBy(() -> ArchitectureRules.noUnpinnedConnectionManager(ROOT).check(FIXTURE))
+                .hasMessageNotContaining("GoodPinnedDockerUser");
+    }
 }

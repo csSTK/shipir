@@ -30,4 +30,7 @@ class ArchitectureTest {
 
     @ArchTest
     static final ArchRule controllersNotOnRepositories = ArchitectureRules.controllersNotOnRepositories(ROOT);
+
+    @ArchTest
+    static final ArchRule noUnpinnedConnectionManager = ArchitectureRules.noUnpinnedConnectionManager(ROOT);
 }

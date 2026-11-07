@@ -2,6 +2,7 @@ package dev.bethge.shipir.architecture;
 
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaConstructorCall;
 import com.tngtech.archunit.lang.ArchRule;
 
 import static com.tngtech.archunit.base.DescribedPredicate.describe;
@@ -64,5 +65,18 @@ final class ArchitectureRules {
                 .that().haveSimpleNameEndingWith("Controller")
                 .should().dependOnClassesThat(repository)
                 .as("controllers must not access repositories directly");
+    }
+
+    /**
+     * The one-argument DockerHostConnectionManager constructor resolves host names through system DNS, bypassing the
+     * egress policy's DNS pinning. It exists for tests against local daemons; production code must use the pinned one.
+     */
+    static ArchRule noUnpinnedConnectionManager(String root) {
+        String owner = root + ".docker.DockerHostConnectionManager";
+        return noClasses()
+                .should().callConstructorWhere(describe("is the unpinned DockerHostConnectionManager constructor",
+                        (JavaConstructorCall call) -> call.getTargetOwner().getName().equals(owner)
+                                && call.getTarget().getRawParameterTypes().size() == 1))
+                .as("main code must not call the unpinned DockerHostConnectionManager(DockerProperties) constructor");
     }
 }
