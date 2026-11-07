@@ -72,14 +72,18 @@ class DockerEventStreamServiceTest {
     private final StompFrameSender sender = mock(StompFrameSender.class);
     private final DockerHostRepository hosts = mock(DockerHostRepository.class);
     private final HostEndpointResolver resolver = mock(HostEndpointResolver.class);
+    private final StreamViewers viewers = mock(StreamViewers.class);
+    private final StreamAccess access = mock(StreamAccess.class);
     private DockerEventStreamService service;
 
     @BeforeEach
     void setUp() {
         when(hosts.findById(hostId)).thenReturn(Optional.of(DockerHost.local("h", UUID.randomUUID())));
         when(resolver.endpointOf(any())).thenReturn(new DockerEndpoint.Local("unix:///x"));
+        when(viewers.isAdmin(any())).thenReturn(true);
+        when(viewers.isAdmin("viewer")).thenReturn(false);
         service = new DockerEventStreamService(stub, hosts, resolver, sender, new DockerEventProperties(
-                Duration.ofMillis(100), 3, Duration.ofMillis(100), Duration.ofMillis(400)));
+                Duration.ofMillis(100), 3, Duration.ofMillis(100), Duration.ofMillis(400)), viewers, access);
     }
 
     @AfterEach
@@ -371,7 +375,7 @@ class DockerEventStreamServiceTest {
     void stopDuringBackoffEndsWorkerPromptlyWithoutInterrupt() throws Exception {
         service.shutdown();
         service = new DockerEventStreamService(stub, hosts, resolver, sender, new DockerEventProperties(
-                Duration.ofMillis(100), 3, Duration.ofSeconds(30), Duration.ofSeconds(30)));
+                Duration.ofMillis(100), 3, Duration.ofSeconds(30), Duration.ofSeconds(30)), viewers, access);
         var probe = new LookupProbe();
         probe.install(false);
         stub.failures.add(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "down", null));
@@ -391,5 +395,164 @@ class DockerEventStreamServiceTest {
         assertThat(DockerEventStreamService.parse("/topic/hosts/" + hostId + "/events/x")).isNull();
         assertThat(DockerEventStreamService.parse("/topic/hosts/not-a-uuid/events")).isNull();
         assertThat(DockerEventStreamService.parse("/topic/hosts/" + hostId + "/containers/a/logs")).isNull();
+    }
+
+    // --- shipr-kqbc.46: STATUS codes are chosen per subscriber, replay included ---
+
+    private List<DockerEventMessage> statusFrames(String session) {
+        return frames(session).stream().filter(m -> m.type() == DockerEventMessage.Type.STATUS).toList();
+    }
+
+    @Test
+    void disconnectedCodeIsCollapsedForViewersAndRawForAdmins() {
+        stub.failures.add(new DockerConnectionException(DockerErrorCode.TLS_ERROR, "bad cert", null));
+        service.subscribe(hostId, "viewer", "sv", "a");
+        service.subscribe(hostId, "root", "sa", "b");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !statusFrames("sv").isEmpty() && !statusFrames("sa").isEmpty());
+
+        // a later CONNECTED status (null code) after the stub's retry is legitimate; only error codes matter here
+        assertThat(statusFrames("sv")).extracting(DockerEventMessage::code).filteredOn(c -> c != null)
+                .containsOnly("UNREACHABLE");
+        assertThat(statusFrames("sa")).extracting(DockerEventMessage::code).contains("TLS_ERROR");
+    }
+
+    @Test
+    void replayedStatusToALateViewerIsCollapsedToo() {
+        service.shutdown();
+        service = new DockerEventStreamService(stub, hosts, resolver, sender, new DockerEventProperties(
+                Duration.ofMillis(100), 3, Duration.ofSeconds(30), Duration.ofSeconds(30)), viewers, access);
+        stub.failures.add(new DockerConnectionException(DockerErrorCode.PERMISSION_DENIED, "no", null));
+        service.subscribe(hostId, "root", "sa", "b");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !statusFrames("sa").isEmpty());
+
+        service.subscribe(hostId, "viewer", "sv", "a"); // the shared latest STATUS is replayed to it
+
+        assertThat(statusFrames("sv")).isNotEmpty();
+        // a later CONNECTED status (null code) after the stub's retry is legitimate; only error codes matter here
+        assertThat(statusFrames("sv")).extracting(DockerEventMessage::code).filteredOn(c -> c != null)
+                .containsOnly("UNREACHABLE");
+    }
+
+    // --- shipr-kqbc.48: events of system-managed projects go to ADMINs only ---
+
+    @Test
+    void eventsOfSystemManagedProjectsAreWithheldFromViewers() {
+        when(access.systemManagedProjects(hostId)).thenReturn(java.util.Set.of("shipir-proxy"));
+        service.subscribe(hostId, "viewer", "sv", "a");
+        service.subscribe(hostId, "root", "sa", "b");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !stub.sinks.isEmpty());
+        stub.lastSink().accept(new DockerEventDto(DockerEventDto.Type.CONTAINER, "die", "p1", "proxy",
+                "shipir-proxy", Instant.now()));
+        stub.lastSink().accept(new DockerEventDto(DockerEventDto.Type.CONTAINER, "start", "w1", "web",
+                "shop", Instant.now()));
+        await().atMost(5, TimeUnit.SECONDS).until(() -> eventsOf("sa").size() == 2);
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !eventsOf("sv").isEmpty());
+
+        assertThat(eventsOf("sv")).extracting(DockerEventDto::id).containsExactly("w1");
+        assertThat(eventsOf("sa")).extracting(DockerEventDto::id).containsExactlyInAnyOrder("p1", "w1");
+    }
+
+    @Test
+    void aBatchOfOnlySystemManagedEventsSendsNothingToViewers() throws Exception {
+        when(access.systemManagedProjects(hostId)).thenReturn(java.util.Set.of("shipir-proxy"));
+        service.subscribe(hostId, "viewer", "sv", "a");
+        service.subscribe(hostId, "root", "sa", "b");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !stub.sinks.isEmpty());
+        stub.lastSink().accept(new DockerEventDto(DockerEventDto.Type.CONTAINER, "die", "p1", "proxy",
+                "shipir-proxy", Instant.now()));
+        await().atMost(5, TimeUnit.SECONDS).until(() -> eventsOf("sa").size() == 1);
+
+        assertThat(eventsOf("sv")).isEmpty();
+    }
+
+    @Test
+    void failingSystemProjectLookupHidesProjectLabelledEventsFromViewers() {
+        when(access.systemManagedProjects(hostId)).thenThrow(new IllegalStateException("db down"));
+        service.subscribe(hostId, "viewer", "sv", "a");
+        service.subscribe(hostId, "root", "sa", "b");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !stub.sinks.isEmpty());
+        stub.lastSink().accept(new DockerEventDto(DockerEventDto.Type.CONTAINER, "die", "p1", "proxy",
+                "shipir-proxy", Instant.now()));
+        stub.lastSink().accept(new DockerEventDto(DockerEventDto.Type.IMAGE, "pull", "img", "img", null,
+                Instant.now()));
+        await().atMost(5, TimeUnit.SECONDS).until(() -> eventsOf("sa").size() == 2);
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !eventsOf("sv").isEmpty());
+
+        assertThat(eventsOf("sv")).extracting(DockerEventDto::id).containsExactly("img");
+    }
+
+    private List<DockerEventDto> eventsOf(String session) {
+        return frames(session).stream().filter(m -> m.type() == DockerEventMessage.Type.EVENT)
+                .flatMap(m -> m.events().stream()).toList();
+    }
+
+    // --- shipr-kqbc.45: a throwing unsubscribe does not skip the remaining items ---
+
+    @Test
+    void throwingUnsubscribeDuringRevalidateDoesNotSkipTheUsersOtherHosts() {
+        UUID other = UUID.randomUUID();
+        when(hosts.findById(other)).thenReturn(Optional.of(DockerHost.local("o", UUID.randomUUID())));
+        var spy = org.mockito.Mockito.spy(service);
+        spy.subscribe(hostId, "alice", "s1", "a");
+        spy.subscribe(other, "alice", "s1", "b");
+        org.mockito.Mockito.doThrow(new IllegalStateException("boom")).when(spy).unsubscribe("s1", "a");
+
+        spy.revalidate("alice", host -> false);
+
+        assertThat(spy.subscriberCount(other)).isZero();
+    }
+
+    @Test
+    void throwingUnsubscribeDuringDropHostDoesNotSkipTheOtherSubscribers() {
+        var spy = org.mockito.Mockito.spy(service);
+        spy.subscribe(hostId, "alice", "s1", "a");
+        spy.subscribe(hostId, "bob", "s2", "b");
+        org.mockito.Mockito.doThrow(new IllegalStateException("boom")).when(spy).unsubscribe("s1", "a");
+
+        spy.dropHost(hostId);
+
+        assertThat(spy.subscriberCount(hostId)).isEqualTo(1); // bob dropped although alice's unsubscribe threw
+    }
+
+    // --- demotion: the admin flag is not frozen at SUBSCRIBE ---
+
+    @Test
+    void demotedAdminNoLongerGetsRawCodesOrSystemEvents() {
+        when(access.systemManagedProjects(hostId)).thenReturn(java.util.Set.of("shipir-proxy"));
+        service.subscribe(hostId, "root", "sa", "b"); // admin when subscribing
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !stub.sinks.isEmpty());
+
+        service.refreshAdmin("root", false); // role changed to VIEWER, still sees the whole host
+
+        stub.lastSink().accept(new DockerEventDto(DockerEventDto.Type.CONTAINER, "die", "p1", "proxy",
+                "shipir-proxy", Instant.now()));
+        stub.lastSink().accept(new DockerEventDto(DockerEventDto.Type.CONTAINER, "start", "w1", "web",
+                "shop", Instant.now()));
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !eventsOf("sa").isEmpty());
+        assertThat(eventsOf("sa")).extracting(DockerEventDto::id).containsExactly("w1");
+        stub.ends.get(stub.ends.size() - 1).accept(new DockerConnectionException(DockerErrorCode.TLS_ERROR, "x", null));
+        await().atMost(5, TimeUnit.SECONDS).until(() -> statusFrames("sa").stream()
+                .anyMatch(m -> m.status() == DockerEventMessage.Status.DISCONNECTED));
+        assertThat(statusFrames("sa")).extracting(DockerEventMessage::code).doesNotContain("TLS_ERROR");
+    }
+
+    @Test
+    void refreshAdminOnlyTouchesTheNamedUser() {
+        service.subscribe(hostId, "root", "sa", "b");
+        service.subscribe(hostId, "root2", "sb", "c"); // viewers.isAdmin default true: both are admins
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !stub.sinks.isEmpty());
+
+        service.refreshAdmin("root", false);
+        stub.ends.get(stub.ends.size() - 1).accept(new DockerConnectionException(DockerErrorCode.TLS_ERROR, "x", null));
+        await().atMost(5, TimeUnit.SECONDS).until(() -> disconnectedCodes("sa").size() >= 1
+                && disconnectedCodes("sb").size() >= 1);
+
+        assertThat(disconnectedCodes("sa")).doesNotContain("TLS_ERROR"); // demoted: collapsed
+        assertThat(disconnectedCodes("sb")).contains("TLS_ERROR"); // untouched admin keeps the raw code
+    }
+
+    private List<String> disconnectedCodes(String session) {
+        return statusFrames(session).stream().filter(m -> m.status() == DockerEventMessage.Status.DISCONNECTED)
+                .map(DockerEventMessage::code).toList();
     }
 }

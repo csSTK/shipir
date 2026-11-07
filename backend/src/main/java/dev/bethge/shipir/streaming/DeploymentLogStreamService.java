@@ -176,7 +176,7 @@ public class DeploymentLogStreamService {
     /** Registers a subscription, replays the buffer and starts the worker for the first subscriber. */
     void subscribe(Target target, Options options, String username, String sessionId, String subscriptionId) {
         Key key = new Key(target, options);
-        boolean admin = viewers.isAdmin(username); // once, on the subscribe thread
+        boolean admin = viewers.isAdmin(username); // initial value (subscribe thread); refreshAdmin keeps it current
         Stream stream;
         boolean first;
         while (true) {
@@ -203,6 +203,23 @@ public class DeploymentLogStreamService {
         if (first) {
             Stream started = stream;
             Thread.ofVirtual().name("deployment-logs-" + target.project()).start(() -> run(started));
+        }
+    }
+
+    /**
+     * The user's role changed: frames are chosen per recipient from this flag, so it must follow the role, not stay
+     * what it was at SUBSCRIBE (a demoted ADMIN can still see the whole host and must not keep raw codes).
+     */
+    void refreshAdmin(String username, boolean admin) {
+        List<Stream> all;
+        synchronized (streams) {
+            all = new ArrayList<>(streams.values());
+        }
+        for (Stream stream : all) {
+            synchronized (stream) {
+                stream.subscribers.replaceAll(s -> username.equals(s.username) && s.admin != admin
+                        ? new Subscription(s.username, s.sessionId, s.subscriptionId, admin) : s);
+            }
         }
     }
 
@@ -252,6 +269,37 @@ public class DeploymentLogStreamService {
             }
             if (!allowed) {
                 own.forEach(s -> unsubscribe(s.sessionId, s.subscriptionId));
+            }
+        }
+    }
+
+    /**
+     * Like {@link #revalidate} for every subscriber, whoever it is: used when something changed that no user event
+     * announces (a deleted deployment takes its grants with it). Fails closed per subscription.
+     */
+    void revalidateAll(java.util.function.BiPredicate<String, Target> stillAllowed) {
+        List<Stream> all;
+        synchronized (streams) {
+            all = new ArrayList<>(streams.values());
+        }
+        for (Stream stream : all) {
+            List<Subscription> subscribers;
+            synchronized (stream) {
+                subscribers = List.copyOf(stream.subscribers);
+            }
+            for (String user : subscribers.stream().map(s -> s.username).distinct().toList()) {
+                boolean allowed;
+                try {
+                    allowed = stillAllowed.test(user, stream.key.target());
+                } catch (RuntimeException e) {
+                    log.warn("Log access revalidation failed on host {}, dropping the subscription: {}",
+                            stream.key.target().hostId(), e.getClass().getSimpleName());
+                    allowed = false;
+                }
+                if (!allowed) {
+                    subscribers.stream().filter(s -> user.equals(s.username))
+                            .forEach(s -> unsubscribe(s.sessionId, s.subscriptionId));
+                }
             }
         }
     }

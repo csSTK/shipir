@@ -2,6 +2,7 @@ package dev.bethge.shipir.streaming;
 
 import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.DockerErrorCode;
+import dev.bethge.shipir.docker.ViewerErrorCodes;
 import dev.bethge.shipir.docker.client.DockerEventService;
 import dev.bethge.shipir.docker.client.ReconnectingEventStream;
 import dev.bethge.shipir.docker.dto.DockerEventDto;
@@ -19,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.concurrent.Executors;
@@ -47,7 +49,7 @@ public class DockerEventStreamService {
     private static final Pattern TOPIC =
             Pattern.compile("^" + Pattern.quote(TOPIC_PREFIX) + "([0-9a-fA-F-]{36})/events$");
 
-    private record Subscription(String sessionId, String subscriptionId, String username) {
+    private record Subscription(String sessionId, String subscriptionId, String username, boolean admin) {
     }
 
     private record EventKey(DockerEventDto.Type type, String action, String id) {
@@ -75,16 +77,21 @@ public class DockerEventStreamService {
     private final HostEndpointResolver endpoints;
     private final StompFrameSender sender;
     private final DockerEventProperties properties;
+    private final StreamViewers viewers;
+    private final StreamAccess access;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(
             Thread.ofPlatform().daemon().name("docker-event-flush").factory());
 
     DockerEventStreamService(DockerEventService events, DockerHostRepository hosts, HostEndpointResolver endpoints,
-                             StompFrameSender sender, DockerEventProperties properties) {
+                             StompFrameSender sender, DockerEventProperties properties,
+                             StreamViewers viewers, StreamAccess access) {
         this.events = events;
         this.hosts = hosts;
         this.endpoints = endpoints;
         this.sender = sender;
         this.properties = properties;
+        this.viewers = viewers;
+        this.access = access;
     }
 
     @PreDestroy
@@ -124,6 +131,7 @@ public class DockerEventStreamService {
 
     /** Registers a subscription and starts the event worker for the first subscriber of the host. */
     void subscribe(UUID hostId, String username, String sessionId, String subscriptionId) {
+        boolean admin = viewers.isAdmin(username); // initial value (subscribe thread); refreshAdmin keeps it current; frames are chosen per recipient
         HostStream stream;
         boolean first;
         while (true) {
@@ -140,7 +148,7 @@ public class DockerEventStreamService {
                 if (stream.closed) {
                     continue; // released concurrently, start over with a fresh stream
                 }
-                Subscription sub = new Subscription(sessionId, subscriptionId, username);
+                Subscription sub = new Subscription(sessionId, subscriptionId, username, admin);
                 stream.subscribers.add(sub);
                 if (stream.lastStatus != null) {
                     send(stream, sub, stream.lastStatus);
@@ -150,6 +158,23 @@ public class DockerEventStreamService {
                     Thread.ofVirtual().name("docker-events-" + hostId).start(() -> run(started));
                 }
                 break;
+            }
+        }
+    }
+
+    /**
+     * The user's role changed: frames are chosen per recipient from this flag, so it must follow the role, not stay
+     * what it was at SUBSCRIBE (a demoted ADMIN can still see the whole host and must not keep raw codes).
+     */
+    void refreshAdmin(String username, boolean admin) {
+        List<HostStream> all;
+        synchronized (streams) {
+            all = new ArrayList<>(streams.values());
+        }
+        for (HostStream stream : all) {
+            synchronized (stream) {
+                stream.subscribers.replaceAll(s -> username.equals(s.username) && s.admin != admin
+                        ? new Subscription(s.sessionId, s.subscriptionId, s.username, admin) : s);
             }
         }
     }
@@ -202,7 +227,16 @@ public class DockerEventStreamService {
             if (allowed) {
                 continue;
             }
-            revoked.forEach(s -> unsubscribe(s.sessionId, s.subscriptionId));
+            revoked.forEach(this::unsubscribeGuarded);
+        }
+    }
+
+    /** One failing unsubscribe must not leave the remaining items of a revalidation or drop untouched. */
+    private void unsubscribeGuarded(Subscription s) {
+        try {
+            unsubscribe(s.sessionId, s.subscriptionId);
+        } catch (RuntimeException e) {
+            log.warn("Dropping an event subscription failed: {}", e.getClass().getSimpleName());
         }
     }
 
@@ -220,7 +254,7 @@ public class DockerEventStreamService {
             synchronized (stream) {
                 dropped = List.copyOf(stream.subscribers);
             }
-            dropped.forEach(s -> unsubscribe(s.sessionId, s.subscriptionId));
+            dropped.forEach(this::unsubscribeGuarded);
         }
     }
 
@@ -364,9 +398,37 @@ public class DockerEventStreamService {
             int omitted = stream.omitted;
             stream.pending.clear();
             stream.omitted = 0;
-            broadcast(stream, new DockerEventMessage(stream.nextSeq++, DockerEventMessage.Type.EVENT, batch,
-                    omitted > 0 ? omitted : null, null, null));
+            var message = new DockerEventMessage(stream.nextSeq++, DockerEventMessage.Type.EVENT, batch,
+                    omitted > 0 ? omitted : null, null, null);
+            Set<String> system = stream.subscribers.stream().anyMatch(s -> !s.admin) ? systemProjects(stream) : null;
+            for (Subscription s : stream.subscribers) {
+                send(stream, s, s.admin ? message : withoutSystemEvents(message, system));
+            }
         }
+    }
+
+    /**
+     * Compose projects whose events only ADMINs see (the managed proxy); null = unknown (lookup failed), then every
+     * project-labelled event is withheld from non-ADMINs.
+     */
+    private Set<String> systemProjects(HostStream stream) {
+        try {
+            return access.systemManagedProjects(stream.hostId);
+        } catch (RuntimeException e) {
+            log.warn("System-managed project lookup for host {} failed: {}", stream.hostId, e.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    /** The frame as a non-ADMIN may see it; null when nothing is left to show (no frame is sent then). */
+    private static DockerEventMessage withoutSystemEvents(DockerEventMessage message, Set<String> system) {
+        List<DockerEventDto> visible = message.events().stream()
+                .filter(e -> e.composeProject() == null || (system != null && !system.contains(e.composeProject())))
+                .toList();
+        if (visible.isEmpty() && message.omitted() == null) {
+            return null;
+        }
+        return new DockerEventMessage(message.seq(), message.type(), visible, message.omitted(), null, null);
     }
 
     /** Caller holds the stream lock. */
@@ -377,6 +439,14 @@ public class DockerEventStreamService {
     }
 
     private void send(HostStream stream, Subscription sub, DockerEventMessage message) {
+        if (message == null) {
+            return;
+        }
+        if (message.type() == DockerEventMessage.Type.STATUS && message.code() != null) {
+            // the stream (and its replayed latest STATUS) holds the raw code; each recipient gets its own view of it
+            message = new DockerEventMessage(message.seq(), message.type(), null, null, message.status(),
+                    ViewerErrorCodes.forStreamFrame(message.code(), sub.admin));
+        }
         sender.send(sub.sessionId, sub.subscriptionId, destination(stream.hostId), message);
     }
 }

@@ -114,6 +114,17 @@ class StompSubscribeRaceTest {
     }
 
     @Test
+    void throwingChatRecheckAfterTheBrokerRegisteredEndsTheSubscription() {
+        when(chatAccess.maySubscribe("alice", "chat-1")).thenThrow(new IllegalStateException("db down"));
+        chatSubscriptions.add("alice", "chat-1", "s1", "sub1");
+
+        interceptor.afterMessageHandled(subscribe("/topic/chat/chat-1"), null, null, null);
+
+        assertThat(chatSubscriptions.count()).isZero();
+        verify(inbound).send(any());
+    }
+
+    @Test
     void runAccessRevokedBetweenCheckAndRegistrationDropsTheRegistration() {
         when(setupStatus.currentStep("alice")).thenReturn(Optional.empty());
         when(access.mayFollowRun(any(), any())).thenReturn(true, false);

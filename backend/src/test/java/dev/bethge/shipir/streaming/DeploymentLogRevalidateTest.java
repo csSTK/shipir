@@ -90,4 +90,23 @@ class DeploymentLogRevalidateTest {
         assertThat(service.subscriberCount(target("shop"))).isZero();
         assertThat(service.subscriberCount(other)).isEqualTo(1);
     }
+
+    @Test
+    void revalidateAllChecksEverySubscriberAndDropsOnlyTheOnesNoLongerAllowed() {
+        var shop = target("shop");
+        var broken = target("broken");
+        service.subscribe(shop, options, "grantOnly", "sa", "1");
+        service.subscribe(shop, options, "wholeHost", "sb", "1");
+        service.subscribe(broken, options, "wholeHost", "sb", "2");
+
+        service.revalidateAll((user, t) -> {
+            if (t.equals(broken)) {
+                throw new IllegalStateException("db down");
+            }
+            return !user.equals("grantOnly");
+        });
+
+        assertThat(service.subscriberCount(shop)).isEqualTo(1);
+        assertThat(service.subscriberCount(broken)).isZero();
+    }
 }

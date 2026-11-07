@@ -30,10 +30,12 @@ class AccessRevalidator {
     private final ComposeOutputStreamService runStreams;
     private final ChatTopicSubscriptions chatSubscriptions;
     private final ChatTopicAccess chatAccess;
+    private final ContainerStatsStreamService statsStreams;
 
     AccessRevalidator(StreamAccess access, ExecSessionHandler execSessions, LogStreamHandler logStreams,
                       DeploymentLogStreamService projectLogStreams, DockerEventStreamService eventStreams, ComposeOutputStreamService runStreams,
-                      ChatTopicSubscriptions chatSubscriptions, ChatTopicAccess chatAccess) {
+                      ChatTopicSubscriptions chatSubscriptions, ChatTopicAccess chatAccess,
+                      ContainerStatsStreamService statsStreams) {
         this.access = access;
         this.execSessions = execSessions;
         this.logStreams = logStreams;
@@ -42,16 +44,27 @@ class AccessRevalidator {
         this.runStreams = runStreams;
         this.chatSubscriptions = chatSubscriptions;
         this.chatAccess = chatAccess;
+        this.statsStreams = statsStreams;
     }
 
     @TransactionalEventListener(fallbackExecution = true)
     void onDeploymentRemoved(DeploymentRemovedEvent event) {
-        execSessions.endForDeployment(event.deploymentId());
+        isolated("exec", () -> execSessions.endForDeployment(event.deploymentId()));
+        // the grants went with the deployment without a UserAccessChangedEvent; the event names no host or project, so
+        // every log subscriber is asked again with the same policy as at SUBSCRIBE (cheap, deletions are rare)
+        isolated("log", () -> logStreams.revalidateAll((user, t) -> access.mayFollowContainer(user, t.hostId(), t.containerId())));
+        isolated("project log", () -> projectLogStreams.revalidateAll((user, t) -> access.mayFollowProject(user, t.hostId(), t.project())));
     }
 
     @TransactionalEventListener(fallbackExecution = true)
     void onAccessChanged(UserAccessChangedEvent event) {
         String user = event.username();
+        // first, so a demoted ADMIN stops getting ADMIN-only frames even if a revalidation below fails
+        boolean admin = isAdmin(user);
+        isolated("log viewer role", () -> logStreams.refreshAdmin(user, admin));
+        isolated("project log viewer role", () -> projectLogStreams.refreshAdmin(user, admin));
+        isolated("event viewer role", () -> eventStreams.refreshAdmin(user, admin));
+        isolated("stats viewer role", () -> statsStreams.refreshAdmin(user, admin));
         // each revalidator is isolated: one failing must not leave the other channels of this user unchecked
         isolated("exec", () -> execSessions.revalidate(user,
                 (hostId, deploymentId) -> access.mayExec(user, hostId, deploymentId, execSessions.operatorEnabled())));
@@ -60,6 +73,16 @@ class AccessRevalidator {
         isolated("event", () -> eventStreams.revalidate(user, hostId -> access.hostFullyVisible(user, hostId)));
         isolated("run output", () -> runStreams.revalidate(user, target -> access.mayFollowRun(user, target)));
         isolated("chat", () -> chatSubscriptions.revalidate(user, chatId -> chatAccess.maySubscribe(user, chatId)));
+    }
+
+    /** True only for an enabled ADMIN; fails closed (not ADMIN) when the role cannot be read. */
+    private boolean isAdmin(String user) {
+        try {
+            return access.roleOf(user).filter(r -> r == dev.bethge.shipir.auth.Role.ADMIN).isPresent();
+        } catch (RuntimeException e) {
+            log.warn("Reading the role of a user for stream frames failed: {}", e.getClass().getSimpleName());
+            return false;
+        }
     }
 
     private static void isolated(String channel, Runnable revalidation) {

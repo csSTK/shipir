@@ -199,8 +199,17 @@ public class ComposeOutputStreamService implements RunOutput {
             if (allowed) {
                 return;
             }
+            List<Subscription> own;
             synchronized (stream) {
-                stream.subscribers.removeIf(s -> username.equals(s.username));
+                own = stream.subscribers.stream().filter(s -> username.equals(s.username)).toList();
+            }
+            for (Subscription s : own) {
+                try {
+                    unsubscribe(s.sessionId, s.subscriptionId);
+                } catch (RuntimeException e) {
+                    // one failing item must not leave the user's remaining subscriptions on this run untouched
+                    log.warn("Dropping a run output subscription failed: {}", e.getClass().getSimpleName());
+                }
             }
         });
     }

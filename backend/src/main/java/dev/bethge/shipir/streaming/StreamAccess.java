@@ -101,6 +101,11 @@ class StreamAccess {
         return new ExecScope(false, projects);
     }
 
+    /** Compose project names of the host's system-managed deployments (the managed proxy). */
+    Set<String> systemManagedProjects(UUID hostId) {
+        return managedDeployments.systemManagedNames(hostId);
+    }
+
     /** Ids of the host's system-managed deployments (the managed proxy). */
     private Set<UUID> systemManagedIds(UUID hostId) {
         Set<String> names = managedDeployments.systemManagedNames(hostId);
@@ -148,8 +153,10 @@ class StreamAccess {
             return Optional.empty();
         }
         Set<UUID> visible = permissions.visibleDeploymentIds(s.get(), hostId);
+        Set<String> system = s.get().role() == Role.ADMIN ? Set.of() : managedDeployments.systemManagedNames(hostId);
         return Optional.of(managedDeployments.managedDeploymentIds(hostId).entrySet().stream()
                 .filter(e -> visible.contains(e.getValue())).map(java.util.Map.Entry::getKey)
+                .filter(name -> !system.contains(name)) // the managed proxy is ADMIN only
                 .collect(Collectors.toSet()));
     }
 
@@ -172,11 +179,27 @@ class StreamAccess {
         if (s.isEmpty()) {
             return false;
         }
-        if (permissions.hostFullyVisible(s.get(), hostId)) {
+        boolean admin = s.get().role() == Role.ADMIN;
+        boolean fullyVisible = permissions.hostFullyVisible(s.get(), hostId);
+        if (admin && fullyVisible) {
             return true;
         }
-        if (!permissions.canView(s.get(), hostId)) {
+        if (!fullyVisible && !permissions.canView(s.get(), hostId)) {
             return false;
+        }
+        if (fullyVisible) {
+            // containers of a system-managed project (the managed proxy) are ADMIN only: needs the label, so look it
+            // up, but only when the host has such a project at all. A lookup that fails could hide a proxy container.
+            if (managedDeployments.systemManagedNames(hostId).isEmpty()) {
+                return true;
+            }
+            try {
+                String project = composeProjectOrThrow(hostId, containerId);
+                return project == null || mayViewProject(s.get(), hostId, project);
+            } catch (RuntimeException e) {
+                log.debug("Container lookup for log access failed: {}", e.getClass().getSimpleName());
+                return false;
+            }
         }
         String project = composeProjectOf(hostId, containerId);
         return project != null && mayViewProject(s.get(), hostId, project);
@@ -184,6 +207,9 @@ class StreamAccess {
 
     /** The one policy: whole host visible, or the project is a managed deployment of the host the user may view. */
     private boolean mayViewProject(PermissionSubject s, UUID hostId, String project) {
+        if (s.role() != Role.ADMIN && project != null && managedDeployments.systemManagedNames(hostId).contains(project)) {
+            return false; // the managed proxy: ADMIN only, whatever the grants say (its logs can carry ACME/DNS errors)
+        }
         if (permissions.hostFullyVisible(s, hostId)) {
             return true;
         }
@@ -194,17 +220,22 @@ class StreamAccess {
     /** Compose project label of the container, null when unknown, unlabelled or Docker cannot tell. */
     private String composeProjectOf(UUID hostId, String containerId) {
         try {
-            var host = hosts.findById(hostId).orElse(null);
-            if (host == null) {
-                return null;
-            }
-            ContainerDetailsDto details = containers.inspect(hostId, endpoints.endpointOf(host), containerId);
-            String project = details == null ? null : details.composeProject();
-            return project == null || project.isBlank() ? null : project;
+            return composeProjectOrThrow(hostId, containerId);
         } catch (RuntimeException e) {
             log.debug("Container lookup for log access failed: {}", e.getClass().getSimpleName());
             return null;
         }
+    }
+
+    /** Compose project label of the container; null when the host is unknown or the container unlabelled. */
+    private String composeProjectOrThrow(UUID hostId, String containerId) {
+        var host = hosts.findById(hostId).orElse(null);
+        if (host == null) {
+            return null;
+        }
+        ContainerDetailsDto details = containers.inspect(hostId, endpoints.endpointOf(host), containerId);
+        String project = details == null ? null : details.composeProject();
+        return project == null || project.isBlank() ? null : project;
     }
 
     /** Output of a deploy or image-pull run: the user may view the run's deployment (ADMIN: any run, even unknown ones). */
@@ -215,6 +246,10 @@ class StreamAccess {
         }
         if (s.get().role() == Role.ADMIN) {
             return true;
+        }
+        if (target.filter(r -> r.deploymentId() != null)
+                .filter(r -> systemManagedIds(r.hostId()).contains(r.deploymentId())).isPresent()) {
+            return false; // run output of the managed proxy: ADMIN only
         }
         // a run without deployment (image pull) is host-level: the whole host must be visible
         return target.map(t -> t.deploymentId() == null

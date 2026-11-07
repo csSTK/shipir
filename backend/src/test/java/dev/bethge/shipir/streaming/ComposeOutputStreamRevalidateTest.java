@@ -56,4 +56,17 @@ class ComposeOutputStreamRevalidateTest {
         assertThat(service.subscriberCount("broken")).isZero();
         assertThat(service.subscriberCount("kept")).isEqualTo(1);
     }
+
+    @Test
+    void throwingUnsubscribeDoesNotSkipTheUsersOtherSubscriptions() {
+        var spy = org.mockito.Mockito.spy(service);
+        spy.registerRun("run", UUID.randomUUID(), UUID.randomUUID());
+        spy.subscribe("run", "alice", "s1", "a");
+        spy.subscribe("run", "alice", "s1", "b");
+        org.mockito.Mockito.doThrow(new IllegalStateException("boom")).when(spy).unsubscribe("s1", "a");
+
+        spy.revalidate("alice", target -> false);
+
+        assertThat(spy.subscriberCount("run")).isEqualTo(1); // "b" was dropped although "a" threw
+    }
 }

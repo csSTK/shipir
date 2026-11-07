@@ -74,6 +74,16 @@ class DockerEventServiceTest {
     }
 
     @Test
+    void networkAndVolumeEventsCarryTheComposeProjectLabel() {
+        // Docker puts the object's labels into the event actor attributes; the viewer filter relies on it
+        Map<String, String> labels = Map.of("name", "shipir-proxy_default", "com.docker.compose.project", "shipir-proxy");
+        assertThat(DockerEventServiceImpl.map(event(EventType.NETWORK, "create", "n1", labels)).composeProject())
+                .isEqualTo("shipir-proxy");
+        assertThat(DockerEventServiceImpl.map(event(EventType.VOLUME, "create", "v1", labels)).composeProject())
+                .isEqualTo("shipir-proxy");
+    }
+
+    @Test
     void dropsNoiseAndForeignTypes() {
         assertThat(DockerEventServiceImpl.map(event(EventType.CONTAINER, "exec_start: sh", "a", Map.of()))).isNull();
         assertThat(DockerEventServiceImpl.map(event(EventType.CONTAINER, "exec_die", "a", Map.of()))).isNull();

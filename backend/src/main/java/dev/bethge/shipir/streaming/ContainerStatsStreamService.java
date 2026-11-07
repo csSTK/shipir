@@ -34,7 +34,10 @@ import java.util.regex.Pattern;
  * every {@code shipir.streaming.stats.interval} samples all running containers of the host and sends one frame
  * to each subscription, the last UNSUBSCRIBE or disconnect stops it. Each frame only holds containers the
  * subscriber may see (whole host, or the containers of visible managed deployments); visibility is re-read per
- * frame so revoked grants take effect at once. No history is kept.
+ * frame so revoked grants take effect at once. Containers of system-managed projects (the managed proxy) and the raw
+ * Docker error codes of failure frames go to ADMINs only; the ADMIN flag is read at SUBSCRIBE and kept current by
+ * {@link #refreshAdmin} on every access change of the user, so a demoted ADMIN loses them without reconnecting.
+ * A role that cannot be read counts as not ADMIN. No history is kept.
  */
 @Service
 @EnableConfigurationProperties(ContainerStatsProperties.class)
@@ -113,7 +116,7 @@ public class ContainerStatsStreamService {
 
     /** Registers a subscription and starts the sampling worker for the first subscriber of the host. */
     void subscribe(UUID hostId, String username, String sessionId, String subscriptionId) {
-        boolean admin = access.roleOf(username).filter(r -> r == Role.ADMIN).isPresent(); // once, on the subscribe thread
+        boolean admin = isAdmin(username); // initial value (subscribe thread); refreshAdmin keeps it current
         while (true) {
             HostStream stream;
             boolean first;
@@ -136,6 +139,33 @@ public class ContainerStatsStreamService {
                     stream.worker.start();
                 }
                 return;
+            }
+        }
+    }
+
+    /** True only for an enabled ADMIN; fails closed (not ADMIN) when the role cannot be read. */
+    private boolean isAdmin(String username) {
+        try {
+            return access.roleOf(username).filter(r -> r == Role.ADMIN).isPresent();
+        } catch (RuntimeException e) {
+            log.warn("Reading the role of a user for stats frames failed: {}", e.getClass().getSimpleName());
+            return false;
+        }
+    }
+
+    /**
+     * The user's role changed: frames are chosen per recipient from this flag, so it must follow the role, not stay
+     * what it was at SUBSCRIBE (a demoted ADMIN can still see the whole host and must not keep raw codes).
+     */
+    void refreshAdmin(String username, boolean admin) {
+        List<HostStream> all;
+        synchronized (streams) {
+            all = new ArrayList<>(streams.values());
+        }
+        for (HostStream stream : all) {
+            synchronized (stream) {
+                stream.subscribers.replaceAll(s -> username.equals(s.username) && s.admin != admin
+                        ? new Subscription(s.sessionId, s.subscriptionId, s.username, admin) : s);
             }
         }
     }
@@ -294,12 +324,18 @@ public class ContainerStatsStreamService {
             seq = stream.nextSeq++;
         }
         Map<String, Set<String>> projectsByUser = new HashMap<>();
+        Set<String> systemProjects = null; // looked up once per frame, only if a non-ADMIN is subscribed
         for (Subscription sub : subs) {
             List<ContainerStatsMessage.Sample> samples = List.of();
             if (code == null) {
                 Set<String> visible = projectsByUser.computeIfAbsent(sub.username,
                         u -> access.visibleProjects(u, stream.hostId).orElse(null));
+                if (!sub.admin && systemProjects == null) {
+                    systemProjects = access.systemManagedProjects(stream.hostId);
+                }
+                Set<String> hidden = sub.admin ? Set.of() : systemProjects; // the managed proxy is ADMIN only
                 samples = sampled.stream()
+                        .filter(s -> s.project == null || !hidden.contains(s.project))
                         .filter(s -> visible == null || (s.project != null && visible.contains(s.project)))
                         .map(ContainerStatsStreamService::toSample).toList();
             }

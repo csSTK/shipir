@@ -139,4 +139,53 @@ class StreamErrorCodeTest {
             assertThat(lastPayloadTo("s-viewer")).contains("UNREACHABLE").doesNotContain("TIMEOUT");
         });
     }
+
+    @Test
+    void demotedAdminGetsCollapsedCodesOnContainerLogs() throws Exception {
+        ContainerLogService logs = mock(ContainerLogService.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.function.Consumer<Throwable>> onEnd = ArgumentCaptor.forClass(java.util.function.Consumer.class);
+        when(logs.follow(any(), any(), any(), anyInt(), anyBoolean(), any(), onEnd.capture()))
+                .thenReturn(mock(java.io.Closeable.class));
+        var handler = new LogStreamHandler(logs, hosts, endpoints, sender,
+                new LogStreamProperties(200, 500, 8192, 1000), Clock.systemUTC(), viewers);
+        handler.subscribe(new LogStreamHandler.Target(host, "web"), new LogStreamHandler.Options(100, false),
+                "root", "s-root", "1");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !onEnd.getAllValues().isEmpty());
+
+        handler.refreshAdmin("root", false);
+        onEnd.getValue().accept(new DockerConnectionException(DockerErrorCode.TLS_ERROR, "x", null));
+
+        await().atMost(5, TimeUnit.SECONDS).untilAsserted(() ->
+                assertThat(lastPayloadTo("s-root")).contains("UNREACHABLE").doesNotContain("TLS_ERROR"));
+    }
+
+    @Test
+    void demotedAdminGetsCollapsedCodesOnProjectLogs() throws Exception {
+        ContainerService containers = mock(ContainerService.class);
+        var c = mock(dev.bethge.shipir.docker.dto.ContainerDto.class);
+        when(c.id()).thenReturn("c1");
+        when(c.state()).thenReturn("running");
+        when(c.composeProject()).thenReturn("shop");
+        when(c.composeService()).thenReturn("web");
+        when(c.name()).thenReturn("shop-web-1");
+        when(containers.listContainers(any(), any())).thenReturn(java.util.List.of(c));
+        ContainerLogService logs = mock(ContainerLogService.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.function.Consumer<Throwable>> onEnd = ArgumentCaptor.forClass(java.util.function.Consumer.class);
+        when(logs.follow(any(), any(), any(), anyInt(), anyBoolean(), any(), onEnd.capture()))
+                .thenReturn(mock(java.io.Closeable.class));
+        var service = new DeploymentLogStreamService(containers, logs, hosts, endpoints,
+                sender, new DeploymentLogProperties(100, 10, 8192, 100, 1000, 100, Duration.ofHours(1)),
+                Clock.systemUTC(), viewers);
+        service.subscribe(new DeploymentLogStreamService.Target(host, "shop"),
+                new DeploymentLogStreamService.Options(100, false), "root", "s-root", "1");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !onEnd.getAllValues().isEmpty());
+
+        service.refreshAdmin("root", false);
+        onEnd.getValue().accept(new DockerConnectionException(DockerErrorCode.TLS_ERROR, "x", null));
+
+        await().atMost(5, TimeUnit.SECONDS).untilAsserted(() ->
+                assertThat(lastPayloadTo("s-root")).contains("UNREACHABLE").doesNotContain("TLS_ERROR"));
+    }
 }

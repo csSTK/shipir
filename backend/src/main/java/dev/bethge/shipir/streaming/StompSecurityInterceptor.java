@@ -224,7 +224,16 @@ public class StompSecurityInterceptor implements ExecutorChannelInterceptor {
             return;
         }
         var chat = CHAT_TOPIC.matcher(String.valueOf(accessor.getDestination()));
-        if (chat.matches() && !chatAccess.maySubscribe(accessor.getUser().getName(), chat.group(1))) {
+        if (!chat.matches()) {
+            return;
+        }
+        boolean allowed;
+        try {
+            allowed = chatAccess.maySubscribe(accessor.getUser().getName(), chat.group(1));
+        } catch (RuntimeException e) {
+            allowed = false; // fail closed like recheckOrDrop: an unanswerable check must not leave the subscription
+        }
+        if (!allowed) {
             chatSubscriptions.end(accessor.getSessionId(), accessor.getSubscriptionId());
         }
     }

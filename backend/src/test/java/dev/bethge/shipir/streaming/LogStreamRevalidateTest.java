@@ -57,4 +57,29 @@ class LogStreamRevalidateTest {
         assertThat(handler.subscriberCount(gone)).isZero();
         assertThat(handler.subscriberCount(kept)).isEqualTo(1);
     }
+
+    @Test
+    void revalidateAllChecksEverySubscriberAndDropsOnlyTheOnesNoLongerAllowed() throws Exception {
+        when(hosts.findById(any())).thenReturn(Optional.of(mock(DockerHost.class)));
+        when(logs.follow(any(), any(), any(), anyInt(), anyBoolean(), any(), any())).thenReturn(mock(Closeable.class));
+        var host = UUID.randomUUID();
+        var options = new LogStreamHandler.Options(100, false);
+        var target = new LogStreamHandler.Target(host, "c1");
+        var broken = new LogStreamHandler.Target(host, "c2");
+        handler.subscribe(target, options, "grantOnly", "s1", "a");
+        handler.subscribe(target, options, "wholeHost", "s2", "b");
+        handler.subscribe(broken, options, "wholeHost", "s2", "c");
+        await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> verify(logs, times(2))
+                .follow(any(), any(), any(), anyInt(), anyBoolean(), any(), any()));
+
+        handler.revalidateAll((user, t) -> {
+            if (t.equals(broken)) {
+                throw new IllegalStateException("docker unreachable");
+            }
+            return !user.equals("grantOnly");
+        });
+
+        assertThat(handler.subscriberCount(target)).isEqualTo(1); // only wholeHost stays
+        assertThat(handler.subscriberCount(broken)).isZero(); // fail closed
+    }
 }

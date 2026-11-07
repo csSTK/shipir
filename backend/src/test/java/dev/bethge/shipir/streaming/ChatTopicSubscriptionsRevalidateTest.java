@@ -32,4 +32,18 @@ class ChatTopicSubscriptionsRevalidateTest {
         assertThat(subscriptions.count()).isEqualTo(2); // alice/kept and bob's untouched one
         verify(inbound, times(2)).send(any());
     }
+
+    @Test
+    void throwingUnsubscribeSendDoesNotSkipTheRemainingSubscriptions() {
+        subscriptions.add("alice", "gone-1", "s1", "a");
+        subscriptions.add("alice", "gone-2", "s1", "b");
+        subscriptions.add("alice", "kept", "s1", "c");
+        org.mockito.Mockito.doThrow(new IllegalStateException("channel down")).doReturn(true)
+                .when(inbound).send(any());
+
+        subscriptions.revalidate("alice", chatId -> chatId.equals("kept"));
+
+        assertThat(subscriptions.count()).isEqualTo(1);
+        verify(inbound, times(2)).send(any());
+    }
 }
