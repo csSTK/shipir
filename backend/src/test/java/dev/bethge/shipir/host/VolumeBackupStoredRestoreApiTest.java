@@ -14,6 +14,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -220,44 +222,40 @@ class VolumeBackupStoredRestoreApiTest extends HostApiTestBase {
     }
 
     @Test
-    void symlinkSwappedInAfterResolveIsNotFollowedWhenTheArchiveIsOpened() throws Exception {
+    void symlinkSwappedInDuringTheRestoreIsNeverRead() throws Exception {
         Path file = DIR.resolve(hostId.toString()).resolve("data").resolve("data-20260110T000000Z.tar");
         Files.writeString(file, "mine");
         Path secret = DIR.resolve(otherHostId.toString()).resolve("data").resolve("data-20260103T000000Z.tar");
-        boolean[] refused = new boolean[1];
+        List<String> read = new ArrayList<>();
         doAnswer(inv -> {
             Files.delete(file);
             Files.createSymbolicLink(file, secret);
-            assertThatThrownBy(() -> ((VolumeArchiveService.ArchiveSource) inv.getArgument(4)).open())
-                    .isInstanceOf(IOException.class);
-            refused[0] = true;
-            return null;
-        }).when(archives).restore(any(), any(), eq("data"), any(), any(), anyLong(), anyBoolean());
-
-        mvc.perform(restore(login("admin"), "data", file.getFileName().toString(), "true", true));
-
-        verify(archives).restore(any(), any(), eq("data"), any(), any(), anyLong(), anyBoolean());
-        assertThat(refused[0]).isTrue();
-        Files.delete(file);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"INVALID_ARCHIVE", "UNREACHABLE"})
-    void archiveDeletedBetweenResolveAndOpenIs404NotAnArchiveOrHostError(String wrappedAs) throws Exception {
-        Path file = put(hostId, "data", "data-20260111T000000Z.tar", "mine");
-        doAnswer(inv -> {
-            Files.delete(file);
-            try {
-                ((VolumeArchiveService.ArchiveSource) inv.getArgument(4)).open();
-            } catch (IOException e) {
-                // the real pipeline wraps the open failure like this (first open: INVALID_ARCHIVE, second: UNREACHABLE)
-                throw new DockerConnectionException(DockerErrorCode.valueOf(wrappedAs), "The upload could not be read.", e);
+            try (InputStream in = ((VolumeArchiveService.ArchiveSource) inv.getArgument(4)).open()) {
+                read.add(new String(in.readAllBytes()));
             }
             return null;
         }).when(archives).restore(any(), any(), eq("data"), any(), any(), anyLong(), anyBoolean());
 
         mvc.perform(restore(login("admin"), "data", file.getFileName().toString(), "true", true))
-                .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("STORED_BACKUP_NOT_FOUND"));
+                .andExpect(status().isNoContent());
+
+        assertThat(read).containsExactly("mine");
+        Files.delete(file);
+    }
+
+    @Test
+    void archiveDeletedDuringTheRestoreDoesNotAffectIt() throws Exception {
+        Path file = put(hostId, "data", "data-20260111T000000Z.tar", "mine");
+        doAnswer(inv -> {
+            Files.delete(file);
+            try (InputStream in = ((VolumeArchiveService.ArchiveSource) inv.getArgument(4)).open()) {
+                in.readAllBytes();
+            }
+            return null;
+        }).when(archives).restore(any(), any(), eq("data"), any(), any(), anyLong(), anyBoolean());
+
+        mvc.perform(restore(login("admin"), "data", file.getFileName().toString(), "true", true))
+                .andExpect(status().isNoContent());
     }
 
     @Test

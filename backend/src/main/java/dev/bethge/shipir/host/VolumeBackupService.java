@@ -11,6 +11,8 @@ import dev.bethge.shipir.docker.client.VolumeArchiveService;
 import dev.bethge.shipir.host.dto.StoredVolumeBackup;
 import dev.bethge.shipir.host.dto.VolumeBackupDownload;
 import dev.bethge.shipir.permission.CurrentAccess;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -22,15 +24,11 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.FileTime;
 import java.time.Clock;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.regex.Pattern;
 
@@ -43,6 +41,8 @@ import java.util.regex.Pattern;
 @Service
 @EnableConfigurationProperties(VolumeBackupProperties.class)
 public class VolumeBackupService {
+
+    private static final Logger log = LoggerFactory.getLogger(VolumeBackupService.class);
 
     private static final Pattern VOLUME_NAME = Pattern.compile("[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}");
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
@@ -158,60 +158,80 @@ public class VolumeBackupService {
         Path file = store.resolve(hostId, volume, fileName).orElseThrow(
                 () -> new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found"));
         long max = properties.maxBytes().toBytes();
-        try {
-            if (Files.size(file) > max) {
-                throw sizeLimit();
-            }
-        } catch (IOException e) {
-            throw new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found");
-        }
-        AtomicBoolean vanished = new AtomicBoolean();
-        AtomicReference<ArchiveIdentity> firstOpen = new AtomicReference<>();
+        // The archive is read from disk exactly once, into a private copy; the restore pipeline (which opens its source
+        // twice, to validate and to stream) works on the copy. A file swapped or rewritten in the backup directory
+        // meanwhile can therefore never make the validated bytes differ from the extracted bytes. This is an integrity
+        // guard, not an access control: someone who can write the backup directory can still plant a (valid) archive
+        // before the copy is made.
+        Path copy = copyPrivately(file, max);
         try {
             call(hostId, (id, endpoint) -> {
-                // NOFOLLOW on every open: a symlink swapped in after resolve() must not be followed
-                archives.restore(id, endpoint, volume, properties.helperImage(), () -> {
-                    try {
-                        InputStream in = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS);
-                        try {
-                            // the pipeline opens the archive to validate and again to stream: both must be the same file
-                            requireSameFile(firstOpen, ArchiveIdentity.of(file));
-                        } catch (IOException | RuntimeException e) {
-                            in.close();
-                            throw e;
-                        }
-                        return in;
-                    } catch (NoSuchFileException e) {
-                        vanished.set(true); // deleted or pruned since resolve(); the pipeline wraps this as 400/502
-                        throw e;
-                    }
-                }, max, confirm);
+                archives.restore(id, endpoint, volume, properties.helperImage(), () -> Files.newInputStream(copy), max, confirm);
                 return null;
             });
         } catch (HostException e) {
-            if (vanished.get()) {
-                throw new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found");
-            }
             if ("INVALID_ARCHIVE".equals(e.code())) {
                 throw new HostException(HttpStatus.BAD_REQUEST, "INVALID_ARCHIVE", "The stored archive is not a valid, safe volume archive");
             }
             throw e;
+        } finally {
+            try {
+                Files.deleteIfExists(copy);
+            } catch (IOException e) {
+                log.warn("Could not delete the temporary restore copy {}: {}", copy.getFileName(), e.toString());
+            }
         }
     }
 
-    /** Remembers the identity at the first open; a later open that sees another file, size or mtime is refused. */
-    private static void requireSameFile(AtomicReference<ArchiveIdentity> first, ArchiveIdentity current) {
-        if (!first.compareAndSet(null, current) && !current.equals(first.get())) {
-            throw new DockerConnectionException(DockerErrorCode.INVALID_ARCHIVE,
-                    "The stored archive changed while it was being restored.", null);
+    /**
+     * Copies the stored archive into an owner-only temp file through one NOFOLLOW open, reading at most {@code max}
+     * bytes (413 when the file is larger). 404 when the file is gone.
+     */
+    static Path copyPrivately(Path file, long max) {
+        Path copy = null;
+        try (InputStream in = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)) {
+            copy = Files.createTempFile("shipir-restore-", ".tar"); // owner-only (0600) on POSIX
+            try (var out = Files.newOutputStream(copy)) {
+                // at most max + 1 bytes: a file that grew past the limit is refused without filling the disk
+                long copied = copyBounded(in, out, max + 1);
+                if (copied > max) {
+                    throw sizeLimit();
+                }
+            }
+            return copy;
+        } catch (NoSuchFileException e) {
+            deleteQuietly(copy);
+            throw new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found");
+        } catch (IOException | RuntimeException e) {
+            deleteQuietly(copy);
+            if (e instanceof HostException he) {
+                throw he;
+            }
+            throw new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found");
         }
     }
 
-    /** File key, size and mtime of a regular file; equal values mean the same file with the same content state. */
-    private record ArchiveIdentity(Object fileKey, long size, FileTime modified) {
-        static ArchiveIdentity of(Path file) throws IOException {
-            BasicFileAttributes a = Files.readAttributes(file, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-            return new ArchiveIdentity(a.fileKey(), a.size(), a.lastModifiedTime());
+    private static long copyBounded(InputStream in, java.io.OutputStream out, long limit) throws IOException {
+        byte[] buf = new byte[64 * 1024];
+        long total = 0;
+        while (total < limit) {
+            int n = in.read(buf, 0, (int) Math.min(buf.length, limit - total));
+            if (n < 0) {
+                break;
+            }
+            out.write(buf, 0, n);
+            total += n;
+        }
+        return total;
+    }
+
+    private static void deleteQuietly(Path p) {
+        if (p != null) {
+            try {
+                Files.deleteIfExists(p);
+            } catch (IOException ignored) {
+                // best effort
+            }
         }
     }
 

@@ -97,37 +97,156 @@ class VolumeBackupStoredRestoreIdentityTest {
         assertThat(opens[0]).isEqualTo(2);
     }
 
+    /** Both opens of the pipeline must see the bytes of the file that was opened first, whatever happens to the path. */
+    private static String drain(InputStream in) throws IOException {
+        return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private void recordBothOpens(Runnable between, java.util.List<String> seen) {
+        doAnswer(inv -> {
+            VolumeArchiveService.ArchiveSource source = inv.getArgument(4);
+            try (InputStream first = source.open()) {
+                seen.add(drain(first));
+            }
+            between.run();
+            try (InputStream second = source.open()) {
+                seen.add(drain(second));
+            }
+            return null;
+        }).when(archives).restore(eq(hostId), any(), eq(VOLUME), anyString(), any(), anyLong(), anyBoolean());
+    }
+
     @Test
-    void archiveReplacedBetweenTheTwoOpensIsRefusedAsInvalidArchive() {
-        int[] opens = new int[1];
-        openTwice(() -> {
+    void archiveReplacedOnDiskDuringTheRestoreIsNeverExtracted() {
+        java.util.List<String> seen = new java.util.ArrayList<>();
+        recordBothOpens(() -> {
             try {
                 Path other = Files.writeString(file.resolveSibling("other.tmp"), "swapped-bytes-of-other-length");
                 Files.move(other, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e) {
                 throw new IllegalStateException(e);
             }
-        }, opens);
+        }, seen);
 
-        assertThatThrownBy(() -> service.restoreStored(hostId, VOLUME, NAME, false))
-                .isInstanceOfSatisfying(HostException.class, e -> assertThat(e.code()).isEqualTo("INVALID_ARCHIVE"));
-        assertThat(opens[0]).isEqualTo(1);
+        service.restoreStored(hostId, VOLUME, NAME, false);
+
+        assertThat(seen).containsExactly("validated-bytes", "validated-bytes");
     }
 
     @Test
-    void archiveRewrittenInPlaceWithTheSameSizeIsRefused() {
-        int[] opens = new int[1];
-        openTwice(() -> {
+    void archiveRewrittenInPlaceDuringTheRestoreIsNeverExtracted() {
+        java.util.List<String> seen = new java.util.ArrayList<>();
+        recordBothOpens(() -> {
             try {
                 Files.writeString(file, "VALIDATED-BYTES"); // same size, same file key
                 Files.setLastModifiedTime(file, FileTime.fromMillis(System.currentTimeMillis() + 60_000));
             } catch (IOException e) {
                 throw new IllegalStateException(e);
             }
-        }, opens);
+        }, seen);
 
+        service.restoreStored(hostId, VOLUME, NAME, false);
+
+        assertThat(seen).containsExactly("validated-bytes", "validated-bytes");
+    }
+
+    @Test
+    void restoreRunsOnAnOwnerOnlyCopyThatIsDeletedAfterSuccessAndAfterFailure() throws Exception {
+        java.util.List<Path> copies = new java.util.ArrayList<>();
+        doAnswer(inv -> {
+            VolumeArchiveService.ArchiveSource source = inv.getArgument(4);
+            try (InputStream in = source.open()) {
+                in.readAllBytes();
+            }
+            Path copy = onlyNewCopy(copies);
+            copies.add(copy);
+            assertThat(Files.readString(copy)).isEqualTo("validated-bytes");
+            if (Files.getFileStore(copy).supportsFileAttributeView("posix")) {
+                assertThat(java.nio.file.attribute.PosixFilePermissions.toString(Files.getPosixFilePermissions(copy)))
+                        .isEqualTo("rw-------");
+            }
+            return null;
+        }).when(archives).restore(eq(hostId), any(), eq(VOLUME), anyString(), any(), anyLong(), anyBoolean());
+        service.restoreStored(hostId, VOLUME, NAME, false);
+        assertThat(copies).hasSize(1);
+        assertThat(copies.get(0)).doesNotExist();
+
+        doAnswer(inv -> {
+            copies.add(onlyNewCopy(copies));
+            throw new dev.bethge.shipir.docker.DockerConnectionException(dev.bethge.shipir.docker.DockerErrorCode.INVALID_ARCHIVE, "bad", null);
+        }).when(archives).restore(eq(hostId), any(), eq(VOLUME), anyString(), any(), anyLong(), anyBoolean());
+        assertThatThrownBy(() -> service.restoreStored(hostId, VOLUME, NAME, false)).isInstanceOf(HostException.class);
+        assertThat(copies).hasSize(2);
+        assertThat(copies.get(1)).doesNotExist();
+    }
+
+    /** The shipir-restore-* file in the shared tmpdir that is not one of {@code known} (parallel tests only add other names' files, ours is the one holding our bytes). */
+    private static Path onlyNewCopy(java.util.List<Path> known) throws IOException {
+        Path tmp = Path.of(System.getProperty("java.io.tmpdir"));
+        try (var files = Files.list(tmp)) {
+            var candidates = files.filter(p -> p.getFileName().toString().startsWith("shipir-restore-"))
+                    .filter(p -> !known.contains(p)).filter(p -> {
+                        try {
+                            return Files.readString(p).equals("validated-bytes");
+                        } catch (IOException e) {
+                            return false;
+                        }
+                    }).toList();
+            assertThat(candidates).hasSize(1);
+            return candidates.get(0);
+        }
+    }
+
+    @Test
+    void copyPrivatelyDoesNotFollowASymlink() throws Exception {
+        Path target = Files.writeString(base.resolve("secret.tar"), "secret");
+        Path link = Files.createSymbolicLink(base.resolve("link.tar"), target);
+
+        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(link, 1024))
+                .isInstanceOfSatisfying(HostException.class, e -> assertThat(e.code()).isEqualTo("STORED_BACKUP_NOT_FOUND"));
+    }
+
+    @Test
+    void copyPrivatelyReportsAMissingFileAsNotFound() {
+        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(base.resolve("gone.tar"), 1024))
+                .isInstanceOfSatisfying(HostException.class, e -> assertThat(e.code()).isEqualTo("STORED_BACKUP_NOT_FOUND"));
+    }
+
+    @Test
+    void copyPrivatelyDeletesItsTempFileWhenTheFileIsTooLarge() throws Exception {
+        Path big = Files.write(base.resolve("big.tar"), new byte[100]);
+        long before = countCopies(Path.of(System.getProperty("java.io.tmpdir")));
+
+        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(big, 50))
+                .isInstanceOfSatisfying(HostException.class, e -> assertThat(e.status().value()).isEqualTo(413));
+
+        assertThat(countCopies(Path.of(System.getProperty("java.io.tmpdir")))).isEqualTo(before);
+    }
+
+    @Test
+    void copyPrivatelyDeletesItsTempFileOnAMidCopyReadError() throws Exception {
+        // a directory can be opened for reading on some platforms but fails on read: use it as the failing source
+        Path dir = Files.createDirectory(base.resolve("d.tar"));
+        long before = countCopies(Path.of(System.getProperty("java.io.tmpdir")));
+
+        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(dir, 50)).isInstanceOf(HostException.class);
+
+        assertThat(countCopies(Path.of(System.getProperty("java.io.tmpdir")))).isEqualTo(before);
+    }
+
+    @Test
+    void oversizedStoredArchiveIsRefusedAsTooLarge() throws Exception {
+        // limit is 10 MB
+        try (var out = Files.newOutputStream(file)) {
+            out.write(new byte[10 * 1024 * 1024 + 1]);
+        }
         assertThatThrownBy(() -> service.restoreStored(hostId, VOLUME, NAME, false))
-                .isInstanceOfSatisfying(HostException.class, e -> assertThat(e.code()).isEqualTo("INVALID_ARCHIVE"));
-        assertThat(opens[0]).isEqualTo(1);
+                .isInstanceOfSatisfying(HostException.class, e -> assertThat(e.status().value()).isEqualTo(413));
+    }
+
+    private static long countCopies(Path tmp) throws IOException {
+        try (var files = Files.list(tmp)) {
+            return files.filter(p -> p.getFileName().toString().startsWith("shipir-restore-")).count();
+        }
     }
 }
