@@ -300,9 +300,10 @@ public class HostResourcesService {
             List<PruneCandidateDto> keptVolumes = filterVolumes(allVolumes, managed, includeManagedVolumes);
             return new PrunePreviewResponse(
                     PrunePreviewResponse.Category.of(withoutProjects(containers.listPrunable(id, endpoint), restricted)),
-                    PrunePreviewResponse.Category.of(images.listPrunable(id, endpoint, imageScope == PruneRequest.ImageScope.UNUSED)),
+                    PrunePreviewResponse.Category.of(systemManaged.withoutRestrictedImages(hostId,
+                            images.listPrunable(id, endpoint, imageScope == PruneRequest.ImageScope.UNUSED))),
                     PrunePreviewResponse.Category.of(keptVolumes),
-                    PrunePreviewResponse.Category.of(networks.listPrunable(id, endpoint)),
+                    PrunePreviewResponse.Category.of(systemManaged.withoutRestrictedNetworks(hostId, networks.listPrunable(id, endpoint))),
                     allVolumes.size() - keptVolumes.size());
         });
     }
@@ -334,10 +335,11 @@ public class HostResourcesService {
                         name -> volumes.removeVolume(id, endpoint, name));
             }
             if (request.pruneNetworks()) {
-                n = removeAll(networks.listPrunable(id, endpoint), nid -> networks.removeNetwork(id, endpoint, nid));
+                n = removeAll(systemManaged.withoutRestrictedNetworks(hostId, networks.listPrunable(id, endpoint)), nid -> networks.removeNetwork(id, endpoint, nid));
             }
             if (request.images() != null) {
-                i = removeAll(images.listPrunable(id, endpoint, request.images() == PruneRequest.ImageScope.UNUSED),
+                i = removeAll(systemManaged.withoutRestrictedImages(hostId,
+                        images.listPrunable(id, endpoint, request.images() == PruneRequest.ImageScope.UNUSED)),
                         iid -> images.removeImage(id, endpoint, iid));
             }
             return new PruneResponse(c, i, v, n, c.reclaimedBytes() + i.reclaimedBytes() + v.reclaimedBytes() + n.reclaimedBytes());
@@ -393,6 +395,7 @@ public class HostResourcesService {
     void removeImage(UUID hostId, String imageId) {
         requireOperate(hostId);
         validateResourceId(imageId);
+        systemManaged.requireNotSystemManagedImage(hostId, imageId);
         call(hostId, (id, endpoint) -> {
             images.removeImage(id, endpoint, imageId);
             return null;
@@ -460,6 +463,7 @@ public class HostResourcesService {
     void removeNetwork(UUID hostId, String networkId) {
         requireOperate(hostId);
         validateResourceId(networkId);
+        systemManaged.requireNotSystemManagedNetwork(hostId, networkId);
         call(hostId, (id, endpoint) -> {
             networks.removeNetwork(id, endpoint, networkId);
             return null;
@@ -689,6 +693,7 @@ public class HostResourcesService {
         if (driver != null && !"bridge".equals(driver) && !access.isAdmin()) {
             throw new HostException(HttpStatus.FORBIDDEN, "ADMIN_REQUIRED", "Only ADMIN may use the " + driver + " driver");
         }
+        systemManaged.requireNotSystemManagedNetworkName(hostId, name);
         NetworkCreateSpec spec = new NetworkCreateSpec(name, driver, Boolean.TRUE.equals(request.internal()), subnet);
         return call(hostId, (id, endpoint) -> networks.createNetwork(id, endpoint, spec));
     }

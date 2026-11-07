@@ -7,15 +7,21 @@ import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.ViewerErrorCodes;
 import dev.bethge.shipir.docker.client.ContainerService;
+import dev.bethge.shipir.docker.client.ImageService;
+import dev.bethge.shipir.docker.client.NetworkService;
 import dev.bethge.shipir.docker.client.VolumeService;
 import dev.bethge.shipir.docker.dto.ContainerDetailsDto;
 import dev.bethge.shipir.docker.dto.ContainerDto;
+import dev.bethge.shipir.docker.dto.ImageDto;
+import dev.bethge.shipir.docker.dto.NetworkDto;
+import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import dev.bethge.shipir.docker.dto.VolumeDto;
 import dev.bethge.shipir.permission.CurrentAccess;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiFunction;
@@ -30,15 +36,23 @@ import java.util.function.BiFunction;
 @Component
 class SystemManagedGuard {
 
+    /** External network the managed proxy template attaches to ({@code managed-*.yaml}); routed containers join it too. */
+    private static final String PROXY_NETWORK = "shipir-proxy";
+
     private final ManagedDeploymentLookup managed;
     private final CurrentAccess access;
     private final ContainerService containers;
     private final VolumeService volumes;
+    private final NetworkService networks;
+    private final ImageService images;
     private final DockerHostRepository hosts;
     private final HostEndpointResolver endpoints;
 
     SystemManagedGuard(ManagedDeploymentLookup managed, CurrentAccess access, ContainerService containers,
-                       VolumeService volumes, DockerHostRepository hosts, HostEndpointResolver endpoints) {
+                       VolumeService volumes, NetworkService networks, ImageService images,
+                       DockerHostRepository hosts, HostEndpointResolver endpoints) {
+        this.networks = networks;
+        this.images = images;
         this.managed = managed;
         this.access = access;
         this.containers = containers;
@@ -110,6 +124,150 @@ class SystemManagedGuard {
             // a container that vanished meanwhile has no mounts left to protect
         }
         return names;
+    }
+
+    /**
+     * 403 when the network (id, id prefix or name) belongs to a system-managed project: the external proxy network,
+     * a network a container of the project is attached to, or a Compose default network of the project. Anything
+     * Docker does not know is left to the action itself to report (404).
+     */
+    void requireNotSystemManagedNetwork(UUID hostId, String network) {
+        Set<String> restricted = restrictedNetworkNames(hostId);
+        if (restricted.isEmpty()) {
+            return;
+        }
+        for (NetworkDto n : call(hostId, networks::list)) {
+            if (matchesNetwork(n, network) && restricted.contains(n.name())) {
+                throw forbidden();
+            }
+        }
+    }
+
+    /** 403 when a network of that name would be created that the system-managed project uses (name squatting). */
+    void requireNotSystemManagedNetworkName(UUID hostId, String name) {
+        if (restrictedNetworkNames(hostId).contains(name)) {
+            throw forbidden();
+        }
+    }
+
+    /** Prune candidates without the networks of system-managed projects (unchanged for ADMIN). */
+    List<PruneCandidateDto> withoutRestrictedNetworks(UUID hostId, List<PruneCandidateDto> candidates) {
+        Set<String> restricted = restrictedNetworkNames(hostId);
+        return restricted.isEmpty() ? candidates : candidates.stream().filter(c -> !restricted.contains(c.name())).toList();
+    }
+
+    /** 403 when the image (id, id prefix or tag) is the image of a container of a system-managed project. */
+    void requireNotSystemManagedImage(UUID hostId, String image) {
+        Set<String> used = restrictedImageRefs(hostId);
+        if (used.isEmpty()) {
+            return;
+        }
+        for (ImageDto i : call(hostId, images::list)) {
+            if (matchesImage(i, image) && isRestrictedImage(i, used)) {
+                throw forbidden();
+            }
+        }
+    }
+
+    /** Prune candidates without the images of system-managed projects (unchanged for ADMIN). */
+    List<PruneCandidateDto> withoutRestrictedImages(UUID hostId, List<PruneCandidateDto> candidates) {
+        Set<String> used = restrictedImageRefs(hostId);
+        if (used.isEmpty()) {
+            return candidates;
+        }
+        List<ImageDto> all = call(hostId, images::list);
+        return candidates.stream().filter(c -> all.stream().noneMatch(i -> i.id().equals(c.id())
+                && isRestrictedImage(i, used))).toList();
+    }
+
+    /** Networks the caller must not touch (empty for ADMIN or without a system-managed project). */
+    private Set<String> restrictedNetworkNames(UUID hostId) {
+        Set<String> projects = restrictedProjects(hostId);
+        if (projects.isEmpty()) {
+            return Set.of();
+        }
+        Set<String> names = new HashSet<>();
+        names.add(PROXY_NETWORK);
+        try {
+            for (ContainerDto c : call(hostId, containers::listContainers)) {
+                if (c.composeProject() == null || !projects.contains(c.composeProject())) {
+                    continue;
+                }
+                ContainerDetailsDto details = call(hostId, (id, endpoint) -> containers.inspect(id, endpoint, c.id()));
+                if (details != null && details.networks() != null) {
+                    details.networks().stream().map(ContainerDetailsDto.Network::name).filter(n -> n != null).forEach(names::add);
+                }
+            }
+            for (NetworkDto n : call(hostId, networks::list)) {
+                for (String project : projects) {
+                    if (n.name() != null && n.name().startsWith(project + "_")) {
+                        names.add(n.name());
+                    }
+                }
+            }
+        } catch (NotFound e) {
+            // a container that vanished meanwhile has no networks left to protect
+        }
+        return names;
+    }
+
+    /** References as given used by containers of system-managed projects. */
+    private Set<String> restrictedImageRefs(UUID hostId) {
+        Set<String> projects = restrictedProjects(hostId);
+        if (projects.isEmpty()) {
+            return Set.of();
+        }
+        Set<String> refs = new HashSet<>();
+        for (ContainerDto c : call(hostId, containers::listContainers)) {
+            if (c.composeProject() != null && projects.contains(c.composeProject()) && c.image() != null) {
+                refs.add(c.image());
+            }
+        }
+        return refs;
+    }
+
+    private static boolean matchesNetwork(NetworkDto n, String ref) {
+        return ref != null && (ref.equals(n.name()) || (n.id() != null && !ref.isEmpty() && n.id().startsWith(ref)));
+    }
+
+    /**
+     * True when {@code ref} (id, id prefix with or without {@code sha256:}, tag with or without {@code :latest}, or a
+     * digest reference) names this image. Digest-pulled images have no tags, so repoDigests are compared too.
+     */
+    private static boolean matchesImage(ImageDto i, String ref) {
+        if (ref == null || ref.isEmpty()) {
+            return false;
+        }
+        String id = i.id() == null ? "" : stripSha(i.id());
+        if (ref.matches("(sha256:)?[0-9a-f]+") && id.startsWith(stripSha(ref))) {
+            return true;
+        }
+        if (i.repoTags() != null && i.repoTags().stream().anyMatch(t -> withLatest(t).equals(withLatest(ref)))) {
+            return true;
+        }
+        int at = ref.indexOf("@sha256:");
+        if (at >= 0 && i.repoDigests() != null) {
+            String digest = ref.substring(at);
+            return i.repoDigests().stream().anyMatch(d -> d.endsWith(digest));
+        }
+        return false;
+    }
+
+    private static boolean isRestrictedImage(ImageDto image, Set<String> used) {
+        return used.stream().anyMatch(u -> matchesImage(image, u));
+    }
+
+    private static String stripSha(String s) {
+        return s.startsWith("sha256:") ? s.substring("sha256:".length()) : s;
+    }
+
+    /** A tag reference without a tag part means {@code :latest}; ids and digest references stay as they are. */
+    private static String withLatest(String ref) {
+        if (ref.contains("@")) {
+            return ref;
+        }
+        int slash = ref.lastIndexOf('/');
+        return ref.indexOf(':', slash + 1) < 0 ? ref + ":latest" : ref;
     }
 
     private HostException forbidden() {
