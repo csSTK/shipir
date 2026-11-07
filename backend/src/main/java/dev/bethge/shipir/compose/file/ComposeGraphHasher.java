@@ -28,8 +28,8 @@ import java.util.stream.Stream;
  * into the directory (bind-mounted data dirs) still change the hash: the next system run is then restricted until an ADMIN
  * deploys again. That is accepted: such a directory is not part of an approvable compose graph. Any I/O problem yields empty: the caller must treat that as "not approved".
  *
- * <p>Not covered: references from {@code compose.yaml} into {@code .shipir-backups} or {@code repo/.git} (unhashed paths;
- * the compose security policy has to deny them).
+ * <p>Not covered: references from {@code compose.yaml} into {@code .shipir-backups} or {@code repo/.git} (unhashed paths).
+ * {@code ComposeSecurityPolicy.unhashedPathReferences} finds them, and a deploy that has any stores no hash (shipr-kqbc.42).
  *
  * <p>Known residual risk: the hash is checked before the compose process starts, so a file changed in between is not
  * noticed (same window as the earlier "only Shipir's own files" rule).
@@ -52,6 +52,11 @@ public final class ComposeGraphHasher {
     private static final String GIT_DIR = ".git";
 
     private ComposeGraphHasher() {
+    }
+
+    /** The paths the hash skips (Git metadata of the checkout, config editor backups) as lexical paths below {@code dir}; they may not exist. */
+    public static List<Path> unhashedPaths(Path dir) {
+        return List.of(dir.resolve(ComposeFileRepository.REPO_DIR).resolve(GIT_DIR), dir.resolve(BACKUP_DIR));
     }
 
     public static Optional<String> hash(Path dir) {

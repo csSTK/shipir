@@ -87,7 +87,7 @@ class ComposeProjectLabelRealDockerTest {
                 "com.docker.compose.project=victim\n");
         var endpoint = new DockerEndpoint.Local("unix://" + DockerClientFactory.instance().getRemoteDockerUnixSocketPath());
 
-        List<String> violations = new ComposeSecurityPolicy(service, files).violations(hostId, name, endpoint, null);
+        List<String> violations = new ComposeSecurityPolicy(service, files, org.mockito.Mockito.mock(dev.bethge.shipir.docker.client.VolumeService.class)).violations(hostId, name, endpoint, null);
 
         assertThat(violations).contains("a: labels com.docker.compose.project");
     }

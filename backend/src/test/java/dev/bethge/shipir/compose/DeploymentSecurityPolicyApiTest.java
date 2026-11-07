@@ -277,6 +277,19 @@ class DeploymentSecurityPolicyApiTest extends DeploymentTestBase {
     }
 
     @Test
+    void adminDeployThatMountsABackupDirectoryStoresNoGraphHash() throws Exception {
+        String source = files.deploymentDir(hostId, "bkref") + "/.shipir-backups";
+        UUID id = adminDeployed("bkref", "services:\n  x:\n    image: alpine\n    volumes:\n      - {type: bind, source: %s, target: /b}\n".formatted(source));
+        assertThat(jdbc.queryForObject("SELECT graph_hash FROM deployment_versions WHERE deployment_id = ? AND deployed_at IS NOT NULL", String.class, id)).isNull();
+    }
+
+    @Test
+    void adminDeployWithEnvFileFromTheGitMetadataStoresNoGraphHash() throws Exception {
+        UUID id = adminDeployed("gitref", "services:\n  x:\n    image: alpine\n    env_file: repo/.git/config\n");
+        assertThat(jdbc.queryForObject("SELECT graph_hash FROM deployment_versions WHERE deployment_id = ? AND deployed_at IS NOT NULL", String.class, id)).isNull();
+    }
+
+    @Test
     void operatorDeployDoesNotRecordAGraphHash() throws Exception {
         Login op = login("operator");
         UUID id = create(op, "ophash", YAML);

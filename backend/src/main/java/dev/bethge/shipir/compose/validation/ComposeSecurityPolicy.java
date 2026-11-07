@@ -6,7 +6,11 @@ import dev.bethge.shipir.compose.execution.ComposeExecutionService;
 import dev.bethge.shipir.compose.execution.ComposeOptions;
 import dev.bethge.shipir.compose.execution.ComposeProcessResult;
 import dev.bethge.shipir.compose.file.ComposeFileRepository;
+import dev.bethge.shipir.compose.file.ComposeGraphHasher;
+import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
+import dev.bethge.shipir.docker.dto.VolumeDto;
+import dev.bethge.shipir.docker.client.VolumeService;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -16,7 +20,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -41,10 +48,12 @@ public class ComposeSecurityPolicy {
 
     private final ComposeExecutionService execution;
     private final ComposeFileRepository files;
+    private final VolumeService volumeService;
 
-    public ComposeSecurityPolicy(ComposeExecutionService execution, ComposeFileRepository files) {
+    public ComposeSecurityPolicy(ComposeExecutionService execution, ComposeFileRepository files, VolumeService volumeService) {
         this.execution = execution;
         this.files = files;
+        this.volumeService = volumeService;
     }
 
     /**
@@ -62,7 +71,95 @@ public class ComposeSecurityPolicy {
         }
         Path allowedDir = files.deploymentDir(hostId, deploymentName);
         List<String> violations = new ArrayList<>(violationsOf(parse(result.output()), allowedDir));
+        violations.addAll(volumeOwnershipViolations(hostId, deploymentName, endpoint, namedVolumes(parse(result.output()))));
         violations.addAll(ComposeFilePolicy.violations(composeFileOf(allowedDir, composeFile), allowedDir, true));
+        return violations;
+    }
+
+    /**
+     * Places where the compose configuration of the stored deployment points into a path the graph hash does not cover
+     * ({@code <dir>/.shipir-backups}, {@code <dir>/repo/.git}): resolved config values (bind sources, build contexts, ...)
+     * and the raw {@code env_file}/{@code include}/{@code extends}/... targets. Empty = nothing references them. A deploy
+     * that has references must not store a hash, since content there could change without changing the hash (shipr-kqbc.42).
+     *
+     * @throws ComposeExecutionException if compose cannot run or its output cannot be read (caller fails closed)
+     */
+    public List<String> unhashedPathReferences(UUID hostId, String deploymentName, DockerEndpoint endpoint, Path composeFile) {
+        ComposeProcessResult result = execution.execute(hostId, deploymentName, ComposeCommand.CONFIG_JSON, endpoint,
+                line -> { }, composeFile, null, ComposeOptions.ofProfiles(List.of(ComposeOptions.ALL_PROFILES)));
+        if (!result.success()) {
+            throw new ComposeExecutionException("docker compose config failed", null);
+        }
+        Path dir = files.deploymentDir(hostId, deploymentName);
+        List<Path> unhashed = new ArrayList<>();
+        for (Path p : ComposeGraphHasher.unhashedPaths(dir)) {
+            Path real = real(p);
+            if (real == null) {
+                throw new ComposeExecutionException("Deployment directory cannot be resolved", null);
+            }
+            unhashed.add(real);
+        }
+        List<String> references = new ArrayList<>();
+        collectUnhashedReferences(parse(result.output()), "", unhashed, references);
+        references.addAll(ComposeFilePolicy.unhashedReferences(composeFileOf(dir, composeFile), dir, unhashed));
+        return references;
+    }
+
+    private static void collectUnhashedReferences(JsonNode node, String where, List<Path> unhashed, List<String> references) {
+        if (node.isObject()) {
+            node.propertyStream().forEach(e -> collectUnhashedReferences(e.getValue(), where.isEmpty() ? e.getKey() : where + "." + e.getKey(), unhashed, references));
+        } else if (node.isArray()) {
+            int i = 0;
+            for (JsonNode item : node) {
+                collectUnhashedReferences(item, where + "[" + i++ + "]", unhashed, references);
+            }
+        } else if (node.isTextual() && node.asString().startsWith("/")) {
+            Path real = real(Path.of(node.asString()));
+            if (real != null && unhashed.stream().anyMatch(real::startsWith)) {
+                references.add(where + ": " + node.asString());
+            }
+        }
+    }
+
+    /** A top-level volume: the resolved Docker volume name (compose's {@code name}, else the key) and whether it is {@code external}. */
+    record NamedVolume(String name, boolean external) { }
+
+    /** All top-level volumes: key in the compose file -> resolved name and external flag. */
+    static Map<String, NamedVolume> namedVolumes(JsonNode config) {
+        Map<String, NamedVolume> result = new LinkedHashMap<>();
+        config.path("volumes").propertyStream().forEach(entry -> result.put(entry.getKey(),
+                new NamedVolume(entry.getValue().path("name").asString(entry.getKey()), entry.getValue().path("external").asBoolean(false))));
+        return result;
+    }
+
+    /**
+     * Non-ADMIN may only attach to Docker volumes that belong to this deployment (shipr-kqbc.36), so they cannot mount another
+     * deployment's or an ADMIN-created volume by name. This holds for {@code external: true} volumes (must exist and carry this
+     * project's label) and for volumes with an explicit {@code name:} (Compose would silently attach to an existing volume of that
+     * name): an existing volume of the resolved name must carry this project's {@code com.docker.compose.project} label; a name that
+     * does not exist yet is fine. The label is read through the {@code docker/} abstraction; if it cannot be read the check
+     * fails closed (an exception, never "allowed").
+     */
+    private List<String> volumeOwnershipViolations(UUID hostId, String deploymentName, DockerEndpoint endpoint, Map<String, NamedVolume> declared) {
+        if (declared.isEmpty()) {
+            return List.of();
+        }
+        List<VolumeDto> existing;
+        try {
+            existing = volumeService.list(hostId, endpoint);
+        } catch (DockerConnectionException e) {
+            throw new ComposeExecutionException("Volumes cannot be checked: host unreachable", e);
+        }
+        List<String> violations = new ArrayList<>();
+        declared.forEach((key, volume) -> {
+            VolumeDto found = existing.stream().filter(v -> volume.name().equals(v.name())).findFirst().orElse(null);
+            boolean own = found != null && deploymentName.equals(found.composeProject());
+            if (volume.external() && !own) {
+                violations.add("volume " + key + ": external volume " + volume.name() + " does not belong to this deployment");
+            } else if (!volume.external() && found != null && !own) {
+                violations.add("volume " + key + ": volume " + volume.name() + " belongs to another deployment or is not managed by Compose");
+            }
+        });
         return violations;
     }
 
@@ -146,6 +243,7 @@ public class ComposeSecurityPolicy {
             buildViolations(service, s.path("build"), allowed, violations);
             composeLabelViolations(service, "labels", s.path("labels"), violations);
             composeLabelViolations(service, "deploy.labels", s.path("deploy").path("labels"), violations);
+            composeLabelViolations(service, "build.labels", s.path("build").path("labels"), violations);
             if (nonEmpty(s.path("devices"))) {
                 violations.add(service + ": devices");
             }
@@ -175,7 +273,12 @@ public class ComposeSecurityPolicy {
                 }
             });
         }
-        config.path("volumes").propertyStream().forEach(entry -> volumeViolations(entry.getKey(), entry.getValue(), allowed, violations));
+        config.path("networks").propertyStream().forEach(entry ->
+                composeLabelViolations("network " + entry.getKey(), "labels", entry.getValue().path("labels"), violations));
+        config.path("volumes").propertyStream().forEach(entry -> {
+            composeLabelViolations("volume " + entry.getKey(), "labels", entry.getValue().path("labels"), violations);
+            volumeViolations(entry.getKey(), entry.getValue(), allowed, violations);
+        });
         return violations;
     }
 
@@ -219,8 +322,8 @@ public class ComposeSecurityPolicy {
         }
         JsonNode opts = volume.path("driver_opts");
         String type = opts.path("type").asString("").strip().toLowerCase(Locale.ROOT);
-        String options = opts.path("o").asString("").toLowerCase(Locale.ROOT);
-        boolean bindOption = options.contains("bind");
+        boolean bindOption = Arrays.stream(opts.path("o").asString("").toLowerCase(Locale.ROOT).split(","))
+                .map(String::strip).anyMatch(o -> o.equals("bind") || o.equals("rbind"));
         if (type.isEmpty() && !bindOption || "tmpfs".equals(type) && !bindOption) {
             return;
         }

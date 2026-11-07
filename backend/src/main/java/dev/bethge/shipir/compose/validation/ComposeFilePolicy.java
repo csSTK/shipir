@@ -67,6 +67,24 @@ final class ComposeFilePolicy {
         return policy.violations;
     }
 
+    /**
+     * Targets of {@code env_file}/{@code include}/{@code extends}/... that resolve into one of {@code unhashed} (paths the
+     * graph hash skips), as {@code "<what> <raw>: ..."} lines. Fails closed on files that cannot be analysed.
+     */
+    static List<String> unhashedReferences(Path composeFile, Path dir, List<Path> unhashed) {
+        Path realAllowed = ComposeSecurityPolicy.real(dir);
+        if (realAllowed == null) {
+            return List.of("deployment directory cannot be resolved");
+        }
+        ComposeFilePolicy policy = new ComposeFilePolicy(realAllowed, true);
+        policy.unhashed = unhashed;
+        policy.scan(composeFile.toAbsolutePath().normalize(), 0);
+        return policy.violations.stream().filter(v -> !v.contains(": outside the deployment directory")).toList();
+    }
+
+    private static final String UNHASHED_NOTE = ": points into a path the deploy hash does not cover";
+    private List<Path> unhashed = List.of();
+
     private void scan(Path file, int depth) {
         Path real = ComposeSecurityPolicy.real(file);
         if (real == null || !visited.add(real)) {
@@ -286,6 +304,10 @@ final class ComposeFilePolicy {
         }
         if (resolved == null || !resolved.startsWith(allowed)) {
             violations.add(what + " " + raw + ": outside the deployment directory");
+            return null;
+        }
+        if (unhashed.stream().anyMatch(resolved::startsWith)) {
+            violations.add(what + " " + raw + UNHASHED_NOTE);
             return null;
         }
         return resolved;

@@ -95,6 +95,18 @@ test('operator pulls and updates a deployed deployment', async ({ page, api }) =
   await expect(page.getByLabel('Deployment output')).toContainText('pu-1')
 })
 
+test('admin reviews the extra files before Pull & update starts', async ({ page, api }) => {
+  mockCommon(api, 'ADMIN')
+  api.mock('GET', `${BASE}/s1/files`, { body: [{ path: 'conf/extra.yaml', directory: false, size: 12, modifiedAt: '2026-10-01T10:00:00Z', readOnly: false }] })
+  api.mock('POST', `${BASE}/s1/pull-update`, { status: 202, body: { runId: 'pu-2', versionId: 'v3' } })
+  await page.goto('/environments/a/deployments/s1')
+  await page.getByRole('button', { name: 'Pull & update' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Review before updating' })
+  await expect(dialog.getByText('conf/extra.yaml')).toBeVisible()
+  await dialog.getByRole('button', { name: 'Pull & update' }).click()
+  await expect(page.getByLabel('Deployment output')).toContainText('pu-2')
+})
+
 test('viewer sees the deployment read-only', async ({ page, api }) => {
   mockCommon(api, 'VIEWER')
   await page.goto('/environments/a/deployments/s1')

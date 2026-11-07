@@ -245,6 +245,40 @@ class ComposeSecurityPolicyTest {
         assertThat(check(json)).containsExactly("volume v: bind mount via driver_opts");
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"xbindy", "nobind", "bindfoo", "rbinder", "size=1m,xbindy"})
+    void doesNotTreatLookalikeOptionTokensAsBind(String options) {
+        String tmpfs = "{\"volumes\":{\"v\":{\"driver_opts\":{\"type\":\"tmpfs\",\"device\":\"tmpfs\",\"o\":\"%s\"}}}}".formatted(options);
+        String untyped = "{\"volumes\":{\"v\":{\"driver_opts\":{\"o\":\"%s\"}}}}".formatted(options);
+        assertThat(check(tmpfs)).isEmpty();
+        assertThat(check(untyped)).isEmpty();
+    }
+
+    @Test
+    void stillTreatsBindTokenAmongOtherOptionsAsBind() {
+        String json = "{\"volumes\":{\"v\":{\"driver_opts\":{\"type\":\"tmpfs\",\"o\":\"size=1m, RBIND\",\"device\":\"/\"}}}}";
+        assertThat(check(json)).containsExactly("volume v: bind mount via driver_opts");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"networks\":{\"n\":{\"labels\":{\"com.docker.compose.project\":\"other\"}}}}|network n: labels com.docker.compose.project",
+            "{\"networks\":{\"n\":{\"labels\":[\"COM.docker.compose.network=x\"]}}}|network n: labels COM.docker.compose.network",
+            "{\"volumes\":{\"v\":{\"labels\":{\"com.docker.compose.volume\":\"x\"}}}}|volume v: labels com.docker.compose.volume",
+            "{\"services\":{\"x\":{\"build\":{\"context\":\"%s\",\"labels\":{\"com.docker.compose.project\":\"o\"}}}}}|x: build.labels com.docker.compose.project"})
+    void deniesComposeLabelsOnNetworksVolumesAndBuild(String caseDef) {
+        String[] parts = caseDef.split("\\|", 2);
+        assertThat(check(parts[0].replace("%s", dir.toString()))).containsExactly(parts[1]);
+    }
+
+    @Test
+    void allowsHarmlessLabelsOnNetworksVolumesAndBuild() {
+        assertThat(check("""
+                {"networks":{"n":{"labels":{"app":"x","com.docker.composer":"1"}}},
+                 "volumes":{"v":{"labels":{"app":"x"}}},
+                 "services":{"x":{"build":{"context":"%s","labels":{"app":"x"}}}}}""".formatted(dir))).isEmpty();
+    }
+
     @Test
     void allowsLocalAndUnsetDriverWithoutTypeAndTmpfs() {
         String json = "{\"volumes\":{\"a\":{},\"b\":{\"driver\":\"local\",\"driver_opts\":{}},"

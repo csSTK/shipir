@@ -37,7 +37,7 @@ class ComposeSecurityPolicyProfilesTest {
         when(execution.execute(any(), any(), eq(ComposeCommand.CONFIG_JSON), any(), any(), any(), any(), any()))
                 .thenReturn(new ComposeProcessResult(0, false, List.of("{\"name\":\"web\",\"services\":{}}")));
 
-        List<String> violations = new ComposeSecurityPolicy(execution, files)
+        List<String> violations = new ComposeSecurityPolicy(execution, files, mock(dev.bethge.shipir.docker.client.VolumeService.class))
                 .violations(host, "web", new DockerEndpoint.Local("unix:///var/run/docker.sock"), null);
 
         assertThat(violations).isEmpty();

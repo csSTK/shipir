@@ -586,7 +586,10 @@ public class DeploymentRunService {
             // hashed before the (slow) policy check, so an edit made meanwhile leaves a stale hash that fails safe next run
             String graphHashBeforeGate = graphHashOf(deployment);
             boolean approved = enforceRunPolicy(deployment, endpoint, username, userId, source);
-            String graphHash = approved ? graphHashBeforeGate : null;
+            // an ADMIN deploy that references paths the hash skips (.shipir-backups, repo/.git) vouches for nothing: no hash
+            String graphHash = approved && graphHashBeforeGate != null
+                    && !deploymentService.referencesUnhashedPaths(hostId, deployment.getName(), endpoint, deploymentService.composeFileOf(deployment))
+                    ? graphHashBeforeGate : null;
             DeploymentVersion version = tx.execute(status -> {
                 DeploymentVersion v = new DeploymentVersion(deployment.getId(), yaml, source.getEnvCiphertext(), versionSource,
                         userId, clock.instant());

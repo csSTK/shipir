@@ -46,7 +46,7 @@ function formatDate(iso: string | null): string {
   return iso ? formatDateTime(iso) : i18n.t('deployments:DeploymentDetailPage.never')
 }
 
-type Dialog = { kind: 'delete' } | { kind: 'stop' } | { kind: 'deploy'; draftId: string | null } | { kind: 'rollback'; version: DeploymentVersion } | null
+type Dialog = { kind: 'delete' } | { kind: 'stop' } | { kind: 'deploy'; draftId: string | null } | { kind: 'redeploy' } | { kind: 'update' } | { kind: 'rollback'; version: DeploymentVersion } | null
 
 /** `/environments/:id/deployments/:deploymentId`: status, actions, content and version history of a managed deployment. */
 export function DeploymentDetailPage() {
@@ -164,6 +164,17 @@ export function DeploymentDetailPage() {
     })
   }
 
+  // An ADMIN's run stores a hash that approves every file in the directory for later automatic runs: show them first.
+  function onRedeployClick() {
+    if (user?.role === 'ADMIN') setDialog({ kind: 'redeploy' })
+    else startRedeploy()
+  }
+
+  function onPullUpdateClick() {
+    if (user?.role === 'ADMIN') setDialog({ kind: 'update' })
+    else startPullUpdate()
+  }
+
   function startPullUpdate() {
     setActionError(null)
     pullUpdate.mutate(deploymentId, {
@@ -230,7 +241,7 @@ export function DeploymentDetailPage() {
               {data.source === 'GIT' && (
                 <Button
                   variant="secondary"
-                  onClick={startRedeploy}
+                  onClick={onRedeployClick}
                   disabled={busy || contentEditing}
                   title={contentEditing ? t('DeploymentDetailPage.saveOrCancelEditsFirst') : undefined}
                 >
@@ -240,7 +251,7 @@ export function DeploymentDetailPage() {
               {data.source === 'FILE' && (
                 <Button
                   variant="secondary"
-                  onClick={startPullUpdate}
+                  onClick={onPullUpdateClick}
                   disabled={busy || !hasDeployed || contentEditing}
                   title={contentEditing ? t('DeploymentDetailPage.saveOrCancelEditsFirst') : hasDeployed ? t('DeploymentDetailPage.pullNewerImagesAndRecreate') : t('DeploymentDetailPage.deployOnceFirst')}
                 >
@@ -375,6 +386,30 @@ export function DeploymentDetailPage() {
           )}
         </ConfirmDialog>
       )}
+      {dialog?.kind === 'redeploy' && (
+        <ConfirmDialog
+          size="xl"
+          title={t('DeploymentDetailPage.reviewBeforeRedeploying')}
+          confirmLabel={t('DeploymentDetailPage.pullRedeploy')}
+          onConfirm={() => { closeDialog(); startRedeploy() }}
+          open onOpenChange={(open) => !open && closeDialog()}
+          details={<DeployFilesReview hostId={hostId} deploymentId={deploymentId} />}
+        >
+          <Trans t={t} i18nKey="DeploymentDetailPage.redeployNameApprovesTheFiles" values={{ name: data.name }} components={{ strong: <strong /> }} />
+        </ConfirmDialog>
+      )}
+      {dialog?.kind === 'update' && (
+        <ConfirmDialog
+          size="xl"
+          title={t('DeploymentDetailPage.reviewBeforeUpdating')}
+          confirmLabel={t('DeploymentDetailPage.pullUpdate')}
+          onConfirm={() => { closeDialog(); startPullUpdate() }}
+          open onOpenChange={(open) => !open && closeDialog()}
+          details={<DeployFilesReview hostId={hostId} deploymentId={deploymentId} />}
+        >
+          <Trans t={t} i18nKey="DeploymentDetailPage.updateNameApprovesTheFiles" values={{ name: data.name }} components={{ strong: <strong /> }} />
+        </ConfirmDialog>
+      )}
       {dialog?.kind === 'delete' && (
         <ConfirmDialog title={t('DeploymentDetailPage.deleteDeployment')} confirmLabel={t('DeploymentDetailPage.delete')} danger loading={remove.isPending} error={dialogError} onConfirm={confirmDelete} open onOpenChange={(open) => !open && closeDialog()}>
           <Trans t={t} i18nKey="DeploymentDetailPage.deleteNameItsContainersAre" values={{ name: data.name }} components={{ strong: <strong /> }} />
@@ -389,7 +424,12 @@ export function DeploymentDetailPage() {
           error={dialogError}
           onConfirm={() => confirmRollback(dialog.version)}
           open onOpenChange={(open) => !open && closeDialog()}
-          details={<VersionDiff hostId={hostId} deploymentId={deploymentId} versionId={dialog.version.id} />}
+          details={
+            <>
+              <VersionDiff hostId={hostId} deploymentId={deploymentId} versionId={dialog.version.id} />
+              {user?.role === 'ADMIN' && <DeployFilesReview hostId={hostId} deploymentId={deploymentId} />}
+            </>
+          }
         >
           <Trans t={t} i18nKey="DeploymentDetailPage.redeployNameWithTheVersion" values={{ name: data.name, date: formatDate(dialog.version.createdAt) }} components={{ strong: <strong /> }} />
         </ConfirmDialog>

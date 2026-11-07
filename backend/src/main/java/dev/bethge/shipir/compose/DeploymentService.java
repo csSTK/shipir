@@ -562,6 +562,19 @@ public class DeploymentService {
     }
 
     /**
+     * Whether the compose configuration points into a path the graph hash does not cover (config editor backups, Git
+     * metadata). Such a deploy must not store a hash, so later automatic runs stay restricted (shipr-kqbc.42). Fails
+     * closed: if compose cannot be asked, the answer is "yes".
+     */
+    boolean referencesUnhashedPaths(UUID hostId, String name, DockerEndpoint endpoint, Path composeFile) {
+        try {
+            return !policy.unhashedPathReferences(hostId, name, endpoint, composeFile).isEmpty();
+        } catch (ComposeExecutionException e) {
+            return true;
+        }
+    }
+
+    /**
      * Before compose runs at all: non-ADMIN callers may not reference files outside the deployment directory
      * ({@code env_file}, {@code include}, {@code extends}, secrets/configs), since compose reads them on the Shipir server
      * (other deployments' {@code .env}, {@code /proc/self/environ}). Checked on the raw YAML because compose inlines

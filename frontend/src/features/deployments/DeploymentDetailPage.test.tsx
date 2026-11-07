@@ -292,6 +292,55 @@ describe('DeploymentDetailPage', () => {
     expect(screen.getByText('pu-7')).toBeInTheDocument()
   })
 
+  const extraFiles = () => [
+    { path: 'conf/extra.yaml', directory: false, size: 12, modifiedAt: '2026-10-01T10:00:00Z', readOnly: false },
+  ]
+  const gitDeployment = () => ({ ...deployment, source: 'GIT', git: { repoUrl: 'https://x/y.git', ref: 'main', composePath: 'compose.yaml', credentialId: null, lastCommitSha: null, autoUpdateEnabled: false, autoUpdateIntervalSeconds: 300, lastPolledAt: null, lastPollError: null } })
+
+  it('shows an ADMIN the extra files before Pull & update and starts it only after confirming', async () => {
+    const pullUpdate = vi.fn(() => ({ runId: 'pu-8', versionId: 'v4' }))
+    serve('ADMIN', { [`GET ${BASE}/files`]: extraFiles, [`POST ${BASE}/pull-update`]: pullUpdate })
+    renderPage()
+    const button = await screen.findByRole('button', { name: 'Pull & update' })
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+    const dialog = await screen.findByRole('dialog', { name: 'Review before updating' })
+    expect(pullUpdate).not.toHaveBeenCalled()
+    expect(await within(dialog).findByText('conf/extra.yaml')).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Pull & update' }))
+    expect(await screen.findByText('pu-8')).toBeInTheDocument()
+  })
+
+  it('shows an ADMIN the extra files before Pull & redeploy and starts it only after confirming', async () => {
+    const redeploy = vi.fn(() => ({ runId: 'rd-8', versionId: 'v4' }))
+    serve('ADMIN', { [`GET ${BASE}`]: gitDeployment, [`GET ${BASE}/files`]: extraFiles, [`POST ${BASE}/git/redeploy`]: redeploy })
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Pull & redeploy' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Review before redeploying' })
+    expect(redeploy).not.toHaveBeenCalled()
+    expect(await within(dialog).findByText('conf/extra.yaml')).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Pull & redeploy' }))
+    expect(await screen.findByText('rd-8')).toBeInTheDocument()
+  })
+
+  it('lets an OPERATOR start Pull & redeploy without a review', async () => {
+    const redeploy = vi.fn(() => ({ runId: 'rd-9', versionId: 'v4' }))
+    serve('OPERATOR', { [`GET ${BASE}`]: gitDeployment, [`POST ${BASE}/git/redeploy`]: redeploy })
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Pull & redeploy' }))
+    expect(await screen.findByText('rd-9')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('shows an ADMIN the extra files in the rollback dialog', async () => {
+    serve('ADMIN', { [`GET ${BASE}/files`]: extraFiles })
+    renderPage()
+    await screen.findByRole('list', { name: 'Versions' })
+    fireEvent.click(screen.getByRole('button', { name: /Roll back to/ }))
+    const dialog = screen.getByRole('dialog', { name: 'Roll back deployment' })
+    expect(await within(dialog).findByText('conf/extra.yaml')).toBeInTheDocument()
+  })
+
   it('keeps the saved confirmation when the refreshed detail changes the image auto-update settings', async () => {
     let current = { ...deployment, imageAutoUpdate: { enabled: false, windowStart: null, windowEnd: null, lastAttemptAt: null, lastResult: null } }
     serve('OPERATOR', {
