@@ -47,7 +47,7 @@ Per-file map of the codebase: `docs/CODE_MAP.md`. Read or grep it when you need 
 ## Model Policy
 
 - **Planning uses Opus.** Planning means architecture and stack decisions, breaking work into epics and tasks, writing issue descriptions and acceptance criteria, and setting dependencies (`text-to-task`). Run planning sessions on Opus (`/model opus`).
-- **Orchestration uses Opus.** The `/next-task*` skills coordinate implementation and do not plan. Run them on Sonnet (`/model sonnet`). Wave planning in `next-task-plan` part 2 (file sets, waves, hand-off prompts) is orchestration, not planning, so it runs on Sonnet.
+- **Orchestration uses Opus.** The `/next-task*` skills coordinate implementation and do not plan. Run them on Opus (`/model opus`). Wave planning in `next-task-plan` part 2 (file sets, waves, hand-off prompts) is orchestration, so it runs on Opus too.
 - **Implementation is done only by Sonnet or Haiku sub-agents.** Opus does not write production code. Delegate each implementation task to the `implementer-sonnet` or `implementer-haiku` subagent (`.claude/agents/`), passing the bead ID.
 - **Pick the implementation model by scope:**
   - **Haiku**: small, well-specified, low-risk changes, such as boilerplate, renames, simple DTOs or entities, config tweaks, docs, and straightforward tests.

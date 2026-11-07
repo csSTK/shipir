@@ -5,7 +5,7 @@ description: Implement a whole beads epic end to end. Takes an epic ID, creates 
 
 # next-task
 
-Orchestrates one epic from branch to push. You coordinate; the implementer sub-agents write the code. Run this on Sonnet (Model Policy in CLAUDE.md); if the session isn't on Sonnet, say so and suggest `/model sonnet`.
+Orchestrates one epic from branch to push. You coordinate; the implementer sub-agents write the code. **Model check first:** before any other step or tool call, check the session model. If it isn't Opus (Model Policy in CLAUDE.md), stop, say so and suggest `/model opus`. Don't create branches or claim beads first.
 
 **Input:** an epic ID, optionally with the flag `--watch-ci` (`$ARGUMENTS`). Remove the flag, then take the rest as the epic ID. If the ID is missing, or `bd show <id>` says it isn't an epic, stop and ask for one, whatever flags were passed. A whole-branch review always runs before the push (step 7). Never pick an epic yourself.
 

@@ -5,7 +5,7 @@ description: Implement one or more individual beads (tasks, bugs, chores, findin
 
 # next-task-beads
 
-Same pipeline as `next-task`, for a hand-picked set of beads instead of an epic's children. Run on Sonnet (Model Policy in CLAUDE.md); if the session isn't on Sonnet, say so and suggest `/model sonnet`.
+Same pipeline as `next-task`, for a hand-picked set of beads instead of an epic's children. **Model check first:** before any other step or tool call, check the session model. If it isn't Opus (Model Policy in CLAUDE.md), stop, say so and suggest `/model opus`. Don't create branches or claim beads first.
 
 **Input:** one or more bead IDs, optionally with the flag `--watch-ci` (`$ARGUMENTS`; the whole-branch review before the push always runs, against the beads' descriptions and criteria). If none is given, stop and ask; never pick beads yourself. If an ID is an epic, stop and point to `/next-task` (or `/next-task-batch` for several epics).
 
