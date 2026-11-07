@@ -61,6 +61,8 @@ This is a learning and portfolio project focused on Java backend development. Th
 
 - **Permissions (shipr-cbw):** OPERATOR and VIEWER users only see the environments and deployments an ADMIN grants them (Settings > Users > Access). After upgrading, existing non-admin users see nothing until they are granted access.
 
+- **Case-insensitive usernames (V44, shipr-kqbc.29):** usernames are now unique ignoring case. If two existing users differed only by case, the migration kept the oldest one and renamed the others to `name (id8)` (first 8 characters of the user id); those users can no longer sign in with their old spelling. After upgrading, check Settings > Users for names ending in `(xxxxxxxx)` and tell the affected people their new username (or rename them). The username `system` (any case) is reserved for background jobs in the audit log and cannot be created.
+
 ## Tech stack
 
 | Area | Choice |

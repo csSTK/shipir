@@ -24,6 +24,9 @@ import java.util.UUID;
 @Service
 class UserAdminService {
 
+    /** Audit actor of background jobs (DeploymentRunService, RecreateLeftoverReconciler, retention purge). */
+    private static final String RESERVED_USERNAME = "system";
+
     private static final String UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ";
     private static final String LOWER = "abcdefghijkmnopqrstuvwxyz";
     private static final String DIGITS = "23456789";
@@ -62,6 +65,10 @@ class UserAdminService {
     @Auditable(action = "USER_CREATE", targetType = "USER", targetId = "#result?.id")
     @Transactional
     OneTimePasswordResponse create(String username, Role role) {
+        // "system" is the actor name of background jobs in the audit log; a real user must not be able to look like it
+        if (username != null && RESERVED_USERNAME.equalsIgnoreCase(username.strip())) {
+            throw usernameTaken();
+        }
         if (users.findByUsername(username).isPresent()) {
             throw usernameTaken();
         }

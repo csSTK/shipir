@@ -230,6 +230,17 @@ class OidcLoginTest extends OidcTestBase {
     }
 
     @Test
+    void providerNameSystemInAnyCaseIsNeverProvisionedAsIs() throws Exception {
+        configure(true, true);
+        Flow f = signIn(claims("sub-system", "SyStEm", "ops"));
+
+        assertThat(f.callbackLocation()).isEqualTo("/");
+        String created = jdbc.queryForObject(
+                "SELECT username FROM users WHERE external_subject = 'sub-system'", String.class);
+        assertThat(created).startsWith("SyStEm-").isNotEqualToIgnoringCase("system");
+    }
+
+    @Test
     void ssoUserHasNoUsablePasswordAndIsNotTrappedInSetup() throws Exception {
         configure(true, true);
         signIn(claims("sub-10", "ivy", "ops"));

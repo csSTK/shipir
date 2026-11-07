@@ -94,7 +94,8 @@ class OidcUserResolver {
             base = "sso";
         }
         base = base.length() > 50 ? base.substring(0, 50) : base;
-        if (!users.existsByUsernameIgnoreCase(base)) {
+        // "system" is the audit actor of background jobs (see UserAdminService): never hand it to a provider-chosen name
+        if (!"system".equalsIgnoreCase(base) && !users.existsByUsernameIgnoreCase(base)) {
             return base;
         }
         String suffix = "-" + sha256Hex(subject).substring(0, 8);

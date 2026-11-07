@@ -234,6 +234,18 @@ class UserAdminApiTest {
     }
 
     @Test
+    void createRejectsTheReservedSystemUsernameInAnyCase() throws Exception {
+        Session admin = admin();
+        for (String reserved : List.of("system", "System", "SYSTEM", "sYsTeM")) {
+            call(admin, "POST", "/api/users", "{\"username\":\"%s\",\"role\":\"ADMIN\"}".formatted(reserved))
+                    .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("USERNAME_TAKEN"));
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM users WHERE lower(username) = 'system'", Integer.class))
+                .isZero();
+        create(admin, "systems", "VIEWER");
+    }
+
+    @Test
     void loginWithAnotherCaseWorksForTheSameUserAndAuditsTheStoredName() throws Exception {
         String password = create(admin(), "Dana", "VIEWER").get("oneTimePassword").asString();
         jdbc.update("DELETE FROM audit_log");
