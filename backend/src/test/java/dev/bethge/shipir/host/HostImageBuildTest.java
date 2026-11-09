@@ -548,6 +548,17 @@ class HostImageBuildTest extends HostApiTestBase {
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_GIT_REF"));
     }
 
+    /** The Git ref error reaches the client through HostExceptionHandler, not a per-service conversion (shipr-ycvc.83). */
+    @Test
+    void badGitRefIsAHandlerMappedGitErrorWithTheSharedMessage() throws Exception {
+        mvc.perform(login("admin").write(build(null, "tag", "a:1", "gitUrl", REPO, "gitRef", "main branch")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_GIT_REF"))
+                .andExpect(jsonPath("$.message").value("Invalid Git branch, tag or commit"));
+        verify(git, never()).sync(any(), any(), any(), any(), any());
+        verifyNoBuild();
+    }
+
     @Test
     void badGitUrlUsesTheGitServiceVerdict() throws Exception {
         doThrow(new GitOperationException(HttpStatus.BAD_REQUEST, "INVALID_REPO_URL", "bad url"))

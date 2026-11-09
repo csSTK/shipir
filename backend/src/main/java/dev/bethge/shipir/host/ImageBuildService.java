@@ -127,12 +127,7 @@ class ImageBuildService {
         String gitRef = null;
         if (fromGit) {
             gitUrl = request.gitUrl().trim();
-            try {
-                gitRef = GitRepositoryService.validateRef(request.gitRef());
-            } catch (GitOperationException e) {
-                // HostExceptionHandler only covers HostException; same status and code as before
-                throw new HostException(e.status(), e.code(), e.getMessage());
-            }
+            gitRef = GitRepositoryService.validateRef(request.gitRef());
             checkGit(gitUrl, request.gitCredentialId());
         }
         long maxBytes = properties.maxBuildContext().toBytes();
@@ -354,12 +349,8 @@ class ImageBuildService {
     }
 
     private void checkGit(String url, UUID credentialId) {
-        try {
-            git.validateUrl(url);
-            git.requireCredentialForUrl(credentialId, url);
-        } catch (GitOperationException e) {
-            throw new HostException(e.status(), e.code(), e.getMessage());
-        }
+        git.validateUrl(url);
+        git.requireCredentialForUrl(credentialId, url);
     }
 
     private void validateArchive(Path file, long maxBytes) {
