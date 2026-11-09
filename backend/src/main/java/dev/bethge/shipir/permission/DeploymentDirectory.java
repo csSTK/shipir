@@ -11,6 +11,9 @@ public interface DeploymentDirectory {
 
     Optional<UUID> hostIdOf(UUID deploymentId);
 
+    /** Host ids of the given deployments in one query; unknown ids are absent from the map. */
+    Map<UUID, UUID> hostIdsOf(Collection<UUID> deploymentIds);
+
     Set<UUID> deploymentIdsOf(UUID hostId);
 
     /** Names of the given deployments in one query; unknown ids are absent from the map. */

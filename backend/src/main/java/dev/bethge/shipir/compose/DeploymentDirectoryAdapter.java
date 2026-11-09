@@ -26,6 +26,12 @@ class DeploymentDirectoryAdapter implements DeploymentDirectory {
     }
 
     @Override
+    public Map<UUID, UUID> hostIdsOf(Collection<UUID> deploymentIds) {
+        return deployments.findAllById(deploymentIds).stream()
+                .collect(Collectors.toMap(Deployment::getId, Deployment::getHostId));
+    }
+
+    @Override
     public Set<UUID> deploymentIdsOf(UUID hostId) {
         return deployments.findByHostIdOrderByNameAsc(hostId).stream().map(Deployment::getId)
                 .collect(Collectors.toSet());

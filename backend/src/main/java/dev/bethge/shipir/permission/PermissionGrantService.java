@@ -229,10 +229,11 @@ public class PermissionGrantService {
     }
 
     private PermissionsResponse toResponse(List<Permission> permissions) {
+        Map<UUID, UUID> hostIds = deployments.hostIdsOf(permissions.stream().map(Permission::getDeploymentId)
+                .filter(Objects::nonNull).collect(Collectors.toSet()));
         List<GrantResponse> list = permissions.stream()
                 .map(p -> new GrantResponse(p.getHostId(), p.getDeploymentId(),
-                        p.getDeploymentId() == null ? null : deployments.hostIdOf(p.getDeploymentId()).orElse(null),
-                        p.getLevel()))
+                        p.getDeploymentId() == null ? null : hostIds.get(p.getDeploymentId()), p.getLevel()))
                 .toList();
         return new PermissionsResponse(list);
     }
