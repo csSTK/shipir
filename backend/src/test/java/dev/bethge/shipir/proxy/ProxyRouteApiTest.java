@@ -109,7 +109,8 @@ class ProxyRouteApiTest {
     void container(String id, String name, String project, String state, int... exposed) {
         List<ContainerDto> list = new java.util.ArrayList<>(listed());
         list.removeIf(c -> c.id().equals(id));
-        list.add(new ContainerDto(id, name, "img", state, "Up", null, Instant.now(), List.of(), project, "svc"));
+        List<String> listedPorts = java.util.Arrays.stream(exposed).mapToObj(p -> p + "/tcp").toList();
+        list.add(new ContainerDto(id, name, "img", state, "Up", null, Instant.now(), listedPorts, project, "svc"));
         when(containers.listContainers(any(), any())).thenReturn(list);
         List<ContainerDetailsDto.Port> ports = java.util.Arrays.stream(exposed)
                 .mapToObj(p -> new ContainerDetailsDto.Port(p, "tcp", null, null)).toList();
@@ -285,6 +286,46 @@ class ProxyRouteApiTest {
                 .andExpect(jsonPath("$[?(@.containerName=='shop-web-1')].published").value(true))
                 .andExpect(jsonPath("$[?(@.containerName=='shop-db-1')].ports[0]").value(3306))
                 .andExpect(jsonPath("$[?(@.containerName=='shop-db-1')].published").value(false));
+    }
+
+    @Test
+    void candidatesTakePortsFromTheListCallWithoutInspectingAnyContainer() throws Exception {
+        Login admin = login("admin");
+        // published and exposed entries of the list call, plus a UDP one that must not count
+        List<ContainerDto> list = new java.util.ArrayList<>(listed());
+        list.removeIf(c -> c.id().equals("web1"));
+        list.add(new ContainerDto("web1", "shop-web-1", "img", "running", "Up", null, Instant.now(),
+                List.of("8080:80/tcp", "80/tcp", "53/udp"), "shop", "svc"));
+        when(containers.listContainers(any(), any())).thenReturn(list);
+        org.mockito.Mockito.clearInvocations(containers);
+
+        mvc.perform(get(url() + "/candidates").session(admin.session())).andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.containerName=='shop-web-1')].ports[0]").value(80))
+                .andExpect(jsonPath("$[?(@.containerName=='shop-web-1')].ports.length()").value(1))
+                .andExpect(jsonPath("$[?(@.containerName=='shop-web-1')].suggestedPort").value(80))
+                .andExpect(jsonPath("$[?(@.containerName=='shop-db-1')].ports[0]").value(3306));
+        verify(containers, never()).inspect(any(), any(), any());
+    }
+
+    @Test
+    void candidatesInspectOnlyStoppedContainersWhoseListedPortsAreEmpty() throws Exception {
+        Login admin = login("admin");
+        // a stopped container: the list call reports no ports, its exposed port comes from inspect
+        container("old1", "shop-old-1", "shop", "exited", 8081);
+        List<ContainerDto> list = new java.util.ArrayList<>(listed());
+        list.removeIf(c -> c.id().equals("old1"));
+        list.add(new ContainerDto("old1", "shop-old-1", "img", "exited", "Exited (0)", null, Instant.now(),
+                List.of(), "shop", "svc"));
+        when(containers.listContainers(any(), any())).thenReturn(list);
+        org.mockito.Mockito.clearInvocations(containers);
+
+        mvc.perform(get(url() + "/candidates").session(admin.session())).andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.containerName=='shop-old-1')].ports[0]").value(8081))
+                .andExpect(jsonPath("$[?(@.containerName=='shop-old-1')].suggestedPort").value(8081))
+                .andExpect(jsonPath("$[?(@.containerName=='shop-web-1')].ports[0]").value(80));
+        verify(containers, times(1)).inspect(any(), any(), eq("old1"));
+        verify(containers, never()).inspect(any(), any(), eq("web1"));
+        verify(containers, never()).inspect(any(), any(), eq("db1"));
     }
 
     @Test

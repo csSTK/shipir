@@ -102,7 +102,12 @@ public class ProxyRouteService {
                 .filter(c -> full || visibleContainer(hostId, managed, c))
                 .sorted(java.util.Comparator.comparing(ContainerDto::name))
                 .map(c -> {
-                    List<Integer> ports = exposedPorts(hostId, endpoint, c);
+                    List<Integer> ports = listedPorts(c.ports());
+                    // Docker's list call reports no ports for stopped containers: inspect only those (running ones
+                    // come from the list alone, so the cost stays one list call plus one inspect per stopped container).
+                    if (ports.isEmpty() && !"running".equalsIgnoreCase(c.state())) {
+                        ports = exposedPorts(hostId, endpoint, c);
+                    }
                     return new ProxyRouteCandidate(c.name(), c.image(), c.state(), ports,
                             ports.size() == 1 ? ports.get(0) : null, published.contains(c.name()));
                 })
@@ -313,6 +318,30 @@ public class ProxyRouteService {
         Map<String, ContainerDto> byName = new LinkedHashMap<>();
         call(() -> containers.listContainers(hostId, endpoint)).forEach(c -> byName.put(c.name(), c));
         return byName;
+    }
+
+    /**
+     * Exposed TCP ports from the list call's entries ({@code 8080:80/tcp} or {@code 80/tcp}), ascending; no inspect,
+     * so listing candidates costs one list call however many containers the host runs.
+     */
+    private static List<Integer> listedPorts(List<String> entries) {
+        if (entries == null) {
+            return List.of();
+        }
+        Set<Integer> ports = new TreeSet<>();
+        for (String entry : entries) {
+            int slash = entry.lastIndexOf('/');
+            if (slash < 0 || !"tcp".equalsIgnoreCase(entry.substring(slash + 1))) {
+                continue;
+            }
+            String head = entry.substring(0, slash);
+            try {
+                ports.add(Integer.parseInt(head.substring(head.lastIndexOf(':') + 1)));
+            } catch (NumberFormatException ignored) {
+                // not a port entry this view understands; skip it
+            }
+        }
+        return List.copyOf(ports);
     }
 
     private List<Integer> exposedPorts(UUID hostId, DockerEndpoint endpoint, ContainerDto container) {
