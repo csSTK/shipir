@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ApiError, apiFetch, readCookie } from '../../shared/api/client.ts'
+import { ApiError, apiFetch } from '../../shared/api/client.ts'
+import { postFormJson } from '../../shared/api/transfer.ts'
 import { HOSTS_OVERVIEW_KEY } from '../hosts/api.ts'
 import { useDeleteResourceMutation } from '../hosts/deleteResource.ts'
 import { MAX_BUILD_CONTEXT_LABEL } from './buildRules.ts'
@@ -94,18 +95,7 @@ const BUILD_ERRORS: Record<string, string> = {
   get HOST_NOT_FOUND() { return i18n.t('images:api.thisEnvironmentNoLongerExists') },
 }
 
-async function toApiError(response: Response): Promise<ApiError> {
-  let code: string | undefined
-  try {
-    const parsed: unknown = JSON.parse(await response.text())
-    if (parsed && typeof parsed === 'object' && 'code' in parsed && typeof parsed.code === 'string') code = parsed.code
-  } catch {
-    // not JSON: keep the generic error
-  }
-  return new ApiError(response.status, response.statusText, code)
-}
-
-/** Multipart POST; not `apiFetch` (JSON only). The browser sets the boundary; CSRF header as in `restoreVolume`. */
+/** Multipart POST (not `apiFetch`, which is JSON only); CSRF and error mapping live in `postFormJson`. */
 export async function startBuild(hostId: string, input: BuildInput): Promise<{ runId: string }> {
   const form = new FormData()
   if (input.source === 'upload' && input.file) {
@@ -119,18 +109,7 @@ export async function startBuild(hostId: string, input: BuildInput): Promise<{ r
   form.append('dockerfile', input.dockerfile.trim() || 'Dockerfile')
   for (const arg of input.buildArgs) form.append('buildArg', arg)
   form.append('noCache', String(input.noCache))
-  const csrf = readCookie('XSRF-TOKEN')
-  const response = await fetch(`/api/hosts/${hostId}/images/build`, {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: {
-      Accept: 'application/json',
-      ...(csrf && { 'X-XSRF-TOKEN': csrf }),
-    },
-    body: form,
-  })
-  if (!response.ok) throw await toApiError(response)
-  return (await response.json()) as { runId: string }
+  return postFormJson<{ runId: string }>(`/api/hosts/${hostId}/images/build`, form)
 }
 
 export function describeBuildError(error: unknown): string {

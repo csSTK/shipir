@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from './client.ts'
-import { downloadFile, filenameFromDisposition, saveBlob, uploadMultipart } from './transfer.ts'
+import { downloadFile, filenameFromDisposition, postForm, postFormJson, saveBlob, uploadMultipart } from './transfer.ts'
 
 let anchor: HTMLAnchorElement | undefined
 beforeEach(() => {
@@ -136,5 +136,30 @@ describe('uploadMultipart', () => {
     const second = uploadMultipart('/api/up', new FormData(), { messages })
     second.abort()
     await expect(second.promise).rejects.toMatchObject({ status: 0, code: 'ABORTED', message: 'abort' })
+  })
+})
+
+describe('postFormJson', () => {
+  it('posts the form with CSRF and returns the parsed JSON answer', async () => {
+    document.cookie = 'XSRF-TOKEN=tok; path=/'
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ runId: 'r1' }), { status: 202 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const form = new FormData()
+    await expect(postFormJson<{ runId: string }>('/api/x', form)).resolves.toEqual({ runId: 'r1' })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/x')
+    expect(init.method).toBe('POST')
+    expect(init.body).toBe(form)
+    expect(init.headers['X-XSRF-TOKEN']).toBe('tok')
+  })
+
+  it('throws an ApiError with the server code on failure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 'BUILD_IN_PROGRESS' }), { status: 409 })))
+    await expect(postFormJson('/api/x', new FormData())).rejects.toMatchObject({ status: 409, code: 'BUILD_IN_PROGRESS' })
+  })
+
+  it('postForm still resolves without a body', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
+    await expect(postForm('/api/x', new FormData())).resolves.toBeUndefined()
   })
 })

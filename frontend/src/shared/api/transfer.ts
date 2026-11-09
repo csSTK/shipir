@@ -59,8 +59,7 @@ async function errorOf(response: Response): Promise<ApiError> {
   return new ApiError(response.status, response.statusText, code, violations, details, retryAfterSeconds(response))
 }
 
-/** POST a multipart form with fetch (no progress); the browser sets the boundary. Rejects with `ApiError`. */
-export async function postForm(url: string, form: FormData): Promise<void> {
+async function sendForm(url: string, form: FormData): Promise<Response> {
   const csrf = readCookie(CSRF_COOKIE)
   const response = await fetch(url, {
     method: 'POST',
@@ -69,6 +68,17 @@ export async function postForm(url: string, form: FormData): Promise<void> {
     body: form,
   })
   if (!response.ok) throw await errorOf(response)
+  return response
+}
+
+/** POST a multipart form with fetch (no progress); the browser sets the boundary. Rejects with `ApiError`. */
+export async function postForm(url: string, form: FormData): Promise<void> {
+  await sendForm(url, form)
+}
+
+/** Like `postForm`, for endpoints that answer with a JSON body. */
+export async function postFormJson<T>(url: string, form: FormData): Promise<T> {
+  return (await (await sendForm(url, form)).json()) as T
 }
 
 interface UploadOptions {
