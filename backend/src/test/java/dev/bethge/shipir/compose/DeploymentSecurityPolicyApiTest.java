@@ -296,6 +296,17 @@ class DeploymentSecurityPolicyApiTest extends DeploymentTestBase {
         assertThat(commands).doesNotContain(ComposeCommand.PULL, ComposeCommand.UP);
     }
 
+    /** shipr-kqbc.56: an env_file outside the deployment dir (here a sibling via ../) is not covered by the hash either. */
+    @Test
+    void systemRunStaysRestrictedForAnEnvFileOutsideTheDeploymentDirectory() throws Exception {
+        UUID id = adminDeployed("envoutside", "services:\n  x:\n    image: alpine\n    privileged: true\n    env_file: ../x\n");
+        assertThat(jdbc.queryForObject("SELECT graph_hash FROM deployment_versions WHERE deployment_id = ? AND deployed_at IS NOT NULL", String.class, id)).isNull();
+        commands.clear();
+        assertThatThrownBy(() -> runs.webhookTrigger(id))
+                .isInstanceOfSatisfying(DeploymentException.class, e -> assertThat(e.code()).isEqualTo("ADMIN_REQUIRED"));
+        assertThat(commands).doesNotContain(ComposeCommand.PULL, ComposeCommand.UP);
+    }
+
     @Test
     void adminDeployWithEnvFileFromTheGitMetadataStoresNoGraphHash() throws Exception {
         UUID id = adminDeployed("gitref", "services:\n  x:\n    image: alpine\n    env_file: repo/.git/config\n");
