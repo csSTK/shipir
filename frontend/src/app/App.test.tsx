@@ -195,12 +195,17 @@ describe('console route gate', () => {
 
   const capabilityCalls = () => apiFetchMock.mock.calls.map((c) => c[0]).filter((p) => p === '/exec/capabilities')
 
-  function routeAs(role: string, capabilities: () => unknown) {
+  const hostScope = { hostOperable: true, operableProjects: [] as string[] }
+  const containers = [{ id: 'c1', name: 'web', composeProject: 'shop' }]
+
+  function routeAs(role: string, capabilities: () => unknown, scope: () => unknown = () => hostScope) {
     window.history.pushState({}, '', '/environments/h1/containers/c1/console')
     route({
       'GET /auth/me': () => ({ username: 'u', role, setupRequired: false }),
       'GET /hosts/overview': () => [],
       'GET /exec/capabilities': capabilities,
+      'GET /exec/access?hostId=h1': scope,
+      'GET /hosts/h1/containers': () => containers,
     })
   }
 
@@ -222,6 +227,37 @@ describe('console route gate', () => {
     render(<App />)
 
     expect(await screen.findByRole('heading', { name: 'Console page' })).toBeInTheDocument()
+  })
+
+  it('shows not-allowed to an OPERATOR without OPERATE on the host or any deployment', async () => {
+    routeAs('OPERATOR', () => ({ operatorEnabled: true }), () => ({ hostOperable: false, operableProjects: [] }))
+    render(<App />)
+
+    expect(await screen.findByText(/not allowed to view/i)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Console page' })).not.toBeInTheDocument()
+  })
+
+  it('shows not-allowed to an OPERATOR who may operate only another deployment than the container\'s', async () => {
+    routeAs('OPERATOR', () => ({ operatorEnabled: true }), () => ({ hostOperable: false, operableProjects: ['other'] }))
+    render(<App />)
+
+    expect(await screen.findByText(/not allowed to view/i)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Console page' })).not.toBeInTheDocument()
+  })
+
+  it('opens the console for an OPERATOR with OPERATE on the container\'s deployment', async () => {
+    routeAs('OPERATOR', () => ({ operatorEnabled: true }), () => ({ hostOperable: false, operableProjects: ['shop'] }))
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: 'Console page' })).toBeInTheDocument()
+  })
+
+  it('opens the console for an ADMIN without asking for the per-host scope', async () => {
+    routeAs('ADMIN', () => ({ operatorEnabled: false }))
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: 'Console page' })).toBeInTheDocument()
+    expect(apiFetchMock.mock.calls.map((c) => c[0])).not.toContain('/exec/access?hostId=h1')
   })
 
   it('does not show not-allowed to an OPERATOR while the capabilities are loading', async () => {

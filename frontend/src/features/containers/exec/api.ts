@@ -2,6 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { ApiError, apiFetch } from '../../../shared/api/client.ts'
 import i18n from 'i18next'
 import { useCurrentUser } from '../../auth/index.ts'
+import { useContainers } from '../api.ts'
 
 export type Shell = '/bin/sh' | '/bin/bash'
 
@@ -55,6 +56,14 @@ interface ExecScope {
   operableProjects: string[]
 }
 
+function useExecScope(hostId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['exec', 'access', hostId],
+    queryFn: () => apiFetch<ExecScope>(`/exec/access?hostId=${encodeURIComponent(hostId)}`),
+    enabled: enabled && hostId !== '',
+  })
+}
+
 /**
  * Per-container console visibility: ADMIN everywhere; an OPERATOR (while operator exec is on) only with OPERATE on
  * the host or on the managed deployment owning the container (its Compose project). Never VIEWER. Hides the action
@@ -64,16 +73,34 @@ export function useCanOpenConsole(hostId: string): (composeProject: string | nul
   const { allowed } = useConsoleAccess()
   const { data: user } = useCurrentUser()
   const isOperator = user?.role === 'OPERATOR'
-  const scope = useQuery({
-    queryKey: ['exec', 'access', hostId],
-    queryFn: () => apiFetch<ExecScope>(`/exec/access?hostId=${encodeURIComponent(hostId)}`),
-    enabled: allowed && isOperator && hostId !== '',
-  })
+  const scope = useExecScope(hostId, allowed && isOperator)
   if (!allowed) return () => false
   if (!isOperator) return () => true
   const data = scope.data
   return (composeProject) =>
     !!data && (data.hostOperable || (composeProject !== null && data.operableProjects.includes(composeProject)))
+}
+
+/**
+ * Console route gate for one container: like {@link useCanOpenConsole}, but pending until the OPERATOR's scope (and,
+ * when only deployments are operable, the container's Compose project) is known. If the hint cannot be loaded the
+ * page opens anyway, because the server re-checks on Connect.
+ */
+export function useConsoleRouteAccess(hostId: string, containerId: string): { allowed: boolean; pending: boolean } {
+  const base = useConsoleAccess()
+  const { data: user } = useCurrentUser()
+  const needsScope = base.allowed && user?.role === 'OPERATOR'
+  const scope = useExecScope(hostId, needsScope)
+  const needsProject = needsScope && !!scope.data && !scope.data.hostOperable && scope.data.operableProjects.length > 0
+  const containers = useContainers(hostId, needsProject)
+  if (!needsScope) return base
+  if (scope.isPending) return { allowed: false, pending: true }
+  if (!scope.data) return { allowed: true, pending: false }
+  if (scope.data.hostOperable) return { allowed: true, pending: false }
+  if (!needsProject) return { allowed: false, pending: false }
+  if (containers.isPending) return { allowed: false, pending: true }
+  const project = containers.data?.find((c) => c.id === containerId)?.composeProject
+  return { allowed: !!project && scope.data.operableProjects.includes(project), pending: false }
 }
 
 const ERROR_TEXT: Record<string, string> = {

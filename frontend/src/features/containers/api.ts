@@ -21,10 +21,11 @@ export interface Container {
   composeService: string | null
 }
 
-export function useContainers(hostId: string) {
+export function useContainers(hostId: string, enabled = true) {
   return useQuery({
     queryKey: ['hosts', hostId, 'containers'],
     queryFn: () => apiFetch<Container[]>(`/hosts/${hostId}/containers`),
+    enabled,
   })
 }
 

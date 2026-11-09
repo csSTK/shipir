@@ -120,4 +120,7 @@ test('OPERATOR without OPERATE on the host or deployment sees no console link', 
   await page.goto('/environments/a/containers')
   await expect(page.getByRole('button', { name: 'Logs web' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Console web' })).toHaveCount(0)
+  await page.goto('/environments/a/containers/c1/console')
+  await expect(page.getByRole('button', { name: 'Connect' })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Not allowed' })).toBeVisible()
 })

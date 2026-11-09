@@ -3,7 +3,7 @@ import { EnvironmentDashboard, EnvironmentsOverview } from '../features/hosts/in
 import { AccountPage } from '../features/account/index.ts'
 import { AiSettingsPage, AuditLogPage, BackupSettingsPage, GitCredentialsSettingsPage, OidcSettingsPage, RegistriesSettingsPage, RetentionSettingsPage, SharedChatSessionsPage, TeamsSettingsPage, UsersSettingsPage, WebhooksSettingsPage } from '../features/settings/index.ts'
 import { ChatPage } from '../features/ai-chat/index.ts'
-import { ContainersPage, ContainerLogsPage, ContainerConsolePage, ContainerDetailsPage, useConsoleAccess } from '../features/containers/index.ts'
+import { ContainersPage, ContainerLogsPage, ContainerConsolePage, ContainerDetailsPage, useConsoleRouteAccess } from '../features/containers/index.ts'
 import { ImagesPage } from '../features/images/index.ts'
 import { NetworksPage } from '../features/networks/index.ts'
 import { DomainsPage } from '../features/domains/index.ts'
@@ -31,9 +31,10 @@ function LegacyStacksRedirect() {
   return <Navigate to={`/environments/${id}/deployments${deploymentId ? `/${deploymentId}` : ''}`} replace />
 }
 
-/** Console page for ADMIN and, while operator exec is enabled, OPERATOR; the server still checks per-container permission. */
+/** Console page for ADMIN and, while operator exec is enabled, an OPERATOR with OPERATE on the host or the container's deployment; the server still re-checks. */
 function ConsoleRoute() {
-  const { allowed, pending } = useConsoleAccess()
+  const { id: hostId = '', cid = '' } = useParams()
+  const { allowed, pending } = useConsoleRouteAccess(hostId, cid)
   if (pending) return <div aria-busy="true" />
   return allowed ? <ContainerConsolePage /> : <NotAllowedPage />
 }
