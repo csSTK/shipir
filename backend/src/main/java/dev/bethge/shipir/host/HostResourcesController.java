@@ -99,10 +99,14 @@ class HostResourcesController {
         return service.pullImage(id, request);
     }
 
-    @DeleteMapping("/images/{imageId}")
+    /**
+     * Removes an image by id or by reference. A registry reference such as {@code registry.example.com/x:1} contains
+     * slashes (an encoded {@code %2F} is refused by the servlet container), so the rest of the path is captured.
+     */
+    @DeleteMapping("/images/{*imageRef}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    void removeImage(@PathVariable UUID id, @PathVariable String imageId) {
-        service.removeImage(id, imageId);
+    void removeImage(@PathVariable UUID id, @PathVariable String imageRef) {
+        service.removeImage(id, imageRef.startsWith("/") ? imageRef.substring(1) : imageRef);
     }
 
     @DeleteMapping("/volumes/{name}")

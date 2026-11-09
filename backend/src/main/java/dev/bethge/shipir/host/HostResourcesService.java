@@ -400,7 +400,7 @@ public class HostResourcesService {
     @Auditable(action = "IMAGE_DELETE", targetType = "IMAGE", targetId = "#imageId")
     void removeImage(UUID hostId, String imageId) {
         requireOperate(hostId);
-        validateResourceId(imageId);
+        validateImageRef(imageId);
         systemManaged.requireNotSystemManagedImage(hostId, imageId);
         call(hostId, (id, endpoint) -> {
             images.removeImage(id, endpoint, imageId);
@@ -558,6 +558,16 @@ public class HostResourcesService {
     /** Ids and names are a single path segment of plain characters; nothing else reaches the daemon. */
     private static void validateResourceId(String value) {
         if (value == null || !RESOURCE_ID.matcher(value).matches()) {
+            throw new HostException(HttpStatus.BAD_REQUEST, "INVALID_RESOURCE_ID", "Invalid resource id");
+        }
+    }
+
+    /** Image references may be registry paths: slash-separated segments of plain characters, no empty or dot-only parts. */
+    private static final Pattern IMAGE_REF = Pattern.compile(
+            "[A-Za-z0-9][A-Za-z0-9_.:-]*(?:/[A-Za-z0-9][A-Za-z0-9_.:@-]*)*");
+
+    private static void validateImageRef(String value) {
+        if (value == null || value.length() > 255 || !IMAGE_REF.matcher(value).matches()) {
             throw new HostException(HttpStatus.BAD_REQUEST, "INVALID_RESOURCE_ID", "Invalid resource id");
         }
     }

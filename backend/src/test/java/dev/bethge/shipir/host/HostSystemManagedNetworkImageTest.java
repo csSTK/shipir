@@ -101,6 +101,39 @@ class HostSystemManagedNetworkImageTest extends HostApiTestBase {
     }
 
     @Test
+    void imageRegisteredUnderARegistryReferenceWithSlashesStillHitsTheGuard() throws Exception {
+        when(images.list(any(), any())).thenReturn(List.of(
+                new ImageDto(PROXY_IMAGE_ID, List.of("registry.example.com/lb/traefik:3"), 10L, null, true),
+                new ImageDto(PLAIN_IMAGE_ID, List.of("registry.example.com/team/app:1"), 10L, null, false)));
+        when(containers.listContainers(any(), any())).thenReturn(List.of(
+                new ContainerDto("px1", "proxy", "registry.example.com/lb/traefik:3", "running", "Up", null, null,
+                        List.of(), "shipir-proxy", "traefik")));
+
+        Login operator = login("operator");
+        mvc.perform(operator.write(delete("/api/hosts/{h}/images/registry.example.com/lb/traefik:3", host)))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        verify(images, never()).removeImage(any(), any(), any());
+    }
+
+    @Test
+    void imageWithASlashReferenceNotUsedByTheProxyIsRemoved() throws Exception {
+        when(images.list(any(), any())).thenReturn(List.of(
+                new ImageDto(PLAIN_IMAGE_ID, List.of("registry.example.com/team/app:1"), 10L, null, false)));
+
+        mvc.perform(login("operator").write(delete("/api/hosts/{h}/images/registry.example.com/team/app:1", host)))
+                .andExpect(status().isNoContent());
+        verify(images).removeImage(any(), any(), eq("registry.example.com/team/app:1"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"registry.example.com/-bad", "registry.example.com/x%20y"})
+    void malformedSlashReferenceIsRejectedWith400(String image) throws Exception {
+        mvc.perform(login("admin").write(delete("/api/hosts/{h}/images/" + image, host)))
+                .andExpect(status().isBadRequest());
+        verify(images, never()).removeImage(any(), any(), any());
+    }
+
+    @Test
     void imagePulledByDigestIsProtectedForRemovalAndPrune() throws Exception {
         String digest = "sha256:" + "d".repeat(64);
         String digestImageId = "sha256:cccccccccccccccccccccccc";

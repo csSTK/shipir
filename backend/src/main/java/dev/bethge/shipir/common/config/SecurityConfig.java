@@ -152,7 +152,7 @@ class SecurityConfig {
                         // environments: every role reads, only ADMIN writes (create, test, rename, delete)
                         .requestMatchers(HttpMethod.DELETE, "/api/hosts/*/deployments/*").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/hosts/*/deployments/*/adopt").hasAnyRole("ADMIN", "OPERATOR")
-                        .requestMatchers(HttpMethod.DELETE, "/api/hosts/*/containers/*", "/api/hosts/*/images/*",
+                        .requestMatchers(HttpMethod.DELETE, "/api/hosts/*/containers/*", "/api/hosts/*/images/**",
                                 "/api/hosts/*/volumes/*", "/api/hosts/*/networks/*").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/hosts/*/containers/*/start", "/api/hosts/*/containers/*/stop",
                                 "/api/hosts/*/containers/*/restart", "/api/hosts/*/containers/*/pause",
