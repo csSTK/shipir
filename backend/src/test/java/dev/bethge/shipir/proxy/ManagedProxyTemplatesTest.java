@@ -17,7 +17,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class ManagedProxyTemplatesTest {
 
-    private static final String NETWORK = "shipir-proxy";
+    /** The name the proxy code attaches to; the templates must declare the same one. */
+    private static final String NETWORK = ProxySyncService.PROXY_NETWORK;
     /** Compose keys that grant host-level access; the bundled templates must not use any of them. */
     private static final Set<String> HOST_ACCESS_KEYS = Set.of("privileged", "cap_add", "pid", "ipc", "network_mode",
             "devices", "security_opt", "userns_mode", "use_api_socket", "cgroup_parent", "uts", "cgroup");

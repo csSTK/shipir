@@ -37,7 +37,7 @@ import java.util.function.BiFunction;
 class SystemManagedGuard {
 
     /** External network the managed proxy template attaches to ({@code managed-*.yaml}); routed containers join it too. */
-    private static final String PROXY_NETWORK = "shipir-proxy";
+    static final String PROXY_NETWORK = "shipir-proxy";
 
     private final ManagedDeploymentLookup managed;
     private final CurrentAccess access;
