@@ -27,5 +27,13 @@
   "NotificationsPage.message.IMAGE_UPDATE_APPLIED": "Image-Update für \"{{target}}\" wurde angewendet.",
   "NotificationsPage.message.IMAGE_UPDATE_FAILED": "Image-Update von \"{{target}}\" ist fehlgeschlagen.",
   "NotificationsPage.message.UPTIME_DOWN": "Uptime-Check von \"{{target}}\" meldet einen Ausfall.",
-  "NotificationsPage.message.UPTIME_UP": "Uptime-Check von \"{{target}}\" ist wieder erfolgreich."
+  "NotificationsPage.message.UPTIME_UP": "Uptime-Check von \"{{target}}\" ist wieder erfolgreich.",
+  "NotificationsPage.imageFailure.reason.UNHEALTHY": "Die aktualisierten Container wurden nicht gesund.",
+  "NotificationsPage.imageFailure.reason.UP_FAILED": "Die aktualisierten Container konnten nicht gestartet werden.",
+  "NotificationsPage.imageFailure.reason.TIMEOUT": "Das Update hat zu lange gedauert.",
+  "NotificationsPage.imageFailure.reason.ERROR": "Es ist ein unerwarteter Fehler aufgetreten.",
+  "NotificationsPage.imageFailure.reason.pullFailed": "Die neuen Images konnten nicht geladen werden. Es wurde nichts geändert.",
+  "NotificationsPage.imageFailure.reason.other": "Das Update konnte nicht abgeschlossen werden.",
+  "NotificationsPage.imageFailure.rollback.restored": "Die vorherigen Images wurden wiederhergestellt.",
+  "NotificationsPage.imageFailure.rollback.notRestored": "Die vorherigen Images konnten nicht wiederhergestellt werden."
 }

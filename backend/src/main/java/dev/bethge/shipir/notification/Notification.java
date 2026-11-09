@@ -52,6 +52,9 @@ public class Notification {
     @Column(nullable = false, updatable = false, length = 500)
     private String message;
 
+    @Column(name = "error_code", updatable = false, length = 64)
+    private String errorCode;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -76,6 +79,10 @@ public class Notification {
         this.deploymentName = draft.deploymentName();
         this.containerId = draft.containerId();
         this.containerName = draft.containerName();
+        // only IMAGE_UPDATE_FAILED reasons are a fixed code set; other drafts carry free text or are not shown by code
+        if (draft.type() == NotificationType.IMAGE_UPDATE_FAILED && draft.errorCode() != null) {
+            this.errorCode = draft.errorCode().length() <= 64 ? draft.errorCode() : draft.errorCode().substring(0, 64);
+        }
     }
 
     public UUID getId() { return id; }
@@ -87,6 +94,7 @@ public class Notification {
     public String getContainerId() { return containerId; }
     public String getContainerName() { return containerName; }
     public String getMessage() { return message; }
+    public String getErrorCode() { return errorCode; }
     public Instant getCreatedAt() { return createdAt; }
     public boolean isRead() { return readAt != null; }
 }

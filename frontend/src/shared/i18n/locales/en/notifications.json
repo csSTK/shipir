@@ -27,5 +27,13 @@
   "NotificationsPage.message.IMAGE_UPDATE_APPLIED": "Image update applied to \"{{target}}\".",
   "NotificationsPage.message.IMAGE_UPDATE_FAILED": "Image update of \"{{target}}\" failed.",
   "NotificationsPage.message.UPTIME_DOWN": "Uptime check of \"{{target}}\" is down.",
-  "NotificationsPage.message.UPTIME_UP": "Uptime check of \"{{target}}\" is back up."
+  "NotificationsPage.message.UPTIME_UP": "Uptime check of \"{{target}}\" is back up.",
+  "NotificationsPage.imageFailure.reason.UNHEALTHY": "The updated containers did not become healthy.",
+  "NotificationsPage.imageFailure.reason.UP_FAILED": "The updated containers could not be started.",
+  "NotificationsPage.imageFailure.reason.TIMEOUT": "The update took too long.",
+  "NotificationsPage.imageFailure.reason.ERROR": "An unexpected error occurred.",
+  "NotificationsPage.imageFailure.reason.pullFailed": "The new images could not be pulled. Nothing was changed.",
+  "NotificationsPage.imageFailure.reason.other": "The update could not be completed.",
+  "NotificationsPage.imageFailure.rollback.restored": "The previous images were restored.",
+  "NotificationsPage.imageFailure.rollback.notRestored": "The previous images could not be restored."
 }

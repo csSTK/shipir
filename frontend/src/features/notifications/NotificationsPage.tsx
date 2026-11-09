@@ -62,6 +62,32 @@ function targetOf(item: AppNotification): { label: string; to: string | null } |
   return null
 }
 
+const IMAGE_FAILURE_REASONS = ['UNHEALTHY', 'UP_FAILED', 'TIMEOUT', 'ERROR'] as const
+
+/** Splits an image update failure code (`PULL_FAILED`, `<reason>[_NOT]_ROLLED_BACK`) into translation keys. */
+function imageFailureKeys(code: string): { reason: string; rollback: string | null } {
+  if (code === 'PULL_FAILED') return { reason: 'pullFailed', rollback: null }
+  const notRolledBack = code.endsWith('_NOT_ROLLED_BACK')
+  const rolledBack = !notRolledBack && code.endsWith('_ROLLED_BACK')
+  const base = code.replace(/_(NOT_)?ROLLED_BACK$/, '')
+  const known = (IMAGE_FAILURE_REASONS as readonly string[]).includes(base)
+  return {
+    reason: known ? base : 'other',
+    rollback: rolledBack ? 'restored' : notRolledBack ? 'notRestored' : null,
+  }
+}
+
+function ImageFailureDetail({ code }: { code: string }) {
+  const { t } = useTranslation('notifications')
+  const { reason, rollback } = imageFailureKeys(code)
+  return (
+    <p className="notif__detail">
+      {t(`NotificationsPage.imageFailure.reason.${reason}`)}
+      {rollback && ` ${t(`NotificationsPage.imageFailure.rollback.${rollback}`)}`}
+    </p>
+  )
+}
+
 function Row({ item, onRead }: { item: AppNotification; onRead: (id: string) => void }) {
   const { t } = useTranslation('notifications')
   const style = TYPE_STYLE[item.type]
@@ -74,6 +100,7 @@ function Row({ item, onRead }: { item: AppNotification; onRead: (id: string) => 
       <span className={`notif__type notif__type--${style.tone}`}>{NOTIFICATION_TYPE_LABELS[item.type]}</span>
       <div className="notif__body">
         <p className="notif__message">{t(`NotificationsPage.message.${item.type}`, { host: item.hostName, target: target?.label ?? item.hostName })}</p>
+        {item.type === 'IMAGE_UPDATE_FAILED' && item.errorCode && <ImageFailureDetail code={item.errorCode} />}
         <p className="notif__meta">
           {item.hostId ? (
             <Link to={`/environments/${item.hostId}`}>{item.hostName}</Link>

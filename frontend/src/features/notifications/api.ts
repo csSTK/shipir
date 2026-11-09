@@ -42,6 +42,8 @@ export interface AppNotification {
   containerId: string | null
   containerName: string | null
   message: string
+  /** Machine-readable reason, only set for IMAGE_UPDATE_FAILED (e.g. UNHEALTHY_ROLLED_BACK). */
+  errorCode?: string | null
   read: boolean
   createdAt: string
 }

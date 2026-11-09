@@ -24,6 +24,7 @@ type N = {
   containerId: string | null
   containerName: string | null
   message: string
+  errorCode?: string | null
   read: boolean
   createdAt: string
 }
@@ -130,6 +131,43 @@ function renderPage() {
 }
 
 describe('NotificationsPage', () => {
+  it.each([
+    ['UNHEALTHY_ROLLED_BACK', 'The updated containers did not become healthy. The previous images were restored.'],
+    ['UP_FAILED_NOT_ROLLED_BACK', 'The updated containers could not be started. The previous images could not be restored.'],
+    ['PULL_FAILED', 'The new images could not be pulled. Nothing was changed.'],
+    ['TIMEOUT_NOT_ROLLED_BACK', 'The update took too long. The previous images could not be restored.'],
+    ['ERROR_ROLLED_BACK', 'An unexpected error occurred. The previous images were restored.'],
+    ['SOMETHING_NEW', 'The update could not be completed.'],
+    ['UNHEALTHY', 'The updated containers did not become healthy.'],
+  ])('shows reason and rollback outcome for IMAGE_UPDATE_FAILED %s', async (errorCode, text) => {
+    items = [{ ...imageFailed, errorCode }]
+    renderPage()
+    expect(await screen.findByText(text)).toBeInTheDocument()
+    expect(screen.queryByText(errorCode)).not.toBeInTheDocument()
+  })
+
+  it('shows the German reason and rollback outcome', async () => {
+    await i18n.changeLanguage('de')
+    try {
+      items = [{ ...imageFailed, errorCode: 'UNHEALTHY_ROLLED_BACK' }]
+      renderPage()
+      expect(
+        await screen.findByText(
+          'Die aktualisierten Container wurden nicht gesund. Die vorherigen Images wurden wiederhergestellt.',
+        ),
+      ).toBeInTheDocument()
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
+
+  it('shows no detail line without an error code', async () => {
+    items = [imageFailed]
+    renderPage()
+    await screen.findByText('Image update of "web" failed.')
+    expect(document.querySelector('.notif__detail')).toBeNull()
+  })
+
   it('renders the image update types with labels instead of crashing', async () => {
     items = [imageApplied, imageFailed]
     renderPage()

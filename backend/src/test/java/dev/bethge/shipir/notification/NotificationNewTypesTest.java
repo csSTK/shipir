@@ -83,6 +83,17 @@ class NotificationNewTypesTest extends NotificationTestBase {
     }
 
     @Test
+    void imageUpdateFailedKeepsTheReasonCodeAndOtherTypesDoNot() {
+        imageUpdateFailedMessage("UNHEALTHY_ROLLED_BACK");
+        assertThat(jdbc.queryForObject("SELECT error_code FROM notifications WHERE type = 'IMAGE_UPDATE_FAILED' LIMIT 1",
+                String.class)).isEqualTo("UNHEALTHY_ROLLED_BACK");
+        jdbc.update("DELETE FROM notifications");
+        deploymentFailed(deployment);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notifications WHERE error_code IS NOT NULL",
+                Integer.class)).isZero();
+    }
+
+    @Test
     void userWithoutAnyGrantGetsNothing() {
         jdbc.update("DELETE FROM permissions WHERE user_id = ?", userId("viewer"));
         deploymentFailed(deployment);

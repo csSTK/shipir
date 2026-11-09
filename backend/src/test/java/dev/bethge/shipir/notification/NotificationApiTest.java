@@ -36,6 +36,15 @@ class NotificationApiTest extends NotificationTestBase {
     }
 
     @Test
+    void exposesErrorCodeOfImageUpdateFailure() throws Exception {
+        UUID id = insertNotification("viewer", "IMAGE_UPDATE_FAILED", false, Instant.now());
+        jdbc.update("UPDATE notifications SET error_code = 'UNHEALTHY_ROLLED_BACK' WHERE id = ?", id);
+        mvc.perform(get("/api/notifications").session(login("viewer").session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].errorCode").value("UNHEALTHY_ROLLED_BACK"));
+    }
+
+    @Test
     void unreadOnlyFilterAndPaging() throws Exception {
         Instant now = Instant.now();
         insertNotification("viewer", "HOST_UP", true, now);

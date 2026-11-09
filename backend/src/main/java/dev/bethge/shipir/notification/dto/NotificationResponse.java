@@ -7,5 +7,5 @@ import java.util.UUID;
 
 public record NotificationResponse(UUID id, NotificationType type, UUID hostId, String hostName, UUID deploymentId,
                                    String deploymentName, String containerId, String containerName,
-                                   String message, boolean read, Instant createdAt) {
+                                   String message, String errorCode, boolean read, Instant createdAt) {
 }

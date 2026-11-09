@@ -249,7 +249,7 @@ public class NotificationService {
 
     private static NotificationResponse toDto(Notification n) {
         return new NotificationResponse(n.getId(), n.getType(), n.getHostId(), n.getHostName(),
-                n.getDeploymentId(), n.getDeploymentName(), n.getContainerId(), n.getContainerName(), n.getMessage(),
+                n.getDeploymentId(), n.getDeploymentName(), n.getContainerId(), n.getContainerName(), n.getMessage(), n.getErrorCode(),
                 n.isRead(), n.getCreatedAt());
     }
 }
