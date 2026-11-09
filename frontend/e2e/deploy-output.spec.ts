@@ -116,7 +116,10 @@ test('scrolling up pauses autoscroll and Jump to latest resumes it', async ({ pa
   await expect(log).toContainText('line 200')
   await expect(page.getByRole('button', { name: 'Jump to latest' })).toHaveCount(0)
   await log.evaluate((el) => (el.scrollTop = 0))
-  await page.getByRole('button', { name: 'Jump to latest' }).click()
+  // Activate by keyboard: a pointer click can be intercepted by the sticky shell bar while the page is still settling
+  // under load (Playwright's scroll-into-view lands the button beneath it), which is a test artefact, not a UI race.
+  await page.getByRole('button', { name: 'Jump to latest' }).focus()
+  await page.keyboard.press('Enter')
   await expect(page.getByRole('button', { name: 'Jump to latest' })).toHaveCount(0)
   await expect.poll(() => log.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight)).toBeLessThan(5)
 })
