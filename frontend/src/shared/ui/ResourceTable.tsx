@@ -33,6 +33,13 @@ export interface ResourceColumn<T> {
   hideable?: boolean
   /** Hidden initially until the user turns it on. */
   defaultHidden?: boolean
+  /**
+   * Primary text column: takes the free width of the table instead of a fixed one (until the user
+   * resizes it), so names and images are not cut off while space is left over.
+   */
+  flex?: boolean
+  /** True when the row has no value here. A column empty for every row is hidden unless the user turns it on. */
+  isEmpty?: (row: T) => boolean
 }
 
 /** One icon button in the pinned actions column. */
@@ -191,10 +198,21 @@ export function ResourceTable<T>({
     [columns],
   )
 
+  // columns without a value in any row stay out of the way until the user turns them on
+  const effectiveVisibility = useMemo<VisibilityState>(() => {
+    const all = rows ?? []
+    if (all.length === 0) return visibility
+    const out = { ...visibility }
+    for (const c of columns) {
+      if (c.isEmpty && out[c.id] === undefined && all.every(c.isEmpty)) out[c.id] = false
+    }
+    return out
+  }, [rows, columns, visibility])
+
   const table = useReactTable({
     data: filtered,
     columns: columnDefs,
-    state: { sorting, columnSizing: sizing, columnVisibility: visibility },
+    state: { sorting, columnSizing: sizing, columnVisibility: effectiveVisibility },
     onSortingChange: setSorting,
     onColumnSizingChange: setSizing,
     onColumnVisibilityChange: setVisibility,
@@ -228,6 +246,8 @@ export function ResourceTable<T>({
   const hideableColumns = table.getAllLeafColumns().filter((c) => c.getCanHide())
   const visibleColumns = table.getVisibleLeafColumns()
   const hasActions = !!rowActions
+  const flexIds = new Set(columns.filter((c) => c.flex && sizing[c.id] === undefined).map((c) => c.id))
+  const hasFlex = visibleColumns.some((c) => flexIds.has(c.id))
   const sizeSum = visibleColumns.reduce((sum, c) => sum + c.getSize(), 0)
 
   let body: ReactNode
@@ -262,9 +282,9 @@ export function ResourceTable<T>({
         <table ref={tableRef} className="rtable__table" aria-label={label} style={{ minWidth: sizeSum }}>
           <colgroup>
             {visibleColumns.map((c) => (
-              <col key={c.id} style={{ width: c.getSize() }} />
+              <col key={c.id} style={flexIds.has(c.id) ? undefined : { width: c.getSize() }} />
             ))}
-            <col />
+            <col style={hasFlex ? { width: 0 } : undefined} />
             {hasActions && <col className="rtable__col-actions" />}
           </colgroup>
           <thead>

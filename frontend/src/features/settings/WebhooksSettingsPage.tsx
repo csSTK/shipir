@@ -139,7 +139,7 @@ export function WebhooksSettingsPage() {
   }
 
   const columns: ResourceColumn<Webhook>[] = [
-    { id: 'name', header: tr('WebhooksSettingsPage.name'), sortValue: (w) => w.name, defaultWidth: 200, hideable: false, render: (w) => <strong>{w.name}</strong> },
+    { id: 'name', header: tr('WebhooksSettingsPage.name'), sortValue: (w) => w.name, defaultWidth: 200, flex: true, hideable: false, render: (w) => <strong>{w.name}</strong> },
     { id: 'url', header: 'URL', defaultWidth: 240, render: (w) => <span className="settings__mono">{w.urlHint}</span> },
     {
       id: 'events',

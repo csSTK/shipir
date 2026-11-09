@@ -53,6 +53,7 @@ function baseColumnsFor(
       id: 'name',
       header: i18n.t('containers:ContainersPage.name'),
       defaultWidth: 210,
+      flex: true,
       sortValue: (c) => c.name,
       render: (c) => (
         <span className="containers__namecell">
@@ -109,6 +110,7 @@ function baseColumnsFor(
       id: 'ports',
       header: i18n.t('containers:ContainersPage.ports'),
       defaultWidth: 130,
+      isEmpty: (c) => c.ports.length === 0,
       render: (c) =>
         c.ports.length ? (
           <ul className="containers__ports" title={c.ports.join(', ')}>
@@ -140,6 +142,7 @@ function statsColumns(series: Record<string, StatSample[]>): ResourceColumn<Cont
       id: 'cpu',
       header: 'CPU',
       defaultWidth: 130,
+      isEmpty: (c) => !series[c.id],
       sortValue: (c) => last(series[c.id])?.cpu ?? -1,
       render: (c) => {
         const samples = series[c.id]
@@ -156,6 +159,7 @@ function statsColumns(series: Record<string, StatSample[]>): ResourceColumn<Cont
       id: 'memory',
       header: i18n.t('containers:ContainersPage.memory'),
       defaultWidth: 150,
+      isEmpty: (c) => !series[c.id],
       sortValue: (c) => last(series[c.id])?.memUsed ?? -1,
       render: (c) => {
         const samples = series[c.id]

@@ -227,4 +227,45 @@ describe('ResourceTable', () => {
       expect(document.querySelector('th.rtable__actions-cell')).toBeInTheDocument()
     })
   })
+
+  describe('column sizing', () => {
+    const sized: ResourceColumn<Row>[] = [
+      { id: 'name', header: 'Name', render: (r) => r.name, sortValue: (r) => r.name, hideable: false, flex: true },
+      { id: 'size', header: 'Size', render: (r) => String(r.size), defaultWidth: 90, isEmpty: (r) => r.size === 0 },
+    ]
+
+    function colWidths() {
+      return Array.from(document.querySelectorAll<HTMLElement>('col')).map((c) => c.style.width)
+    }
+
+    it('leaves flexible columns without a fixed width so they take the free space', () => {
+      setup({ columns: sized })
+      const [name, size] = colWidths()
+      expect(name).toBe('')
+      expect(size).toBe('90px')
+    })
+
+    it('turns a flexible column fixed once the user resizes it', () => {
+      setup({ columns: sized })
+      fireEvent.keyDown(screen.getByRole('separator', { name: 'Resize Name column' }), { key: 'ArrowRight' })
+      expect(colWidths()[0]).not.toBe('')
+    })
+
+    it('hides a column that is empty for every row', () => {
+      setup({ columns: sized, rows: rows.map((r) => ({ ...r, size: 0 })) })
+      expect(screen.queryByRole('columnheader', { name: /Size/ })).not.toBeInTheDocument()
+    })
+
+    it('keeps a column that has a value in at least one row', () => {
+      setup({ columns: sized, rows: [{ id: '1', name: 'a', size: 0 }, { id: '2', name: 'b', size: 3 }] })
+      expect(screen.getByRole('columnheader', { name: /Size/ })).toBeInTheDocument()
+    })
+
+    it('lets the user turn an auto-hidden column on again', async () => {
+      setup({ columns: sized, rows: rows.map((r) => ({ ...r, size: 0 })) })
+      fireEvent.pointerDown(screen.getByRole('button', { name: 'Columns' }), { button: 0, ctrlKey: false })
+      fireEvent.click(await screen.findByRole('menuitem', { name: /Size/ }))
+      expect(screen.getByRole('columnheader', { name: /Size/, hidden: true })).toBeInTheDocument()
+    })
+  })
 })
