@@ -107,4 +107,11 @@ class ExecOperatorDisabledTest {
         assertThat(r.statusCode()).isEqualTo(200);
         assertThat(r.body()).contains("\"operatorEnabled\":false");
     }
+
+    @Test
+    void accessReportsNoScopeForAnOperatorWithAnOperateGrantWhileOperatorExecIsOff() throws Exception {
+        var r = call(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/exec/access?hostId=" + hostId)));
+        assertThat(r.statusCode()).isEqualTo(200);
+        assertThat(r.body()).isEqualTo("{\"hostOperable\":false,\"operableProjects\":[]}");
+    }
 }

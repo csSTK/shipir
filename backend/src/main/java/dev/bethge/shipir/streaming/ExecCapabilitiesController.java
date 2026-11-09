@@ -1,10 +1,12 @@
 package dev.bethge.shipir.streaming;
 
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.UUID;
 
 /** Tells the UI whether OPERATORs may open container consoles ({@code shipir.streaming.exec.operator-enabled}). */
 @RestController
@@ -27,7 +29,7 @@ class ExecCapabilitiesController {
      * Reveals nothing beyond the user's own grants.
      */
     @GetMapping("/access")
-    ExecScope access(@RequestParam java.util.UUID hostId, Authentication authentication) {
+    ExecScope access(@RequestParam UUID hostId, Authentication authentication) {
         return access.execScope(authentication.getName(), hostId, sessions.operatorEnabled());
     }
 

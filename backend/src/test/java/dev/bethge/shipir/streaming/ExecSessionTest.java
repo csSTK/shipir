@@ -568,6 +568,16 @@ class ExecSessionTest {
     }
 
     @Test
+    void accessWithAMalformedOrMissingHostIdIsRejectedByTheDefaultBadRequestMapping() throws Exception {
+        Client op = operatorClient("execbadid", Role.OPERATOR);
+        for (String query : new String[] {"hostId=not-a-uuid", "hostId=", ""}) {
+            var r = op.call(HttpRequest.newBuilder(URI.create(base() + "/api/exec/access?" + query)));
+            assertThat(r.statusCode()).as(query).isEqualTo(400);
+            assertThat(r.body()).as(query).doesNotContain("\"hostOperable\"");
+        }
+    }
+
+    @Test
     void createNeedsCsrfToken() throws Exception {
         assertThat(admin().exec("web", "{}", false).statusCode()).isEqualTo(403);
     }

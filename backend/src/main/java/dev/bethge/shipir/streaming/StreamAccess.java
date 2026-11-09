@@ -13,10 +13,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Permission checks for STOMP SUBSCRIBE. The STOMP threads carry no SecurityContext, so the subject is resolved from
@@ -85,19 +87,19 @@ class StreamAccess {
             return ExecScope.NONE;
         }
         if (s.get().role() == Role.ADMIN) {
-            return new ExecScope(true, java.util.List.of());
+            return new ExecScope(true, List.of());
         }
         if (s.get().role() != Role.OPERATOR || !operatorEnabled || !permissions.canView(s.get(), hostId)) {
             return ExecScope.NONE;
         }
         if (permissions.canOperate(s.get(), hostId)) {
-            return new ExecScope(true, java.util.List.of());
+            return new ExecScope(true, List.of());
         }
         Set<UUID> system = systemManagedIds(hostId);
-        java.util.List<String> projects = managedDeployments.managedDeploymentIds(hostId).entrySet().stream()
+        List<String> projects = managedDeployments.managedDeploymentIds(hostId).entrySet().stream()
                 .filter(e -> !system.contains(e.getValue()))
                 .filter(e -> permissions.canOperate(s.get(), hostId, e.getValue()))
-                .map(java.util.Map.Entry::getKey).sorted().toList();
+                .map(Map.Entry::getKey).sorted().toList();
         return new ExecScope(false, projects);
     }
 
@@ -110,7 +112,7 @@ class StreamAccess {
     private Set<UUID> systemManagedIds(UUID hostId) {
         Set<String> names = managedDeployments.systemManagedNames(hostId);
         return managedDeployments.managedDeploymentIds(hostId).entrySet().stream()
-                .filter(e -> names.contains(e.getKey())).map(java.util.Map.Entry::getValue)
+                .filter(e -> names.contains(e.getKey())).map(Map.Entry::getValue)
                 .collect(Collectors.toSet());
     }
 
@@ -155,7 +157,7 @@ class StreamAccess {
         Set<UUID> visible = permissions.visibleDeploymentIds(s.get(), hostId);
         Set<String> system = s.get().role() == Role.ADMIN ? Set.of() : managedDeployments.systemManagedNames(hostId);
         return Optional.of(managedDeployments.managedDeploymentIds(hostId).entrySet().stream()
-                .filter(e -> visible.contains(e.getValue())).map(java.util.Map.Entry::getKey)
+                .filter(e -> visible.contains(e.getValue())).map(Map.Entry::getKey)
                 .filter(name -> !system.contains(name)) // the managed proxy is ADMIN only
                 .collect(Collectors.toSet()));
     }
