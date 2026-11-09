@@ -224,6 +224,9 @@ describe('fromYaml ports kept exactly as written', () => {
   it.each(['080', '8e1'])('rejects unquoted port %s, which YAML would rewrite', (v) => {
     expect(reason(port(v))).toMatch(new RegExp(v))
   })
+  it.each(['080', '8e1'])('explains unquoted port %s with the number message, not the unsupported-form message', (v) => {
+    expect(reason(port(v))).toMatch(/is a number YAML would rewrite/)
+  })
   it('keeps a plain decimal port', () => {
     expect(buildSpec(ok(port('8080'))).services[0].ports).toEqual([{ host: null, container: 8080, protocol: 'tcp' }])
   })

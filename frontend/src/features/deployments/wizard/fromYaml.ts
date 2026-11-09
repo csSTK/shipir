@@ -55,7 +55,7 @@ function parsePort(doc: Document, serviceName: string, index: number, where: str
   if (typeof v === 'number') {
     const node = doc.getIn(['services', serviceName, 'ports', index], true)
     const written = isScalar(node) && node.source ? node.source : text
-    if (!isScalar(node) || written !== text) return fail(tr('portUnsupported', { where, value: written }))
+    if (!isScalar(node) || written !== text) return fail(tr('portNumberNotExact', { where, value: written }))
   }
   const m = /^(?:(\d+):)?(\d+)(?:\/(tcp|udp))?$/.exec(text)
   if (!m) return fail(tr('portUnsupported', { where, value: text }))

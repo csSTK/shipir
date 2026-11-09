@@ -594,6 +594,7 @@
   "fromYaml.expectedMapOrList": "{{where}}: Map oder Liste erwartet.",
   "fromYaml.portShortOnly": "{{where}}: nur die Kurzform 'Host:Container/Protokoll' wird unterstützt.",
   "fromYaml.portUnsupported": "{{where}}: '{{value}}' wird nicht unterstützt (nur 'Host:Container' oder 'Container' mit optionalem /tcp oder /udp).",
+  "fromYaml.portNumberNotExact": "{{where}}: '{{value}}' ist eine Zahl, die YAML umschreiben würde (zum Beispiel 080 oder 8e1); setze sie in Anführungszeichen.",
   "fromYaml.volumeShortOnly": "{{where}}: nur die Kurzform 'Quelle:Ziel[:ro]' wird unterstützt.",
   "fromYaml.volumeUnsupported": "{{where}}: '{{value}}' wird nicht unterstützt (anonyme Volumes und Optionen ebenfalls nicht).",
   "fromYaml.volumeOption": "{{where}}: Volume-Option '{{value}}' wird nicht unterstützt.",
