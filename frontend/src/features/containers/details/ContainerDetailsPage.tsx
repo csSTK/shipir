@@ -325,7 +325,7 @@ export function ContainerDetailsPage() {
     : []
 
   return (
-    <div className="cdetails">
+    <div className="ui-page cdetails">
       <Link to={base} className="cdetails__back">
         <ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" /> {t('ContainerDetailsPage.containers')}
       </Link>

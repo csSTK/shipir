@@ -37,7 +37,7 @@ export function ContainerLogsPage() {
     connection === 'connected' ? t('ContainerLogsPage.live') : connection === 'connecting' ? t('ContainerLogsPage.connecting') : t('ContainerLogsPage.connectionLostReconnecting')
 
   return (
-    <section className="clogs">
+    <section className="ui-page clogs">
       <Link to={`/environments/${hostId}/containers`} className="clogs__back">
         <ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" /> {t('ContainerLogsPage.containers')}
       </Link>

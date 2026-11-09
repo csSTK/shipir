@@ -18,7 +18,7 @@ export function SettingsPage({
   children: ReactNode
 }) {
   return (
-    <section className={wide ? 'settings settings--wide' : 'settings'}>
+    <section className={wide ? 'ui-page settings' : 'ui-page ui-page--narrow settings'}>
       <PageHeader title={title} subtitle={subtitle} actions={actions} />
       {children}
     </section>

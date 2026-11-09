@@ -1,7 +1,5 @@
 /* Container console. Press feedback on the buttons is instant; no decorative motion. */
 .cconsole {
-  max-width: var(--content-max);
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);

@@ -81,7 +81,7 @@ export function DeploymentDetailPage() {
 
   if (deployment.isPending) {
     return (
-      <section className="sd" aria-busy="true">
+      <section className="ui-page sd" aria-busy="true">
         <div role="status" aria-label={t('DeploymentDetailPage.loadingDeployment')} className="sd-skeleton">
           <Skeleton height="2rem" width="40%" />
           <Skeleton height="10rem" />
@@ -93,7 +93,7 @@ export function DeploymentDetailPage() {
   if (deployment.error instanceof ApiError && deployment.error.status === 403) {
     // Only the managed proxy deployment answers 403 on its detail (ADMIN only): it is operated through Domains.
     return (
-      <section className="sd">
+      <section className="ui-page sd">
         <Link className="sd-back" to={listPath}>
           {t('DeploymentDetailPage.deployments')}
         </Link>
@@ -111,7 +111,7 @@ export function DeploymentDetailPage() {
   if (deployment.error) {
     const notFound = deployment.error instanceof ApiError && deployment.error.code === 'DEPLOYMENT_NOT_FOUND'
     return (
-      <section className="sd">
+      <section className="ui-page sd">
         <Link className="sd-back" to={listPath}>
           {t('DeploymentDetailPage.deployments')}
         </Link>
@@ -216,7 +216,7 @@ export function DeploymentDetailPage() {
   const status = STATUS[data.status]
 
   return (
-    <section className="sd">
+    <section className="ui-page sd">
       <Link className="sd-back" to={listPath}>
         {t('DeploymentDetailPage.deployments')}
       </Link>

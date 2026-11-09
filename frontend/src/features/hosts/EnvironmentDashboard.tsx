@@ -50,7 +50,7 @@ export function EnvironmentDashboard() {
 
   if (isPending) {
     return (
-      <section className="envs" role="status" aria-label={t('EnvironmentDashboard.loadingEnvironment')} aria-busy="true">
+      <section className="ui-page envs" role="status" aria-label={t('EnvironmentDashboard.loadingEnvironment')} aria-busy="true">
         <Skeleton height="2rem" width="12rem" />
         <div className="dash__tiles">
           {ENV_RESOURCES.map(({ slug }) => (
@@ -62,7 +62,7 @@ export function EnvironmentDashboard() {
   }
   if (isError) {
     return (
-      <section className="envs">
+      <section className="ui-page envs">
         <Back />
         <p role="alert" className="envs__message">
           {t('EnvironmentDashboard.couldNotLoadTheEnvironment')}
@@ -72,7 +72,7 @@ export function EnvironmentDashboard() {
   }
   if (!env) {
     return (
-      <section className="envs">
+      <section className="ui-page envs">
         <Back />
         <PageHeader title={t('EnvironmentDashboard.environmentNotFound')} subtitle={t('EnvironmentDashboard.thisEnvironmentDoesNotExist')} />
       </section>
@@ -88,7 +88,7 @@ export function EnvironmentDashboard() {
     .filter(Boolean)
     .join(' · ')
   return (
-    <section className="envs">
+    <section className="ui-page envs">
       <Back />
       <PageHeader
         title={env.name}

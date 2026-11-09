@@ -104,7 +104,7 @@ export function ImagesPage() {
   const withUpdate = [...columns, updateColumn(canWrite ? (i) => setPulling({ reference: i.repoTags[0] }) : null)]
 
   return (
-    <section className="images">
+    <section className="ui-page images">
       <PageHeader
         title={tr('ImagesPage.images')}
         actions={

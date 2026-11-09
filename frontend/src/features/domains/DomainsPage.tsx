@@ -162,7 +162,7 @@ export function DomainsPage() {
   }
 
   return (
-    <section className="domains">
+    <section className="ui-page domains">
       <PageHeader
         title={t('DomainsPage.title')}
         subtitle={t('DomainsPage.subtitle')}

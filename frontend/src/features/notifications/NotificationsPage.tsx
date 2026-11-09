@@ -106,7 +106,7 @@ export function NotificationsPage() {
   const markAll = useMarkAllRead()
 
   return (
-    <section className="notifs" aria-label={t('NotificationsPage.notifications')}>
+    <section className="ui-page ui-page--narrow notifs" aria-label={t('NotificationsPage.notifications')}>
       <PageHeader
         title={t('NotificationsPage.notifications')}
         actions={

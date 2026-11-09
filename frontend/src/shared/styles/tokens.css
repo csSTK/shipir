@@ -72,8 +72,10 @@
 
   /* Layout */
   --sidebar-width: 15rem;
-  --content-max: 72rem;
   --content-narrow: 60rem;
+  /* Page container widths (shared .ui-page): wide for tables/lists, narrow for forms */
+  --page-width-wide: 72rem;
+  --page-width-narrow: 44rem;
   --panel-max-height: 20rem;
   --control-height: 2.5rem;
   /* Assistant dock panel: preferred width/height (capped to the viewport in CSS) and phone sheet height */

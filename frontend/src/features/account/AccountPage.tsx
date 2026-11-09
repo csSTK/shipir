@@ -280,7 +280,7 @@ export function AccountPage({
 }) {
   const { t } = useTranslation('account')
   return (
-    <div className="account">
+    <div className="ui-page ui-page--narrow account">
       <PageHeader title={t('AccountPage.account')} subtitle={t('AccountPage.yourSignInPasswordApi')} />
       <Card className="account__card" role="region" aria-labelledby="account-info">
         <h2 className="account__heading" id="account-info">

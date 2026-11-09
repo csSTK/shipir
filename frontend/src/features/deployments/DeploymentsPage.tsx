@@ -231,7 +231,7 @@ export function DeploymentsPage() {
   }
 
   return (
-    <section className="deployments">
+    <section className="ui-page deployments">
       <PageHeader
         title={t('DeploymentsPage.deployments')}
         actions={

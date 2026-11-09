@@ -1,0 +1,9 @@
+/* Shared page container: every routed page sits in this, left-aligned at the same x with the same top edge. */
+.ui-page {
+  width: 100%;
+  max-width: var(--page-width-wide);
+  margin: 0;
+}
+.ui-page--narrow {
+  max-width: var(--page-width-narrow);
+}

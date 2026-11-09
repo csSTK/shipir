@@ -105,7 +105,7 @@ export function EnvironmentsOverview({ role }: { role: Role }) {
   )
 
   return (
-    <section className="envs">
+    <section className="ui-page envs">
       <PageHeader
         title={tr('EnvironmentsOverview.environments')}
         subtitle={tr('EnvironmentsOverview.dockerHostsManagedWithShipir')}

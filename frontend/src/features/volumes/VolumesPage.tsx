@@ -91,7 +91,7 @@ export function VolumesPage() {
   }
 
   return (
-    <section className="volumes">
+    <section className="ui-page volumes">
       <PageHeader
         title={t('VolumesPage.volumes')}
         actions={

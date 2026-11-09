@@ -185,7 +185,7 @@ export function ContainerConsolePage() {
     )
 
   return (
-    <section className="cconsole">
+    <section className="ui-page cconsole">
       <Link to={`/environments/${hostId}/containers`} className="cconsole__back">
         <ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" /> {t('ContainerConsolePage.containers')}
       </Link>

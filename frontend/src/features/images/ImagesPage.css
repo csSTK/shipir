@@ -1,6 +1,4 @@
 .images {
-  max-width: var(--content-max);
-  margin: 0 auto;
 }
 .images__tags {
   list-style: none;

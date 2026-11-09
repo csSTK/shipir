@@ -303,7 +303,7 @@ export function ContainersPage() {
   const rows = deployment ? data?.filter((c) => c.composeProject === deployment) : data
 
   return (
-    <section className="containers">
+    <section className="ui-page containers">
       <PageHeader
         title={t('ContainersPage.containers')}
         actions={

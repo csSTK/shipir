@@ -46,7 +46,7 @@ export function NetworksPage() {
   const [creating, setCreating] = useState(false)
 
   return (
-    <section className="networks">
+    <section className="ui-page networks">
       <PageHeader
         title={t('NetworksPage.networks')}
         actions={

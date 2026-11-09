@@ -14,6 +14,7 @@ import { UserMenu } from './UserMenu.tsx'
 import { useMediaQuery } from './useMediaQuery.ts'
 import { useTranslation } from 'react-i18next'
 import './AppShell.css'
+import '../../shared/ui/Page.css'
 
 interface Props {
   user: CurrentUser

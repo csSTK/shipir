@@ -1,12 +1,7 @@
 .settings {
-  max-width: 44rem;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-}
-.settings--wide {
-  max-width: var(--content-max);
 }
 .settings__form {
   display: flex;
