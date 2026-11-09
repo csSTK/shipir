@@ -261,7 +261,9 @@ export function UsersSettingsPage({ currentUsername }: { currentUsername: string
       id: 'status',
       header: t('UsersSettingsPage.status'),
       sortValue: (u) => (u.disabled ? 1 : 0),
-      defaultWidth: 110,
+      // Fits the longest badge label ("Deaktiviert" in German) with cell padding; narrower would clip the pill.
+      defaultWidth: 140,
+      minWidth: 140,
       render: (u) => <Badge tone={u.disabled ? 'bad' : 'ok'}>{u.disabled ? t('UsersSettingsPage.disabled') : t('UsersSettingsPage.active')}</Badge>,
     },
     {

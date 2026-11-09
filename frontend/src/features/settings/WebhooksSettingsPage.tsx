@@ -151,7 +151,9 @@ export function WebhooksSettingsPage() {
       id: 'status',
       header: tr('WebhooksSettingsPage.status'),
       sortValue: (w) => (w.enabled ? 0 : 1),
-      defaultWidth: 110,
+      // Fits the longest badge label ("Deaktiviert" in German) with cell padding; narrower would clip the pill.
+      defaultWidth: 140,
+      minWidth: 140,
       render: (w) => <Badge tone={w.enabled ? 'ok' : 'muted'}>{w.enabled ? tr('WebhooksSettingsPage.enabled') : tr('WebhooksSettingsPage.disabled')}</Badge>,
     },
     { id: 'delivery', header: tr('WebhooksSettingsPage.lastDelivery'), defaultWidth: 260, render: (w) => deliveryText(w) },
