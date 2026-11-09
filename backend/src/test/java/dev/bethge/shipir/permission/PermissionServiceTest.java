@@ -335,4 +335,66 @@ class PermissionServiceTest {
             org.springframework.security.core.context.SecurityContextHolder.clearContext();
         }
     }
+
+    @Test
+    void canOperateAnyDeploymentMatrix() {
+        PermissionSubject admin = new PermissionSubject(adminId, Role.ADMIN);
+        assertThat(service.canOperateAnyDeployment(admin, hostA)).isTrue();
+
+        PermissionSubject none = persisted(Role.OPERATOR, "anyNone");
+        assertThat(service.canOperateAnyDeployment(none, hostA)).isFalse();
+
+        // own deployment OPERATE grant: only on that host
+        PermissionSubject own = persisted(Role.OPERATOR, "anyOwn");
+        grantDeployment(own.userId(), depA1, PermissionLevel.OPERATE);
+        assertThat(service.canOperateAnyDeployment(own, hostA)).isTrue();
+        assertThat(service.canOperateAnyDeployment(own, hostB)).isFalse();
+
+        // VIEW deployment grant never operates
+        PermissionSubject view = persisted(Role.OPERATOR, "anyView");
+        grantDeployment(view.userId(), depA1, PermissionLevel.VIEW);
+        assertThat(service.canOperateAnyDeployment(view, hostA)).isFalse();
+
+        // OPERATE grant on another host's deployment does not leak
+        PermissionSubject other = persisted(Role.OPERATOR, "anyOther");
+        grantDeployment(other.userId(), depB1, PermissionLevel.OPERATE);
+        assertThat(service.canOperateAnyDeployment(other, hostA)).isFalse();
+        assertThat(service.canOperateAnyDeployment(other, hostB)).isTrue();
+
+        // host OPERATE grant covers the host's deployments, not other hosts
+        PermissionSubject host = persisted(Role.OPERATOR, "anyHost");
+        grantHost(host.userId(), hostA, PermissionLevel.OPERATE);
+        assertThat(service.canOperateAnyDeployment(host, hostA)).isTrue();
+        assertThat(service.canOperateAnyDeployment(host, hostB)).isFalse();
+
+        // host VIEW grant does not operate
+        PermissionSubject hostView = persisted(Role.OPERATOR, "anyHostView");
+        grantHost(hostView.userId(), hostA, PermissionLevel.VIEW);
+        assertThat(service.canOperateAnyDeployment(hostView, hostA)).isFalse();
+
+        // role cap: VIEWER never operates
+        PermissionSubject viewer = persisted(Role.VIEWER, "anyViewer");
+        grantDeployment(viewer.userId(), depA1, PermissionLevel.OPERATE);
+        grantHost(viewer.userId(), hostB, PermissionLevel.OPERATE);
+        assertThat(service.canOperateAnyDeployment(viewer, hostA)).isFalse();
+        assertThat(service.canOperateAnyDeployment(viewer, hostB)).isFalse();
+    }
+
+    @Test
+    void canOperateAnyDeploymentHonoursTeamGrantsAndEmptyHosts() {
+        PermissionSubject s = persisted(Role.OPERATOR, "anyTeam");
+        UUID t = team("anyt", s.userId());
+        teamGrantDeployment(t, depA2, PermissionLevel.OPERATE);
+        assertThat(service.canOperateAnyDeployment(s, hostA)).isTrue();
+        assertThat(service.canOperateAnyDeployment(s, hostB)).isFalse();
+
+        PermissionSubject nonMember = persisted(Role.OPERATOR, "anyNonMember");
+        assertThat(service.canOperateAnyDeployment(nonMember, hostA)).isFalse();
+
+        // host without deployments: nothing to operate, even with an OPERATE host grant
+        UUID emptyHost = host("empty");
+        PermissionSubject h = persisted(Role.OPERATOR, "anyEmpty");
+        grantHost(h.userId(), emptyHost, PermissionLevel.OPERATE);
+        assertThat(service.canOperateAnyDeployment(h, emptyHost)).isFalse();
+    }
 }

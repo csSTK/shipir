@@ -71,7 +71,21 @@ public class PermissionService {
         if (isAdmin(subject)) {
             return true;
         }
-        return deployments.deploymentIdsOf(hostId).stream().anyMatch(d -> canOperate(subject, hostId, d));
+        if (subject.role() != Role.OPERATOR) {
+            return false;
+        }
+        // One grant query for all of the user's effective OPERATE grants (own + teams), one for the host's deployments.
+        List<Permission> operate = grants.findEffectiveByUser(subject.userId()).stream()
+                .filter(p -> p.getLevel() == PermissionLevel.OPERATE).toList();
+        if (operate.isEmpty()) {
+            return false;
+        }
+        Set<UUID> onHost = deployments.deploymentIdsOf(hostId);
+        if (onHost.isEmpty()) {
+            return false;
+        }
+        return operate.stream().anyMatch(p -> hostId.equals(p.getHostId())
+                || (p.getDeploymentId() != null && onHost.contains(p.getDeploymentId())));
     }
 
     /** True when the whole host (all deployments, unmanaged ones, containers, ...) is visible. */
