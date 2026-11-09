@@ -67,9 +67,13 @@ test('restarts a service, handles busy, and saves profiles', async ({ page, api 
   await expect(card.getByRole('button', { name: 'Save profiles' })).toBeDisabled()
 })
 
-test('viewers do not see the services card', async ({ page, api }) => {
+test('viewers see the services read-only, without action buttons', async ({ page, api }) => {
   mockCommon(api, 'VIEWER')
+  api.mock('GET', `${BASE}/s1/services`, { body: { services: ['db', 'web'], profiles: ['debug', 'tools'] } })
   await page.goto('/environments/a/deployments/s1')
-  await expect(page.getByRole('heading', { name: 'shop' })).toBeVisible()
-  await expect(page.getByRole('region', { name: 'Services' })).toHaveCount(0)
+
+  const card = page.getByRole('region', { name: 'Services' })
+  await expect(card.getByText('web', { exact: true })).toBeVisible()
+  await expect(card.getByRole('button')).toHaveCount(0)
+  await expect(card.getByRole('checkbox', { name: 'debug' })).toBeDisabled()
 })

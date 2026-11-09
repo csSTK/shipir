@@ -17,7 +17,7 @@ function describeServiceError(error: unknown, fallback: string, notDeployed: str
 }
 
 /** Profile checkboxes; remounted (via `key`) when the saved profiles change, so the draft resets. */
-function ProfilePicker({ hostId, deploymentId, available, active }: { hostId: string; deploymentId: string; available: string[]; active: string[] }) {
+function ProfilePicker({ hostId, deploymentId, available, active, readOnly }: { hostId: string; deploymentId: string; available: string[]; active: string[]; readOnly: boolean }) {
   const { t } = useTranslation('deployments')
   const save = useSetProfiles(hostId, deploymentId)
   const [selected, setSelected] = useState<string[]>(active)
@@ -37,16 +37,17 @@ function ProfilePicker({ hostId, deploymentId, available, active }: { hostId: st
         <legend className="services__legend">{t('ServicesCard.activeProfiles')}</legend>
         <div className="services__chips">
           {names.map((name) => (
-            <Checkbox key={name} className="services__chip" label={name} checked={selected.includes(name)} onChange={() => toggle(name)} />
+            <Checkbox key={name} className="services__chip" label={name} checked={selected.includes(name)} disabled={readOnly} onChange={() => toggle(name)} />
           ))}
         </div>
       </fieldset>
-      <p className="services__text">{t('ServicesCard.profilesHint')}</p>
+      {!readOnly && <p className="services__text">{t('ServicesCard.profilesHint')}</p>}
       {error && (
         <p role="alert" className="ui-error">
           {error}
         </p>
       )}
+      {!readOnly && (
       <div>
         <Button
           variant="secondary"
@@ -59,11 +60,12 @@ function ProfilePicker({ hostId, deploymentId, available, active }: { hostId: st
           {t('ServicesCard.saveProfiles')}
         </Button>
       </div>
+      )}
     </div>
   )
 }
 
-/** Services and Compose profiles of a deployment, with per-service actions (ADMIN/OPERATOR only). */
+/** Services and Compose profiles of a deployment; actions and the profile save are only offered with `canOperate` (viewers read). */
 export function ServicesCard({
   hostId,
   deploymentId,
@@ -79,12 +81,11 @@ export function ServicesCard({
   onRunStarted: (kind: string, runId: string) => void
 }) {
   const { t } = useTranslation('deployments')
-  const info = useServices(hostId, deploymentId, canOperate)
+  const info = useServices(hostId, deploymentId)
   const action = useServiceAction(hostId, deploymentId)
   const startAll = useStartAll(hostId, deploymentId)
   const [error, setError] = useState<string | null>(null)
 
-  if (!canOperate) return null
   if (info.error instanceof ApiError && info.error.status === 403) return null
 
   const pending = action.isPending || startAll.isPending
@@ -116,7 +117,7 @@ export function ServicesCard({
         <h3 className="services__title" id={titleId}>
           {t('ServicesCard.services')}
         </h3>
-        {info.data && info.data.services.length > 0 && (
+        {canOperate && info.data && info.data.services.length > 0 && (
           <Button variant="secondary" onClick={start} disabled={pending}>
             {t('ServicesCard.startAll')}
           </Button>
@@ -138,6 +139,7 @@ export function ServicesCard({
           {info.data.services.map((name) => (
             <li key={name} className="services__row">
               <span className="services__name">{name}</span>
+              {canOperate && (
               <div className="services__actions">
                 <IconButton icon={RotateCw} aria-label={t('ServicesCard.restartName', { name })} disabled={pending} onClick={() => run(name, 'restart')} />
                 <IconButton icon={Download} aria-label={t('ServicesCard.pullImageOf', { name })} disabled={pending} onClick={() => run(name, 'pull')} />
@@ -146,6 +148,7 @@ export function ServicesCard({
                   items={[{ label: t('ServicesCard.up'), icon: <Play size={16} />, onSelect: () => run(name, 'up') }]}
                 />
               </div>
+              )}
             </li>
           ))}
         </ul>
@@ -162,6 +165,7 @@ export function ServicesCard({
           deploymentId={deploymentId}
           available={info.data.profiles}
           active={activeProfiles}
+          readOnly={!canOperate}
         />
       )}
     </Card>

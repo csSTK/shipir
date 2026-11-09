@@ -20,11 +20,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ToolDefinitionBudgetTest {
 
     /** Approximate tokens (chars / 4). Before shortening: 9956 chars (about 2490 tokens); then 7154 chars (about 1788 tokens); then 7738 chars (about 1934 tokens) after adding list_config_files and read_config_file; then 8081 chars after adding list_access_grants; now 8044 chars (about 2011 tokens) after shortening its description; the budget (2015) is 81.1% of the old size. */
+    // Bumped from 2015 to 2275 for list_deployment_services, service_action and set_deployment_profiles (shipr-ycvc.9, about 1040 chars;
+    // the three service/profile actions share one service_action tool with an action enum instead of three tools).
     // Adding a tool or a longer description means deliberately bumping this budget. Bumped from 1790 to 1940 for the two config
     // file read tools (shipr-006w.2, 584 chars, descriptions already minimal), and from 1940 to 2030 for the ADMIN-only
     // list_access_grants (shipr-006w.3, 343 chars: four uuid properties are the bulk; lowered to 2015 once its description was shortened, the per-id uuid schema is already one shared constant). It is only sent to ADMINs; keep the budget
     // below the 9956 chars measured before shortening, so the saving is not given back piecemeal.
-    private static final int BUDGET_TOKENS = 2_015;
+    private static final int BUDGET_TOKENS = 2_275;
 
     private static final ObjectMapper MAPPER = JsonMapper.builder().build();
 

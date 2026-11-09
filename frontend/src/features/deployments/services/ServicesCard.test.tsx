@@ -32,15 +32,23 @@ function renderCard(opts: { canOperate?: boolean; profiles?: string[]; services?
 }
 
 describe('ServicesCard', () => {
-  it('lists the services and renders nothing and fetches nothing for viewers', async () => {
+  it('lists the services', async () => {
     renderCard()
     expect(await screen.findByText('web')).toBeInTheDocument()
     expect(screen.getByText('db')).toBeInTheDocument()
-    cleanup()
-    apiFetch.mockReset()
-    renderCard({ canOperate: false })
-    expect(screen.queryByRole('region')).toBeNull()
-    expect(apiFetch).not.toHaveBeenCalled()
+  })
+
+  it('shows services and profiles read-only for viewers: no action buttons, no save', async () => {
+    renderCard({ canOperate: false, profiles: ['debug'] })
+    expect(await screen.findByText('web')).toBeInTheDocument()
+    expect(apiFetch).toHaveBeenCalledWith(`${BASE}/services`)
+    expect(screen.queryByRole('button', { name: /restart/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /pull/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /more actions/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /start all/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /save/i })).toBeNull()
+    for (const box of screen.getAllByRole('checkbox')) expect(box).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: 'debug' })).toBeChecked()
   })
 
   it('hides itself on 403', async () => {

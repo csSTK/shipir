@@ -14,12 +14,11 @@ export type ServiceAction = 'restart' | 'pull' | 'up'
 const base = (hostId: string, deploymentId: string) => `/hosts/${hostId}/managed-deployments/${deploymentId}`
 const deploymentKey = (hostId: string) => ['hosts', hostId, 'managed-deployments'] as const
 
-/** Services and profiles of the stored Compose file (`GET .../services`, ADMIN/OPERATOR only). */
-export function useServices(hostId: string, deploymentId: string, enabled: boolean) {
+/** Services and profiles of the stored Compose file (`GET .../services`, every role with a VIEW grant). */
+export function useServices(hostId: string, deploymentId: string) {
   return useQuery({
     queryKey: [...deploymentKey(hostId), deploymentId, 'services'],
     queryFn: () => apiFetch<ServicesInfo>(`${base(hostId, deploymentId)}/services`),
-    enabled,
     retry: false,
   })
 }

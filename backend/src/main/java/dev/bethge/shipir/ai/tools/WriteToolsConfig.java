@@ -7,6 +7,8 @@ import dev.bethge.shipir.compose.DeploymentSource;
 import dev.bethge.shipir.compose.DeploymentService;
 import dev.bethge.shipir.compose.dto.AutoUpdateRequest;
 import dev.bethge.shipir.compose.dto.EnvEntry;
+import dev.bethge.shipir.compose.dto.ProfilesRequest;
+import dev.bethge.shipir.compose.execution.ComposeOptions;
 import dev.bethge.shipir.compose.dto.DeploymentCreateRequest;
 import dev.bethge.shipir.compose.dto.DeploymentUpdateRequest;
 import dev.bethge.shipir.git.GitCredentialService;
@@ -131,6 +133,37 @@ class WriteToolsConfig {
     }
 
     @Bean
+    AiTool serviceActionTool(DeploymentRunService deployments) {
+        Map<String, Object> props = new LinkedHashMap<>();
+        props.put("hostId", UUID_PROP);
+        props.put("deploymentId", UUID_PROP);
+        props.put("service", Map.of("type", "string"));
+        props.put("action", Map.of("type", "string", "enum", List.of("restart", "pull", "up")));
+        return write("service_action", "Restart, pull or up one service (names: list_deployment_services). Async.",
+                schema(props, "hostId", "deploymentId", "service", "action"), Role.OPERATOR, (a, c) -> {
+                    UUID host = uuid(a, "hostId");
+                    UUID id = uuid(a, "deploymentId");
+                    String service = (String) a.get("service");
+                    return switch ((String) a.get("action")) {
+                        case "restart" -> deployments.restartService(host, id, service, c.username());
+                        case "pull" -> deployments.pullService(host, id, service, c.username());
+                        default -> deployments.upService(host, id, service, c.username());
+                    };
+                });
+    }
+
+    @Bean
+    AiTool setDeploymentProfilesTool(DeploymentService deployments) {
+        Map<String, Object> props = new LinkedHashMap<>();
+        props.put("hostId", UUID_PROP);
+        props.put("deploymentId", UUID_PROP);
+        props.put("profiles", Map.of("type", "array", "items", Map.of("type", "string"), "maxItems", 50));
+        return write("set_deployment_profiles", "Set Compose profiles ([] = none) for the next runs.",
+                schema(props, "hostId", "deploymentId", "profiles"), Role.OPERATOR, (a, c) -> deployments.configureProfiles(
+                        uuid(a, "hostId"), uuid(a, "deploymentId"), new ProfilesRequest(stringList(a.get("profiles")))));
+    }
+
+    @Bean
     AiTool markNotificationsReadTool(NotificationService notifications) {
         Map<String, Object> props = Map.of("notificationId", Map.of("type", "string", "format", "uuid",
                 "description", "Omit for all."));
@@ -224,6 +257,18 @@ class WriteToolsConfig {
 
     private static Map<String, Object> deploymentSchema() {
         return schema(Map.of("hostId", UUID_PROP, "deploymentId", UUID_PROP), "hostId", "deploymentId");
+    }
+
+    private static List<String> stringList(Object value) {
+        if (!(value instanceof List<?> list) || !list.stream().allMatch(String.class::isInstance)) {
+            throw new ToolArgumentException("profiles must be a list of strings");
+        }
+        List<String> names = list.stream().map(String.class::cast).toList();
+        // the REST endpoint validates the same rule with bean validation; the tool path has no @Valid
+        if (!names.stream().allMatch(n -> ComposeOptions.NAME.matcher(n).matches())) {
+            throw new ToolArgumentException("profile names may only use letters, digits, '_', '.' and '-'");
+        }
+        return names;
     }
 
     private static UUID uuid(Map<String, Object> args, String name) {

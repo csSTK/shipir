@@ -299,8 +299,8 @@ class ReadToolsTest {
 
         for (Role role : Role.values()) {
             for (AiTool tool : registry.toolsFor(role)) {
-                if (!List.of("list_config_files", "read_config_file").contains(tool.name())) {
-                    assertThat(tool.name()).as("only the two config tools may touch files").doesNotContainIgnoringCase("file")
+                if (!List.of("list_config_files", "read_config_file", "set_deployment_profiles").contains(tool.name())) {
+                    assertThat(tool.name()).as("only the two config tools may touch files (set_deployment_profiles: 'profiles' is no file access)").doesNotContainIgnoringCase("file")
                             .doesNotContainIgnoringCase("config").doesNotContainIgnoringCase("env_");
                 }
                 if (tool.write()) {
@@ -405,15 +405,23 @@ class ReadToolsTest {
     }
 
     @Test
+    void listDeploymentServicesIsOpenToViewersWithAGrantOnly() {
+        // no compose in this test: the call must at least pass the role/permission layer and fail (if at all) later, not as UNKNOWN_TOOL
+        assertThat(run("list_deployment_services", stack(hostId, deploymentId), Role.VIEWER).content()).doesNotContain("UNKNOWN_TOOL");
+        jdbc.update("DELETE FROM permissions");
+        assertThat(run("list_deployment_services", stack(hostId, deploymentId), Role.VIEWER).content()).contains("NOT_FOUND");
+    }
+
+    @Test
     void roleFilteringOfTheRealToolSet() {
         assertThat(readTools(Role.ADMIN)).extracting(AiTool::name).containsExactlyInAnyOrder(
                 "list_hosts", "host_overview", "list_deployments", "get_managed_deployment", "list_deployment_versions",
                 "list_containers", "list_images", "list_networks", "list_volumes", "list_notifications",
-                "list_git_credentials", "list_audit_log", "list_config_files", "read_config_file", "list_access_grants");
+                "list_git_credentials", "list_audit_log", "list_config_files", "read_config_file", "list_access_grants", "list_deployment_services");
         assertThat(readTools(Role.OPERATOR)).extracting(AiTool::name)
-                .hasSize(13).contains("list_git_credentials", "read_config_file").doesNotContain("list_audit_log");
+                .hasSize(14).contains("list_deployment_services", "list_git_credentials", "read_config_file").doesNotContain("list_audit_log");
         assertThat(readTools(Role.VIEWER)).extracting(AiTool::name)
-                .hasSize(12).contains("list_config_files", "read_config_file")
+                .hasSize(13).contains("list_config_files", "read_config_file", "list_deployment_services")
                 .doesNotContain("list_audit_log", "list_git_credentials");
     }
 
@@ -459,6 +467,7 @@ class ReadToolsTest {
                 "get_managed_deployment", stack(hostId, deploymentId),
                 "list_deployment_versions", stack(hostId, deploymentId),
                 "list_config_files", stack(hostId, deploymentId),
+                "list_deployment_services", stack(hostId, deploymentId),
                 "read_config_file", configArgs(hostId, deploymentId, "app.conf"),
                 "list_access_grants", "{\"hostId\":\"" + tcpHostId + "\"}");
         StringBuilder all = new StringBuilder();

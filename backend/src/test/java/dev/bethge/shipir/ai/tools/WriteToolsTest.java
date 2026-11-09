@@ -114,6 +114,10 @@ class WriteToolsTest {
         // CONFIG_JSON (the ADMIN-gate lookup for non-ADMIN callers) needs a valid, harmless compose config
         org.mockito.stubbing.Answer<ComposeProcessResult> fake = inv -> inv.getArgument(2) == dev.bethge.shipir.compose.execution.ComposeCommand.CONFIG_JSON
                 ? new ComposeProcessResult(0, false, List.of("{\"name\":\"" + inv.getArgument(1) + "\",\"services\":{}}"))
+                : inv.getArgument(2) == dev.bethge.shipir.compose.execution.ComposeCommand.CONFIG_SERVICES
+                ? new ComposeProcessResult(0, false, List.of("web"))
+                : inv.getArgument(2) == dev.bethge.shipir.compose.execution.ComposeCommand.CONFIG_PROFILES
+                ? new ComposeProcessResult(0, false, List.of("debug"))
                 : ok;
         when(execution.execute(any(), any(), any(), any(), any())).thenAnswer(fake);
         when(execution.execute(any(), any(), any(), any(), any(), any())).thenAnswer(fake);
@@ -184,11 +188,12 @@ class WriteToolsTest {
         assertThat(registry.toolsFor(Role.VIEWER)).noneMatch(AiTool::write);
         assertThat(registry.toolsFor(Role.OPERATOR)).filteredOn(AiTool::write).extracting(AiTool::name)
                 .containsExactlyInAnyOrder("run_deployment", "stop_deployment", "rollback_deployment", "git_redeploy_deployment",
-                        "create_deployment", "update_deployment", "delete_deployment", "set_auto_update", "mark_notifications_read");
+                        "create_deployment", "update_deployment", "delete_deployment", "set_auto_update", "mark_notifications_read",
+                        "service_action", "set_deployment_profiles");
         assertThat(registry.toolsFor(Role.ADMIN)).filteredOn(AiTool::write).extracting(AiTool::name)
                 .containsExactlyInAnyOrder("run_deployment", "stop_deployment", "rollback_deployment", "git_redeploy_deployment",
                         "create_deployment", "update_deployment", "delete_deployment", "set_auto_update", "mark_notifications_read",
-                        "create_host", "rename_host", "delete_host", "set_webhook_enabled", "delete_webhook",
+                        "service_action", "set_deployment_profiles", "create_host", "rename_host", "delete_host", "set_webhook_enabled", "delete_webhook",
                         "delete_git_credential");
     }
 
@@ -210,6 +215,109 @@ class WriteToolsTest {
 
         ToolResult admin = confirmed("stop_deployment", stack(hostId, deploymentId), Role.ADMIN);
         assertThat(admin.error()).isFalse();
+    }
+
+    private String serviceArgs(String service, String action) {
+        return "{\"hostId\":\"" + hostId + "\",\"deploymentId\":\"" + deploymentId + "\",\"service\":\"" + service
+                + "\",\"action\":\"" + action + "\"}";
+    }
+
+    @Test
+    void serviceActionNeedsConfirmationRunsAsTheUserAndIsAuditedViaAi() throws Exception {
+        runDeployed();
+
+        assertThat(registry.execute("service_action", serviceArgs("web", "restart"), ctx(Role.OPERATOR)).content())
+                .contains("CONFIRMATION_REQUIRED");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_log WHERE action LIKE 'DEPLOYMENT_SERVICE_%'", Integer.class)).isZero();
+
+        for (String action : List.of("restart", "pull", "up")) {
+            ToolResult result = confirmed("service_action", serviceArgs("web", action), Role.OPERATOR);
+            assertThat(result.error()).as(action + ": " + result.content()).isFalse();
+            assertAuditedViaAi("DEPLOYMENT_SERVICE_" + action.toUpperCase(), Role.OPERATOR);
+            assertThat(auditEntry("DEPLOYMENT_SERVICE_" + action.toUpperCase()).get("details").toString()).contains("web");
+        }
+    }
+
+    @Test
+    void serviceActionRejectsUnknownActionAndMaliciousServiceNames() throws Exception {
+        runDeployed();
+        ProposalResult bad = registry.propose("service_action", serviceArgs("web", "down"), ctx(Role.OPERATOR), SESSION);
+        assertThat(bad.accepted()).isFalse();
+        assertThat(bad.error().content()).contains("INVALID_ARGUMENTS");
+
+        for (String name : List.of("--project-name=x", "web;rm -rf /", "../web", "nope")) {
+            ToolResult r = confirmed("service_action", serviceArgs(name, "restart"), Role.OPERATOR);
+            assertThat(r.error()).as(name).isTrue();
+            assertThat(r.content()).as(name).containsAnyOf("INVALID_SERVICE", "UNKNOWN_SERVICE");
+        }
+    }
+
+    @Test
+    void serviceActionAndProfilesAreUnavailableToViewerAndDeniedWithoutGrantOrOnSystemManaged() throws Exception {
+        runDeployed();
+        String profiles = "{\"hostId\":\"" + hostId + "\",\"deploymentId\":\"" + deploymentId + "\",\"profiles\":[\"debug\"]}";
+        for (String[] t : new String[][]{{"service_action", serviceArgs("web", "restart")}, {"set_deployment_profiles", profiles}}) {
+            ProposalResult v = registry.propose(t[0], t[1], ctx(Role.VIEWER), SESSION);
+            assertThat(v.accepted()).as(t[0]).isFalse();
+            assertThat(v.error().content()).as(t[0]).contains("UNKNOWN_TOOL");
+        }
+
+        jdbc.update("UPDATE deployments SET system_managed = TRUE WHERE id = ?", deploymentId);
+        for (String[] t : new String[][]{{"service_action", serviceArgs("web", "restart")}, {"set_deployment_profiles", profiles}}) {
+            ProposalResult p = registry.propose(t[0], t[1], ctx(Role.OPERATOR), SESSION);
+            assertThat(registry.executeConfirmed(p.action().token(), ctx(Role.OPERATOR)).content()).as(t[0]).contains("FORBIDDEN");
+        }
+
+        jdbc.update("UPDATE deployments SET system_managed = FALSE WHERE id = ?", deploymentId);
+        jdbc.update("DELETE FROM permissions WHERE user_id IN (SELECT id FROM users WHERE username = 'operator')");
+        for (String[] t : new String[][]{{"service_action", serviceArgs("web", "restart")}, {"set_deployment_profiles", profiles}}) {
+            ProposalResult p = registry.propose(t[0], t[1], ctx(Role.OPERATOR), SESSION);
+            ToolResult r = registry.executeConfirmed(p.action().token(), ctx(Role.OPERATOR));
+            assertThat(r.error()).as(t[0]).isTrue();
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_log WHERE outcome = 'SUCCESS' "
+                + "AND (action LIKE 'DEPLOYMENT_SERVICE_%' OR action = 'DEPLOYMENT_PROFILES_UPDATE')", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT array_to_string(profiles, ',') FROM deployments WHERE id = ?", String.class, deploymentId))
+                .doesNotContain("debug");
+    }
+
+    @Test
+    void setDeploymentProfilesStoresThemAndIsAuditedViaAi() throws Exception {
+        String args = "{\"hostId\":\"" + hostId + "\",\"deploymentId\":\"" + deploymentId + "\",\"profiles\":[\"debug\",\"debug\"]}";
+
+        ToolResult result = confirmed("set_deployment_profiles", args, Role.OPERATOR);
+
+        assertThat(result.error()).as(result.content()).isFalse();
+        assertAuditedViaAi("DEPLOYMENT_PROFILES_UPDATE", Role.OPERATOR);
+    }
+
+    @Test
+    void setDeploymentProfilesRejectsMaliciousNames() {
+        for (String bad : List.of("--project-name=x", "a b", "$(id)", "", "-debug")) {
+            String args = mapper.writeValueAsString(Map.of("hostId", hostId.toString(), "deploymentId", deploymentId.toString(),
+                    "profiles", List.of(bad)));
+            ToolResult r = confirmed("set_deployment_profiles", args, Role.OPERATOR);
+            assertThat(r.error()).as(bad).isTrue();
+        }
+        ProposalResult notAList = registry.propose("set_deployment_profiles", mapper.writeValueAsString(Map.of(
+                "hostId", hostId.toString(), "deploymentId", deploymentId.toString(), "profiles", "debug")), ctx(Role.OPERATOR), SESSION);
+        assertThat(notAList.accepted()).isFalse();
+        assertThat(jdbc.queryForObject("SELECT array_to_string(profiles, ',') FROM deployments WHERE id = ?", String.class, deploymentId))
+                .isEmpty();
+    }
+
+    /** Marks the deployment as deployed (latest successful version), as the service actions require. */
+    private void runDeployed() throws Exception {
+        confirmed("run_deployment", stack(hostId, deploymentId), Role.OPERATOR);
+        for (int i = 0; i < 100; i++) {
+            Integer n = jdbc.queryForObject("SELECT count(*) FROM deployment_versions WHERE deploy_succeeded_at IS NOT NULL", Integer.class);
+            if (n != null && n > 0) {
+                break;
+            }
+            Thread.sleep(100);
+        }
+        awaitAudit("DEPLOYMENT_DEPLOY_RESULT"); // the worker's own audit entry, so it cannot land after the cleanup below
+        jdbc.update("DELETE FROM audit_log");
     }
 
     @Test

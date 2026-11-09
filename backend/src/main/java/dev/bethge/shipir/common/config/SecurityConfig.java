@@ -147,7 +147,9 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/hosts/*/managed-deployments", "/api/hosts/*/managed-deployments/*",
                                 "/api/hosts/*/managed-deployments/*/versions", "/api/hosts/*/managed-deployments/*/versions/*",
                                 "/api/hosts/*/managed-deployments/*/files",
-                                "/api/hosts/*/managed-deployments/*/files/backups").authenticated()
+                                "/api/hosts/*/managed-deployments/*/files/backups",
+                                // read-only services/profiles list: the service demands VIEW; the service actions stay ADMIN/OPERATOR
+                                "/api/hosts/*/managed-deployments/*/services").authenticated()
                         .requestMatchers("/api/hosts/*/managed-deployments", "/api/hosts/*/managed-deployments/**").hasAnyRole("ADMIN", "OPERATOR")
                         // environments: every role reads, only ADMIN writes (create, test, rename, delete)
                         .requestMatchers(HttpMethod.DELETE, "/api/hosts/*/deployments/*").hasAnyRole("ADMIN", "OPERATOR")

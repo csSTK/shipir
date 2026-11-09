@@ -332,6 +332,10 @@ public class AiToolRegistry {
         if (n.isIntegralNumber() && n.canConvertToLong()) {
             return n.asLong();
         }
+        if (n.isArray() && java.util.stream.StreamSupport.stream(n.spliterator(), false).allMatch(JsonNode::isString)) {
+            // only arrays of strings (e.g. profile names); anything else stays unsupported and fails validation
+            return java.util.stream.StreamSupport.stream(n.spliterator(), false).map(JsonNode::asString).toList();
+        }
         return UNSUPPORTED;
     }
 

@@ -64,6 +64,12 @@ class ReadToolsConfig {
     }
 
     @Bean
+    AiTool listDeploymentServicesTool(DeploymentService deployments) {
+        return read("list_deployment_services", "Compose service and profile names of a managed deployment.",
+                deploymentSchema(), Role.VIEWER, (a, c) -> deployments.services(uuid(a, "hostId"), uuid(a, "deploymentId")));
+    }
+
+    @Bean
     AiTool listConfigFilesTool(ConfigFileService files) {
         return read("list_config_files", "File tree of a managed deployment's directory.",
                 deploymentSchema(), Role.VIEWER, (a, c) -> files.tree(uuid(a, "hostId"), uuid(a, "deploymentId")));

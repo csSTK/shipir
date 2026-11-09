@@ -221,6 +221,46 @@ class DeploymentServicesApiTest extends DeploymentTestBase {
         assertThat(commands).isEmpty();
     }
 
+    @Test
+    void viewerWithViewGrantMayListServicesReadOnlyButOnlyOnGrantedHosts() throws Exception {
+        String id = create(login("admin"));
+        commands.clear();
+        Login viewer = login("viewer");
+
+        mvc.perform(get(url() + "/" + id + "/services").session(viewer.session()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.services[0]").value("debug"))
+                .andExpect(jsonPath("$.profiles[0]").value("debug"));
+        // read-only: every action stays closed for the same user
+        for (String action : List.of("restart", "pull", "up")) {
+            mvc.perform(viewer.write(post(url() + "/" + id + "/services/web/" + action))).andExpect(status().isForbidden());
+        }
+        assertThat(commands).isEmpty();
+
+        jdbc.update("DELETE FROM permissions");
+        mvc.perform(get(url() + "/" + id + "/services").session(viewer.session())).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void operatorWithoutGrantCannotListOrActOnServices() throws Exception {
+        String id = deployed(login("admin"));
+        Login op = login("operator");
+        jdbc.update("DELETE FROM permissions");
+
+        mvc.perform(get(url() + "/" + id + "/services").session(op.session())).andExpect(status().isNotFound());
+        for (String action : List.of("restart", "pull", "up")) {
+            mvc.perform(op.write(post(url() + "/" + id + "/services/web/" + action))).andExpect(status().is4xxClientError());
+        }
+        mvc.perform(op.write(put(url() + "/" + id + "/profiles")).contentType(APPLICATION_JSON).content("{\"profiles\":[]}"))
+                .andExpect(status().is4xxClientError());
+        assertThat(commands).isEmpty();
+    }
+
+    @Test
+    void anonymousCannotListServices() throws Exception {
+        String id = create(login("admin"));
+        mvc.perform(get(url() + "/" + id + "/services")).andExpect(status().isUnauthorized());
+    }
+
     // --- start
 
     @Test
@@ -330,8 +370,8 @@ class DeploymentServicesApiTest extends DeploymentTestBase {
         Login op = login("operator");
         String id = create(op);
 
-        // like /env this is behind the OPERATOR/ADMIN rule of the managed-deployments sub-paths
-        mvc.perform(get(url() + "/" + id + "/services").session(login("viewer").session())).andExpect(status().isForbidden());
+        // a VIEWER (with a VIEW grant) reads the list too; the actions stay closed (see viewerWithViewGrantMayListServices...)
+        mvc.perform(get(url() + "/" + id + "/services").session(login("viewer").session())).andExpect(status().isOk());
         mvc.perform(get(url() + "/" + id + "/services").session(op.session()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.services[0]").value("debug"))

@@ -7,7 +7,7 @@ import java.util.UUID;
 
 /**
  * Validates tool arguments against the small JSON Schema subset the tools use: object with {@code properties}
- * (type string/integer/boolean, {@code format: uuid}, {@code enum}, {@code minimum}, {@code maximum}),
+ * (type string/integer/boolean/array of strings, {@code format: uuid}, {@code enum}, {@code minimum}, {@code maximum}),
  * {@code required}, and no unknown properties.
  */
 final class ArgumentValidator {
@@ -62,6 +62,15 @@ final class ArgumentValidator {
                 }
                 if (prop.get("maximum") instanceof Number max && n > max.longValue()) {
                     errors.add("'" + name + "' must be <= " + max);
+                }
+            }
+            case "array" -> {
+                if (!(value instanceof List<?> items) || !items.stream().allMatch(String.class::isInstance)) {
+                    errors.add("'" + name + "' must be a list of strings");
+                    return;
+                }
+                if (prop.get("maxItems") instanceof Number max && items.size() > max.longValue()) {
+                    errors.add("'" + name + "' must have at most " + max + " items");
                 }
             }
             case "boolean" -> {
