@@ -1,7 +1,7 @@
 package dev.bethge.shipir.streaming;
 
-import dev.bethge.shipir.common.stream.RunStatus;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import dev.bethge.shipir.common.stream.RunStatus;
 
 /**
  * JSON frame sent to subscribers of {@code /topic/deployments/{id}}. {@code seq} is strictly increasing per

@@ -32,8 +32,9 @@ import java.util.regex.Pattern;
 @Service
 public class ComposeGeneratorService {
 
-    // Deliberately stricter than Compose's ComposeOptions.NAME: generated service names are also DNS hostnames on the
-    // Docker network (RFC 1123, no leading '_'), and network/volume names must start with a letter or digit in Docker.
+    // Deliberately stricter than Compose's ComposeOptions.NAME: generated names are lowercase and start with a letter or
+    // digit, because service names are also DNS hostnames on the Docker network and Docker requires it for network and
+    // volume names. '_' is still allowed mid-name.
     private static final Pattern NAME = Pattern.compile("[a-z0-9][a-z0-9_-]{0,62}");
     private static final Pattern ENV_KEY = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
     private static final Pattern DRIVER = Pattern.compile("[a-z0-9][a-z0-9_.-]{0,62}");
