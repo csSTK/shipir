@@ -54,7 +54,7 @@ function currentForm(c: ContainerDetails): ResourcesForm {
 /** Changes memory, CPU and restart policy of a container in place (no restart). Fields start with the current limits; unchanged or empty ones are not sent. */
 export function ContainerResourcesDialog({ hostId, container, onClose }: { hostId: string; container: ContainerDetails; onClose: () => void }) {
   const { t } = useTranslation('containers')
-  const original = currentForm(container)
+  const [original] = useState(() => currentForm(container))
   const [memory, setMemory] = useState(original.memory)
   const [cpus, setCpus] = useState(original.cpus)
   const [policy, setPolicy] = useState<RestartPolicy>(original.policy)

@@ -160,6 +160,27 @@ describe('ContainerResourcesDialog', () => {
     expect((call('PATCH')![1] as { body: unknown }).body).toEqual({ memoryBytes: null, cpus: null, restartPolicy: 'always' })
   })
 
+  it('keeps the limits it opened with when the container refetches with new limits', async () => {
+    apiFetch.mockResolvedValue(undefined)
+    const onClose = vi.fn()
+    const client = new QueryClient()
+    const before = { ...sample, memoryBytes: 512 * 1024 * 1024, cpus: 1.5 }
+    const { rerender } = render(
+      <QueryClientProvider client={client}>
+        <ContainerResourcesDialog hostId="h1" container={before} onClose={onClose} />
+      </QueryClientProvider>,
+    )
+    rerender(
+      <QueryClientProvider client={client}>
+        <ContainerResourcesDialog hostId="h1" container={{ ...before, memoryBytes: 1024 * 1024 * 1024, cpus: 2 }} onClose={onClose} />
+      </QueryClientProvider>,
+    )
+    fireEvent.change(screen.getByLabelText('Restart policy'), { target: { value: 'always' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply limits' }))
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+    expect((call('PATCH')![1] as { body: unknown }).body).toEqual({ memoryBytes: null, cpus: null, restartPolicy: 'always' })
+  })
+
   it('rejects an empty change when the prefilled limits are untouched', () => {
     wrap(<ContainerResourcesDialog hostId="h1" container={{ ...sample, memoryBytes: 512 * 1024 * 1024, cpus: 1.5 }} onClose={() => {}} />)
     fireEvent.click(screen.getByRole('button', { name: 'Apply limits' }))
