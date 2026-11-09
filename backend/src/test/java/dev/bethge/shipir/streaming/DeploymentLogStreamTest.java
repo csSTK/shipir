@@ -50,6 +50,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -539,6 +540,32 @@ class DeploymentLogStreamTest {
         awaitFollowing("c-db");
         lineSinks.get("c-db").accept(line("after restart"));
         assertThat(drain(q, 500)).anyMatch(f -> f.contains("after restart") && f.contains("\"service\":\"db\""));
+        s.disconnect();
+    }
+
+    @Test
+    void retryAfterFailedRestartOfAContainerThatDeliveredUsesNoTail() throws Exception {
+        List<Integer> dbTails = new CopyOnWriteArrayList<>();
+        when(logService.follow(any(), any(DockerEndpoint.class), eq("c-db"), anyInt(), anyBoolean(), any(), any()))
+                .thenAnswer(inv -> {
+                    int n = dbTails.size();
+                    dbTails.add(inv.getArgument(3));
+                    if (n == 1) { // the restart follow fails once
+                        throw new DockerConnectionException(DockerErrorCode.UNREACHABLE, "down", null);
+                    }
+                    lineSinks.put("c-db", inv.getArgument(5));
+                    endSinks.put("c-db", inv.getArgument(6));
+                    return mock(Closeable.class);
+                });
+        StompSession s = connect();
+        BlockingQueue<String> q = subscribe(s, topic("shop"));
+        awaitFollowing("c-db", "c-web");
+        lineSinks.get("c-db").accept(line("old line"));
+        assertThat(drain(q, 300)).anyMatch(f -> f.contains("old line"));
+        endSinks.get("c-db").accept(null); // ended, container still reported running: restart follow, which fails
+        await().atMost(10, TimeUnit.SECONDS).until(() -> dbTails.size() >= 3);
+        assertThat(dbTails.get(0)).isEqualTo(100);
+        assertThat(dbTails.subList(1, 3)).containsExactly(0, 0); // restart and its retry never re-send old lines
         s.disconnect();
     }
 

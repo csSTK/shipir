@@ -96,6 +96,8 @@ public class DeploymentLogStreamService {
         int generation;
         boolean ended;
         boolean failed;
+        /** Set once a line of this container was published; a later follow then starts at tail 0 (no duplicates). */
+        boolean delivered;
         /** Consecutive failed starts; reset by a successful start. */
         int failures;
         /** Refresh rounds to wait before the next retry of a failed start. */
@@ -467,7 +469,7 @@ public class DeploymentLogStreamService {
                     if (f.failures <= MAX_START_RETRIES && --f.ticksUntilRetry <= 0) {
                         f.ended = false;
                         toStart.add(f);
-                        tails.add(stream.key.options().tail()); // nothing was delivered yet
+                        tails.add(f.delivered ? 0 : stream.key.options().tail()); // delivered lines are never re-sent
                         generations.add(++f.generation);
                     }
                 } else if (f.ended && "running".equals(c.state())) {
@@ -568,6 +570,7 @@ public class DeploymentLogStreamService {
             String text = LogStreamSupport.capLength(line.text(), properties.maxLineLength());
             String timestamp = LogStreamSupport.timestampOf(line, stream.key.options().timestamps());
             publish(stream, DeploymentLogMessage.Type.LINE, f, line.stream().name(), text, null, timestamp);
+            f.delivered = true;
         }
     }
 
