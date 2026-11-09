@@ -12,6 +12,8 @@ import dev.bethge.shipir.proxy.ProxyCertificateRepository;
 import dev.bethge.shipir.proxy.ProxyHostAccess;
 import dev.bethge.shipir.proxy.ProxyInstance;
 import dev.bethge.shipir.proxy.ProxyInstanceRepository;
+import dev.bethge.shipir.proxy.ProxyRoute;
+import dev.bethge.shipir.proxy.ProxyRouteRepository;
 import dev.bethge.shipir.proxy.ProxyRouteService;
 import dev.bethge.shipir.proxy.ProxySyncService;
 import dev.bethge.shipir.proxy.dto.ProxyRouteView;
@@ -31,8 +33,10 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -59,6 +63,7 @@ public class ProxyStatusService {
     private final ProxyInstanceRepository instances;
     private final ProxyCertificateRepository certificates;
     private final ProxyRouteService routes;
+    private final ProxyRouteRepository routeRepository;
     private final ProxyHostAccess access;
     private final ProxySyncService sync;
     private final ContainerFileService files;
@@ -70,7 +75,7 @@ public class ProxyStatusService {
 
     @Autowired
     ProxyStatusService(ProxyInstanceRepository instances, ProxyCertificateRepository certificates,
-                       ProxyRouteService routes, ProxyHostAccess access, ProxySyncService sync,
+                       ProxyRouteService routes, ProxyRouteRepository routeRepository, ProxyHostAccess access, ProxySyncService sync,
                        ContainerFileService files, ContainerLogService logs, Clock clock,
                        @Value("${shipir.proxy.status.log-timeout:5s}") Duration logTimeout,
                        @Value("${shipir.proxy.status.cache-ttl:30s}") Duration cacheTtl,
@@ -78,6 +83,7 @@ public class ProxyStatusService {
         this.instances = instances;
         this.certificates = certificates;
         this.routes = routes;
+        this.routeRepository = routeRepository;
         this.access = access;
         this.sync = sync;
         this.files = files;
@@ -147,23 +153,30 @@ public class ProxyStatusService {
         if (type == ProxyType.CADDY) {
             caddyCerts = caddy.read(hostId, endpoint, containerId);
         } else {
-            http = readAcme(hostId, endpoint, containerId, ACME_HTTP_FILE, degraded);
-            dns = readAcme(hostId, endpoint, containerId, ACME_DNS_FILE, degraded);
+            // all routes of the host, not just the caller's visible ones: the facts are cached host-wide
+            Set<CertMode> modes = new HashSet<>();
+            for (ProxyRoute r : routeRepository.findByHostId(hostId)) {
+                modes.add(r.getCertMode());
+            }
+            http = readAcme(hostId, endpoint, containerId, ACME_HTTP_FILE, modes.contains(CertMode.ACME_HTTP), degraded);
+            dns = readAcme(hostId, endpoint, containerId, ACME_DNS_FILE, modes.contains(CertMode.ACME_DNS), degraded);
         }
         List<String> lines = recentLog(hostId, endpoint, containerId, degraded);
         return new ProxyFacts(http, dns, caddyCerts, lines, degraded[0]);
     }
 
     private List<IssuedCert> readAcme(UUID hostId, DockerEndpoint endpoint, String containerId, String path,
-                                         boolean[] degraded) {
+                                         boolean needed, boolean[] degraded) {
         try {
             // readFile returns the whole acme.json, private keys included, as a byte[] up to the cap; only
             // AcmeJsonParser sees it and it keeps names and end dates only
             return AcmeJsonParser.parse(files.readFile(hostId, endpoint, containerId, path, AcmeJsonParser.MAX_BYTES));
         } catch (DockerConnectionException e) {
             if (e.getCode() == DockerErrorCode.NOT_FOUND) {
-                // normal: the store is only created once a route of that mode asks for a certificate (an HTTP-only
-                // setup never has acme-dns.json), so it must not shorten the cache lifetime
+                // the store is only created once a route of that mode asks for a certificate: without such a
+                // route (an HTTP-only setup never has acme-dns.json) it is normal; with one, the certificate is
+                // still being obtained and the facts must be re-read soon
+                degraded[0] |= needed;
                 return List.of();
             }
             if (e.getCode() == DockerErrorCode.SIZE_LIMIT_EXCEEDED || e.getCode() == DockerErrorCode.INVALID_PATH) {

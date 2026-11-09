@@ -262,6 +262,48 @@ class ProxyStatusApiTest {
         verify(files, times(1)).readFile(any(), any(), eq("proxy1"), eq("/letsencrypt/acme-http.json"), anyLong());
     }
 
+    private void missing(String path) {
+        when(files.readFile(any(), any(), eq("proxy1"), eq(path), anyLong()))
+                .thenThrow(new DockerConnectionException(DockerErrorCode.NOT_FOUND, "x", null));
+    }
+
+    @Test
+    void aMissingHttpStoreWithAcmeHttpRoutesIsDegradedSoItIsRetriedAfterTheFloor() throws Exception {
+        missing("/letsencrypt/acme-http.json");
+        MockHttpSession admin = login("admin");
+
+        body(admin);
+        clock.now = clock.now.plusSeconds(2).plusMillis(500); // past the refresh floor (2s), within the ttl (3s)
+        body(admin);
+
+        verify(files, times(2)).readFile(any(), any(), eq("proxy1"), eq("/letsencrypt/acme-http.json"), anyLong());
+    }
+
+    @Test
+    void aMissingDnsStoreWithAcmeDnsRoutesIsDegradedSoItIsRetriedAfterTheFloor() throws Exception {
+        route("dns.example.com", "shop-web-1", "ACME_DNS", null);
+        MockHttpSession admin = login("admin");
+
+        body(admin);
+        clock.now = clock.now.plusSeconds(2).plusMillis(500);
+        body(admin);
+
+        verify(files, times(2)).readFile(any(), any(), eq("proxy1"), eq("/letsencrypt/acme-dns.json"), anyLong());
+    }
+
+    @Test
+    void aMissingHttpStoreWithoutAcmeHttpRoutesKeepsTheFullTtl() throws Exception {
+        jdbc.update("DELETE FROM proxy_routes WHERE cert_mode = 'ACME_HTTP'");
+        missing("/letsencrypt/acme-http.json");
+        MockHttpSession admin = login("admin");
+
+        body(admin);
+        clock.now = clock.now.plusSeconds(2).plusMillis(500);
+        body(admin);
+
+        verify(files, times(1)).readFile(any(), any(), eq("proxy1"), eq("/letsencrypt/acme-http.json"), anyLong());
+    }
+
     @Test
     void aProxyThatCannotBeReadLeavesRoutesPendingInsteadOfFailingTheRequest() throws Exception {
         org.mockito.Mockito.doThrow(new dev.bethge.shipir.proxy.ProxyException(
