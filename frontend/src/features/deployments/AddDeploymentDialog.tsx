@@ -150,10 +150,33 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
     applyImport(text, entries)
   }
 
+  /** Leaving an import source drops what it put into the shared editors; the file pickers reset on unmount. */
+  function clearImport() {
+    setImported(false)
+    setYaml('')
+    setYamlError(null)
+    setEnv([])
+    setImportHint(null)
+    setTemplate(null)
+    setPortNotices([])
+    setKeptPorts([])
+    setSeed((current) => ({ key: current.key + 1 }))
+    setMode('yaml')
+  }
+
   function importEnv({ entries }: ImportedEnv) {
     picked.current.env = entries
-    if (picked.current.yaml === null) setEnv(entries)
-    else applyImport(picked.current.yaml, entries)
+    setEnv(entries)
+    // The compose file is already in: only the variables change, so the wizard and YAML edits stay. A YAML fallback
+    // is re-checked because the new variables may make the file representable (only then is the wizard reseeded).
+    if (picked.current.yaml === null || importHint === null) return
+    const result = fromYaml(picked.current.yaml, entries.map((e) => e.key))
+    if (!result.ok) return setImportHint(result.reason)
+    setImportHint(null)
+    setTemplate(null)
+    setPortNotices([])
+    setSeed((current) => ({ key: current.key + 1, state: result.state }))
+    setMode('wizard')
   }
 
   function submit(e: FormEvent) {
@@ -220,6 +243,7 @@ export function AddDeploymentDialog({ hostId, onClose }: { hostId: string; onClo
           {([['file', tr('AddDeploymentDialog.newFile')], ['import', tr('AddDeploymentDialog.importFile')], ['portainer', tr('AddDeploymentDialog.importFromPortainer')], ['git', tr('AddDeploymentDialog.gitRepository')]] as const).map(([value, label]) => (
             <label key={value} className="wz-mode">
               <input type="radio" name="deployment-source" checked={source === value} onChange={() => {
+                  if (isImport) clearImport()
                   setSource(value)
                   picked.current = { yaml: null, env: null } // the file pickers reset when they unmount
                 }} />

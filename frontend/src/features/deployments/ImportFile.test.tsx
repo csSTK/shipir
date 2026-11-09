@@ -22,6 +22,7 @@ const BASE = '/hosts/h1/managed-deployments'
 const created = { id: 's1', name: 'shop', status: 'STOPPED', source: 'FILE', yaml: '', envKeys: [] }
 const SIMPLE = 'services:\n  web:\n    image: nginx:1.27\n'
 const WITH_BUILD = 'services:\n  web:\n    build: .\n'
+const WITH_ENV_REF = 'services:\n  web:\n    image: nginx:1.27\n    environment:\n      TOKEN: ${TOKEN}\n'
 
 function serve(post: (init?: { body?: unknown }) => unknown = () => created) {
   apiFetch.mockImplementation((path: string, init?: { method?: string; body?: unknown }) => {
@@ -145,6 +146,53 @@ describe('AddDeploymentDialog, Import file source', () => {
     pick('Environment file (optional)', envFile(text))
     expect(await screen.findByRole('alert')).toHaveTextContent(message)
     expect(screen.getByDisplayValue('KEEP')).toBeInTheDocument()
+  })
+
+  it.each(['New file', 'Git repository'])('does not carry env rows from an env-only import into the %s source', async (source) => {
+    serve()
+    renderDialog()
+    await chooseImport()
+    pick('Environment file (optional)', envFile('PORT=8080\n'))
+    await waitFor(() => expect(screen.getByDisplayValue('PORT')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('radio', { name: source }))
+    expect(screen.queryByDisplayValue('PORT')).not.toBeInTheDocument()
+    expect(screen.queryByDisplayValue('8080')).not.toBeInTheDocument()
+  })
+
+  it('does not reuse env rows from an earlier import after switching away and back', async () => {
+    serve()
+    renderDialog()
+    await chooseImport()
+    pick('Environment file (optional)', envFile('PORT=8080\n'))
+    await waitFor(() => expect(screen.getByDisplayValue('PORT')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('radio', { name: 'New file' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Import file' }))
+    pick('Compose file (.yml, .yaml)', composeFile(SIMPLE))
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Form wizard' })).toBeChecked())
+    expect(screen.queryByDisplayValue('PORT')).not.toBeInTheDocument()
+  })
+
+  it('keeps wizard edits when the env file is picked after the compose file', async () => {
+    serve()
+    renderDialog()
+    await chooseImport()
+    pick('Compose file (.yml, .yaml)', composeFile(SIMPLE))
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Form wizard' })).toBeChecked())
+    fireEvent.change(screen.getByDisplayValue('nginx:1.27'), { target: { value: 'nginx:1.28' } })
+    pick('Environment file (optional)', envFile('PORT=8080\n'))
+    await waitFor(() => expect(screen.getByDisplayValue('PORT')).toBeInTheDocument())
+    expect(screen.getByDisplayValue('nginx:1.28')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Form wizard' })).toBeChecked()
+  })
+
+  it('switches to the wizard when the env file supplies the variables the compose file references', async () => {
+    serve()
+    renderDialog()
+    await chooseImport()
+    pick('Compose file (.yml, .yaml)', composeFile(WITH_ENV_REF))
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'YAML' })).toBeChecked())
+    pick('Environment file (optional)', envFile('TOKEN=abc\n'))
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Form wizard' })).toBeChecked())
   })
 
   it('shows an inline error for an oversize env file', async () => {

@@ -84,3 +84,13 @@ test('an oversize env file shows an inline error and nothing is imported', async
   await expect(page.getByRole('radio', { name: 'Form wizard' })).toBeHidden()
   await expect(page.getByRole('button', { name: 'Create deployment' })).toBeHidden()
 })
+
+test('env rows from an env-only import do not show up in the New file source', async ({ page, api }) => {
+  mockCommon(api)
+  await openImport(page)
+  await page.getByLabel('Environment file (optional)', { exact: true }).setInputFiles({ name: 'stack.env', mimeType: 'text/plain', buffer: Buffer.from('PORT=8080\n') })
+  await expect(page.getByLabel('Variable 1 name')).toHaveValue('PORT')
+
+  await page.getByRole('radio', { name: 'New file' }).check()
+  await expect(page.getByLabel('Variable 1 name')).toHaveCount(0)
+})
