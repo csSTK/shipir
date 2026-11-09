@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { e2ePort } from './port'
+import { e2ePort, ownerFromStatus, ownershipProbePath } from './port'
+
+describe('dev server ownership marker (shipr-k31n.36)', () => {
+  it('asks for this checkout\'s own index.html through the Vite /@fs/ route', () => {
+    expect(ownershipProbePath('/work/shipir-x/frontend')).toBe('/@fs/work/shipir-x/frontend/index.html')
+  })
+
+  it('reads 200 as this checkout, no answer as a free port and any other status as another server', () => {
+    expect(ownerFromStatus(200)).toBe('this-checkout')
+    expect(ownerFromStatus(0)).toBe('free')
+    expect(ownerFromStatus(403)).toBe('other')
+    expect(ownerFromStatus(404)).toBe('other')
+  })
+})
 
 describe('e2ePort', () => {
   it('is stable for the same checkout', () => {

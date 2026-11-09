@@ -13,6 +13,20 @@ function hash(text: string): number {
   return h
 }
 
+// Ownership marker (shipr-k31n.36): two checkouts can still derive the same port (about 1 in 20000). Vite refuses to
+// serve files outside its workspace root (server.fs.strict), so this request is answered 200 only by a dev server
+// started from this checkout, 403 by a server of another checkout, and not answered (status 0) on a free port.
+export type PortOwner = 'free' | 'this-checkout' | 'other'
+
+export function ownershipProbePath(checkoutDir: string): string {
+  return `/@fs${encodeURI(checkoutDir)}/index.html`
+}
+
+export function ownerFromStatus(status: number): PortOwner {
+  if (status === 0) return 'free'
+  return status === 200 ? 'this-checkout' : 'other'
+}
+
 export function e2ePort(checkoutDir: string, override?: string): number {
   if (override !== undefined && override !== '') {
     const port = Number(override)

@@ -66,7 +66,8 @@ const countsFor = (rule: Rule): Record<string, number> =>
 //  - rem/em widths and flex-basis (non-square): font-relative layout measures that scale with the user's font size;
 //    only square rem/em icon boxes are tokenized (iconBox rule below) and flex-basis is checked for px only.
 //  - letter-spacing em: typographic tracking is relative to the font size by design.
-//  - bare easing keywords (ease-out, ease): out of this bead's scope; the wizard stylesheet already forbids them.
+//  - bare easing keywords (ease, linear, ...): scanned by their own rule (shipr-k31n.36) with a counted allowlist of
+//    existing debt; only --ease-out is tokenized so far.
 //  - inline style values in TSX driven by data (DiskUsageCard % segment widths, ResourceTable column sizes,
 //    Skeleton/YamlEditor width/height props, chart colors): computed at runtime, no token can express them.
 type LiteralRule =
@@ -232,6 +233,38 @@ describe('design token usage', () => {
     expect(wizardViolations(wizard!.css)).toEqual([])
   })
 
+  // Bare easing keywords and cubic-bezier() outside shared/styles must come from --ease-* tokens (shipr-ycvc.54).
+  const bareEasing = (css: string): string[] =>
+    [...strip(css).replace(/var\([^)]*\)/g, '').matchAll(/(?<![\w-])(?:ease-in-out|ease-in|ease-out|ease|linear)(?![\w-])|cubic-bezier\(/gi)].map(
+      (m) => m[0],
+    )
+
+  it('bare easing scanner catches keywords and ignores tokens and gradients', () => {
+    expect(bareEasing('.a { transition: x 1s ease-out; }')).toEqual(['ease-out'])
+    expect(bareEasing('.a { animation: spin 1s linear infinite; }')).toEqual(['linear'])
+    expect(bareEasing('.a { transition: x 1s cubic-bezier(0,0,1,1); }')).toEqual(['cubic-bezier('])
+    expect(bareEasing('.a { transition: x var(--duration-fast) var(--ease-out); background: linear-gradient(red, blue); }')).toEqual([])
+  })
+
+  // Debt, not accepted: these stylesheets still use bare keywords. Only --ease-out is tokenized (tokens.css), so the
+  // rest needs a design decision for --ease-in-out, --ease and linear (follow-up bead). Counts must match exactly.
+  const bareEasingAllowlist: Record<string, number> = {
+    '/features/ai-chat/AssistantDock.css': 1,
+    '/features/ai-chat/ChatPane.css': 1,
+    '/features/deployments/DeploymentDetailPage.css': 1,
+    '/features/deployments/config-files/ConfigFilesPanel.css': 2,
+    '/features/deployments/deploy-output/DeployOutput.css': 3,
+    '/features/deployments/editor/editor.css': 1,
+    '/features/deployments/templates/templates.css': 2,
+    '/shared/ui/Button.css': 1,
+    '/shared/ui/Skeleton.css': 1,
+  }
+
+  it('has no bare easing keywords outside shared/styles beyond the allowlist', () => {
+    const actual = Object.fromEntries(checked.flatMap((s) => (bareEasing(s.css).length > 0 ? [[s.path, bareEasing(s.css).length] as const] : [])))
+    expect(actual).toEqual(bareEasingAllowlist)
+  })
+
   // Assistant dock badge (shipr-ycvc.20): count text on the warn fill must reach WCAG AA 4.5:1 in every theme.
   // tokens.css defines each theme block once (light, OS dark, forced dark), so the values are read in that order.
   describe('assistant dock tokens', () => {
@@ -333,14 +366,36 @@ describe('design token usage', () => {
     readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
       e.isDirectory() ? tsxFiles(join(dir, e.name)) : /\.tsx$/.test(e.name) && !/\.test\.tsx$/.test(e.name) ? [join(dir, e.name)] : [],
     )
+  // Each style={{...}} attribute is read up to its matching brace (shipr-ycvc.54), so multi-line objects are scanned
+  // too and the scan never runs into the JSX after the attribute. Returns the offending lines of each attribute.
+  const sizeLiteral = /(?<![\w.-])\d*\.?\d+(?:px|rem|em)\b|\}(?:px|rem|em)\b/
   const inlineStyleLiterals = (tsx: string): string[] =>
-    [...tsx.matchAll(/style=\{\{[^\n]*?(?:(?<![\w.-])\d*\.?\d+(?:px|rem|em)\b|\}(?:px|rem|em)\b)[^\n]*/g)].map((m) => m[0].trim())
+    [...tsx.matchAll(/style=\{\{/g)].flatMap((m) => {
+      const open = m.index + 'style='.length
+      let depth = 0
+      let end = open
+      for (; end < tsx.length; end++) {
+        if (tsx[end] === '{') depth++
+        else if (tsx[end] === '}' && --depth === 0) break
+      }
+      return tsx
+        .slice(open, end + 1)
+        .split('\n')
+        .filter((line) => sizeLiteral.test(line))
+        .map((line) => line.trim())
+    })
 
   it('inline style scanner catches size literals and ignores runtime values', () => {
     expect(inlineStyleLiterals('<li style={{ paddingInlineStart: `${depth * 14}px` }}>')).toHaveLength(1)
     expect(inlineStyleLiterals("<div style={{ height: '12rem' }} />")).toHaveLength(1)
     expect(inlineStyleLiterals('<div style={{ width, height }} />')).toEqual([])
     expect(inlineStyleLiterals("<li style={{ '--depth': depth } as CSSProperties}>")).toEqual([])
+  })
+
+  it('inline style scanner reads multi-line style objects and stops at the attribute end', () => {
+    expect(inlineStyleLiterals("<div style={{\n  width: '12rem',\n  color: 'red',\n}} />")).toHaveLength(1)
+    expect(inlineStyleLiterals("<li style={{\n  '--depth': depth,\n  paddingInlineStart: `${depth * 14}px`,\n} as CSSProperties}>")).toHaveLength(1)
+    expect(inlineStyleLiterals('<div style={{ width, height }} />\n<p>12px</p>')).toEqual([])
   })
 
   it('has no px/rem/em literals in inline styles of any component', () => {
