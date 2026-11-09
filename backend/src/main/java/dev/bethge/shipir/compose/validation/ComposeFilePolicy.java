@@ -36,6 +36,13 @@ import java.util.Set;
  * or under {@code env_file}/{@code include}/{@code extends}/{@code secrets}/{@code configs}/{@code file}/{@code path}/
  * {@code project_directory}, and any merge key in such a context or at the document root. Aliases elsewhere
  * ({@code image: *img}, {@code <<: *defaults} in a service) stay allowed.
+ *
+ * <p>Graph hash interaction (decided in shipr-kqbc.53, accepted and documented): {@code unhashedReferences} keeps every
+ * violation except "outside the deployment directory", so a variable ({@code $}), {@code ~} or remote reference counts as a
+ * reference the graph hash does not cover. An ADMIN deploy with such a reference stores no {@code graph_hash}
+ * ({@code DeploymentService.referencesUnhashedPaths}), and its later system runs fall back to the "only Shipir's own files"
+ * rule of {@code DeploymentRunService.graphIsOnlyApprovedFiles} instead of a hash check. Pinned by
+ * {@code GraphHashVariableReferencesTest}. Strict policy is unchanged.
  */
 final class ComposeFilePolicy {
 
