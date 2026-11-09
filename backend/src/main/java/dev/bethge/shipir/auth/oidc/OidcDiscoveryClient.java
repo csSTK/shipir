@@ -132,7 +132,7 @@ class OidcDiscoveryClient {
         try {
             EgressHttpClient.Response response = egressClient.send("GET", URI.create(url), ACCEPT_JSON,
                     properties.timeout());
-            if (response.status() != 200) {
+            if (response.status() != 200 || response.truncated()) {
                 throw unreachable();
             }
             JsonNode doc = mapper.readTree(response.body());

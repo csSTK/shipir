@@ -47,6 +47,12 @@ class EgressHttpClientTest {
             ex.getResponseBody().write(body);
             ex.close();
         });
+        server.createContext("/exact", ex -> {
+            byte[] body = new byte[1_048_576];
+            ex.sendResponseHeaders(200, body.length);
+            ex.getResponseBody().write(body);
+            ex.close();
+        });
         server.start();
     }
 
@@ -102,6 +108,21 @@ class EgressHttpClientTest {
         EgressHttpClient client = new EgressHttpClient(new EgressPolicy(new EgressProperties(true)));
         EgressHttpClient.Response r = client.send("GET", uri("/big"), Map.of(), TIMEOUT);
         assertThat(r.body().length()).isLessThanOrEqualTo(1_048_576);
+        assertThat(r.truncated()).isTrue();
+    }
+
+    @Test
+    void bodyExactlyAtTheCapIsNotTruncated() throws Exception {
+        EgressHttpClient client = new EgressHttpClient(new EgressPolicy(new EgressProperties(true)));
+        EgressHttpClient.Response r = client.send("GET", uri("/exact"), Map.of(), TIMEOUT);
+        assertThat(r.body().length()).isEqualTo(1_048_576);
+        assertThat(r.truncated()).isFalse();
+    }
+
+    @Test
+    void smallBodyIsNotTruncated() throws Exception {
+        EgressHttpClient client = new EgressHttpClient(new EgressPolicy(new EgressProperties(true)));
+        assertThat(client.send("GET", uri("/ok"), Map.of(), TIMEOUT).truncated()).isFalse();
     }
 
     @Test

@@ -8,7 +8,6 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 
@@ -21,9 +20,6 @@ import java.util.Map;
 class PortainerClient {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
-    /** {@link EgressHttpClient} truncates at this size; a body this long is treated as oversize. */
-    static final int MAX_BODY_BYTES = 1_048_576;
-
     private final EgressHttpClient http;
     private final JsonMapper json = JsonMapper.builder().build();
 
@@ -52,7 +48,7 @@ class PortainerClient {
         if (status < 200 || status >= 300) {
             throw unreachable();
         }
-        if (response.body().getBytes(StandardCharsets.UTF_8).length >= MAX_BODY_BYTES) {
+        if (response.truncated()) {
             throw badResponse();
         }
         try {

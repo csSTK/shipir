@@ -77,8 +77,13 @@ public class EgressHttpClient implements AutoCloseable {
         T handle(StreamResponse response) throws IOException;
     }
 
-    /** Status, first value of each header (lower-case name) and at most 1 MiB of the body as UTF-8. */
-    public record Response(int status, Map<String, String> headers, String body) {
+    /**
+     * Status, first value of each header (lower-case name) and at most 1 MiB of the body as UTF-8.
+     *
+     * @param truncated true if the server sent more than the cap; {@code body} is then only a prefix and must not be
+     *                  parsed or trusted as the whole answer (a prefix can be valid JSON on its own)
+     */
+    public record Response(int status, Map<String, String> headers, String body, boolean truncated) {
 
         public String header(String name) {
             return headers.get(name.toLowerCase(Locale.ROOT));
@@ -128,13 +133,17 @@ public class EgressHttpClient implements AutoCloseable {
                 out.putIfAbsent(h.getName().toLowerCase(Locale.ROOT), h.getValue());
             }
             String body = "";
+            boolean truncated = false;
             if (response.getEntity() != null && !"HEAD".equalsIgnoreCase(method)) {
                 try (InputStream in = response.getEntity().getContent()) {
-                    body = new String(in.readNBytes(MAX_BODY_BYTES), StandardCharsets.UTF_8);
+                    // one byte more than the cap tells "exactly at the cap" from "cut off"
+                    byte[] bytes = in.readNBytes(MAX_BODY_BYTES + 1);
+                    truncated = bytes.length > MAX_BODY_BYTES;
+                    body = new String(bytes, 0, Math.min(bytes.length, MAX_BODY_BYTES), StandardCharsets.UTF_8);
                 }
                 EntityUtils.consumeQuietly(response.getEntity());
             }
-            return new Response(response.getCode(), out, body);
+            return new Response(response.getCode(), out, body, truncated);
         });
     }
 

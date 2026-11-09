@@ -99,7 +99,7 @@ class RemoteDigestChecker implements RemoteDigestLookup {
         }
         EgressHttpClient.Response response = egress.send("GET", uri,
                 basic == null ? Map.of() : Map.of("Authorization", basic), properties.timeout());
-        if (response.status() != 200) {
+        if (response.status() != 200 || response.truncated()) {
             return null;
         }
         JsonNode body = json.readTree(response.body());

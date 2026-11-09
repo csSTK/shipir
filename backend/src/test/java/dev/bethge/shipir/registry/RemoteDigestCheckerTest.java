@@ -112,6 +112,31 @@ class RemoteDigestCheckerTest {
     }
 
     @Test
+    void oversizeTokenResponseIsNotAcceptedEvenIfThePrefixIsValidJson() throws Exception {
+        start();
+        when(credentials.decryptedCredentials()).thenThrow(new IllegalStateException("no key"));
+        String realm = "http://127.0.0.1:" + server.getAddress().getPort() + "/token";
+        server.createContext("/v2/", ex -> {
+            if ("Bearer t".equals(ex.getRequestHeaders().getFirst("Authorization"))) {
+                ex.getResponseHeaders().add("Docker-Content-Digest", DIGEST);
+                ex.sendResponseHeaders(200, -1);
+            } else {
+                ex.getResponseHeaders().add("WWW-Authenticate", "Bearer realm=\"" + realm + "\"");
+                ex.sendResponseHeaders(401, -1);
+            }
+            ex.close();
+        });
+        server.createContext("/token", ex -> {
+            byte[] body = ("{\"access_token\":\"t\"}" + " ".repeat(2_000_000)).getBytes(StandardCharsets.UTF_8);
+            ex.sendResponseHeaders(200, body.length);
+            ex.getResponseBody().write(body);
+            ex.close();
+        });
+        server.start();
+        assertThat(checker(true).digestOf(ref())).isEmpty();
+    }
+
+    @Test
     void anonymousBearerWorksWithoutCredentials() throws Exception {
         start();
         when(credentials.decryptedCredentials()).thenThrow(new IllegalStateException("no key"));
