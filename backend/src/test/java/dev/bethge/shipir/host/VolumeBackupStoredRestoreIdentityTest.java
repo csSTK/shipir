@@ -235,6 +235,31 @@ class VolumeBackupStoredRestoreIdentityTest {
     }
 
     @Test
+    void copyPrivatelyReportsAFailedReadAsServerErrorNotAsMissing() throws Exception {
+        // an I/O failure that is not "file missing or symlink" (here: read fails on a directory) is a server problem
+        Path dir = Files.createDirectory(base.resolve("unreadable.tar"));
+
+        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(dir, 50))
+                .isInstanceOfSatisfying(HostException.class, e -> {
+                    assertThat(e.status().value()).isEqualTo(500);
+                    assertThat(e.code()).isEqualTo("STORED_BACKUP_UNREADABLE");
+                });
+    }
+
+    @Test
+    void copyPrivatelyReportsAFileWithoutReadPermissionAsServerErrorNotAsMissing() throws Exception {
+        Path locked = Files.writeString(base.resolve("locked.tar"), "validated-bytes");
+        Files.setPosixFilePermissions(locked, java.nio.file.attribute.PosixFilePermissions.fromString("---------"));
+        org.junit.jupiter.api.Assumptions.assumeFalse(Files.isReadable(locked), "needs a non-root user to deny reads");
+
+        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(locked, 1024))
+                .isInstanceOfSatisfying(HostException.class, e -> {
+                    assertThat(e.status().value()).isEqualTo(500);
+                    assertThat(e.code()).isEqualTo("STORED_BACKUP_UNREADABLE");
+                });
+    }
+
+    @Test
     void oversizedStoredArchiveIsRefusedAsTooLarge() throws Exception {
         // limit is 10 MB
         try (var out = Files.newOutputStream(file)) {

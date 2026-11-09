@@ -22,7 +22,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.ZoneOffset;
@@ -185,7 +184,11 @@ public class VolumeBackupService {
 
     /**
      * Copies the stored archive into an owner-only temp file through one NOFOLLOW open, reading at most {@code max}
-     * bytes (413 when the file is larger). 404 when the file is gone.
+     * bytes (413 when the file is larger).
+     * <p>
+     * The temp file is created in {@code java.io.tmpdir}, which may be a small tmpfs (e.g. in a container). A full
+     * tmpdir or a file that cannot be read is a server problem and gives 500 STORED_BACKUP_UNREADABLE. Only a file
+     * that is missing or a symbolic link gives 404 STORED_BACKUP_NOT_FOUND.
      */
     static Path copyPrivately(Path file, long max) {
         Path copy = null;
@@ -199,15 +202,17 @@ public class VolumeBackupService {
                 }
             }
             return copy;
-        } catch (NoSuchFileException e) {
+        } catch (IOException e) {
             deleteQuietly(copy);
-            throw new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found");
-        } catch (IOException | RuntimeException e) {
-            deleteQuietly(copy);
-            if (e instanceof HostException he) {
-                throw he;
+            // opening a symlink with NOFOLLOW fails with an I/O error, so it is judged by its link status
+            if (Files.isSymbolicLink(file) || !Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
+                throw new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found");
             }
-            throw new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found");
+            throw new HostException(HttpStatus.INTERNAL_SERVER_ERROR, "STORED_BACKUP_UNREADABLE",
+                    "The stored backup could not be read");
+        } catch (RuntimeException e) {
+            deleteQuietly(copy);
+            throw e;
         }
     }
 
