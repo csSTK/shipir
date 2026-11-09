@@ -69,7 +69,7 @@ export function InstallTemplateDialog({
   const { t: tr } = useTranslation('deployments')
   const navigate = useNavigate()
   const existing = useManagedDeployments(hostId)
-  const generate = useGenerateCompose()
+  const generate = useGenerateCompose(hostId)
   const create = useCreateDeployment(hostId)
   const deploy = useDeployDeployment(hostId)
 

@@ -111,6 +111,15 @@ describe('InstallTemplateDialog', () => {
     expect(calls('/hosts/h1/managed-deployments/s1/deploy', 'POST')).toHaveLength(1)
   })
 
+  it('sends the target host to compose generate so the managed-proxy rules apply', async () => {
+    serve()
+    open()
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('wordpress'))
+    fireEvent.click(screen.getByRole('button', { name: 'Install' }))
+    await waitFor(() => expect(calls('/compose/generate', 'POST')).toHaveLength(1))
+    expect(calls('/compose/generate', 'POST')[0][1].body.hostId).toBe('h1')
+  })
+
   it('shows a generated secret that can be revealed and regenerated', async () => {
     serve()
     open()
