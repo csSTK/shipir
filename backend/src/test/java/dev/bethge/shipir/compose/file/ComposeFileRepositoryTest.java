@@ -13,13 +13,16 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ComposeFileRepositoryTest {
@@ -88,6 +91,74 @@ class ComposeFileRepositoryTest {
     }
 
     @Test
+    void deleteManagedFilesRemovesOnlyShipirFilesAndKeepsRepoCheckout() throws IOException {
+        repo.write(HOST, "web", "x", "A=1");
+        repo.writeRollbackOverride(HOST, "web", "y");
+        Path checkout = repo.repoDir(HOST, "web");
+        Files.createDirectories(checkout.resolve(".git"));
+        Files.writeString(checkout.resolve("compose.yaml"), "from git");
+
+        repo.deleteManagedFiles(HOST, "web");
+
+        Path dir = repo.deploymentDir(HOST, "web");
+        assertThat(dir.resolve(ComposeFileRepository.COMPOSE_FILE)).doesNotExist();
+        assertThat(dir.resolve(ComposeFileRepository.ENV_FILE)).doesNotExist();
+        assertThat(dir.resolve(ComposeFileRepository.ROLLBACK_OVERRIDE_FILE)).doesNotExist();
+        assertThat(checkout.resolve("compose.yaml")).hasContent("from git");
+        assertThat(checkout.resolve(".git")).isDirectory();
+    }
+
+    @Test
+    void deleteManagedFilesLeavesOtherFilesInTheDirectoryAlone() throws IOException {
+        repo.write(HOST, "web", "x", null);
+        Path other = repo.deploymentDir(HOST, "web").resolve("notes.txt");
+        Files.writeString(other, "keep");
+
+        repo.deleteManagedFiles(HOST, "web");
+
+        assertThat(other).hasContent("keep");
+    }
+
+    @Test
+    void deleteManagedFilesOnMissingDeploymentIsNoOp() {
+        assertThatCode(() -> repo.deleteManagedFiles(HOST, "nope")).doesNotThrowAnyException();
+        assertThat(repo.deploymentDir(HOST, "nope")).doesNotExist();
+    }
+
+    @Test
+    void deleteManagedFilesUnlinksSymlinksWithoutFollowingThem(@TempDir Path outside) throws IOException {
+        Path targetFile = outside.resolve("target.yaml");
+        Files.writeString(targetFile, "keep");
+        Files.createDirectory(outside.resolve("outside-dir"));
+        Files.writeString(outside.resolve("outside-dir").resolve("inner.txt"), "keep");
+        repo.write(HOST, "web", "x", null);
+        Path dir = repo.deploymentDir(HOST, "web");
+        Files.delete(dir.resolve("compose.yaml"));
+        Files.createSymbolicLink(dir.resolve("compose.yaml"), targetFile);
+        Files.createSymbolicLink(dir.resolve(ComposeFileRepository.ENV_FILE), outside.resolve("outside-dir"));
+
+        repo.deleteManagedFiles(HOST, "web");
+
+        assertThat(Files.exists(dir.resolve("compose.yaml"), LinkOption.NOFOLLOW_LINKS)).isFalse();
+        assertThat(Files.exists(dir.resolve(ComposeFileRepository.ENV_FILE), LinkOption.NOFOLLOW_LINKS)).isFalse();
+        assertThat(targetFile).hasContent("keep");
+        assertThat(outside.resolve("outside-dir").resolve("inner.txt")).hasContent("keep");
+    }
+
+    @Test
+    void deleteManagedFilesFailsLoudlyWhenAManagedFileCannotBeRemoved() throws IOException {
+        repo.write(HOST, "web", "x", null);
+        Path compose = repo.deploymentDir(HOST, "web").resolve("compose.yaml");
+        Files.delete(compose);
+        Files.createDirectory(compose);
+        Files.writeString(compose.resolve("blocker"), "x");
+
+        assertThatThrownBy(() -> repo.deleteManagedFiles(HOST, "web"))
+                .isInstanceOf(UncheckedIOException.class)
+                .hasMessageContaining("compose.yaml");
+    }
+
+    @Test
     void writeLeavesNoTempFilesBehind() throws IOException {
         repo.write(HOST, "web", "v1", "A=1");
         Path dir = repo.deploymentDir(HOST, "web");
@@ -139,6 +210,7 @@ class ComposeFileRepositoryTest {
         assertThatThrownBy(() -> repo.readEnv(HOST, name)).isInstanceOf(PathValidationException.class);
         assertThatThrownBy(() -> repo.delete(HOST, name)).isInstanceOf(PathValidationException.class);
         assertThatThrownBy(() -> repo.repoDir(HOST, name)).isInstanceOf(PathValidationException.class);
+        assertThatThrownBy(() -> repo.deleteManagedFiles(HOST, name)).isInstanceOf(PathValidationException.class);
     }
 
     @Test

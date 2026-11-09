@@ -9,6 +9,7 @@ import org.eclipse.jgit.transport.http.HttpConnection;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.FileNotFoundException;
 import java.net.InetAddress;
@@ -18,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -143,16 +145,16 @@ class PinnedHttpConnectionTest {
     }
 
     @Test
-    void sslVerificationCannotBeSwitchedOff() throws Exception {
+    void sslVerificationCannotBeSwitchedOff(@TempDir java.nio.file.Path dir) throws Exception {
         // HTTPS stub with a self-signed certificate (valid for rebind.test, so only the missing trust can fail it)
-        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("shipir-tls-");
         java.nio.file.Path keystore = dir.resolve("ks.p12");
         Process keytool = new ProcessBuilder(java.nio.file.Path.of(System.getProperty("java.home"), "bin", "keytool").toString(),
                 "-genkeypair", "-alias", "s", "-keyalg", "RSA", "-keysize", "2048", "-validity", "2",
                 "-dname", "CN=rebind.test", "-ext", "SAN=dns:rebind.test", "-storetype", "PKCS12",
                 "-keystore", keystore.toString(), "-storepass", "changeit").redirectErrorStream(true).start();
         keytool.getInputStream().readAllBytes();
-        assertThat(keytool.waitFor()).isZero();
+        assertThat(keytool.waitFor(60, TimeUnit.SECONDS)).as("keytool finished in time").isTrue();
+        assertThat(keytool.exitValue()).isZero();
         java.security.KeyStore ks = java.security.KeyStore.getInstance("PKCS12");
         try (var in = java.nio.file.Files.newInputStream(keystore)) {
             ks.load(in, "changeit".toCharArray());
