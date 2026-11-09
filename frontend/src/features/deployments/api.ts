@@ -355,17 +355,3 @@ export function useTraefikTemplate() {
     mutationFn: () => apiFetch<{ yaml: string }>('/compose/proxy-templates/traefik'),
   })
 }
-
-/**
- * The managed proxy of a host (`GET /api/hosts/{id}/proxy/managed`), same cache entry as the Domains page. Only its type
- * is used here: the wizard stops offering Caddy labels where the managed Caddy does not read them.
- */
-export function useManagedProxyType(hostId: string, enabled = true) {
-  return useQuery({
-    queryKey: ['hosts', hostId, 'proxy', 'managed'],
-    queryFn: () => apiFetch<{ instance: { type: ProxyType } | null }>(`/hosts/${hostId}/proxy/managed`),
-    enabled,
-    refetchOnWindowFocus: false,
-    retry: false,
-  })
-}

@@ -36,10 +36,24 @@ export interface ProxySetupResult {
 
 const proxyKey = (hostId: string) => ['hosts', hostId, 'proxy', 'managed'] as const
 
-export function useManagedProxy(hostId: string) {
+export interface ManagedProxyOptions {
+  enabled?: boolean
+  /** Per-observer overrides; unset means the app-wide query defaults. */
+  retry?: boolean
+  refetchOnWindowFocus?: boolean
+}
+
+/**
+ * The managed proxy of a host. The Domains page, the publish dialogs and the deployment wizard share this cache entry;
+ * the wizard passes `retry: false` and `refetchOnWindowFocus: false` as it always has.
+ */
+export function useManagedProxy(hostId: string, options: ManagedProxyOptions = {}) {
   return useQuery({
     queryKey: proxyKey(hostId),
     queryFn: () => apiFetch<ProxyManaged>(`/hosts/${hostId}/proxy/managed`),
+    enabled: options.enabled ?? true,
+    ...(options.retry !== undefined && { retry: options.retry }),
+    ...(options.refetchOnWindowFocus !== undefined && { refetchOnWindowFocus: options.refetchOnWindowFocus }),
   })
 }
 

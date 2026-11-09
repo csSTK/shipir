@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError } from '../../../shared/api/client.ts'
-import { useDetectedProxy, useGenerateCompose, useManagedProxyType, useTraefikTemplate, type DetectedProxy } from '../api.ts'
+import { useManagedProxy } from '../../domains/index.ts'
+import { useDetectedProxy, useGenerateCompose, useTraefikTemplate, type DetectedProxy } from '../api.ts'
 import { YamlEditor } from '../editor/index.ts'
 import {
   buildSpec,
@@ -415,7 +416,11 @@ export function ComposeWizard({
   const [state, setState] = useState<WizardState>(() => initial ?? initialState())
   // Asked once a domain is being entered, so wizards without a domain make no extra request.
   const managedCaddy =
-    useManagedProxyType(hostId, active && state.services.some((s) => s.domain.host.trim() !== '')).data?.instance?.type === 'CADDY'
+    useManagedProxy(hostId, {
+      enabled: active && state.services.some((s) => s.domain.host.trim() !== ''),
+      retry: false,
+      refetchOnWindowFocus: false,
+    }).data?.instance?.type === 'CADDY'
   const { t } = useTranslation('deployments')
   const previewId = useId()
   const generate = useGenerateCompose(hostId)
