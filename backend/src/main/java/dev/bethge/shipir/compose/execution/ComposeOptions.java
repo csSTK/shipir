@@ -15,7 +15,8 @@ public record ComposeOptions(List<String> profiles, List<String> services) {
      * letters, digits, {@code _ . -}. A leading {@code -} stays rejected: these names go into the argument list, where
      * they would read as a flag.
      */
-    public static final Pattern NAME = Pattern.compile("[A-Za-z0-9_][A-Za-z0-9_.-]{0,62}");
+    public static final String NAME_REGEX = "[A-Za-z0-9_][A-Za-z0-9_.-]{0,62}";
+    public static final Pattern NAME = Pattern.compile(NAME_REGEX);
     public static final String ALL_PROFILES = "*";
     public static final ComposeOptions NONE = new ComposeOptions(List.of(), List.of());
 
