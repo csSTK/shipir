@@ -809,8 +809,12 @@ public class HostResourcesService {
                 v.add("networks: " + nName + " is listed twice");
                 continue;
             }
+            List<String> inAliases = n.aliases() == null ? List.of() : n.aliases();
+            if (inAliases.size() > MAX_LIST) {
+                v.add("networks: at most " + MAX_LIST + " aliases on " + nName);
+            }
             List<String> aliases = new java.util.ArrayList<>();
-            for (String a : n.aliases() == null ? List.<String>of() : n.aliases()) {
+            for (String a : inAliases) {
                 if (a == null || !RESOURCE_NAME.matcher(a.trim()).matches()) {
                     v.add("networks: invalid alias on " + nName);
                 } else if (!aliases.contains(a.trim())) {

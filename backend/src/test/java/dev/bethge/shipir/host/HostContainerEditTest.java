@@ -124,6 +124,22 @@ class HostContainerEditTest extends HostApiTestBase {
     }
 
     @Test
+    void aliasesPerNetworkAreCappedAt100() throws Exception {
+        when(containers.recreateContainer(any(), any(), eq("web1"), any())).thenReturn(new CreatedResourceDto("new1", "web"));
+        String aliases = java.util.stream.IntStream.range(0, 101).mapToObj(i -> "'a" + i + "'")
+                .collect(java.util.stream.Collectors.joining(","));
+        mvc.perform(recreate(login("operator"), "web1", "recreate",
+                        "{'image':'nginx','networks':[{'name':'front','aliases':[" + aliases + "]}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_CONTAINER_SPEC"))
+                .andExpect(jsonPath("$.details[0]").value("networks: at most 100 aliases on front"));
+        verify(containers, never()).recreateContainer(any(), any(), any(), any());
+        mvc.perform(recreate(login("operator"), "web1", "recreate",
+                        "{'image':'nginx','networks':[{'name':'front','aliases':[" + aliases.substring(0, aliases.lastIndexOf(",")) + "]}]}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void recreateValidatesLikeCreateAndListsEveryViolation() throws Exception {
         mvc.perform(recreate(login("operator"), "web1", "recreate",
                         "{'name':'-bad','image':'--evil','env':{'1x':'v'},'ports':[{'containerPort':70000}],"
