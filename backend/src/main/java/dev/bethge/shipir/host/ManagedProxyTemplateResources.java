@@ -1,43 +1,34 @@
 package dev.bethge.shipir.host;
 
-import org.springframework.core.io.ClassPathResource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 /**
  * Images and networks the bundled managed-proxy Compose templates declare ({@code templates/proxy/managed-*.yaml}).
  * Lets {@link SystemManagedGuard} protect them while the proxy is stopped and has no containers to learn them from.
- * The resource names are fixed; read-only, nothing here depends on the {@code proxy/} package.
+ * Every {@code managed-*.yaml} on the classpath is picked up, so a new template is protected without code changes.
+ * Read-only, nothing here depends on the {@code proxy/} package.
  */
 final class ManagedProxyTemplateResources {
 
-    private static final List<String> RESOURCES = List.of(
-            "templates/proxy/managed-traefik.yaml", "templates/proxy/managed-caddy.yaml");
+    private static final Logger log = LoggerFactory.getLogger(ManagedProxyTemplateResources.class);
 
-    private static final Set<String> IMAGES = new HashSet<>();
-    private static final Set<String> NETWORKS = new HashSet<>();
+    private static final String TEMPLATE_PATTERN = "classpath*:templates/proxy/managed-*.yaml";
 
-    static {
-        for (String resource : RESOURCES) {
-            try (InputStream in = new ClassPathResource(resource).getInputStream()) {
-                Resources r = parse(new String(in.readAllBytes(), StandardCharsets.UTF_8));
-                IMAGES.addAll(r.images());
-                NETWORKS.addAll(r.networks());
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-        }
-    }
+    /** Loaded on first use, not in a static initializer: a broken template must not poison the class. */
+    private static volatile Resources bundled;
 
     /** Images and networks (real names) a Compose file declares; empty when it is not parseable. */
     record Resources(Set<String> images, Set<String> networks) {
@@ -50,6 +41,9 @@ final class ManagedProxyTemplateResources {
         try {
             root = new Yaml(new SafeConstructor(new LoaderOptions())).load(composeYaml);
         } catch (RuntimeException e) {
+            // Only the exception type: SnakeYAML messages quote input, which can hold values from .env.
+            log.warn("Compose file is not valid YAML, no images or networks read from it ({})",
+                    e.getClass().getSimpleName());
             return new Resources(Set.of(), Set.of());
         }
         if (root instanceof Map<?, ?> doc) {
@@ -70,14 +64,56 @@ final class ManagedProxyTemplateResources {
         return new Resources(images, networks);
     }
 
+    /** The union over all bundled managed-proxy templates, loaded once. */
+    static Resources bundled() {
+        Resources r = bundled;
+        if (r == null) {
+            r = load(TEMPLATE_PATTERN);
+            bundled = r;
+        }
+        return r;
+    }
+
+    /**
+     * Union of the resources of every template matching the pattern.
+     * Fails with an {@link IllegalStateException} when nothing matches, so a packaging mistake surfaces at first use.
+     */
+    static Resources load(String locationPattern) {
+        Resource[] templates;
+        try {
+            templates = new PathMatchingResourcePatternResolver().getResources(locationPattern);
+        } catch (IOException e) {
+            throw new IllegalStateException("Cannot list managed proxy templates " + locationPattern, e);
+        }
+        if (templates.length == 0) {
+            throw new IllegalStateException("No managed proxy templates found for " + locationPattern);
+        }
+        Set<String> images = new HashSet<>();
+        Set<String> networks = new HashSet<>();
+        for (Resource template : templates) {
+            Resources r = parse(read(template));
+            images.addAll(r.images());
+            networks.addAll(r.networks());
+        }
+        return new Resources(Set.copyOf(images), Set.copyOf(networks));
+    }
+
+    private static String read(Resource template) {
+        try (InputStream in = template.getInputStream()) {
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new IllegalStateException("Cannot read managed proxy template " + template.getFilename(), e);
+        }
+    }
+
     private ManagedProxyTemplateResources() {
     }
 
     static Set<String> images() {
-        return Set.copyOf(IMAGES);
+        return bundled().images();
     }
 
     static Set<String> networks() {
-        return Set.copyOf(NETWORKS);
+        return bundled().networks();
     }
 }
