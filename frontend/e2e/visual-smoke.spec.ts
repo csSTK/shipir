@@ -41,9 +41,10 @@ const DISK_USAGE = {
   volumes: { count: 4, totalSize: 0, reclaimableSize: 0 },
   buildCache: { count: 0, totalSize: 0, reclaimableSize: 0 },
 }
-const pages = [
+const pages: { name: string; path: string; ready?: string }[] = [
   { name: 'overview', path: '/' },
-  { name: 'dashboard', path: '/environments/a' },
+  // `ready`: accessible name of the page's h1 once its data has rendered (the dashboard shows a skeleton until then).
+  { name: 'dashboard', path: '/environments/a', ready: 'Local' },
   { name: 'containers', path: '/environments/a/containers' },
   { name: 'deployments', path: '/environments/a/deployments' },
   { name: 'images', path: '/environments/a/images' },
@@ -145,6 +146,10 @@ for (const scheme of schemes) {
         await page.emulateMedia({ colorScheme: scheme })
         await page.setViewportSize({ width: viewport.width, height: viewport.height })
         await page.goto(target.path)
+        // A client-side redirect or a re-render after `load` would destroy the execution context of the check below:
+        // wait for the final URL, then for the page's data to be on screen before measuring.
+        await page.waitForURL((url) => url.pathname === target.path)
+        if (target.ready) await expect(page.getByRole('heading', { name: target.ready, exact: true })).toBeVisible()
         // The assistant page nests its own <main> inside the shell's, so take the outer (shell) one.
         await expect(page.getByRole('main').first()).toBeVisible()
         await expect(page.getByText('Loading')).toHaveCount(0)
