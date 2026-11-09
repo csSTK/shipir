@@ -306,4 +306,23 @@ describe('AssistantDock', () => {
     const sheet = /\.assistant-dock__panel--sheet\s*\{[^}]*\}/.exec(css)?.[0] ?? ''
     expect(sheet).toContain('env(safe-area-inset-bottom')
   })
+
+  describe('left and right safe-area insets (landscape notch)', () => {
+    const css = readFileSync(join(process.cwd(), 'src/features/ai-chat/AssistantDock.css'), 'utf8')
+    const block = (selector: string) => new RegExp(`${selector}\\s*\\{[^}]*\\}`).exec(css)?.[0] ?? ''
+
+    it('offsets the dock icon from the right inset', () => {
+      expect(block('\\.assistant-dock')).toContain('var(--safe-right)')
+    })
+
+    it('keeps the open panel clear of the left inset', () => {
+      expect(block('\\.assistant-dock__panel')).toContain('var(--safe-left)')
+    })
+
+    it('pads the phone sheet by the left and right insets', () => {
+      const sheet = block('\\.assistant-dock__panel--sheet')
+      expect(sheet).toContain('var(--safe-left)')
+      expect(sheet).toContain('var(--safe-right)')
+    })
+  })
 })
