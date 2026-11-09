@@ -112,8 +112,7 @@ public class StompSecurityInterceptor implements ExecutorChannelInterceptor {
                 }
                 var eventHost = DockerEventStreamService.parse(destination);
                 if (eventHost != null) {
-                    if (!eventStreams.mayFollow(accessor.getUser().getName(), eventHost)
-                            || !access.hostFullyVisible(accessor.getUser().getName(), eventHost)) {
+                    if (!access.hostFullyVisible(accessor.getUser().getName(), eventHost)) {
                         throw new MessageDeliveryException("Subscription destination not allowed");
                     }
                     eventStreams.subscribe(eventHost, accessor.getUser().getName(), accessor.getSessionId(), accessor.getSubscriptionId());

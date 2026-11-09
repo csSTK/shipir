@@ -121,14 +121,6 @@ public class DockerEventStreamService {
         return TOPIC_PREFIX + hostId + "/events";
     }
 
-    /**
-     * Permission hook: may this user follow the events of this host? Today every authenticated user may
-     * (read access); the permissions epic narrows it per host here.
-     */
-    boolean mayFollow(String username, UUID hostId) {
-        return true;
-    }
-
     /** Registers a subscription and starts the event worker for the first subscriber of the host. */
     void subscribe(UUID hostId, String username, String sessionId, String subscriptionId) {
         boolean admin = viewers.isAdmin(username); // initial value (subscribe thread); refreshAdmin keeps it current; frames are chosen per recipient

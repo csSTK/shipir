@@ -153,7 +153,6 @@ class StompSubscribeRaceTest {
     @Test
     void eventsAccessRevokedBetweenCheckAndRegistrationDropsTheRegistration() {
         when(setupStatus.currentStep("alice")).thenReturn(Optional.empty());
-        when(events.mayFollow("alice", HOST_ID)).thenReturn(true);
         when(access.hostFullyVisible("alice", HOST_ID)).thenReturn(true, false);
 
         assertThatThrownBy(() -> interceptor.preSend(subscribe("/topic/hosts/" + HOST + "/events"), null))
