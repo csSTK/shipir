@@ -1,22 +1,18 @@
 package dev.bethge.shipir.compose.generator;
 
 import dev.bethge.shipir.PostgresTestConfiguration;
+import dev.bethge.shipir.auth.UserRepository;
+import dev.bethge.shipir.compose.ComposeApiTestSupport;
+import jakarta.servlet.http.Cookie;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
-import dev.bethge.shipir.auth.Role;
-import dev.bethge.shipir.auth.User;
-import dev.bethge.shipir.auth.UserRepository;
-import jakarta.servlet.http.Cookie;
-import org.junit.jupiter.api.BeforeEach;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-import java.time.Instant;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,37 +42,21 @@ class ComposeGeneratorApiTest {
     @Autowired
     org.springframework.jdbc.core.JdbcTemplate jdbc;
 
+    private ComposeApiTestSupport support;
+
     @BeforeEach
     void seedUsers() {
-        for (Role role : Role.values()) {
-            String name = role.name().toLowerCase();
-            User u = users.findByUsername(name).orElseGet(() -> new User(name, "x", role));
-            u.changePasswordHash(encoder.encode(PASSWORD), Instant.now());
-            users.save(u);
-        }
+        support = new ComposeApiTestSupport(mvc, PASSWORD);
+        support.seedUsers(users, encoder);
     }
 
     private MockHttpServletRequestBuilder generate(String username, String body) throws Exception {
-        Cookie anon = mvc.perform(get("/api/auth/me")).andReturn().getResponse().getCookie("XSRF-TOKEN");
         MockHttpServletRequestBuilder req = post("/api/compose/generate").contentType(APPLICATION_JSON).content(body);
         if (username == null) {
+            Cookie anon = support.anonymousCsrf();
             return req.cookie(anon).header("X-XSRF-TOKEN", anon.getValue());
         }
-        MvcResult r = mvc.perform(post("/api/auth/login").cookie(anon).header("X-XSRF-TOKEN", anon.getValue())
-                .contentType(APPLICATION_JSON)
-                .content("{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, PASSWORD))).andReturn();
-        assertThat(r.getResponse().getStatus()).isEqualTo(200);
-        return req.session((MockHttpSession) r.getRequest().getSession(false))
-                .cookie(anon).header("X-XSRF-TOKEN", anon.getValue());
-    }
-
-    private MockHttpSession sessionOf(String username) throws Exception {
-        Cookie anon = mvc.perform(get("/api/auth/me")).andReturn().getResponse().getCookie("XSRF-TOKEN");
-        MvcResult r = mvc.perform(post("/api/auth/login").cookie(anon).header("X-XSRF-TOKEN", anon.getValue())
-                .contentType(APPLICATION_JSON)
-                .content("{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, PASSWORD))).andReturn();
-        assertThat(r.getResponse().getStatus()).isEqualTo(200);
-        return (MockHttpSession) r.getRequest().getSession(false);
+        return support.login(username).apply(req);
     }
 
     @Test
@@ -196,7 +176,7 @@ class ComposeGeneratorApiTest {
     @Test
     void everyRoleCanReadTheTraefikTemplate() throws Exception {
         for (String user : new String[] {"viewer", "operator"}) {
-            mvc.perform(get("/api/compose/proxy-templates/traefik").session(sessionOf(user)))
+            mvc.perform(support.login(user).apply(get("/api/compose/proxy-templates/traefik")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.yaml").value(org.hamcrest.Matchers.containsString("image: traefik:v3.1")));
         }
@@ -204,7 +184,7 @@ class ComposeGeneratorApiTest {
 
     @Test
     void unknownProxyTemplateIs404AndAnonymousIs401() throws Exception {
-        mvc.perform(get("/api/compose/proxy-templates/caddy").session(sessionOf("operator")))
+        mvc.perform(support.login("operator").apply(get("/api/compose/proxy-templates/caddy")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PROXY_TEMPLATE_NOT_FOUND"));
         mvc.perform(get("/api/compose/proxy-templates/traefik")).andExpect(status().isUnauthorized());
