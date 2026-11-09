@@ -26,7 +26,20 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Recreate and resource update against the local Docker daemon. */
+/**
+ * Recreate and resource update against the local Docker daemon.
+ *
+ * <p>Cleanup note for dev machines: older runs (before tearDown reported removal failures) may have left
+ * networks named {@code shipir-rc-<8 hex>-...} behind, which block other tests that use fixed subnets.
+ * Remove them by hand, containers attached to them first:
+ * <pre>
+ * docker ps -a --filter name=shipir-rc- --format '{{.ID}} {{.Names}}'     # list leftover containers
+ * docker rm -f &lt;container-id&gt;                                             # per leftover container
+ * docker network ls --filter name=shipir-rc- --format '{{.ID}} {{.Name}}'  # list leftover networks
+ * docker network rm &lt;network-id&gt;                                          # per leftover network
+ * </pre>
+ * Only names with the {@code shipir-rc-} prefix belong to this test; nothing else is touched.
+ */
 class ContainerRecreateIntegrationTest {
 
     private static final String IMAGE = "busybox:1.36";
@@ -66,18 +79,25 @@ class ContainerRecreateIntegrationTest {
                 if (n.startsWith("/" + prefix)) containerIds.add(c.getId());
             }
         }
+        // a failed container removal keeps its networks attached, so it is reported as well, not swallowed
+        List<String> containerFailures = new ArrayList<>();
         for (String id : containerIds) {
             try {
                 docker.removeContainerCmd(id).withForce(true).exec();
-            } catch (RuntimeException ignored) {
+            } catch (NotFoundException alreadyGone) {
                 // already gone
+            } catch (RuntimeException e) {
+                containerFailures.add(id + " (" + e.getMessage() + ")");
             }
         }
+        List<String> volumeFailures = new ArrayList<>();
         for (String v : volumes) {
             try {
                 docker.removeVolumeCmd(v).exec();
-            } catch (RuntimeException ignored) {
+            } catch (NotFoundException alreadyGone) {
                 // already gone
+            } catch (RuntimeException e) {
+                volumeFailures.add(v + " (" + e.getMessage() + ")");
             }
         }
         // networks only after the containers above are gone, otherwise removal fails while they are attached
@@ -92,8 +112,9 @@ class ContainerRecreateIntegrationTest {
             }
         }
         manager.evict(hostId);
-        if (!networkFailures.isEmpty()) {
-            throw new IllegalStateException("Test networks were not removed and would leak: " + networkFailures);
+        if (!containerFailures.isEmpty() || !volumeFailures.isEmpty() || !networkFailures.isEmpty()) {
+            throw new IllegalStateException("Test resources were not removed and would leak: containers "
+                    + containerFailures + ", volumes " + volumeFailures + ", networks " + networkFailures);
         }
     }
 
