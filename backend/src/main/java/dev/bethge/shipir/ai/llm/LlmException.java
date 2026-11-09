@@ -59,6 +59,17 @@ public class LlmException extends RuntimeException {
         }
     }
 
+    /** True for a read or connect timeout (also wrapped): the provider did not answer in time, as opposed to refusing. */
+    static boolean isTimeout(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            if (t instanceof java.net.SocketTimeoutException
+                    || t instanceof org.apache.hc.client5.http.ConnectTimeoutException) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public Code code() {
         return code;
     }

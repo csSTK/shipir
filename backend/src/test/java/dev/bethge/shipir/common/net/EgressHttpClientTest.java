@@ -53,6 +53,20 @@ class EgressHttpClientTest {
             ex.getResponseBody().write(body);
             ex.close();
         });
+        server.createContext("/trickle", ex -> {
+            hits.add("trickle");
+            ex.sendResponseHeaders(200, 0);
+            try {
+                for (int i = 0; i < 40; i++) { // one byte every 100 ms: never idle, but far past the total deadline
+                    ex.getResponseBody().write('x');
+                    ex.getResponseBody().flush();
+                    Thread.sleep(100);
+                }
+            } catch (Exception ignored) {
+                // the client gave up
+            }
+            ex.close();
+        });
         server.start();
     }
 
@@ -109,6 +123,15 @@ class EgressHttpClientTest {
         EgressHttpClient.Response r = client.send("GET", uri("/big"), Map.of(), TIMEOUT);
         assertThat(r.body().length()).isLessThanOrEqualTo(1_048_576);
         assertThat(r.truncated()).isTrue();
+    }
+
+    @Test
+    void slowTrickledBodyIsCutOffByTheTotalDeadline() {
+        EgressHttpClient client = new EgressHttpClient(new EgressPolicy(new EgressProperties(true)));
+        long start = System.nanoTime();
+        assertThatThrownBy(() -> client.send("GET", uri("/trickle"), Map.of(), Duration.ofMillis(800)))
+                .isInstanceOf(java.net.SocketTimeoutException.class);
+        assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(3));
     }
 
     @Test

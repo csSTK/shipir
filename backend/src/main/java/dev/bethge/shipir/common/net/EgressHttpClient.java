@@ -15,12 +15,18 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * HTTP client for requests to user-influenced URLs. The {@link EgressPolicy} validates the address inside the DNS
@@ -90,6 +96,13 @@ public class EgressHttpClient implements AutoCloseable {
         }
     }
 
+    /** Fires the total-deadline aborts of {@link #send}; the tasks only call {@code abort()}, so one thread is enough. */
+    private static final ScheduledExecutorService DEADLINES = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "egress-deadline");
+        t.setDaemon(true);
+        return t;
+    });
+
     private final CloseableHttpClient client;
 
     @Autowired
@@ -127,6 +140,28 @@ public class EgressHttpClient implements AutoCloseable {
         }
         Timeout t = Timeout.ofMilliseconds(timeout.toMillis());
         request.setConfig(RequestConfig.custom().setResponseTimeout(t).setConnectionRequestTimeout(t).build());
+        // the response timeout only bounds each single read; a server dribbling bytes would otherwise hold the call open
+        // far past `timeout`, so the whole call (connect, headers, capped body read) gets one hard deadline
+        AtomicBoolean deadlineHit = new AtomicBoolean();
+        ScheduledFuture<?> deadline = DEADLINES.schedule(() -> {
+            deadlineHit.set(true);
+            request.abort();
+        }, timeout.toMillis(), TimeUnit.MILLISECONDS);
+        try {
+            return execute(method, request);
+        } catch (IOException e) {
+            if (deadlineHit.get()) {
+                SocketTimeoutException timedOut = new SocketTimeoutException("Request exceeded its total deadline");
+                timedOut.initCause(e);
+                throw timedOut;
+            }
+            throw e;
+        } finally {
+            deadline.cancel(false);
+        }
+    }
+
+    private Response execute(String method, HttpUriRequestBase request) throws IOException {
         return client.execute(request, response -> {
             Map<String, String> out = new LinkedHashMap<>();
             for (Header h : response.getHeaders()) {

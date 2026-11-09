@@ -15,7 +15,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URLEncoder;
-import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -73,9 +72,10 @@ public class GeminiLlmClient implements LlmClient {
             // fails before any byte, so the API key never reaches it.
             return http.stream("POST", request.uri(), request.headers(), request.body(), properties.readTimeout(),
                     response -> handle(response, apiKey, onToken, timedOut));
-        } catch (SocketTimeoutException e) {
-            throw new LlmException(LlmException.Code.TIMEOUT, "LLM provider did not answer in time");
         } catch (IOException e) {
+            if (LlmException.isTimeout(e)) {
+                throw new LlmException(LlmException.Code.TIMEOUT, "LLM provider did not answer in time");
+            }
             if (timedOut.get()) {
                 throw new LlmException(LlmException.Code.TIMEOUT, "LLM stream stalled");
             }

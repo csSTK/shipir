@@ -47,6 +47,11 @@ import java.util.TreeMap;
  * connection), no proxy, TLS verification can never be switched off ({@link #configure} and
  * {@link #setHostnameVerifier} are ignored, so {@code http.sslVerify=false} makes the call fail instead of becoming
  * insecure), request bodies are buffered (capped), the response is not decompressed (JGit handles gzip itself).
+ * <p>
+ * One Apache client (pool of one) per request, on purpose: the pinned addresses belong to one validated connection
+ * and JGit creates a new connection object, and so a fresh egress check, for every request (redirects included). A
+ * pooled client shared across requests would keep sockets validated for an earlier answer alive, which is the window
+ * this class closes; the cost is a new TCP/TLS handshake per request of a fetch (accepted: fetches are rare and short).
  */
 final class PinnedHttpConnection implements HttpConnection {
 
