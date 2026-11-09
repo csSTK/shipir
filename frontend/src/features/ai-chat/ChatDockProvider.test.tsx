@@ -26,6 +26,7 @@ let handlers: TopicHandlers
 let byTopic: Record<string, { handlers: TopicHandlers; unsubscribe: ReturnType<typeof vi.fn> }>
 let unsubscribe: ReturnType<typeof vi.fn>
 let messages: object[]
+let serverRunning: boolean
 let pendingTotal: number
 const userMsg = { id: 'm0', seq: 1, role: 'USER', content: 'hello', toolCalls: null, toolCallId: null, status: null, createdAt: '2026-10-23T10:00:00Z' }
 const answerMsg = { id: 'm1', seq: 2, role: 'ASSISTANT', content: 'Done!', toolCalls: null, toolCallId: null, status: null, createdAt: '2026-10-23T10:00:00Z' }
@@ -51,8 +52,8 @@ function renderApp() {
     const method = options?.method ?? 'GET'
     if (method === 'GET' && p.startsWith('/ai/sessions?')) return Promise.resolve({ items: [session] })
     if (method === 'GET' && p === '/ai/sessions/pending-count') return Promise.resolve({ count: pendingTotal })
-    if (method === 'GET' && p === '/ai/sessions/s2') return Promise.resolve({ session: { ...session, id: 's2' }, messages: [] })
-    if (method === 'GET' && p === '/ai/sessions/s1') return Promise.resolve({ session, messages })
+    if (method === 'GET' && p === '/ai/sessions/s2') return Promise.resolve({ session: { ...session, id: 's2' }, messages: [], running: false })
+    if (method === 'GET' && p === '/ai/sessions/s1') return Promise.resolve({ session, messages, running: serverRunning })
     if (method === 'POST' && p === '/ai/sessions/s1/messages') return Promise.resolve({ runId: 'r' })
     if (method === 'DELETE' && p === '/ai/sessions/s1') return Promise.resolve(null)
     return Promise.reject(new Error(`unmocked ${method} ${p}`))
@@ -85,6 +86,7 @@ async function startRunAndLeave() {
 
 beforeEach(() => {
   messages = []
+  serverRunning = false
   pendingTotal = 0
   byTopic = {}
   unsubscribe = vi.fn()
@@ -151,6 +153,7 @@ describe('ChatDockProvider', () => {
   it('keeps following a run after switching to another chat and flags it unread when it finishes there', async () => {
     await startRunAndLeave()
     messages = [userMsg]
+    serverRunning = true
     fireEvent.click(screen.getByText('switch'))
     await waitFor(() => expect(subscribe).toHaveBeenCalledWith('/topic/chat/s2', expect.anything()))
     // The active subscription ends with the switch; a background one on the same chat takes over.
@@ -180,6 +183,7 @@ describe('ChatDockProvider', () => {
     await startRunAndLeave()
     // Resolving an action starts a new run, so a CONFIRMED tool message does not mean the chat is idle.
     messages = [userMsg, { ...pendingTool, status: 'CONFIRMED' }]
+    serverRunning = true
     fireEvent.click(screen.getByText('switch'))
     await waitFor(() => expect(subscribe).toHaveBeenCalledWith('/topic/chat/s2', expect.anything()))
     await waitFor(() => expect(vi.mocked(apiFetch).mock.calls.filter(([p]) => p === '/ai/sessions/s1').length).toBeGreaterThan(1))
@@ -191,10 +195,21 @@ describe('ChatDockProvider', () => {
   it('stops following a background run when the websocket is lost', async () => {
     await startRunAndLeave()
     messages = [userMsg]
+    serverRunning = true
     fireEvent.click(screen.getByText('switch'))
     await waitFor(() => expect(screen.getByTestId('elsewhere')).toHaveTextContent('true'))
     act(() => byTopic['/topic/chat/s1'].handlers.onState('reconnecting'))
     await waitFor(() => expect(screen.getByTestId('elsewhere')).toHaveTextContent('false'))
+  })
+
+  it('follows a run that is already going when the chat is opened after a reload', async () => {
+    messages = [userMsg]
+    serverRunning = true
+    renderApp()
+    await screen.findByLabelText('Message')
+    expect(await screen.findByText('Thinking…')).toBeInTheDocument()
+    frame({ type: 'DONE', outcome: 'COMPLETE' })
+    await waitFor(() => expect(screen.queryByText('Thinking…')).not.toBeInTheDocument())
   })
 
   it('unsubscribes when the session is deleted', async () => {

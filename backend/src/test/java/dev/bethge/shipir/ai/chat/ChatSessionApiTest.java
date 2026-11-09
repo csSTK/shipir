@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
@@ -54,6 +55,8 @@ class ChatSessionApiTest {
     ChatSessionService service;
     @Autowired
     ObjectMapper mapper;
+    @MockitoSpyBean
+    ChatOrchestrator orchestrator;
 
     @BeforeEach
     void reset() {
@@ -118,6 +121,17 @@ class ChatSessionApiTest {
             mvc.perform(get("/api/ai/sessions/" + id).session(l.session())).andExpect(status().isNotFound());
         }
         assertThat(auditCount("CHAT_SESSION_DELETE")).isEqualTo(3);
+    }
+
+    @Test
+    void sessionDetailReportsWhetherARunIsActive() throws Exception {
+        Login l = login("operator");
+        String id = create(l, "{}");
+        mvc.perform(get("/api/ai/sessions/" + id).session(l.session()))
+                .andExpect(jsonPath("$.running").value(false));
+        org.mockito.Mockito.doReturn(true).when(orchestrator).isRunning(UUID.fromString(id));
+        mvc.perform(get("/api/ai/sessions/" + id).session(l.session()))
+                .andExpect(jsonPath("$.running").value(true));
     }
 
     @Test

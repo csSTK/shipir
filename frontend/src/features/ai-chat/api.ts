@@ -39,6 +39,8 @@ export interface ChatMessage {
 export interface ChatSessionDetail {
   session: ChatSession
   messages: ChatMessage[]
+  /** An assistant run is active for this session right now. */
+  running: boolean
 }
 
 /** What the user is looking at; the server drops ids it cannot resolve for this user. */

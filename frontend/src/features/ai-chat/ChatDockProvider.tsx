@@ -1,22 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { subscribeToTopic } from '../../shared/realtime/stomp.ts'
-import { fetchChatSession, usePendingActionCount, useRefreshSession, type ChatMessage } from './api.ts'
+import { fetchChatSession, usePendingActionCount, useRefreshSession } from './api.ts'
 import { ChatDockContext, type ChatDock } from './useChatDock.ts'
 import { useChatStream } from './useChatStream.ts'
-
-/**
- * A run is still going when the stored transcript does not end in a finished answer: the user's message has no
- * reply yet, the assistant asked for tools whose results are still coming, or an action was just resolved (which
- * starts a new run). Only a pending Confirm, which waits for the user, is not a run.
- */
-function runLooksActive(messages: readonly ChatMessage[]): boolean {
-  const last = messages.at(-1)
-  if (!last) return false
-  if (last.role === 'USER') return true
-  if (last.role === 'ASSISTANT') return !!last.toolCalls?.length
-  return last.status !== 'PENDING'
-}
 
 /**
  * Follows a run in a chat that is no longer the active one, only to learn when it ends. Renders nothing.
@@ -50,7 +37,7 @@ function BackgroundRun({ sessionId, onDone, onLost }: { sessionId: string; onDon
     // Subscribe first, then look: a run ending after this fetch still delivers its DONE frame.
     fetchChatSession(client, sessionId)
       .then((detail) => {
-        if (alive && !runLooksActive(detail.messages)) doneRef.current(sessionId)
+        if (alive && !detail.running) doneRef.current(sessionId)
       })
       .catch(() => {
         // the session is gone or unreachable; the next DONE or a lost connection still ends the run
@@ -101,6 +88,23 @@ export function ChatDockProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     startRef.current = start
   })
+
+  // After a reload (or opening a chat whose run was started elsewhere) the server says whether a run is active;
+  // follow it. The subscription above is already in place, so a DONE after this check still arrives.
+  useEffect(() => {
+    if (!sessionId) return
+    let alive = true
+    fetchChatSession(client, sessionId)
+      .then((detail) => {
+        if (alive && detail.running) startRef.current()
+      })
+      .catch(() => {
+        // unreachable or deleted session: the chat view reports it
+      })
+    return () => {
+      alive = false
+    }
+  }, [sessionId, client])
 
   const runningRef = useRef(false)
   useEffect(() => {

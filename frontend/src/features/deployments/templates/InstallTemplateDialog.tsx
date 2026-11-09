@@ -251,7 +251,7 @@ export function InstallTemplateDialog({
   }
 
   return (
-    <Dialog size="lg" open onOpenChange={(open) => !open && !busy && onClose()} title={tr('InstallTemplateDialog.installName', { name: template.name })} description={template.description}>
+    <Dialog size="lg" open dismissible={!busy} onOpenChange={(open) => !open && !busy && onClose()} title={tr('InstallTemplateDialog.installName', { name: template.name })} description={template.description}>
       <form onSubmit={(e) => void install(e)} className="ui-form">
         <TextField
           label={tr('AddDeploymentDialog.name')}

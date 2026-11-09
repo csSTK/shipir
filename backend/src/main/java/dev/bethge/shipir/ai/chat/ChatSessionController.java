@@ -63,7 +63,7 @@ class ChatSessionController {
 
     @GetMapping("/sessions/{id}")
     ChatSessionDetailResponse get(Authentication auth, @PathVariable UUID id) {
-        return service.get(userId(auth), id);
+        return service.get(userId(auth), id).withRunning(orchestrator.isRunning(id));
     }
 
     @PatchMapping("/sessions/{id}")

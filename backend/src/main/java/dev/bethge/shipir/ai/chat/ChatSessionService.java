@@ -183,7 +183,7 @@ public class ChatSessionService {
 
     private ChatSessionDetailResponse detail(ChatSession session, String owner) {
         return new ChatSessionDetailResponse(toResponse(session, owner),
-                messages.findBySessionIdOrderBySeqAsc(session.getId()).stream().map(this::toResponse).toList());
+                messages.findBySessionIdOrderBySeqAsc(session.getId()).stream().map(this::toResponse).toList(), false);
     }
 
     private String ownerName(UUID userId) {

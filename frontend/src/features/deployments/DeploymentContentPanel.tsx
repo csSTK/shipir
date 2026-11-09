@@ -91,16 +91,14 @@ export function DeploymentContentPanel({
           </Button>
         )}
       </div>
-      {saved && !editing && (
-        <p role="status" className="sd-muted">
-          {t('DeploymentContentPanel.savedAsADraftDeploy')}
-        </p>
-      )}
-      {editing && (
-        <p role="status" className="sd-muted">
-          {t('DeploymentContentPanel.actionsPausedWhileEditing')}
-        </p>
-      )}
+      {/* One persistent live region: a region inserted together with its text is not announced by every screen reader. */}
+      <p role="status" className="sd-muted">
+        {editing
+          ? t('DeploymentContentPanel.actionsPausedWhileEditing')
+          : saved
+            ? t('DeploymentContentPanel.savedAsADraftDeploy')
+            : null}
+      </p>
       {gitManaged && editing && <p className="sd-muted">{t('DeploymentContentPanel.theComposeFileComesFrom')}</p>}
       <YamlEditor
         label={t('DeploymentContentPanel.composeFile')}

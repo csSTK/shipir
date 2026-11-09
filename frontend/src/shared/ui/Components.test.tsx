@@ -166,6 +166,21 @@ describe('Dialog', () => {
   })
 })
 
+describe('Dialog dismissible', () => {
+  it('disables the close button and ignores Esc while not dismissible', () => {
+    const onChange = vi.fn()
+    render(<Dialog open dismissible={false} onOpenChange={onChange} title="Busy">body</Dialog>)
+    expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled()
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('is dismissible by default', () => {
+    render(<Dialog open onOpenChange={() => {}} title="Free">body</Dialog>)
+    expect(screen.getByRole('button', { name: 'Close' })).toBeEnabled()
+  })
+})
+
 describe('Button asChild', () => {
   it('renders the child element with button classes and keeps its label', () => {
     render(

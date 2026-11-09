@@ -252,6 +252,7 @@ describe('InstallTemplateDialog', () => {
     await waitFor(() => expect(calls('/hosts/h1/managed-deployments', 'POST')).toHaveLength(1))
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     expect(onClose).not.toHaveBeenCalled()
     release({ id: 's1' })

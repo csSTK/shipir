@@ -494,7 +494,7 @@ describe('DeploymentDetailPage', () => {
       await startEdit()
       expect(await screen.findByRole('status')).toHaveTextContent(/Deploy and pull actions are paused/)
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-      await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument())
+      await waitFor(() => expect(screen.getByRole('status')).toBeEmptyDOMElement())
     })
 
     it('blocks Pull & update while editing', async () => {

@@ -57,10 +57,14 @@
   cursor: pointer;
   transition: transform var(--duration-press) var(--ease-out), background-color var(--duration-fast) var(--ease-out);
 }
-.ui-dialog__close:hover {
+.ui-dialog__close:hover:not(:disabled) {
   background: var(--color-surface-hover);
 }
-.ui-dialog__close:active {
+.ui-dialog__close:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+.ui-dialog__close:active:not(:disabled) {
   transform: scale(var(--press-scale));
 }
 .ui-dialog__close:focus-visible {
