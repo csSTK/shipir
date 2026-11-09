@@ -189,6 +189,7 @@ class SystemManagedGuard {
         Set<String> names = new HashSet<>();
         names.add(PROXY_NETWORK);
         names.addAll(ManagedProxyTemplateResources.networks());
+        names.addAll(storedProxyResources(hostId).networks());
         try {
             for (ContainerDto c : call(hostId, containers::listContainers)) {
                 if (c.composeProject() == null || !projects.contains(c.composeProject())) {
@@ -220,12 +221,26 @@ class SystemManagedGuard {
         }
         // the bundled proxy templates' images count too: after compose down no container names them
         Set<String> refs = new HashSet<>(ManagedProxyTemplateResources.images());
+        // and so do the images of the proxy's stored compose file (ADMIN-customised, or before a template bump)
+        refs.addAll(storedProxyResources(hostId).images());
         for (ContainerDto c : call(hostId, containers::listContainers)) {
             if (c.composeProject() != null && projects.contains(c.composeProject()) && c.image() != null) {
                 refs.add(c.image());
             }
         }
         return refs;
+    }
+
+    /** Images and networks the system-managed deployments' stored compose files declare. */
+    private ManagedProxyTemplateResources.Resources storedProxyResources(UUID hostId) {
+        Set<String> imageRefs = new HashSet<>();
+        Set<String> networkNames = new HashSet<>();
+        for (String compose : managed.systemManagedComposeFiles(hostId)) {
+            ManagedProxyTemplateResources.Resources r = ManagedProxyTemplateResources.parse(compose);
+            imageRefs.addAll(r.images());
+            networkNames.addAll(r.networks());
+        }
+        return new ManagedProxyTemplateResources.Resources(imageRefs, networkNames);
     }
 
     private static boolean matchesNetwork(NetworkDto n, String ref) {

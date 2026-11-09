@@ -1,9 +1,11 @@
 package dev.bethge.shipir.compose;
 
+import dev.bethge.shipir.compose.file.ComposeFileRepository;
 import dev.bethge.shipir.host.ManagedDeploymentLookup;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -14,9 +16,11 @@ import java.util.UUID;
 class ManagedDeploymentIndex implements ManagedDeploymentLookup {
 
     private final DeploymentRepository deployments;
+    private final ComposeFileRepository files;
 
-    ManagedDeploymentIndex(DeploymentRepository deployments) {
+    ManagedDeploymentIndex(DeploymentRepository deployments, ComposeFileRepository files) {
         this.deployments = deployments;
+        this.files = files;
     }
 
     @Override
@@ -30,5 +34,11 @@ class ManagedDeploymentIndex implements ManagedDeploymentLookup {
     public Set<String> systemManagedNames(UUID hostId) {
         return deployments.findByHostIdOrderByNameAsc(hostId).stream().filter(Deployment::isSystemManaged)
                 .map(Deployment::getName).collect(Collectors.toSet());
+    }
+
+    @Override
+    public List<String> systemManagedComposeFiles(UUID hostId) {
+        return deployments.findByHostIdOrderByNameAsc(hostId).stream().filter(Deployment::isSystemManaged)
+                .flatMap(d -> files.readCompose(hostId, d.getName()).stream()).toList();
     }
 }
