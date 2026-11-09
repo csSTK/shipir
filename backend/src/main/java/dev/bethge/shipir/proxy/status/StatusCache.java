@@ -45,6 +45,19 @@ class StatusCache {
         this.refreshFloor = refreshFloor;
     }
 
+    /**
+     * Forgets a host entirely: its facts, its load throttle and its lock object, so a removed host leaves nothing
+     * behind. A load that was already running may still store its result afterwards; for a removed host that entry is
+     * never read and is dropped with the next eviction.
+     */
+    void evict(UUID hostId) {
+        synchronized (locks.computeIfAbsent(hostId, k -> new Object())) {
+            entries.remove(hostId);
+            lastAttempt.remove(hostId);
+        }
+        locks.remove(hostId);
+    }
+
     ProxyFacts get(UUID hostId, boolean refresh, Supplier<ProxyFacts> loader) {
         synchronized (locks.computeIfAbsent(hostId, k -> new Object())) {
             Instant now = clock.instant();

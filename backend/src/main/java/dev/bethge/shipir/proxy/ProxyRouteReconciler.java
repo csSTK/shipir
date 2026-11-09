@@ -129,16 +129,22 @@ class ProxyRouteReconciler {
                     return loop;
                 });
             }
-            workers.keySet().removeIf(id -> {
-                if (wanted.contains(id)) {
-                    return false;
+            // hosts that lost their proxy or were deleted: stop the worker and drop every per-host entry, the
+            // rate-limit stamp included (it is in lastProxySync even when no worker ever started for the host)
+            Set<UUID> gone = new HashSet<>(workers.keySet());
+            gone.addAll(lastProxySync.keySet());
+            gone.removeAll(wanted);
+            for (UUID hostId : gone) {
+                ReconnectingEventStream worker = workers.remove(hostId);
+                if (worker != null) {
+                    worker.stop();
                 }
-                workers.get(id).stop();
                 synchronized (pending) {
-                    pending.remove(id);
+                    pending.remove(hostId);
                 }
-                return true;
-            });
+                lastProxySync.remove(hostId);
+                sync.forget(hostId);
+            }
         } catch (RuntimeException e) {
             log.warn("Could not update the proxy reconcile workers: {}", e.getClass().getSimpleName());
         }

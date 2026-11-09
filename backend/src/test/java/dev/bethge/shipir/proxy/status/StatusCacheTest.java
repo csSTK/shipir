@@ -143,4 +143,37 @@ class StatusCacheTest {
         assertThat(text).contains("DockerConnectionException").contains("UNREACHABLE").contains(host.toString())
                 .doesNotContain("secret-detail-token");
     }
+
+    @Test
+    void evictDropsTheFactsOfARemovedHost() {
+        cache.get(host, false, this::load);
+
+        cache.evict(host);
+
+        java.util.function.Supplier<ProxyFacts> failing = () -> { throw new IllegalStateException("docker down"); };
+        assertThat(cache.get(host, false, failing)).as("no stale facts after eviction").isSameAs(ProxyFacts.EMPTY);
+    }
+
+    @Test
+    void evictLiftsTheLoadThrottleOfARemovedHost() {
+        AtomicInteger attempts = new AtomicInteger();
+        cache.get(host, false, () -> {
+            attempts.incrementAndGet();
+            throw new IllegalStateException("docker down");
+        });
+
+        cache.evict(host);
+        cache.get(host, false, this::load);
+
+        assertThat(attempts).hasValue(1);
+        assertThat(loads).as("a load right after eviction is not throttled").hasValue(1);
+    }
+
+    @Test
+    void evictingAHostNeverLoadedIsANoOp() {
+        cache.evict(host);
+
+        cache.get(host, false, this::load);
+        assertThat(loads).hasValue(1);
+    }
 }

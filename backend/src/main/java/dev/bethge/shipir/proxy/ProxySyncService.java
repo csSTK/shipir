@@ -1,6 +1,7 @@
 package dev.bethge.shipir.proxy;
 
 import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
+import dev.bethge.shipir.common.security.HostRemovedEvent;
 import dev.bethge.shipir.common.security.SecretCipher;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
 import dev.bethge.shipir.compose.generator.model.ProxyType;
@@ -19,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -82,8 +84,8 @@ public class ProxySyncService {
     private final ContainerFileService files;
     private final ExecService exec;
     private final ProxyHostAccess access;
-    private final ConcurrentMap<UUID, ReentrantLock> locks = new ConcurrentHashMap<>();
-    /** Hosts whose proxy container Shipir stopped and could not start again; the next sync starts it (not user-stopped ones). */
+    private final ConcurrentMap<UUID, HostLock> locks = new ConcurrentHashMap<>();
+    /** Hosts whose proxy container Shipir stopped and could not start again; the next sync starts it (not user-stopped ones). Dropped by {@link #forget}. */
     private final Set<UUID> stoppedByShipir = ConcurrentHashMap.newKeySet();
 
     ProxySyncService(ProxyInstanceRepository instances, ProxyRouteRepository routes, ProxyCertificateRepository certificates,
@@ -181,15 +183,46 @@ public class ProxySyncService {
         }
     }
 
-    /** Runs {@code action} while holding the host's proxy lock. */
+    /**
+     * Runs {@code action} while holding the host's proxy lock. The lock entry exists only while callers are inside or
+     * waiting for it, so the map does not grow with every host ever synced.
+     */
     public <T> T exclusive(UUID hostId, Supplier<T> action) {
-        ReentrantLock lock = locks.computeIfAbsent(hostId, k -> new ReentrantLock());
-        lock.lock();
+        HostLock hostLock = locks.compute(hostId, (k, v) -> {
+            HostLock h = v == null ? new HostLock() : v;
+            h.users++;
+            return h;
+        });
         try {
-            return action.get();
+            hostLock.lock.lock();
+            try {
+                return action.get();
+            } finally {
+                hostLock.lock.unlock();
+            }
         } finally {
-            lock.unlock();
+            locks.computeIfPresent(hostId, (k, v) -> {
+                v.users--;
+                return v.users == 0 ? null : v;
+            });
         }
+    }
+
+    /** Forgets what Shipir remembers about a host's proxy: the host or its proxy instance is gone. */
+    void forget(UUID hostId) {
+        stoppedByShipir.remove(hostId);
+    }
+
+    /** A deleted host takes its remembered proxy state with it. Runs after the deleting transaction commits. */
+    @TransactionalEventListener(fallbackExecution = true)
+    void onHostRemoved(HostRemovedEvent event) {
+        forget(event.hostId());
+    }
+
+    /** A host's proxy lock and the number of callers holding or waiting for it; guarded by {@code locks.compute}. */
+    private static final class HostLock {
+        final ReentrantLock lock = new ReentrantLock();
+        int users;
     }
 
     private void doSync(UUID hostId) {

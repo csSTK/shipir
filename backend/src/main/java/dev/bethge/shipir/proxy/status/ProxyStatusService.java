@@ -1,5 +1,6 @@
 package dev.bethge.shipir.proxy.status;
 
+import dev.bethge.shipir.common.security.HostRemovedEvent;
 import dev.bethge.shipir.compose.generator.model.ProxyType;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
@@ -24,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -92,6 +94,12 @@ public class ProxyStatusService {
         this.clock = clock;
         this.cache = new StatusCache(clock, cacheTtl, refreshFloor, cacheTtl.multipliedBy(STALE_FACTOR));
         this.logTimeout = logTimeout;
+    }
+
+    /** A deleted host's cached proxy status goes with it. Runs after the deleting transaction commits. */
+    @TransactionalEventListener(fallbackExecution = true)
+    void onHostRemoved(HostRemovedEvent event) {
+        cache.evict(event.hostId());
     }
 
     /** Status of every route the current user may see; {@code refresh} asks for fresh data (rate limited). */

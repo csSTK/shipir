@@ -2,6 +2,7 @@ package dev.bethge.shipir.proxy;
 
 import dev.bethge.shipir.common.security.EncryptionProperties;
 import dev.bethge.shipir.common.security.SecretCipher;
+import dev.bethge.shipir.common.security.HostRemovedEvent;
 import dev.bethge.shipir.compose.generator.model.ProxyType;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerEndpoint;
@@ -25,7 +26,9 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -429,5 +432,62 @@ class ProxySyncServiceTest {
         when(access.isAdmin()).thenReturn(true);
         assertThatThrownBy(() -> service.sync(HOST)).isInstanceOfSatisfying(ProxyException.class,
                 e -> assertThat(e.getMessage()).contains("TLS_ERROR"));
+    }
+
+    @Test
+    void aStopShipirCouldNotUndoIsForgottenWithTheRemovedHost() {
+        instance(ProxyType.TRAEFIK);
+        container(ProxyType.TRAEFIK, "restarting");
+        doThrow(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "x", null))
+                .doNothing()
+                .when(fileService).writeFiles(any(), any(), any(), any(), any(), anyLong());
+        doThrow(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "y", null))
+                .when(containers).restartContainer(any(), any(), any(), anyInt());
+        assertThatThrownBy(() -> service.sync(HOST)).isInstanceOf(ProxyException.class);
+        assertThat(stoppedByShipir()).contains(HOST);
+
+        service.onHostRemoved(new HostRemovedEvent(HOST));
+
+        assertThat(stoppedByShipir()).isEmpty();
+        container(ProxyType.TRAEFIK, "exited");
+        service.sync(HOST);
+        // only the failed restart inside the failed sync; a proxy that is no longer remembered as ours stays stopped
+        verify(containers, times(1)).restartContainer(eq(HOST), eq(ENDPOINT), eq("proxy1"), anyInt());
+    }
+
+    @Test
+    void theLockOfAnIdleHostIsNotKeptAfterUse() {
+        service.exclusive(HOST, () -> "ran");
+
+        assertThat(lockEntries()).isEmpty();
+    }
+
+    @Test
+    void theLockOfAHostIsReleasedEvenWhenTheActionFails() {
+        assertThatThrownBy(() -> service.exclusive(HOST, () -> {
+            throw new IllegalStateException("boom");
+        })).isInstanceOf(IllegalStateException.class);
+
+        assertThat(lockEntries()).isEmpty();
+    }
+
+    @Test
+    void aNestedCallKeepsTheLockUntilTheOuterOneReturns() {
+        service.exclusive(HOST, () -> {
+            service.exclusive(HOST, () -> "inner");
+            assertThat(lockEntries()).containsKey(HOST);
+            return "outer";
+        });
+
+        assertThat(lockEntries()).isEmpty();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Set<UUID> stoppedByShipir() {
+        return (Set<UUID>) ReflectionTestUtils.getField(service, "stoppedByShipir");
+    }
+
+    private Map<UUID, ?> lockEntries() {
+        return (Map<UUID, ?>) ReflectionTestUtils.getField(service, "locks");
     }
 }

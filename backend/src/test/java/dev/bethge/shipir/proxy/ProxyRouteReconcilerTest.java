@@ -19,6 +19,7 @@ import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.BeforeEach;
 import org.slf4j.LoggerFactory;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -245,6 +246,37 @@ class ProxyRouteReconcilerTest {
 
     private static ContainerDto container(String id, String name, String project) {
         return new ContainerDto(id, name, "img", "running", "Up", null, Instant.now(), List.of(), project, null);
+    }
+
+    @Test
+    void aHostWhoseProxyIsGoneIsForgottenByTheWorkerCleanup() {
+        reconciler.handle(HOST, start("shipir-proxy-caddy-1", "p1", "shipir-proxy"));
+        verify(sync).sync(HOST);
+        assertThat(lastProxySyncOf()).containsKey(HOST);
+        when(instances.findAll()).thenReturn(List.of());
+
+        reconciler.syncWorkers();
+
+        verify(sync).forget(HOST);
+        assertThat(lastProxySyncOf()).as("rate-limit entry dropped with the proxy").isEmpty();
+    }
+
+    @Test
+    void aDeletedHostIsForgottenByTheWorkerCleanupEvenIfItsProxyRowStillExists() {
+        reconciler.handle(HOST, start("shipir-proxy-caddy-1", "p1", "shipir-proxy"));
+        when(instances.findAll()).thenReturn(List.of(
+                ProxyInstance.create(HOST, ProxyType.CADDY, "ops@example.com", CertMode.ACME_HTTP)));
+        when(hosts.existsById(HOST)).thenReturn(false);
+
+        reconciler.syncWorkers();
+
+        verify(sync).forget(HOST);
+        assertThat(lastProxySyncOf()).isEmpty();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<UUID, Instant> lastProxySyncOf() {
+        return (Map<UUID, Instant>) ReflectionTestUtils.getField(reconciler, "lastProxySync");
     }
 
     private static final class MutableClock extends Clock {
