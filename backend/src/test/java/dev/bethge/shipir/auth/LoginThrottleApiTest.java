@@ -280,6 +280,16 @@ class LoginThrottleApiTest {
                 String.class, username);
         assertThat(rows).isEqualTo(1);
         assertThat(details).doesNotContain("wrong-secret-xyz");
+
+        java.util.Map<String, Object> row = jdbc.queryForMap(
+                "SELECT outcome, target_type, target_id, details->>'scope' AS scope,"
+                        + " details->>'clientAddress' AS client_address"
+                        + " FROM audit_log WHERE action = 'LOGIN_THROTTLED' AND username = ?", username);
+        assertThat(row).containsEntry("outcome", "FAILURE")
+                .containsEntry("target_type", "USER")
+                .containsEntry("target_id", username)
+                .containsEntry("scope", "LOGIN")
+                .containsEntry("client_address", ip);
     }
 
     @Test
