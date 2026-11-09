@@ -113,14 +113,7 @@ class ExecSessionTest {
             User u = users.findByUsername(username).orElseGet(() -> new User(username, "x", role));
             u.changePasswordHash(encoder.encode(PASSWORD), Instant.now());
             users.save(u);
-            call(HttpRequest.newBuilder(URI.create(base() + "/api/auth/me")));
-            var r = call(HttpRequest.newBuilder(URI.create(base() + "/api/auth/login"))
-                    .header("Content-Type", "application/json").header("X-XSRF-TOKEN", jar.get("XSRF-TOKEN"))
-                    .POST(HttpRequest.BodyPublishers.ofString(
-                            "{\"username\":\"" + username + "\",\"password\":\"" + PASSWORD + "\"}")));
-            assertThat(r.statusCode()).isEqualTo(200);
-            call(HttpRequest.newBuilder(URI.create(base() + "/api/auth/me"))); // picks up the rotated XSRF cookie
-            csrf = jar.get("XSRF-TOKEN");
+            csrf = RealServerLogin.login(http, jar, port, username, PASSWORD);
         }
 
         HttpResponse<String> call(HttpRequest.Builder b) throws Exception {
@@ -164,7 +157,7 @@ class ExecSessionTest {
             h.add("Cookie", "JSESSIONID=" + jar.get("JSESSIONID") + "; XSRF-TOKEN=" + jar.get("XSRF-TOKEN"));
             StompHeaders connect = new StompHeaders();
             connect.add("X-XSRF-TOKEN", csrf);
-            return c.connectAsync("ws://localhost:" + port + "/ws", h, connect, new StompSessionHandlerAdapter() {
+            return c.connectAsync("ws://127.0.0.1:" + port + "/ws", h, connect, new StompSessionHandlerAdapter() {
             }).get(5, TimeUnit.SECONDS);
         }
     }
@@ -174,7 +167,7 @@ class ExecSessionTest {
     }
 
     private String base() {
-        return "http://localhost:" + port;
+        return "http://127.0.0.1:" + port;
     }
 
     private static String json(String body, String field) {

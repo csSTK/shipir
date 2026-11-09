@@ -32,10 +32,7 @@ import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
 
 import java.lang.reflect.Type;
-import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HashMap;
@@ -45,7 +42,6 @@ import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -223,31 +219,13 @@ class ContainerStatsTopicTest {
         connect.add("X-XSRF-TOKEN", jar.get("XSRF-TOKEN"));
         WebSocketStompClient c = new WebSocketStompClient(new StandardWebSocketClient());
         c.setMessageConverter(new RawBytesConverter());
-        return c.connectAsync("ws://localhost:" + port + "/ws", h, connect, new StompSessionHandlerAdapter() {
+        return c.connectAsync("ws://127.0.0.1:" + port + "/ws", h, connect, new StompSessionHandlerAdapter() {
         }).get(5, TimeUnit.SECONDS);
-    }
-
-    private HttpResponse<String> call(Map<String, String> jar, HttpRequest.Builder b) throws Exception {
-        if (!jar.isEmpty()) {
-            b.header("Cookie", jar.entrySet().stream().map(e -> e.getKey() + "=" + e.getValue())
-                    .collect(Collectors.joining("; ")));
-        }
-        HttpResponse<String> r = http.send(b.build(), HttpResponse.BodyHandlers.ofString());
-        r.headers().allValues("set-cookie").forEach(c -> {
-            String pair = c.split(";", 2)[0];
-            int i = pair.indexOf('=');
-            jar.put(pair.substring(0, i), pair.substring(i + 1));
-        });
-        return r;
     }
 
     private Map<String, String> login(String username) throws Exception {
         Map<String, String> jar = new HashMap<>();
-        call(jar, HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/me")));
-        HttpResponse<String> r = call(jar, HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/login"))
-                .header("Content-Type", "application/json").header("X-XSRF-TOKEN", jar.get("XSRF-TOKEN"))
-                .POST(HttpRequest.BodyPublishers.ofString("{\"username\":\"" + username + "\",\"password\":\"" + PASSWORD + "\"}")));
-        assertThat(r.statusCode()).isEqualTo(200);
+        RealServerLogin.login(http, jar, port, username, PASSWORD);
         return jar;
     }
 

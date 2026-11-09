@@ -62,12 +62,7 @@ class StompSetupGateTest {
         // a user with a one-time password: setup step PASSWORD is pending
         jdbc.update("UPDATE users SET password_changed_at = NULL WHERE username = 'stompsetup'");
         jar.clear();
-        call(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/me")));
-        var r = call(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/login"))
-                .header("Content-Type", "application/json").header("X-XSRF-TOKEN", jar.get("XSRF-TOKEN"))
-                .POST(HttpRequest.BodyPublishers.ofString("{\"username\":\"stompsetup\",\"password\":\"" + ONE_TIME + "\"}")));
-        assertThat(r.statusCode()).isEqualTo(200);
-        call(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/me"))); // fresh CSRF token
+        RealServerLogin.login(http, jar, port, "stompsetup", ONE_TIME);
     }
 
     @Test
@@ -79,7 +74,7 @@ class StompSetupGateTest {
         connect.add("X-XSRF-TOKEN", jar.get("XSRF-TOKEN"));
         WebSocketStompClient c = new WebSocketStompClient(new StandardWebSocketClient());
         c.setMessageConverter(new org.springframework.messaging.converter.ByteArrayMessageConverter());
-        var future = c.connectAsync("ws://localhost:" + port + "/ws", h, connect, new StompSessionHandlerAdapter() {
+        var future = c.connectAsync("ws://127.0.0.1:" + port + "/ws", h, connect, new StompSessionHandlerAdapter() {
             @Override
             public void handleFrame(StompHeaders headers, Object payload) {
                 errors.add(String.valueOf(headers.getFirst("message")));
@@ -92,12 +87,12 @@ class StompSetupGateTest {
 
     @Test
     void connectWorksAfterThePasswordWasChanged() throws Exception {
-        var r = call(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/password"))
+        var r = call(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/auth/password"))
                 .header("Content-Type", "application/json").header("X-XSRF-TOKEN", jar.get("XSRF-TOKEN"))
                 .POST(HttpRequest.BodyPublishers.ofString(
                         "{\"currentPassword\":\"" + ONE_TIME + "\",\"newPassword\":\"" + NEW_PASSWORD + "\"}")));
         assertThat(r.statusCode()).as(r.body()).isEqualTo(204);
-        call(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/me"))); // rotated session
+        call(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/auth/me"))); // rotated session
 
         StompSession s = connect();
         assertThat(s.isConnected()).isTrue();
@@ -111,7 +106,7 @@ class StompSetupGateTest {
         connect.add("X-XSRF-TOKEN", jar.get("XSRF-TOKEN"));
         WebSocketStompClient c = new WebSocketStompClient(new StandardWebSocketClient());
         c.setMessageConverter(new org.springframework.messaging.converter.ByteArrayMessageConverter());
-        return c.connectAsync("ws://localhost:" + port + "/ws", h, connect, new StompSessionHandlerAdapter() {
+        return c.connectAsync("ws://127.0.0.1:" + port + "/ws", h, connect, new StompSessionHandlerAdapter() {
         }).get(5, TimeUnit.SECONDS);
     }
 

@@ -35,10 +35,7 @@ import org.springframework.web.socket.messaging.WebSocketStompClient;
 
 import java.io.Closeable;
 import java.lang.reflect.Type;
-import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
@@ -56,7 +53,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -188,27 +184,8 @@ class DeploymentLogStreamTest {
         hosts.deleteById(hostId);
     }
 
-    private HttpResponse<String> call(HttpRequest.Builder b) throws Exception {
-        if (!jar.isEmpty()) {
-            b.header("Cookie", jar.entrySet().stream().map(e -> e.getKey() + "=" + e.getValue())
-                    .collect(Collectors.joining("; ")));
-        }
-        HttpResponse<String> r = http.send(b.build(), HttpResponse.BodyHandlers.ofString());
-        r.headers().allValues("set-cookie").forEach(c -> {
-            String pair = c.split(";", 2)[0];
-            int i = pair.indexOf('=');
-            jar.put(pair.substring(0, i), pair.substring(i + 1));
-        });
-        return r;
-    }
-
     private void login() throws Exception {
-        call(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/me")));
-        HttpResponse<String> r = call(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/login"))
-                .header("Content-Type", "application/json").header("X-XSRF-TOKEN", jar.get("XSRF-TOKEN"))
-                .POST(HttpRequest.BodyPublishers.ofString("{\"username\":\"viewer\",\"password\":\"" + PASSWORD + "\"}")));
-        assertThat(r.statusCode()).isEqualTo(200);
-        csrf = jar.get("XSRF-TOKEN");
+        csrf = RealServerLogin.login(http, jar, port, "viewer", PASSWORD);
     }
 
     private StompSession connect() throws Exception {
@@ -218,7 +195,7 @@ class DeploymentLogStreamTest {
         c.setMessageConverter(new RawBytesConverter());
         StompHeaders connect = new StompHeaders();
         connect.add("X-XSRF-TOKEN", csrf);
-        return c.connectAsync("ws://localhost:" + port + "/ws", h, connect, new StompSessionHandlerAdapter() {
+        return c.connectAsync("ws://127.0.0.1:" + port + "/ws", h, connect, new StompSessionHandlerAdapter() {
         }).get(5, TimeUnit.SECONDS);
     }
 

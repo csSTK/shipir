@@ -11,7 +11,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Cookie-jar login against a real (RANDOM_PORT) server for the streaming tests: anonymous {@code GET /api/auth/me}
- * for the XSRF-TOKEN cookie, then {@code POST /api/auth/login}. Every step is asserted, so a failure names the
+ * for the XSRF-TOKEN cookie, then {@code POST /api/auth/login}, then {@code GET /api/auth/me} for the rotated token.
+ * Every step is asserted, so a failure names the
  * status, headers and body of the response that broke it instead of surfacing later as a null header value
  * (shipr-k31n.24, shipr-bq7o).
  */
@@ -55,6 +56,9 @@ final class RealServerLogin {
                 r.body()).isEqualTo(200);
         assertThat(jar.get("JSESSIONID")).as("JSESSIONID cookie after login").isNotNull();
         assertThat(jar.get("XSRF-TOKEN")).as("XSRF-TOKEN cookie after login").isNotNull();
+        // The XSRF cookie is rotated on the first request after login, so one more GET is needed to get the token
+        // that POSTs of the signed-in session must send (without it they fail with 403).
+        call(http, jar, HttpRequest.newBuilder(URI.create(base + "/api/auth/me")));
         return jar.get("XSRF-TOKEN");
     }
 }

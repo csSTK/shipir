@@ -84,13 +84,7 @@ class ExecOperatorDisabledTest {
         userId = users.save(u).getId();
         hostId = hosts.save(DockerHost.local("exec-off-" + UUID.randomUUID(), userId)).getId();
         jdbc.update("INSERT INTO permissions (user_id, host_id, level) VALUES (?, ?, 'OPERATE')", userId, hostId);
-        String base = "http://localhost:" + port;
-        call(HttpRequest.newBuilder(URI.create(base + "/api/auth/me")));
-        var r = call(HttpRequest.newBuilder(URI.create(base + "/api/auth/login"))
-                .header("Content-Type", "application/json").header("X-XSRF-TOKEN", jar.get("XSRF-TOKEN"))
-                .POST(HttpRequest.BodyPublishers.ofString("{\"username\":\"" + name + "\",\"password\":\"" + PASSWORD + "\"}")));
-        assertThat(r.statusCode()).isEqualTo(200);
-        call(HttpRequest.newBuilder(URI.create(base + "/api/auth/me")));
+        RealServerLogin.login(http, jar, port, name, PASSWORD);
     }
 
     @AfterEach
@@ -100,7 +94,7 @@ class ExecOperatorDisabledTest {
 
     @Test
     void operatorWithOperateGrantStillGets403ByDefault() throws Exception {
-        var r = call(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/hosts/" + hostId + "/containers/web/exec"))
+        var r = call(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/hosts/" + hostId + "/containers/web/exec"))
                 .header("Content-Type", "application/json").header("X-XSRF-TOKEN", jar.get("XSRF-TOKEN"))
                 .POST(HttpRequest.BodyPublishers.ofString("{}")));
         assertThat(r.statusCode()).isEqualTo(403);
@@ -109,7 +103,7 @@ class ExecOperatorDisabledTest {
 
     @Test
     void capabilitiesReportOperatorExecAsDisabled() throws Exception {
-        var r = call(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/exec/capabilities")));
+        var r = call(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/exec/capabilities")));
         assertThat(r.statusCode()).isEqualTo(200);
         assertThat(r.body()).contains("\"operatorEnabled\":false");
     }

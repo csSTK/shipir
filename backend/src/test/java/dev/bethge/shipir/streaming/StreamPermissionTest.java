@@ -181,7 +181,7 @@ class StreamPermissionTest {
 
         // an ADMIN replaces the user's grants with none
         Map<String, String> adminJar = loginAs("streamadmin", Role.ADMIN);
-        var r = callWith(adminJar, HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/users/" + userId + "/permissions"))
+        var r = callWith(adminJar, HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/users/" + userId + "/permissions"))
                 .header("Content-Type", "application/json").header("X-XSRF-TOKEN", adminJar.get("XSRF-TOKEN"))
                 .PUT(HttpRequest.BodyPublishers.ofString("{\"grants\":[]}")));
         assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
@@ -214,7 +214,7 @@ class StreamPermissionTest {
         assertThat(frames.poll(5, TimeUnit.SECONDS)).contains("before revoke");
 
         Map<String, String> adminJar = loginAs("streamadmin", Role.ADMIN);
-        var r = callWith(adminJar, HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/users/" + userId + "/permissions"))
+        var r = callWith(adminJar, HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/users/" + userId + "/permissions"))
                 .header("Content-Type", "application/json").header("X-XSRF-TOKEN", adminJar.get("XSRF-TOKEN"))
                 .PUT(HttpRequest.BodyPublishers.ofString("{\"grants\":[]}")));
         assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
@@ -230,12 +230,7 @@ class StreamPermissionTest {
         u.changePasswordHash(encoder.encode(PASSWORD), Instant.now());
         users.save(u);
         Map<String, String> j = new HashMap<>();
-        callWith(j, HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/me")));
-        var r = callWith(j, HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/login"))
-                .header("Content-Type", "application/json").header("X-XSRF-TOKEN", j.get("XSRF-TOKEN"))
-                .POST(HttpRequest.BodyPublishers.ofString("{\"username\":\"" + username + "\",\"password\":\"" + PASSWORD + "\"}")));
-        assertThat(r.statusCode()).isEqualTo(200);
-        callWith(j, HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/me")));
+        RealServerLogin.login(http, j, port, username, PASSWORD);
         return j;
     }
 
@@ -348,7 +343,7 @@ class StreamPermissionTest {
         await().atMost(5, TimeUnit.SECONDS).until(() -> logStreams.subscriberCount(target) == 1);
 
         Map<String, String> adminJar = loginAs("streamadmin", Role.ADMIN);
-        var r = callWith(adminJar, HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/users/" + userId + "/permissions"))
+        var r = callWith(adminJar, HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/users/" + userId + "/permissions"))
                 .header("Content-Type", "application/json").header("X-XSRF-TOKEN", adminJar.get("XSRF-TOKEN"))
                 .PUT(HttpRequest.BodyPublishers.ofString("{\"grants\":[]}")));
         assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
@@ -443,12 +438,8 @@ class StreamPermissionTest {
         connect.add("X-XSRF-TOKEN", jar.get("XSRF-TOKEN"));
         WebSocketStompClient c = new WebSocketStompClient(new StandardWebSocketClient());
         c.setMessageConverter(converter);
-        return c.connectAsync("ws://localhost:" + port + "/ws", h, connect, new StompSessionHandlerAdapter() {
+        return c.connectAsync("ws://127.0.0.1:" + port + "/ws", h, connect, new StompSessionHandlerAdapter() {
         }).get(5, TimeUnit.SECONDS);
-    }
-
-    private HttpResponse<String> call(HttpRequest.Builder b) throws Exception {
-        return callWith(jar, b);
     }
 
     private HttpResponse<String> callWith(Map<String, String> jar, HttpRequest.Builder b) throws Exception {
@@ -467,10 +458,6 @@ class StreamPermissionTest {
 
     private void login() throws Exception {
         jar.clear();
-        call(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/me")));
-        HttpResponse<String> r = call(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/login"))
-                .header("Content-Type", "application/json").header("X-XSRF-TOKEN", jar.get("XSRF-TOKEN"))
-                .POST(HttpRequest.BodyPublishers.ofString("{\"username\":\"streamop\",\"password\":\"" + PASSWORD + "\"}")));
-        assertThat(r.statusCode()).isEqualTo(200);
+        RealServerLogin.login(http, jar, port, "streamop", PASSWORD);
     }
 }
