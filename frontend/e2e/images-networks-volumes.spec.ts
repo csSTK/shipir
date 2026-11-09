@@ -79,3 +79,17 @@ test('images: unreachable host shows the error, retry shows the empty state', as
   await page.getByRole('button', { name: 'Retry' }).click()
   await expect(page.getByText('No images in this environment.')).toBeVisible()
 })
+
+// Layout (shipr-ycvc.98): at phone width the page header actions get their own row under the title, not a cramped shared line.
+test('images header: at 375px the actions sit below the title, inside the viewport', async ({ page, api }) => {
+  await page.setViewportSize({ width: 375, height: 800 })
+  api.mock('GET', '/api/auth/me', { body: { username: 'u', role: 'ADMIN', setupRequired: false } })
+  api.mock('GET', '/api/hosts/a/images', { body: images })
+  await page.goto('/environments/a/images')
+  const title = await page.getByRole('heading', { name: 'Images' }).boundingBox()
+  const pull = await page.getByRole('button', { name: 'Pull image' }).boundingBox()
+  const build = await page.getByRole('button', { name: 'Build image' }).boundingBox()
+  if (!title || !pull || !build) throw new Error('header not rendered')
+  expect(Math.min(pull.y, build.y)).toBeGreaterThanOrEqual(title.y + title.height)
+  expect(Math.max(pull.x + pull.width, build.x + build.width)).toBeLessThanOrEqual(375)
+})

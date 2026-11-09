@@ -90,7 +90,7 @@ function Row({ item, onRead }: { item: AppNotification; onRead: (id: string) => 
         </p>
       </div>
       {!item.read && (
-        <Button size="sm" onClick={() => onRead(item.id)}>
+        <Button size="sm" className="notif__action" onClick={() => onRead(item.id)}>
           {t('NotificationsPage.markAsRead')}
         </Button>
       )}

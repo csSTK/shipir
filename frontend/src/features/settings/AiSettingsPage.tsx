@@ -193,7 +193,7 @@ function AiForm({ initial }: { initial: AiSettings }) {
         />
         {(config.keyConfigured || clearKey) && (
           <div>
-            <Button size="sm" variant="ghost" onClick={() => update({ clearKey: !clearKey, apiKey: '' })}>
+            <Button size="sm" variant="secondary" onClick={() => update({ clearKey: !clearKey, apiKey: '' })}>
               {clearKey ? t('AiSettingsPage.keepStoredKey') : t('AiSettingsPage.removeStoredKey')}
             </Button>
           </div>

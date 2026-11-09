@@ -1,5 +1,14 @@
 .images {
 }
+/* Phone: the actions get their own full-width row under the title instead of sharing its line. */
+@media (max-width: 640px) {
+  .images .ui-pageheader__actions {
+    width: 100%;
+  }
+  .images .ui-pageheader__actions > * {
+    flex: 1;
+  }
+}
 .images__tags {
   list-style: none;
   margin: 0;
