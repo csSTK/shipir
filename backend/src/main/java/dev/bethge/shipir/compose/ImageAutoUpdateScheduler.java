@@ -44,6 +44,11 @@ import java.util.stream.Collectors;
  * {@link ImageAutoUpdateEvent}. A failing deployment never stops the others. The tick is sequential, so one waiting
  * health check delays the next deployment by at most the health timeout.
  *
+ * <p>Why sequential (decision shipr-kav.3): bounded parallelism per host would shorten the worst-case delay, but needs
+ * per-deployment serialisation, a shared worker pool and concurrent-pull handling on one Docker daemon. Updates run
+ * once per check result (a few times a day) in a quiet window, so the added concurrency risk (several deployments
+ * restarting at once on one host) outweighs the delay. Revisit if the number of auto-updated deployments grows.
+ *
  * <p>Git deployments are excluded: they have their own auto-update, which redeploys from the repository.
  */
 @Component
