@@ -26,6 +26,7 @@ import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -332,9 +333,16 @@ public class AiToolRegistry {
         if (n.isIntegralNumber() && n.canConvertToLong()) {
             return n.asLong();
         }
-        if (n.isArray() && java.util.stream.StreamSupport.stream(n.spliterator(), false).allMatch(JsonNode::isString)) {
+        if (n.isArray()) {
             // only arrays of strings (e.g. profile names); anything else stays unsupported and fails validation
-            return java.util.stream.StreamSupport.stream(n.spliterator(), false).map(JsonNode::asString).toList();
+            List<String> items = new ArrayList<>(n.size());
+            for (JsonNode item : n) {
+                if (!item.isString()) {
+                    return UNSUPPORTED;
+                }
+                items.add(item.asString());
+            }
+            return List.copyOf(items);
         }
         return UNSUPPORTED;
     }

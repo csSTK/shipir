@@ -153,6 +153,28 @@ class AiToolRegistryTest {
     }
 
     @Test
+    void stringArrayArgumentsReachTheToolAsAList() {
+        Map<String, Object> arraySchema = Map.of("type", "object", "properties",
+                Map.of("tags", Map.of("type", "array", "items", Map.of("type", "string"))));
+        AiToolRegistry registry = registry(new FunctionTool("tags", "d", arraySchema, Role.VIEWER, false,
+                (a, c) -> Map.of("tags", a.get("tags")), v -> MAPPER.writeValueAsString(v)));
+
+        ToolResult strings = registry.execute("tags", "{\"tags\":[\"a\",\"b\"]}", ctx(Role.VIEWER));
+        ToolResult empty = registry.execute("tags", "{\"tags\":[]}", ctx(Role.VIEWER));
+        ToolResult mixed = registry.execute("tags", "{\"tags\":[\"a\",1]}", ctx(Role.VIEWER));
+        ToolResult nested = registry.execute("tags", "{\"tags\":[[\"a\"]]}", ctx(Role.VIEWER));
+
+        assertThat(strings.error()).isFalse();
+        assertThat(MAPPER.readTree(strings.content()).get("tags")).hasToString("[\"a\",\"b\"]");
+        assertThat(empty.error()).isFalse();
+        assertThat(MAPPER.readTree(empty.content()).get("tags")).hasToString("[]");
+        assertThat(mixed.error()).isTrue();
+        assertThat(mixed.content()).contains("INVALID_ARGUMENTS");
+        assertThat(nested.error()).isTrue();
+        assertThat(nested.content()).contains("INVALID_ARGUMENTS");
+    }
+
+    @Test
     void unknownToolIsAnErrorResult() {
         ToolResult result = registry().execute("nope", "{}", ctx(Role.ADMIN));
 

@@ -1,16 +1,16 @@
 package dev.bethge.shipir.ai.tools;
 
 import dev.bethge.shipir.auth.Role;
-import dev.bethge.shipir.compose.EnvFile;
 import dev.bethge.shipir.compose.DeploymentRunService;
-import dev.bethge.shipir.compose.DeploymentSource;
 import dev.bethge.shipir.compose.DeploymentService;
+import dev.bethge.shipir.compose.DeploymentSource;
+import dev.bethge.shipir.compose.EnvFile;
 import dev.bethge.shipir.compose.dto.AutoUpdateRequest;
+import dev.bethge.shipir.compose.dto.DeploymentCreateRequest;
+import dev.bethge.shipir.compose.dto.DeploymentUpdateRequest;
 import dev.bethge.shipir.compose.dto.EnvEntry;
 import dev.bethge.shipir.compose.dto.ProfilesRequest;
 import dev.bethge.shipir.compose.execution.ComposeOptions;
-import dev.bethge.shipir.compose.dto.DeploymentCreateRequest;
-import dev.bethge.shipir.compose.dto.DeploymentUpdateRequest;
 import dev.bethge.shipir.git.GitCredentialService;
 import dev.bethge.shipir.host.ConnectionType;
 import dev.bethge.shipir.host.HostService;
@@ -29,6 +29,11 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.BiFunction;
 
+import static dev.bethge.shipir.ai.tools.ToolSchemas.UUID_PROP;
+import static dev.bethge.shipir.ai.tools.ToolSchemas.deploymentSchema;
+import static dev.bethge.shipir.ai.tools.ToolSchemas.hostSchema;
+import static dev.bethge.shipir.ai.tools.ToolSchemas.schema;
+
 /**
  * The state-changing tools ({@code write = true}), so {@link AiToolRegistry} only runs them after the user confirmed.
  * Each one calls the same service method as the REST endpoint and needs at least the role that endpoint needs, except
@@ -40,7 +45,6 @@ import java.util.function.BiFunction;
 @Configuration(proxyBeanMethods = false)
 class WriteToolsConfig {
 
-    private static final Map<String, Object> UUID_PROP = Map.of("type", "string", "format", "uuid");
     private static final Map<String, Object> OK = Map.of("status", "ok");
 
     private final ObjectMapper mapper;
@@ -243,20 +247,6 @@ class WriteToolsConfig {
     private AiTool write(String name, String description, Map<String, Object> parameters, Role role,
                          BiFunction<Map<String, Object>, ToolContext, Object> handler) {
         return new FunctionTool(name, description, parameters, role, true, handler, mapper::writeValueAsString);
-    }
-
-    private static Map<String, Object> schema(Map<String, Object> properties, String... required) {
-        // No additionalProperties: ArgumentValidator already rejects unknown arguments, and it costs tokens per tool.
-        return required.length == 0 ? Map.of("type", "object", "properties", properties)
-                : Map.of("type", "object", "properties", properties, "required", List.of(required));
-    }
-
-    private static Map<String, Object> hostSchema() {
-        return schema(Map.of("hostId", UUID_PROP), "hostId");
-    }
-
-    private static Map<String, Object> deploymentSchema() {
-        return schema(Map.of("hostId", UUID_PROP, "deploymentId", UUID_PROP), "hostId", "deploymentId");
     }
 
     private static List<String> stringList(Object value) {

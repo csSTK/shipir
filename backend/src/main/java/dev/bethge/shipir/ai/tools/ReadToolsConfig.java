@@ -24,14 +24,17 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.BiFunction;
 
+import static dev.bethge.shipir.ai.tools.ToolSchemas.UUID_PROP;
+import static dev.bethge.shipir.ai.tools.ToolSchemas.deploymentSchema;
+import static dev.bethge.shipir.ai.tools.ToolSchemas.hostSchema;
+import static dev.bethge.shipir.ai.tools.ToolSchemas.schema;
+
 /**
  * The read-only tools. Each one delegates to the same service the REST API uses, so results contain exactly
  * what that API returns to the same role (env values, tokens, PEMs and webhook URLs are never part of it).
  */
 @Configuration(proxyBeanMethods = false)
 class ReadToolsConfig {
-
-    private static final Map<String, Object> UUID_PROP = Map.of("type", "string", "format", "uuid");
 
     private final ObjectMapper mapper;
 
@@ -197,20 +200,6 @@ class ReadToolsConfig {
     private AiTool read(String name, String description, Map<String, Object> parameters, Role role,
                         BiFunction<Map<String, Object>, ToolContext, Object> handler) {
         return new FunctionTool(name, description, parameters, role, false, handler, mapper::writeValueAsString);
-    }
-
-    private static Map<String, Object> schema(Map<String, Object> properties, String... required) {
-        // No additionalProperties: ArgumentValidator already rejects unknown arguments, and it costs tokens per tool.
-        return required.length == 0 ? Map.of("type", "object", "properties", properties)
-                : Map.of("type", "object", "properties", properties, "required", List.of(required));
-    }
-
-    private static Map<String, Object> hostSchema() {
-        return schema(Map.of("hostId", UUID_PROP), "hostId");
-    }
-
-    private static Map<String, Object> deploymentSchema() {
-        return schema(Map.of("hostId", UUID_PROP, "deploymentId", UUID_PROP), "hostId", "deploymentId");
     }
 
     private static UUID uuid(Map<String, Object> args, String name) {
