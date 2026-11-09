@@ -206,7 +206,19 @@ public class ProxyRouteService {
         route.apply(r.hostname(), r.aliases(), container.name(), port, scheme(r), r.pathPrefix(), r.entrypoint(), mode,
                 r.certificateId(), redirect(r), hashes, r.responseHeaders());
         route = save(route);
-        syncWithRepair(hostId);
+        try {
+            syncWithRepair(hostId);
+        } catch (RuntimeException e) {
+            if (moved) {
+                // the move is committed, so the old container is likely unused now; best effort, keep the sync error
+                try {
+                    detachIfUnused(hostId, endpoint, oldContainer, byName.get(oldContainer));
+                } catch (RuntimeException ignored) {
+                    // the sync failure is the error to report
+                }
+            }
+            throw e;
+        }
         if (moved) {
             detachIfUnused(hostId, endpoint, oldContainer, byName.get(oldContainer));
         }

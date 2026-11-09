@@ -521,6 +521,35 @@ class ProxyRouteApiTest {
     }
 
     @Test
+    void aSyncFailureOnAMovingUpdateStillDetachesTheOldContainerAndKeepsTheOriginalError() throws Exception {
+        Login admin = login("admin");
+        UUID id = routeFor(admin);
+        org.mockito.Mockito.clearInvocations(sync, networks);
+        doThrow(syncFailure()).doNothing().when(sync).sync(any());
+
+        mvc.perform(admin.write(put(url() + "/" + id)).contentType(APPLICATION_JSON)
+                        .content(body("shop.example.com", "other-1", "")))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("PROXY_SYNC_FAILED"));
+
+        verify(networks).disconnectContainer(any(), any(), eq(ProxySyncService.PROXY_NETWORK), eq("web1"));
+    }
+
+    @Test
+    void aFailingDetachAfterAFailedMovingUpdateDoesNotReplaceTheOriginalError() throws Exception {
+        Login admin = login("admin");
+        UUID id = routeFor(admin);
+        doThrow(syncFailure()).doNothing().when(sync).sync(any());
+        doThrow(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "down", null)).when(networks)
+                .disconnectContainer(any(), any(), any(), any());
+
+        mvc.perform(admin.write(put(url() + "/" + id)).contentType(APPLICATION_JSON)
+                        .content(body("shop.example.com", "other-1", "")))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("PROXY_SYNC_FAILED"));
+    }
+
+    @Test
     void aFailingDetachOnMoveStillSyncsFirst() throws Exception {
         Login admin = login("admin");
         UUID id = routeFor(admin);
