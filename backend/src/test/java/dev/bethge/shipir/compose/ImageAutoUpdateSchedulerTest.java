@@ -463,6 +463,21 @@ class ImageAutoUpdateSchedulerTest extends DeploymentTestBase {
         locks.release(id);
     }
 
+    @Test
+    void reportThatFailsMidwayIsNotRepeatedSoTheAuditRowIsNotDuplicated() throws Exception {
+        UUID id = deployed("web", true);
+        pullFails = true;
+        DeploymentRunService flaky = mock(DeploymentRunService.class, AdditionalAnswers.delegatesTo(runs));
+        org.mockito.Mockito.doThrow(new IllegalStateException("publish failed")).when(flaky)
+                .publishImageUpdate(any(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+
+        schedulerWith(flaky).tick();
+
+        assertThat(audit("IMAGE_AUTO_UPDATE")).containsExactly("system:FAILURE");
+        locks.acquire(id); // lock released
+        locks.release(id);
+    }
+
     private ImageAutoUpdateScheduler schedulerWith(DeploymentRunService runService) {
         return new ImageAutoUpdateScheduler(deploymentRepository, updates, containers, images, deploymentService,
                 runService, locks, clock, new ImageAutoUpdateProperties(true, Duration.ofSeconds(60),

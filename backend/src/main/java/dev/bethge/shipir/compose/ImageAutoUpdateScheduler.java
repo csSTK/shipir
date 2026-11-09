@@ -158,17 +158,18 @@ class ImageAutoUpdateScheduler {
         Map<String, String> previous = previousDigests(hostId, endpoint, own);
         long services = own.stream().map(ContainerDto::composeService).filter(java.util.Objects::nonNull).distinct().count();
 
+        AtomicBoolean reported = new AtomicBoolean();
         // Recorded before the worker exists, so a failure here cannot leave a running worker behind.
         deployments.recordImageUpdateAttempt(deployment.getId(), now, null);
         CompletableFuture<DeploymentRunService.PullUpdateOutcome> run;
         try {
             run = runs.autoPullUpdate(deployment.getId());
         } catch (DeploymentException e) {
-            finish(deployment, now, false, e.code(), false, 0, services, false);
+            finish(reported, deployment, now, false, e.code(), false, 0, services, false);
             return;
         }
         try {
-            afterStart(deployment, now, run, previous, services, updatedKeys, handedOver);
+            afterStart(reported, deployment, now, run, previous, services, updatedKeys, handedOver);
         } catch (RuntimeException | Error e) {
             // The worker may still run compose: the lock must not be released before it ends.
             if (!run.isDone()) {
@@ -176,7 +177,7 @@ class ImageAutoUpdateScheduler {
             } else if (failed(run)) {
                 // The automatic worker no longer reports its own failure, so it must not go unreported here.
                 try {
-                    finish(deployment, now, false, "ERROR", false, previous.size(), services, true);
+                    finish(reported, deployment, now, false, "ERROR", false, previous.size(), services, true);
                 } catch (RuntimeException reportError) {
                     e.addSuppressed(reportError);
                 }
@@ -195,7 +196,7 @@ class ImageAutoUpdateScheduler {
     }
 
     /** Everything after the worker started: wait, health check, rollback decision, report. */
-    private void afterStart(Deployment deployment, Instant now, CompletableFuture<DeploymentRunService.PullUpdateOutcome> run,
+    private void afterStart(AtomicBoolean reported, Deployment deployment, Instant now, CompletableFuture<DeploymentRunService.PullUpdateOutcome> run,
                             Map<String, String> previous, long services, Set<String> updatedKeys,
                             AtomicBoolean handedOver) {
         DeploymentRunService.PullUpdateOutcome outcome = await(run);
@@ -204,11 +205,13 @@ class ImageAutoUpdateScheduler {
             // would let a manual run start next to it. Report without rollback; the worker's end releases the lock.
             if (outcome != null) {
                 handOver(run, deployment.getId(), handedOver, null);
-                finish(deployment, now, false, "TIMEOUT", false, previous.size(), services, true);
+                finish(reported, deployment, now, false, "TIMEOUT", false, previous.size(), services, true);
             } else {
-                // Interrupted while the worker still runs: nobody waits for it, so its end must report a failure.
+                // Interrupted while the worker still runs: nobody waits for it, so its end must report a failure. If it
+                // succeeds instead, nothing is reported or recorded as a result: the interrupt means shutdown, there is
+                // no health check or applied-marking, and the attempt stays without lastResult until the next check.
                 handOver(run, deployment.getId(), handedOver,
-                        () -> finish(deployment, now, false, "ERROR", false, previous.size(), services, true));
+                        () -> finish(reported, deployment, now, false, "ERROR", false, previous.size(), services, true));
             }
             return;
         }
@@ -218,7 +221,7 @@ class ImageAutoUpdateScheduler {
         }
         if (outcome == null) {
             if (failed(run)) {
-                finish(deployment, now, false, "ERROR", false, previous.size(), services, true);
+                finish(reported, deployment, now, false, "ERROR", false, previous.size(), services, true);
             }
             return; // interrupted: shutting down
         }
@@ -226,7 +229,7 @@ class ImageAutoUpdateScheduler {
         DockerEndpoint endpoint = deploymentService.endpointOf(deploymentService.requireHost(hostId));
         if (outcome.success() && awaitHealthy(hostId, endpoint, deployment.getName())) {
             updates.markApplied(hostId, updatedKeys); // the flag would stay stale until the next check otherwise
-            finish(deployment, now, true, null, false, previous.size(), services, true);
+            finish(reported, deployment, now, true, null, false, previous.size(), services, true);
             return;
         }
         String reason = outcome.success() ? "UNHEALTHY" : "PULL".equals(outcome.failedStep()) ? "PULL_FAILED" : "UP_FAILED";
@@ -234,7 +237,7 @@ class ImageAutoUpdateScheduler {
         // Only a rollback that pinned every service counts as rolled back.
         boolean rolledBack = !"PULL_FAILED".equals(reason) && runs.rollbackImages(deployment.getId(), previous)
                 && previous.size() >= services;
-        finish(deployment, now, false, reason, rolledBack, previous.size(), services, true);
+        finish(reported, deployment, now, false, reason, rolledBack, previous.size(), services, true);
     }
 
     /**
@@ -275,8 +278,16 @@ class ImageAutoUpdateScheduler {
         return rolledBack ? "ROLLED_BACK" : "FAILED_NOT_ROLLED_BACK";
     }
 
-    private void finish(Deployment deployment, Instant attemptAt, boolean applied, String reason, boolean rolledBack,
-                        int pinnedServices, long services, boolean started) {
+    /**
+     * Records, audits and publishes the outcome. Runs at most once per update ({@code reported}, claimed before the first
+     * side effect): if it fails midway, the outer error handling must not run it again, which would write a second audit
+     * row for the same attempt. A half-reported failure is preferred over a duplicated one.
+     */
+    private void finish(AtomicBoolean reported, Deployment deployment, Instant attemptAt, boolean applied, String reason,
+                        boolean rolledBack, int pinnedServices, long services, boolean started) {
+        if (!reported.compareAndSet(false, true)) {
+            return;
+        }
         deployments.recordImageUpdateAttempt(deployment.getId(), attemptAt, resultOf(applied, reason, rolledBack, started));
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("applied", applied);
