@@ -1,6 +1,7 @@
 package dev.bethge.shipir.registry;
 
 import dev.bethge.shipir.PostgresTestConfiguration;
+import dev.bethge.shipir.SetupGateFixture;
 import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
@@ -56,10 +57,7 @@ abstract class RegistryTestBase {
             u.changePasswordHash(encoder.encode(PASSWORD), Instant.now());
             users.save(u);
         }
-        jdbc.update("DELETE FROM deployments");
-        jdbc.update("DELETE FROM docker_hosts");
-        jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
-                + "SELECT 'Registry host', 'LOCAL', id FROM users WHERE username = 'admin'");
+        SetupGateFixture.resetWithAdminHost(jdbc, "Registry host");
     }
 
     record Login(MockHttpSession session, Cookie csrf) {

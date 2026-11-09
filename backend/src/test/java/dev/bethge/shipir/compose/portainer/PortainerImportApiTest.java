@@ -2,6 +2,7 @@ package dev.bethge.shipir.compose.portainer;
 
 import com.sun.net.httpserver.HttpServer;
 import dev.bethge.shipir.PostgresTestConfiguration;
+import dev.bethge.shipir.SetupGateFixture;
 import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
@@ -73,10 +74,7 @@ class PortainerImportApiTest {
             u.changePasswordHash(encoder.encode(PASSWORD), Instant.now());
             users.save(u);
         }
-        jdbc.update("DELETE FROM deployments");
-        jdbc.update("DELETE FROM docker_hosts");
-        jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
-                + "SELECT 'Portainer host', 'LOCAL', id FROM users WHERE username = 'admin'");
+        SetupGateFixture.resetWithAdminHost(jdbc, "Portainer host");
         stub = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         stub.createContext("/", ex -> {
             seenKeys.add(String.valueOf(ex.getRequestHeaders().getFirst("X-API-Key")));
