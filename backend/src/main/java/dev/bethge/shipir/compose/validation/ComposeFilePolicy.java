@@ -37,11 +37,10 @@ import java.util.Set;
  * {@code project_directory}, and any merge key in such a context or at the document root. Aliases elsewhere
  * ({@code image: *img}, {@code <<: *defaults} in a service) stay allowed.
  *
- * <p>Graph hash interaction (decided in shipr-kqbc.53, accepted and documented): {@code unhashedReferences} keeps every
- * violation except "outside the deployment directory", so a variable ({@code $}), {@code ~} or remote reference counts as a
- * reference the graph hash does not cover. An ADMIN deploy with such a reference stores no {@code graph_hash}
- * ({@code DeploymentService.referencesUnhashedPaths}), and its later system runs fall back to the "only Shipir's own files"
- * rule of {@code DeploymentRunService.graphIsOnlyApprovedFiles} instead of a hash check. Pinned by
+ * <p>Graph hash interaction (shipr-kqbc.53, shipr-kqbc.56): {@code unhashedReferences} returns every violation, so a
+ * variable ({@code $}), {@code ~}, remote or outside-the-deployment-directory reference counts as a reference the graph
+ * hash does not cover. An ADMIN deploy with such a reference stores no {@code graph_hash}
+ * ({@code DeploymentService.referencesUnhashedPaths}), and its system runs are restricted, with no fallback. Pinned by
  * {@code GraphHashVariableReferencesTest}. Strict policy is unchanged.
  */
 final class ComposeFilePolicy {
@@ -86,7 +85,7 @@ final class ComposeFilePolicy {
         ComposeFilePolicy policy = new ComposeFilePolicy(realAllowed, true);
         policy.unhashed = unhashed;
         policy.scan(composeFile.toAbsolutePath().normalize(), 0);
-        return policy.violations.stream().filter(v -> !v.contains(": outside the deployment directory")).toList();
+        return policy.violations;
     }
 
     private static final String UNHASHED_NOTE = ": points into a path the deploy hash does not cover";

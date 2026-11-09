@@ -76,6 +76,17 @@ class GraphHashVariableReferencesTest {
         assertThat(referencesThatBlockTheHash(composeYaml)).isNotEmpty();
     }
 
+    /** shipr-kqbc.56: a local target outside the deployment dir is not covered by the hash either. */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "services:\n  x:\n    image: a\n    env_file: ../other/.env\n",
+            "services:\n  x:\n    image: a\n    env_file: /etc/hostname\n",
+            "include:\n  - ../other/x.yaml\nservices: {}\n",
+            "services:\n  x:\n    extends:\n      file: ../other/x.yaml\n      service: y\n"})
+    void referencesOutsideTheDeploymentDirBlockTheGraphHash(String composeYaml) throws IOException {
+        assertThat(referencesThatBlockTheHash(composeYaml)).isNotEmpty();
+    }
+
     @Test
     void ordinaryLocalEnvFileDoesNotBlockTheGraphHash() throws IOException {
         assertThat(referencesThatBlockTheHash("services:\n  x:\n    image: a\n    env_file: data/a.env\n")).isEmpty();
