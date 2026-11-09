@@ -273,7 +273,7 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `backend/src/test/java/dev/bethge/shipir/PostgresTestConfiguration.java`: reusable `@TestConfiguration`, `@ServiceConnection` postgres:16-alpine; integration tests `@Import` it
 
 Frontend (`frontend/`):
-- `vite.config.ts`: dev proxy (`/api`, `/ws` → :8080), Vitest config
+- `vite.config.ts`: dev proxy (`/api`, `/ws` → :8080), Vitest config (testTimeout 15s for CPU-loaded runs)
 - `src/index.css` + `src/shared/styles/{tokens,base}.css`: design tokens (color light/dark incl. `[data-theme]`, 6-step type scale, `--space-1..8`, radii, shadows, z, motion) and global element defaults/reduced-motion; feature CSS uses `var(--*)` only
 - `src/main.tsx`: entry, mounts `App`
 - `src/app/App.tsx`: root component, `Providers` + `BrowserRouter` + auth gate (applies the user's language, or the browser language without a session or after logout, before paint, `LanguageBoundary` remounts the tree on a language switch, loading, `LoginPage` on 401, `SetupPage` while `setupRequired`, routes `/` overview, `/account`, `/notifications`, `/settings/*`, `/environments/:id` dashboard and `/environments/:id/{deployments,containers,images,networks,volumes,domains}` pages, legacy `/stacks` URLs redirect, sign out)
@@ -408,7 +408,7 @@ Frontend (`frontend/`):
 - `src/features/hosts/resources.ts`: `ENV_RESOURCES` (deployments/containers/images/networks/volumes) for sidebar, tiles
 - `src/features/hosts/format.ts`: memory/size formatting (`Intl` numbers), `countOf(count, noun)` plurals (`hosts:count.<noun>_one/_other`), overview error code to message, `describeResourceError(err)` for `/hosts/{id}/...` failures
 - `src/features/hosts/index.ts`: exports form, overview, dashboard, `ENV_RESOURCES`, hooks, types
-- `src/test/setup.ts`: jest-dom matchers for Vitest; imports `shared/i18n` so every test runs with lng=en
+- `src/test/setup.ts`: jest-dom matchers for Vitest; imports `shared/i18n` so every test runs with lng=en; Testing Library asyncUtilTimeout 5s (CPU-loaded runs)
 - `src/test/deploymentCards.ts`: `deploymentCardAnswer(path, deploymentPath, versions?)`: Vitest apiFetch answers for a deployment detail page's card endpoints (undefined for other paths)
 - `src/shared/i18n/index.ts`: i18next + react-i18next init (lng `en`, fallback `en`, namespaces = one JSON per feature, all languages bundled eagerly via `import.meta.glob`, `escapeValue: false`); also re-exports the format and language helpers
 - `src/shared/i18n/language.{ts,test.ts}`: supported languages (`en`, `de`), `browserLanguage()` (first supported of `navigator.languages`, else en), `resolveLanguage(locale)` (user's locale, else browser), `applyLanguage()` (i18next + `<html lang>`); `applyLanguage` also drives Intl formatting

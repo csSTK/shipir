@@ -16,6 +16,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     globals: false,
+    // Parallel runs on a CPU-loaded machine blow the 5s default (shipr-k31n.44/.56); a real hang still fails.
+    testTimeout: 15_000,
     exclude: [...configDefaults.exclude, 'e2e/**', 'e2e-csp/**'],
   },
 })

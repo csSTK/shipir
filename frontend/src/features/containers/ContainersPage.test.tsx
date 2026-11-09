@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, configure, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../shared/api/client.ts'
@@ -20,11 +20,6 @@ vi.mock('../../shared/realtime/stomp.ts', () => ({
     return statsUnsubscribe
   },
 }))
-
-// The page renders its row actions only after containers and /auth/me both resolved; the 1 s default
-// of findBy* is too tight when the whole suite runs in parallel on a loaded machine.
-configure({ asyncUtilTimeout: 10_000 })
-vi.setConfig({ testTimeout: 20_000 })
 
 afterEach(() => {
   cleanup()
