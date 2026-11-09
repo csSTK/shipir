@@ -241,7 +241,13 @@ public class HostResourcesService {
         }
     }
 
-    /** Container actions and deletes act on the whole host: 404 if invisible, 403 without a host-level OPERATE grant. */
+    /**
+     * Container actions and deletes act on the whole host: 404 if invisible, 403 without a host-level OPERATE grant.
+     * Remove, recreate, duplicate and resource edits deliberately stay at this host level even though start/stop/
+     * restart/pause/unpause/kill also accept a deployment-level OPERATE grant (see {@link #requireContainerOperate}):
+     * they change a container outside Compose, so the next {@code up} does not know about the change and the effect
+     * reaches beyond one deployment. Decision in shipr-0qbh.54, pinned by HostResourceActionsAccessTest.
+     */
     private void requireOperate(UUID hostId) {
         requireView(hostId);
         if (!access.canOperate(hostId)) {
