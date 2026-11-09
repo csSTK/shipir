@@ -127,14 +127,14 @@ public class HostResourcesService {
                 .toList();
     }
 
-    /** Compose projects with a container whose image has a newer remote digest (no extra Docker call without any). */
+    /**
+     * Compose projects with an outdated container: its image has a newer remote digest, or the tag was pulled
+     * since (e.g. by a sibling deployment) so the container still runs the old image and needs a recreate.
+     */
     private Set<String> projectsWithUpdates(UUID hostId) {
-        if (imageUpdates.isEmpty(hostId)) {
-            return Set.of();
-        }
         try {
             return call(hostId, containers::listContainers).stream()
-                    .filter(c -> c.composeProject() != null && hasUpdate(hostId, c.image()))
+                    .filter(c -> c.composeProject() != null && (c.runsUntaggedImage() || hasUpdate(hostId, c.image())))
                     .map(ContainerDto::composeProject)
                     .collect(java.util.stream.Collectors.toSet());
         } catch (HostException e) {
@@ -173,9 +173,20 @@ public class HostResourcesService {
      * visible managed deployment, otherwise 404 RESOURCE_NOT_FOUND. Env values only for ADMIN/OPERATOR (others get keys).
      */
     public ContainerDetailsDto container(UUID hostId, String containerId) {
+        return container(hostId, containerId, false);
+    }
+
+    /** Like {@link #container} plus the image's own env ({@code imageEnv}); only the details endpoint pays for it. */
+    public ContainerDetailsDto containerWithImageEnv(UUID hostId, String containerId) {
+        return container(hostId, containerId, true);
+    }
+
+    private ContainerDetailsDto container(UUID hostId, String containerId, boolean withImageEnv) {
         requireView(hostId);
         validateResourceId(containerId);
-        ContainerDetailsDto details = call(hostId, (id, endpoint) -> containers.inspect(id, endpoint, containerId));
+        ContainerDetailsDto details = call(hostId, (id, endpoint) -> withImageEnv
+                ? containers.inspectWithImageEnv(id, endpoint, containerId)
+                : containers.inspect(id, endpoint, containerId));
         if (!access.hostFullyVisible(hostId)) {
             UUID managed = details.composeProject() == null ? null
                     : managedDeployments.managedDeploymentIds(hostId).get(details.composeProject());

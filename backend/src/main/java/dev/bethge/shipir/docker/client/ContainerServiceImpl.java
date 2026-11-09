@@ -264,7 +264,7 @@ public class ContainerServiceImpl implements ContainerService {
         Long created = c.getCreated();
         return new ContainerDto(c.getId(), name, c.getImage(), c.getState(), c.getStatus(), health(c.getStatus()),
                 created == null ? null : Instant.ofEpochSecond(created), ports(c.getPorts()),
-                label(c, PROJECT_LABEL), label(c, SERVICE_LABEL));
+                label(c, PROJECT_LABEL), label(c, SERVICE_LABEL), c.getImageId());
     }
 
     /** The health state is only available as suffix of the status text, e.g. {@code Up 5 seconds (healthy)}. */

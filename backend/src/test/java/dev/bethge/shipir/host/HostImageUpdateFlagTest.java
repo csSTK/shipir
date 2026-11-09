@@ -20,8 +20,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /** {@code updateAvailable} on images and deployments is filled from the update store (stubbed ports, no Spring). */
@@ -76,11 +74,29 @@ class HostImageUpdateFlagTest {
     }
 
     @Test
-    void containersAreNotListedWhileNoUpdateIsKnown() {
+    void flagIsPerDeploymentWhenASiblingAlreadyPulledTheTag() {
+        // No outdated digest is known (the sibling pulled the tag), but "web" still runs the previous image:
+        // Docker shows the image ID for it, "db" runs the current one.
+        String oldId = "sha256:0123456789abcdef0123456789abcdef";
+        when(containers.listDeployments(any(), any())).thenReturn(List.of(
+                new DeploymentSummaryDto("web", 1, 1, DeploymentSummaryDto.Status.RUNNING, null),
+                new DeploymentSummaryDto("db", 1, 1, DeploymentSummaryDto.Status.RUNNING, null)));
+        when(containers.listContainers(any(), any())).thenReturn(List.of(
+                new ContainerDto("c1", "n1", "0123456789ab", "running", "Up", null, Instant.EPOCH, List.of(), "web",
+                        "web", oldId),
+                new ContainerDto("c2", "n2", "nginx:latest", "running", "Up", null, Instant.EPOCH, List.of(), "db",
+                        "db", "sha256:fedcba9876543210fedcba9876543210")));
+        assertThat(service.deployments(hostId)).extracting(HostDeploymentResponse::name,
+                HostDeploymentResponse::updateAvailable).containsExactly(
+                org.assertj.core.groups.Tuple.tuple("web", true), org.assertj.core.groups.Tuple.tuple("db", false));
+    }
+
+    @Test
+    void deploymentsWithoutAnyUpdateStayUnflagged() {
         when(containers.listDeployments(any(), any())).thenReturn(List.of(
                 new DeploymentSummaryDto("web", 1, 1, DeploymentSummaryDto.Status.RUNNING, null)));
+        when(containers.listContainers(any(), any())).thenReturn(List.of(container("nginx", "web")));
         assertThat(service.deployments(hostId)).extracting(HostDeploymentResponse::updateAvailable)
                 .containsExactly(false);
-        verify(containers, never()).listContainers(any(), any());
     }
 }
