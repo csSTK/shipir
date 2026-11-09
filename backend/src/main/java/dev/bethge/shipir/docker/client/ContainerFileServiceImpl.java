@@ -162,11 +162,12 @@ public class ContainerFileServiceImpl implements ContainerFileService {
         try (TarArchiveOutputStream tar = new TarArchiveOutputStream(out)) {
             tar.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX);
             for (ContainerFileWrite f : files) {
+                byte[] content = f.content(); // accessor copies; read it once per file
                 TarArchiveEntry entry = new TarArchiveEntry(f.path());
-                entry.setSize(f.content().length);
+                entry.setSize(content.length);
                 entry.setMode(f.mode() & 07777);
                 tar.putArchiveEntry(entry);
-                tar.write(f.content());
+                tar.write(content);
                 tar.closeArchiveEntry();
             }
             tar.finish();
@@ -197,8 +198,10 @@ public class ContainerFileServiceImpl implements ContainerFileService {
     @Override
     public byte[] readFile(UUID hostId, DockerEndpoint endpoint, String containerId, String path, long maxBytes) {
         String normalized = normalizePath(path);
+        // Clamp before adding the headroom: maxBytes + TAR_OVERHEAD overflows for large limits such as Long.MAX_VALUE.
+        long archiveLimit = Math.min(maxBytes, Long.MAX_VALUE - TAR_OVERHEAD) + TAR_OVERHEAD;
         LimitedInputStream raw = new LimitedInputStream(openArchive(hostId, endpoint, containerId, normalized),
-                maxBytes + TAR_OVERHEAD);
+                archiveLimit);
         try (TarArchiveInputStream tar = new TarArchiveInputStream(raw)) {
             TarArchiveEntry first = tar.getNextEntry();
             if (first == null || !first.isFile()) {

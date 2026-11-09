@@ -122,6 +122,46 @@ class ContainerFileServiceTest {
     }
 
     @Test
+    void readFileWithLongMaxValueLimitStillReadsTheFile() throws Exception {
+        byte[] payload = "hello".getBytes(StandardCharsets.UTF_8);
+        var service = serviceWithArchive(singleFileTar("app.conf", payload));
+
+        assertThat(service.readFile(HOST, null, "c", "/etc/app.conf", Long.MAX_VALUE)).isEqualTo(payload);
+    }
+
+    @Test
+    void readFileStillEnforcesALimitBelowTheFileSize() throws Exception {
+        var service = serviceWithArchive(singleFileTar("app.conf", new byte[5]));
+
+        assertThatThrownBy(() -> service.readFile(HOST, null, "c", "/etc/app.conf", 4))
+                .isInstanceOfSatisfying(DockerConnectionException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(DockerErrorCode.SIZE_LIMIT_EXCEEDED));
+    }
+
+    private static byte[] singleFileTar(String name, byte[] content) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (TarArchiveOutputStream tar = new TarArchiveOutputStream(out)) {
+            TarArchiveEntry file = new TarArchiveEntry(name);
+            file.setSize(content.length);
+            tar.putArchiveEntry(file);
+            tar.write(content);
+            tar.closeArchiveEntry();
+        }
+        return out.toByteArray();
+    }
+
+    private static ContainerFileServiceImpl serviceWithArchive(byte[] archive) {
+        var manager = new DockerHostConnectionManager(
+                new DockerProperties("unix:///nonexistent.sock", Duration.ofSeconds(1), Duration.ofSeconds(1)));
+        return new ContainerFileServiceImpl(manager, lister(List::of, new String[1])) {
+            @Override
+            InputStream openArchive(UUID hostId, DockerEndpoint endpoint, String containerId, String path) {
+                return new ByteArrayInputStream(archive);
+            }
+        };
+    }
+
+    @Test
     void archiveOverScanLimitFallsBackToExecListing() {
         String[] seen = new String[1];
         var entry = new ContainerFileEntry("x", "/data/x", ContainerFileEntry.Type.FILE, 0, null, 0, null);
