@@ -188,6 +188,7 @@ class SystemManagedGuard {
         }
         Set<String> names = new HashSet<>();
         names.add(PROXY_NETWORK);
+        names.addAll(ManagedProxyTemplateResources.networks());
         try {
             for (ContainerDto c : call(hostId, containers::listContainers)) {
                 if (c.composeProject() == null || !projects.contains(c.composeProject())) {
@@ -211,13 +212,14 @@ class SystemManagedGuard {
         return names;
     }
 
-    /** References as given used by containers of system-managed projects. */
+    /** References as given used by containers of system-managed projects, plus the images of the bundled proxy templates. */
     private Set<String> restrictedImageRefs(UUID hostId) {
         Set<String> projects = restrictedProjects(hostId);
         if (projects.isEmpty()) {
             return Set.of();
         }
-        Set<String> refs = new HashSet<>();
+        // the bundled proxy templates' images count too: after compose down no container names them
+        Set<String> refs = new HashSet<>(ManagedProxyTemplateResources.images());
         for (ContainerDto c : call(hostId, containers::listContainers)) {
             if (c.composeProject() != null && projects.contains(c.composeProject()) && c.image() != null) {
                 refs.add(c.image());
