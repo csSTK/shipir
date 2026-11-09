@@ -16,6 +16,7 @@ import org.testcontainers.DockerClientFactory;
 import java.io.Closeable;
 import java.time.Duration;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -127,7 +128,7 @@ class ContainerLogServiceIntegrationTest {
             Thread.sleep(500);
         }
         Thread.sleep(500);
-        int threadsBefore = Thread.getAllStackTraces().size();
+        Set<Thread> threadsBefore = Set.copyOf(Thread.getAllStackTraces().keySet());
 
         Closeable handle = service.follow(hostId, endpoint, id, 0, false, l -> { lines.add(l); some.countDown(); }, e -> ended.countDown());
         await(some);
@@ -138,11 +139,20 @@ class ContainerLogServiceIntegrationTest {
         Thread.sleep(800);
 
         assertThat(lines).as("no lines after close").hasSize(afterClose);
+        // only this follow's own docker-java stream thread counts; threads other tests start meanwhile must not fake a leak
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
-        while (Thread.getAllStackTraces().size() > threadsBefore && System.nanoTime() < deadline) {
+        List<String> leaked = newThreads(threadsBefore);
+        while (!leaked.isEmpty() && System.nanoTime() < deadline) {
             Thread.sleep(100);
+            leaked = newThreads(threadsBefore);
         }
-        assertThat(Thread.getAllStackTraces().size()).as("stream threads released").isLessThanOrEqualTo(threadsBefore);
+        assertThat(leaked).as("stream threads released").isEmpty();
+    }
+
+    private static List<String> newThreads(Set<Thread> before) {
+        return Thread.getAllStackTraces().keySet().stream()
+                .filter(t -> t.isAlive() && !before.contains(t) && t.getName().startsWith("docker-java-stream"))
+                .map(Thread::getName).toList();
     }
 
     @Test
