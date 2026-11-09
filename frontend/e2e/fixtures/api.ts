@@ -74,21 +74,29 @@ export const test = base.extend<{ api: ApiMock }>({
         if (m.type() === 'error' || m.type() === 'warning') monacoErrors.push(m.text())
       })
 
+      // Handlers still running; awaited at the end so a late call is counted before the check (see below).
+      const inFlight = new Set<Promise<void>>()
       // Predicate, not a glob: '**/api/**' would also match source files such as /src/shared/api/client.ts.
       await page.route(
         (url) => url.pathname.startsWith('/api/'),
-        async (route) => {
+        (route) => {
+          const handled = handle(route).finally(() => inFlight.delete(handled))
+          inFlight.add(handled)
+          return handled
+        },
+      )
+      const handle = async (route: import('@playwright/test').Route) => {
           const request = route.request()
           const id = key(request.method(), new URL(request.url()).pathname)
           const mocked = mocks.get(id) ?? defaultFor(request.method(), new URL(request.url()).pathname)
+          // fulfill() throws when the page closed meanwhile; that must not fail a test, only the recorded `unmocked` does.
           if (!mocked) {
             unmocked.push(id)
-            await route.fulfill({ status: 501, json: { error: `No e2e mock registered for ${id}` } })
+            await route.fulfill({ status: 501, json: { error: `No e2e mock registered for ${id}` } }).catch(() => {})
             return
           }
-          await route.fulfill({ status: mocked.status ?? 200, json: mocked.body ?? null })
-        },
-      )
+          await route.fulfill({ status: mocked.status ?? 200, json: mocked.body ?? null }).catch(() => {})
+      }
 
       await use({
         mock: (method, path, response = {}) => {
@@ -96,9 +104,13 @@ export const test = base.extend<{ api: ApiMock }>({
         },
       })
 
-      // Requests the app fired just before the test ended may still be inside their route handler (or not yet
-      // routed): wait for those handlers to finish so a late unmocked call is counted instead of racing the check.
-      await page.unrouteAll({ behavior: 'wait' })
+      // Requests the app fired just before the test ended may still be inside their route handler: wait for those
+      // handlers ourselves, then drop the routes without rethrowing handler errors (`behavior: 'wait'` rethrows them
+      // and failed unrelated tests when the page closed under load). Unmocked calls are recorded before fulfilling.
+      // Limit: a request the browser has not yet handed to the route (fired in the same tick the test ends) cannot be
+      // seen by any hook, so a spec must await what it fires; the guard covers every call the test body waited for.
+      await Promise.allSettled([...inFlight])
+      await page.unrouteAll({ behavior: 'ignoreErrors' })
 
       expect(unmocked, 'API calls without a registered mock').toEqual([])
       expect(monacoErrors.filter((m) => MONACO_ERROR.test(m)), 'Monaco worker errors').toEqual([])
