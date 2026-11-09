@@ -390,6 +390,8 @@ class LogStreamTest {
         b.disconnect();
         await().atMost(5, TimeUnit.SECONDS).until(() -> handler.subscriberCount(target) == 1);
         verify(closeable, timeout(5000).times(1)).close();
+        // timeout() returns as soon as the count hits 1, so also assert strictly that c's stream was not closed early
+        verify(closeable, times(1)).close();
         c.disconnect();
         await().atMost(5, TimeUnit.SECONDS).until(() -> handler.activeStreams() == 0);
         verify(closeable, timeout(5000).times(2)).close();
