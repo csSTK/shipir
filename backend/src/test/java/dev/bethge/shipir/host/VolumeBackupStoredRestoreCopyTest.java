@@ -31,10 +31,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * The stored archive is opened twice by the restore pipeline (validate, then stream). The second open must be the
- * same file as the first, otherwise the validated bytes are not the extracted bytes.
+ * Restoring a stored backup works on a private copy. The restore pipeline opens its source twice (validate, then
+ * stream), and both opens must read the copy, so a file swapped or rewritten in the backup directory during the restore
+ * never changes the extracted bytes. The copy is owner-only and deleted after success and after failure. Symlinks and
+ * missing files map to 404, any other read error to 500.
  */
-class VolumeBackupStoredRestoreIdentityTest {
+class VolumeBackupStoredRestoreCopyTest {
 
     private static final String VOLUME = "data";
     private static final String NAME = VOLUME + "-20260102T030405Z.tar";
@@ -97,11 +99,14 @@ class VolumeBackupStoredRestoreIdentityTest {
         assertThat(opens[0]).isEqualTo(2);
     }
 
-    /** Both opens of the pipeline must see the bytes of the file that was opened first, whatever happens to the path. */
     private static String drain(InputStream in) throws IOException {
         return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
     }
 
+    /**
+     * Records what each of the two source opens reads. {@code between} runs after the first open, so it can change the
+     * stored file on disk; both reads must still return the bytes that were validated.
+     */
     private void recordBothOpens(Runnable between, java.util.List<String> seen) {
         doAnswer(inv -> {
             VolumeArchiveService.ArchiveSource source = inv.getArgument(4);
