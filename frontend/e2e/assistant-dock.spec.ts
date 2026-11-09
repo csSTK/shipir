@@ -79,7 +79,11 @@ test('Escape closes the dock and focus returns to the icon', async ({ page, api 
   await mockBroker(page)
   await page.goto('/')
   await page.getByRole('button', { name: 'Open assistant' }).click()
-  await expect(page.getByRole('dialog', { name: 'Assistant' })).toBeVisible()
+  const panel = page.getByRole('dialog', { name: 'Assistant' })
+  await expect(panel).toBeVisible()
+  // The panel's Escape listener is registered in the same passive-effect flush that focuses it. Visible only means the
+  // DOM is committed, so under load an immediate Escape could beat the listener; focus proves the listener exists.
+  await expect(panel).toBeFocused()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Open assistant' })).toBeFocused()
