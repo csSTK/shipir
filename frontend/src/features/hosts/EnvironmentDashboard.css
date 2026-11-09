@@ -13,8 +13,19 @@
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  /* Six tiles: 2 columns on a phone, 3 on tablets, one row of 6 on desktop. Divisors of 6 keep every row full. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
+}
+@media (min-width: 40rem) {
+  .dash__tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 72rem) {
+  .dash__tiles {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
 }
 .dash__disk {
   margin-top: var(--space-5);

@@ -101,3 +101,33 @@ test('sidebar section works on a narrow screen', async ({ page, api }) => {
   // Wait for the page's own request to be answered so it cannot fire after the test ends.
   await expect(page.getByRole('heading', { name: 'Images' })).toBeVisible()
 })
+
+test('resource tiles fill every row: 2 columns on a phone, no orphan on desktop', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', me)
+  api.mock('GET', '/api/notifications/unread-count', { body: { count: 0 } })
+  api.mock('GET', '/api/hosts/overview', { body: [local] })
+  api.mock('GET', '/api/hosts/a/disk-usage', { body: DISK_USAGE })
+  const tileLabels = ['Deployments', 'Containers', 'Images', 'Networks', 'Volumes', 'Domains']
+
+  for (const { width, height, columns } of [
+    { width: 375, height: 800, columns: [2] },
+    { width: 1440, height: 900, columns: [3, 6] },
+  ]) {
+    await page.setViewportSize({ width, height })
+    await page.goto('/environments/a')
+    await expect(page.getByRole('main').getByRole('link', { name: /Containers/ })).toContainText('7')
+
+    const boxes = await Promise.all(
+      tileLabels.map((label) => page.getByRole('main').getByRole('link', { name: new RegExp(label) }).boundingBox()),
+    )
+    // Group tiles into rows by their top edge; every row must hold the same number of tiles.
+    const rows = new Map<number, number>()
+    for (const box of boxes) {
+      if (!box) throw new Error('tile not rendered')
+      rows.set(box.y, (rows.get(box.y) ?? 0) + 1)
+    }
+    const perRow = [...rows.values()]
+    expect(columns).toContain(perRow[0])
+    expect(perRow.every((count) => count === perRow[0]), `tiles per row at ${width}px: ${perRow}`).toBe(true)
+  }
+})
