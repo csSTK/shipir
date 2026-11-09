@@ -27,10 +27,12 @@ type Handler = (path: string, method: string, body: unknown) => unknown
 
 let teamGrants: unknown[] = []
 let userTeamGrants: unknown[] = []
+let userTeamsFail = false
 
 function mockApi(handler?: Handler, teams = [ops]) {
   teamGrants = []
   userTeamGrants = []
+  userTeamsFail = false
   apiFetchMock.mockImplementation((path: string, options?: { method?: string; body?: unknown }) => {
     const method = options?.method ?? 'GET'
     if (method === 'GET' && path === '/teams') return Promise.resolve(teams)
@@ -40,6 +42,7 @@ function mockApi(handler?: Handler, teams = [ops]) {
     if (method === 'GET' && path === '/hosts/h1/managed-deployments') return Promise.resolve([{ id: 'd1', name: 'web' }])
     if (method === 'GET' && path === '/teams/t1/permissions') return Promise.resolve({ grants: teamGrants })
     // inherited access of a user: one request with the teams and their named grants
+    if (method === 'GET' && path === '/users/u2/teams' && userTeamsFail) return Promise.reject(new Error('boom'))
     if (method === 'GET' && path === '/users/u2/teams') return Promise.resolve({ teams: [{ id: 't1', name: 'Ops', grants: userTeamGrants }] })
     if (method === 'GET' && path === '/users/u3/teams') return Promise.resolve({ teams: [] })
     const result = handler?.(path, method, options?.body)
@@ -147,6 +150,15 @@ describe('UserAccessDialog inherited team access', () => {
     wrap(<UserAccessDialog subject={{ kind: 'user', user: { ...anna, role: 'VIEWER' } }} onClose={() => {}} />)
     const section = within(await screen.findByRole('group', { name: 'Inherited team access' }))
     expect(await section.findByText(/never allow Operate/)).toBeInTheDocument()
+  })
+
+  it('shows an error instead of hiding the inherited section when the teams cannot be loaded', async () => {
+    mockApi((p) => (p === '/users/u2/permissions' ? { grants: [] } : undefined))
+    userTeamsFail = true
+    wrap(<UserAccessDialog subject={{ kind: 'user', user: anna }} onClose={() => {}} />)
+    expect(await screen.findByText("Could not load the team's access.")).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Inherited team access' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save access' })).toBeEnabled()
   })
 
   it('does not show teams the user is not a member of', async () => {

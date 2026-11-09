@@ -164,7 +164,9 @@ function TeamGrants({ team }: { team: UserTeam }) {
 /** Teams the user belongs to with their grants. These add to the direct ones; the effective result is the highest level. */
 function InheritedTeams({ user }: { user: ManagedUser }) {
   const { t: tr } = useTranslation('settings')
-  const memberOf = useUserTeams(user.id).data?.teams ?? []
+  const { data, isError } = useUserTeams(user.id)
+  const memberOf = data?.teams ?? []
+  if (isError) return <p role="alert" className="settings__error">{tr('UserAccessDialog.couldNotLoadTheTeam')}</p>
   if (memberOf.length === 0) return null
   return (
     <div className="ua-inherited" role="group" aria-label={tr('UserAccessDialog.inheritedTeamAccess')}>

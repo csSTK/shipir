@@ -227,6 +227,7 @@ describe('UsersSettingsPage', () => {
         if (path === '/users/u3/permissions') return method === 'PUT' ? new ApiError(400, 'x', 'UNKNOWN_HOST') : { grants: [] }
         if (path === '/hosts') return [host]
         if (path === '/hosts/h1/managed-deployments') return []
+        if (path === '/users/u3/teams') return { teams: [] }
         return undefined
       })
       await screen.findByText('bob')
