@@ -13,9 +13,11 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.client.ClientHttpRequest;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -136,6 +138,36 @@ class OidcEgressTest {
     void discoveryDocumentOverTheCapIsUnreachable() {
         provider.oversize(true);
         assertUnreachable(() -> client(true).fetch(provider.issuer()));
+    }
+
+    /** A complete, valid discovery document that is larger than the cap: the body is cut and must not be used. */
+    @Test
+    void validDiscoveryDocumentLargerThanTheCapIsUnreachable() throws Exception {
+        HttpServer padded = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        String base = "http://127.0.0.1:" + padded.getAddress().getPort();
+        padded.createContext("/.well-known/openid-configuration", ex -> {
+            byte[] head = ("{\"issuer\":\"" + base + "\",\"authorization_endpoint\":\"" + base + "/authorize\","
+                    + "\"token_endpoint\":\"" + base + "/token\",\"jwks_uri\":\"" + base + "/jwks\",\"padding\":\"")
+                    .getBytes(StandardCharsets.UTF_8);
+            byte[] chunk = "a".repeat(64 * 1024).getBytes(StandardCharsets.UTF_8);
+            ex.getResponseHeaders().add("Content-Type", "application/json");
+            ex.sendResponseHeaders(200, 0);
+            try (var out = ex.getResponseBody()) {
+                out.write(head);
+                for (int i = 0; i < 32; i++) { // 2 MiB of padding, then the closing quote and brace
+                    out.write(chunk);
+                }
+                out.write("\"}".getBytes(StandardCharsets.UTF_8));
+            } catch (IOException clientRefusedTheBody) {
+                // expected: the client stops reading at the cap
+            }
+        });
+        padded.start();
+        try {
+            assertUnreachable(() -> client(true).fetch(base));
+        } finally {
+            padded.stop(0);
+        }
     }
 
     @Test

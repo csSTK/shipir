@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -190,6 +191,61 @@ class ContainerRecreateIntegrationTest {
         assertThat(attached.get(netA).getIpAddress()).isEqualTo(subA + ".10");
         assertThat(attached.get(netB).getIpAddress()).isEqualTo(subB + ".20");
         assertThat(attached.get(netB).getAliases()).contains("alias-b");
+    }
+
+    /** A new subnet for {@code name} with a container that holds {@code address} on it (started, like a compose ipv4_address). */
+    private String containerWithStaticIp(String name, String network, String subnet, String address) {
+        networkIds.add(docker.createNetworkCmd().withName(network).withIpam(new com.github.dockerjava.api.model.Network.Ipam()
+                .withConfig(new com.github.dockerjava.api.model.Network.Ipam.Config().withSubnet(subnet + ".0/24"))).exec().getId());
+        String id = create(withNetworks(spec(name, Map.of(), List.of(), List.of(), false),
+                List.of(new ContainerCreateSpec.Network(network, List.of()))));
+        docker.disconnectFromNetworkCmd().withNetworkId(network).withContainerId(id).exec();
+        docker.connectToNetworkCmd().withNetworkId(network).withContainerId(id).withContainerNetwork(
+                new com.github.dockerjava.api.model.ContainerNetwork().withIpamConfig(
+                        new com.github.dockerjava.api.model.ContainerNetwork.Ipam().withIpv4Address(address))).exec();
+        docker.startContainerCmd(id).exec();
+        return id;
+    }
+
+    @Test
+    void duplicateOfAStaticIpContainerGetsADynamicAddress() {
+        String net = prefix + "-dup";
+        String subnet = "10." + ThreadLocalRandom.current().nextInt(100, 200) + ".73";
+        containerWithStaticIp(prefix + "-orig", net, subnet, subnet + ".10");
+
+        String copyId = create(withNetworks(spec(prefix + "-copy", Map.of(), List.of(), List.of(), true),
+                List.of(new ContainerCreateSpec.Network(net, List.of()))));
+
+        var attached = docker.inspectContainerCmd(copyId).exec().getNetworkSettings().getNetworks().get(net);
+        assertThat(attached.getIpamConfig()).isNull();
+        assertThat(attached.getIpAddress()).startsWith(subnet + ".").isNotEqualTo(subnet + ".10");
+    }
+
+    @Test
+    void failedRecreateOfAStaticIpContainerRestoresItWithItsAddress() throws Exception {
+        String net = prefix + "-rb";
+        String subnet = "10." + ThreadLocalRandom.current().nextInt(100, 200) + ".74";
+        String name = prefix + "-pinned";
+        String oldId = containerWithStaticIp(name, net, subnet, subnet + ".10");
+        int taken = freePort();
+        create(spec(prefix + "-blocker", Map.of(), List.of(new ContainerCreateSpec.Port(taken, 80, "tcp")), List.of(), true));
+        var nets = List.of(new ContainerCreateSpec.Network(net, List.of()));
+
+        // the new container fails to start on the taken port, after the old one was stopped and renamed
+        assertThatThrownBy(() -> service.recreateContainer(hostId, endpoint, oldId,
+                withNetworks(spec(name, Map.of("A", "2"), List.of(new ContainerCreateSpec.Port(taken, 80, "tcp")), List.of(), true), nets)))
+                .isInstanceOfSatisfying(DockerConnectionException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(DockerErrorCode.RECREATE_FAILED));
+
+        var inspect = docker.inspectContainerCmd(oldId).exec();
+        assertThat(inspect.getName()).isEqualTo("/" + name);
+        assertThat(inspect.getState().getRunning()).isTrue();
+        var attached = inspect.getNetworkSettings().getNetworks().get(net);
+        assertThat(attached.getIpamConfig().getIpv4Address()).isEqualTo(subnet + ".10");
+        assertThat(attached.getIpAddress()).isEqualTo(subnet + ".10");
+        List<String> ownNames = docker.listContainersCmd().withShowAll(true).exec().stream()
+                .map(c -> c.getNames()[0]).filter(n -> n.startsWith("/" + prefix)).toList();
+        assertThat(ownNames).containsExactlyInAnyOrder("/" + name, "/" + prefix + "-blocker");
     }
 
     private static ContainerCreateSpec withNetworks(ContainerCreateSpec s, List<ContainerCreateSpec.Network> networks) {
