@@ -156,7 +156,7 @@ export function WebhooksSettingsPage() {
       minWidth: 140,
       render: (w) => <Badge tone={w.enabled ? 'ok' : 'muted'}>{w.enabled ? tr('WebhooksSettingsPage.enabled') : tr('WebhooksSettingsPage.disabled')}</Badge>,
     },
-    { id: 'delivery', header: tr('WebhooksSettingsPage.lastDelivery'), defaultWidth: 260, render: (w) => deliveryText(w) },
+    { id: 'delivery', header: tr('WebhooksSettingsPage.lastDelivery'), defaultWidth: 260, flex: true, render: (w) => deliveryText(w) },
   ]
 
   function rowActions(w: Webhook): RowActions {

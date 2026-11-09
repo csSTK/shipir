@@ -118,6 +118,7 @@ export function DeploymentsPage() {
     {
       id: 'name',
       header: t('DeploymentsPage.name'),
+      flex: true,
       sortValue: (r) => r.name,
       render: (r) =>
         r.managed ? (
@@ -142,6 +143,7 @@ export function DeploymentsPage() {
     {
       id: 'source',
       header: t('DeploymentsPage.source'),
+      isEmpty: (r) => !r.managed,
       sortValue: (r) => r.managed?.source ?? '',
       render: (r) =>
         r.managed ? (
@@ -156,6 +158,7 @@ export function DeploymentsPage() {
     {
       id: 'update',
       header: t('DeploymentsPage.update'),
+      isEmpty: (r) => !r.live?.updateAvailable,
       sortValue: (r) => (r.live?.updateAvailable ? 1 : 0),
       render: (r) => {
         if (!r.live?.updateAvailable) return '–'
@@ -176,10 +179,11 @@ export function DeploymentsPage() {
       sortValue: (r) => r.live?.runningCount ?? 0,
       render: (r) => (r.live ? `${r.live.runningCount} / ${r.live.containerCount}` : '–'),
     },
-    { id: 'dir', header: t('DeploymentsPage.workingDirectory'), render: (r) => r.live?.workingDir ?? '–' },
+    { id: 'dir', header: t('DeploymentsPage.workingDirectory'), flex: true, isEmpty: (r) => !r.live?.workingDir, render: (r) => r.live?.workingDir ?? '–' },
     {
       id: 'managed',
       header: t('DeploymentsPage.managed'),
+      isEmpty: (r) => !r.managed && !isSystem(r),
       sortValue: (r) => (r.managed ? 0 : 1),
       render: (r) =>
         isSystem(r) ? (

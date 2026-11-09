@@ -30,6 +30,7 @@ const columns: ResourceColumn<Image>[] = [
   {
     id: 'tags',
     get header() { return i18n.t('images:ImagesPage.tags') },
+    flex: true,
     sortValue: (i) => i.repoTags[0] ?? null,
     render: (i) =>
       i.repoTags.length ? (
@@ -57,6 +58,7 @@ const columns: ResourceColumn<Image>[] = [
   {
     id: 'created',
     get header() { return i18n.t('images:ImagesPage.created') },
+    defaultWidth: 200,
     sortValue: (i) => Date.parse(i.created),
     render: (i) => dateFormat.format(new Date(i.created)),
   },
@@ -73,6 +75,7 @@ function updateColumn(onPull: ((i: Image) => void) | null): ResourceColumn<Image
   return {
     id: 'update',
     header: i18n.t('images:ImagesPage.update'),
+    isEmpty: (i) => !i.updateAvailable,
     sortValue: (i) => (i.updateAvailable ? 1 : 0),
     render: (i) => {
       if (!i.updateAvailable) return '–'

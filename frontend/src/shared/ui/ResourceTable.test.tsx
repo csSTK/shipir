@@ -251,6 +251,12 @@ describe('ResourceTable', () => {
       expect(colWidths()[0]).not.toBe('')
     })
 
+    it('clamps saved widths below the column minimum on load', () => {
+      window.localStorage.setItem('shipir.table.things', JSON.stringify({ widths: { size: 50 }, hidden: [], density: 'comfortable' }))
+      setup({ columns: [sized[0], { ...sized[1], minWidth: 140 }] })
+      expect(colWidths()[1]).toBe('140px')
+    })
+
     it('hides a column that is empty for every row', () => {
       setup({ columns: sized, rows: rows.map((r) => ({ ...r, size: 0 })) })
       expect(screen.queryByRole('columnheader', { name: /Size/ })).not.toBeInTheDocument()
