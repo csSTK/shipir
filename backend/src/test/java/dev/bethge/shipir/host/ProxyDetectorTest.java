@@ -37,6 +37,43 @@ class ProxyDetectorTest {
         };
     }
 
+    private static String networkWithEnv(List<String> networks, List<String> command, String envKey, String envValue) {
+        Function<String, ContainerDetailsDto> base = networks(Map.of("t", networks));
+        return ProxyDetector.detect(List.of(container("t", "traefik:v3", "running")), id -> {
+            ContainerDetailsDto d = base.apply(id);
+            return new ContainerDetailsDto(d.id(), d.name(), d.image(), d.state(), null, null, 0, null, command,
+                    List.of(), false, false, List.of(new ContainerDetailsDto.EnvVar("OTHER", "x"),
+                    new ContainerDetailsDto.EnvVar(envKey, envValue)), List.of(), Map.of(), d.networks(), List.of(),
+                    null, null, null);
+        }).network();
+    }
+
+    @Test
+    void traefikProviderNetworkEnvVarBeatsAlphabeticalOrder() {
+        assertThat(networkWithEnv(List.of("alpha", "web"), List.of(), "TRAEFIK_PROVIDERS_DOCKER_NETWORK", "web"))
+                .isEqualTo("web");
+    }
+
+    @Test
+    void providerNetworkArgWinsOverEnvVar() {
+        assertThat(networkWithEnv(List.of("alpha", "web", "zeta"), List.of("--providers.docker.network=zeta"),
+                "TRAEFIK_PROVIDERS_DOCKER_NETWORK", "web")).isEqualTo("zeta");
+    }
+
+    @Test
+    void envVarNotAttachedOrBlankFallsBackToAlphabetical() {
+        assertThat(networkWithEnv(List.of("alpha", "web"), List.of(), "TRAEFIK_PROVIDERS_DOCKER_NETWORK", "gone"))
+                .isEqualTo("alpha");
+        assertThat(networkWithEnv(List.of("alpha", "web"), List.of(), "TRAEFIK_PROVIDERS_DOCKER_NETWORK", " "))
+                .isEqualTo("alpha");
+    }
+
+    @Test
+    void unattachedArgFallsThroughToEnvVar() {
+        assertThat(networkWithEnv(List.of("alpha", "web"), List.of("--providers.docker.network=gone"),
+                "TRAEFIK_PROVIDERS_DOCKER_NETWORK", "web")).isEqualTo("web");
+    }
+
     private static String networkFor(String image, List<String> networks, List<String> command) {
         return ProxyDetector.detect(List.of(container("t", image, "running")), withCommand(networks, command))
                 .network();

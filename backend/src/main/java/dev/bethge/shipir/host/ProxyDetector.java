@@ -16,12 +16,15 @@ import java.util.function.Function;
  * {@code traefik} or {@code caddy-docker-proxy} (registry prefix, tag and digest ignored; plain {@code caddy} is not
  * label driven). Traefik wins over Caddy when both run.
  * Network rule: a Traefik {@code --providers.docker.network} command argument wins if the proxy is attached to that
- * user-defined network; otherwise of the proxy's user-defined networks the alphabetically first name is reported
+ * user-defined network, then the {@code TRAEFIK_PROVIDERS_DOCKER_NETWORK} env var (same condition). A
+ * {@code providers.docker.network} in a static traefik.yml/toml is not read (it lives in a file inside the container);
+ * such setups fall back to the next rule. Otherwise of the proxy's user-defined networks the alphabetically first name is reported
  * (deterministic; built-in {@code bridge}/{@code host}/{@code none} are never reported).
  */
 final class ProxyDetector {
 
     private static final String PROVIDER_NETWORK_ARG = "--providers.docker.network";
+    private static final String PROVIDER_NETWORK_ENV = "TRAEFIK_PROVIDERS_DOCKER_NETWORK";
     private static final Set<String> BUILT_IN_NETWORKS = Set.of("bridge", "host", "none");
 
     private ProxyDetector() {
@@ -67,11 +70,27 @@ final class ProxyDetector {
                 .map(ContainerDetailsDto.Network::name)
                 .filter(n -> !BUILT_IN_NETWORKS.contains(n))
                 .toList();
-        String configured = providerNetworkArg(details.command());
-        if (configured != null && userNetworks.contains(configured)) {
-            return configured;
+        String fromArg = providerNetworkArg(details.command());
+        if (fromArg != null && userNetworks.contains(fromArg)) {
+            return fromArg;
+        }
+        String fromEnv = providerNetworkEnv(details.env());
+        if (fromEnv != null && userNetworks.contains(fromEnv)) {
+            return fromEnv;
         }
         return userNetworks.stream().min(Comparator.naturalOrder()).orElse(null);
+    }
+
+    /** Value of the {@code TRAEFIK_PROVIDERS_DOCKER_NETWORK} env var, else null. */
+    private static String providerNetworkEnv(List<ContainerDetailsDto.EnvVar> env) {
+        if (env == null) {
+            return null;
+        }
+        return env.stream()
+                .filter(e -> e != null && PROVIDER_NETWORK_ENV.equals(e.key()) && e.value() != null
+                        && !e.value().isBlank())
+                .map(ContainerDetailsDto.EnvVar::value)
+                .findFirst().orElse(null);
     }
 
     /** Value of {@code --providers.docker.network=x} or {@code --providers.docker.network x}, else null. */
