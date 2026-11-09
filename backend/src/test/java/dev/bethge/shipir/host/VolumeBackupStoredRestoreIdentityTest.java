@@ -152,15 +152,18 @@ class VolumeBackupStoredRestoreIdentityTest {
 
     @Test
     void restoreRunsOnAnOwnerOnlyCopyThatIsDeletedAfterSuccessAndAfterFailure() throws Exception {
+        // a token only this test writes: the copy is found in the shared tmpdir by its content, so a copy of another test can never match
+        String token = "copy-" + UUID.randomUUID();
+        Files.writeString(file, token);
         java.util.List<Path> copies = new java.util.ArrayList<>();
         doAnswer(inv -> {
             VolumeArchiveService.ArchiveSource source = inv.getArgument(4);
             try (InputStream in = source.open()) {
                 in.readAllBytes();
             }
-            Path copy = onlyNewCopy(copies);
+            Path copy = onlyNewCopy(copies, token);
             copies.add(copy);
-            assertThat(Files.readString(copy)).isEqualTo("validated-bytes");
+            assertThat(Files.readString(copy)).isEqualTo(token);
             if (Files.getFileStore(copy).supportsFileAttributeView("posix")) {
                 assertThat(java.nio.file.attribute.PosixFilePermissions.toString(Files.getPosixFilePermissions(copy)))
                         .isEqualTo("rw-------");
@@ -172,7 +175,7 @@ class VolumeBackupStoredRestoreIdentityTest {
         assertThat(copies.get(0)).doesNotExist();
 
         doAnswer(inv -> {
-            copies.add(onlyNewCopy(copies));
+            copies.add(onlyNewCopy(copies, token));
             throw new dev.bethge.shipir.docker.DockerConnectionException(dev.bethge.shipir.docker.DockerErrorCode.INVALID_ARCHIVE, "bad", null);
         }).when(archives).restore(eq(hostId), any(), eq(VOLUME), anyString(), any(), anyLong(), anyBoolean());
         assertThatThrownBy(() -> service.restoreStored(hostId, VOLUME, NAME, false)).isInstanceOf(HostException.class);
@@ -180,14 +183,17 @@ class VolumeBackupStoredRestoreIdentityTest {
         assertThat(copies.get(1)).doesNotExist();
     }
 
-    /** The shipir-restore-* file in the shared tmpdir that is not one of {@code known} (parallel tests only add other names' files, ours is the one holding our bytes). */
-    private static Path onlyNewCopy(java.util.List<Path> known) throws IOException {
+    /**
+     * The shipir-restore-* file in the shared tmpdir that holds {@code content} and is not one of {@code known}. Only
+     * the test's own unique content can match, so copies of parallel tests in the same tmpdir never count.
+     */
+    private static Path onlyNewCopy(java.util.List<Path> known, String content) throws IOException {
         Path tmp = Path.of(System.getProperty("java.io.tmpdir"));
         try (var files = Files.list(tmp)) {
             var candidates = files.filter(p -> p.getFileName().toString().startsWith("shipir-restore-"))
                     .filter(p -> !known.contains(p)).filter(p -> {
                         try {
-                            return Files.readString(p).equals("validated-bytes");
+                            return Files.readString(p).equals(content);
                         } catch (IOException e) {
                             return false;
                         }
@@ -215,23 +221,24 @@ class VolumeBackupStoredRestoreIdentityTest {
     @Test
     void copyPrivatelyDeletesItsTempFileWhenTheFileIsTooLarge() throws Exception {
         Path big = Files.write(base.resolve("big.tar"), new byte[100]);
-        long before = countCopies(Path.of(System.getProperty("java.io.tmpdir")));
+        Path copies = Files.createDirectory(base.resolve("copies"));
 
-        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(big, 50))
+        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(big, 50, copies))
                 .isInstanceOfSatisfying(HostException.class, e -> assertThat(e.status().value()).isEqualTo(413));
 
-        assertThat(countCopies(Path.of(System.getProperty("java.io.tmpdir")))).isEqualTo(before);
+        assertThat(listDirectory(copies)).isEmpty();
     }
 
     @Test
     void copyPrivatelyDeletesItsTempFileOnAMidCopyReadError() throws Exception {
-        // a directory can be opened for reading on some platforms but fails on read: use it as the failing source
+        // a directory can be opened for reading on some platforms but fails on read: use it as the failing source.
+        // Whether the failure comes before or after the temp file is created, the directory must end up empty.
         Path dir = Files.createDirectory(base.resolve("d.tar"));
-        long before = countCopies(Path.of(System.getProperty("java.io.tmpdir")));
+        Path copies = Files.createDirectory(base.resolve("copies"));
 
-        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(dir, 50)).isInstanceOf(HostException.class);
+        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(dir, 50, copies)).isInstanceOf(HostException.class);
 
-        assertThat(countCopies(Path.of(System.getProperty("java.io.tmpdir")))).isEqualTo(before);
+        assertThat(listDirectory(copies)).isEmpty();
     }
 
     @Test
@@ -269,9 +276,9 @@ class VolumeBackupStoredRestoreIdentityTest {
                 .isInstanceOfSatisfying(HostException.class, e -> assertThat(e.status().value()).isEqualTo(413));
     }
 
-    private static long countCopies(Path tmp) throws IOException {
-        try (var files = Files.list(tmp)) {
-            return files.filter(p -> p.getFileName().toString().startsWith("shipir-restore-")).count();
+    private static java.util.List<Path> listDirectory(Path dir) throws IOException {
+        try (var files = Files.list(dir)) {
+            return files.toList();
         }
     }
 }

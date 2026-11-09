@@ -191,9 +191,16 @@ public class VolumeBackupService {
      * that is missing or a symbolic link gives 404 STORED_BACKUP_NOT_FOUND.
      */
     static Path copyPrivately(Path file, long max) {
+        return copyPrivately(file, max, null);
+    }
+
+    /** As {@link #copyPrivately(Path, long)}; {@code tempDir} is where the copy is created, {@code null} for java.io.tmpdir (tests pass their own). */
+    static Path copyPrivately(Path file, long max, Path tempDir) {
         Path copy = null;
         try (InputStream in = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)) {
-            copy = Files.createTempFile("shipir-restore-", ".tar"); // owner-only (0600) on POSIX
+            copy = tempDir == null
+                    ? Files.createTempFile("shipir-restore-", ".tar")
+                    : Files.createTempFile(tempDir, "shipir-restore-", ".tar"); // owner-only (0600) on POSIX
             try (var out = Files.newOutputStream(copy)) {
                 // at most max + 1 bytes: a file that grew past the limit is refused without filling the disk
                 long copied = copyBounded(in, out, max + 1);
