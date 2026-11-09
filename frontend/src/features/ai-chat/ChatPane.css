@@ -135,6 +135,15 @@
   border-radius: var(--radius-md);
 }
 
+/* The shared disabled look (half-faded accent) turns pale violet; a flat neutral keeps the label at 3:1 or better. */
+.chat-composer .ui-btn--primary:disabled {
+  opacity: 1;
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  --btn-fg: var(--color-text-muted);
+  border-color: var(--color-border-strong);
+}
+
 .chat-composer textarea:disabled {
   opacity: var(--opacity-dimmed);
 }

@@ -131,6 +131,17 @@
   outline: none;
 }
 
+/* Grabber: the affordance at the top of the phone sheet that says it is a sheet. */
+.assistant-dock__grabber {
+  align-self: center;
+  flex-shrink: 0;
+  width: var(--space-7);
+  height: var(--space-1);
+  margin-top: calc(var(--space-2) * -1);
+  border-radius: var(--radius-pill);
+  background: var(--color-border-strong);
+}
+
 /* Phone width: a bottom sheet across the screen. */
 .assistant-dock__panel--sheet {
   position: fixed;
@@ -153,24 +164,14 @@
   gap: var(--space-2);
 }
 
-.assistant-dock__picker {
+/* The shared Select supplies the control look; the field only has to take the free width of the header. */
+.assistant-dock__header > :first-child {
   flex: 1;
   min-width: 0;
-  min-height: var(--control-height);
-  padding: 0 var(--space-3);
-  border: var(--border-width) solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-size: var(--text-body-size);
-  font-weight: var(--weight-semibold);
 }
 
-.assistant-dock__picker:focus-visible {
-  outline: none;
-  border-color: var(--color-accent);
-  box-shadow: var(--shadow-focus);
+.assistant-dock__picker {
+  font-weight: var(--weight-semibold);
 }
 
 .assistant-dock__actions {

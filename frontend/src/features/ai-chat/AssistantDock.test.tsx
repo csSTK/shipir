@@ -301,6 +301,27 @@ describe('AssistantDock', () => {
     })
   })
 
+  it('uses the shared Select for the chat picker', async () => {
+    renderAt('/containers')
+    fireEvent.click(icon())
+    const picker = await screen.findByRole('combobox', { name: 'Chat' })
+    expect(picker.closest('.ui-select')).not.toBeNull()
+    expect(picker).toHaveClass('ui-control')
+  })
+
+  it('draws a grabber on the phone sheet only, hidden from assistive tech', () => {
+    const css = readFileSync(join(process.cwd(), 'src/features/ai-chat/AssistantDock.css'), 'utf8')
+    expect(/\.assistant-dock__grabber\s*\{[^}]*\}/.exec(css)?.[0]).toContain('var(--radius-pill)')
+  })
+
+  it('keeps the disabled Send readable instead of fading the accent button', () => {
+    const css = readFileSync(join(process.cwd(), 'src/features/ai-chat/ChatPane.css'), 'utf8')
+    const rule = /\.chat-composer \.ui-btn--primary:disabled\s*\{[^}]*\}/.exec(css)?.[0] ?? ''
+    expect(rule).toContain('opacity: 1')
+    expect(rule).toContain('var(--color-text-muted)')
+    expect(rule).toContain('var(--color-surface-sunken)')
+  })
+
   it('pads the phone sheet by the bottom safe-area inset', () => {
     const css = readFileSync(join(process.cwd(), 'src/features/ai-chat/AssistantDock.css'), 'utf8')
     const sheet = /\.assistant-dock__panel--sheet\s*\{[^}]*\}/.exec(css)?.[0] ?? ''

@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { Maximize2, Plus, Sparkles, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Button, EmptyState, IconButton, springSmooth, useSheetMotion } from '../../shared/ui/index.ts'
+import { Button, EmptyState, IconButton, Select, springSmooth, useSheetMotion } from '../../shared/ui/index.ts'
 import { useChatSessions, useCreateChatSession } from './api.ts'
 import { ChatPane } from './ChatPane.tsx'
 import { useChatDock } from './useChatDock.ts'
@@ -46,10 +46,12 @@ function DockPanel({ isAdmin, narrow, onClose }: { isAdmin: boolean; narrow: boo
       className={`assistant-dock__panel${narrow ? ' assistant-dock__panel--sheet' : ''}`}
       {...sheetMotion}
     >
+      {narrow && <span className="assistant-dock__grabber" aria-hidden="true" />}
       <header className="assistant-dock__header">
-        <select
+        <Select
+          label={t('AssistantDock.chat')}
+          hideLabel
           className="assistant-dock__picker"
-          aria-label={t('AssistantDock.chat')}
           value={dock.sessionId ?? ''}
           onChange={(e) => dock.open(e.target.value)}
         >
@@ -63,7 +65,7 @@ function DockPanel({ isAdmin, narrow, onClose }: { isAdmin: boolean; narrow: boo
               {s.title}
             </option>
           ))}
-        </select>
+        </Select>
         <IconButton icon={X} aria-label={t('AssistantDock.closeAssistant')} onClick={onClose} />
       </header>
       <div className="assistant-dock__actions">

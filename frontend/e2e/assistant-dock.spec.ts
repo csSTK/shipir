@@ -113,6 +113,51 @@ test('on a phone the dock is a bottom sheet', async ({ page, api }) => {
   await expect.poll(async () => Math.round(((await panel.boundingBox())?.y ?? 0) + ((await panel.boundingBox())?.height ?? 0))).toBe(800)
 })
 
+test('the phone sheet has a grabber and rounded top corners; the desktop panel has no grabber', async ({ page, api }) => {
+  setup(api)
+  await mockBroker(page)
+  await page.setViewportSize({ width: 390, height: 800 })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Open assistant' }).click()
+  const panel = page.getByRole('dialog', { name: 'Assistant' })
+  const grabber = panel.locator('.assistant-dock__grabber')
+  await expect(grabber).toBeVisible()
+  await expect(panel).toHaveCSS('border-top-left-radius', /^[1-9]/)
+  await expect(panel).toHaveCSS('border-top-right-radius', /^[1-9]/)
+  await expect(panel).toHaveCSS('border-bottom-left-radius', '0px')
+  const [g, p] = await Promise.all([grabber.boundingBox(), panel.boundingBox()])
+  expect(g!.y).toBeLessThan(p!.y + 24)
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.reload()
+  await page.getByRole('button', { name: 'Open assistant' }).click()
+  await expect(page.getByRole('dialog', { name: 'Assistant' })).toBeVisible()
+  await expect(page.locator('.assistant-dock__grabber')).toHaveCount(0)
+})
+
+test('the chat picker is the app select with a chevron, and the disabled Send keeps 3:1 contrast', async ({ page, api }) => {
+  setup(api)
+  await mockBroker(page)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Open assistant' }).click()
+  const panel = page.getByRole('dialog', { name: 'Assistant' })
+  await panel.getByRole('combobox', { name: 'Chat' }).selectOption('s1')
+  await expect(panel.locator('.ui-select .ui-select__chevron')).toBeVisible()
+  const send = panel.getByRole('button', { name: 'Send' })
+  await expect(send).toBeDisabled()
+  await expect(send).toHaveCSS('opacity', '1')
+  const ratio = await send.evaluate((el) => {
+    const rgb = (c: string) => (c.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number)
+    const lum = ([r, g, b]: number[]) => {
+      const f = (v: number) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4 }
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+    }
+    const cs = getComputedStyle(el)
+    const a = lum(rgb(cs.color)), b = lum(rgb(cs.backgroundColor))
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+  })
+  expect(ratio).toBeGreaterThanOrEqual(3)
+})
+
 test('reduced motion still opens and closes the dock', async ({ page, api }) => {
   setup(api)
   await mockBroker(page)
