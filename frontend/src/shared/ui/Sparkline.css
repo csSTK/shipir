@@ -1,5 +1,6 @@
 .sparkline {
   display: block;
-  color: var(--color-accent);
+  /* Chart line: the first chart series token (chart lines use --chart-N), validated for chart contrast in both themes */
+  color: var(--chart-1);
   overflow: visible;
 }

@@ -189,7 +189,7 @@
   --color-series-6: #17693a;
   --color-series-7: #be123c;
   --color-series-8: #7a5a00;
-  /* Chart series (usage history). Validated with the dataviz palette checks against the card surface. */
+  /* Chart series (usage history, sparklines). Validated with the dataviz palette checks against the card surface. */
   --chart-1: #4f46e5;
   --chart-2: #c2570c;
 
