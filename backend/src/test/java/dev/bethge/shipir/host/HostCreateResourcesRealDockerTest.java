@@ -5,9 +5,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.testcontainers.DockerClientFactory;
 
+import java.util.List;
+import java.util.Objects;
+import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -36,18 +44,83 @@ class HostCreateResourcesRealDockerTest extends HostApiTestBase {
     private String freeSubnet() {
         var used = docker.listNetworksCmd().exec().stream()
                 .flatMap(n -> n.getIpam() == null || n.getIpam().getConfig() == null
-                        ? java.util.stream.Stream.<String>empty()
+                        ? Stream.<String>empty()
                         : n.getIpam().getConfig().stream().map(c -> c.getSubnet()))
-                .filter(java.util.Objects::nonNull).toList();
-        java.util.concurrent.ThreadLocalRandom rnd = java.util.concurrent.ThreadLocalRandom.current();
+                .filter(Objects::nonNull).toList();
+        return pickFreeSubnet(used, ThreadLocalRandom.current());
+    }
+
+    static String pickFreeSubnet(List<String> used, Random rnd) {
+        // IPv6 pools (if the daemon reports any) cannot overlap an IPv4 candidate, so they are skipped
+        List<String> ipv4Used = used.stream().filter(u -> IPV4_CIDR.matcher(u).matches()).toList();
         for (int i = 0; i < 200; i++) {
-            String prefix = "10." + rnd.nextInt(100, 250) + "." + rnd.nextInt(0, 256) + ".";
-            if (used.stream().noneMatch(u -> u.startsWith("10.") && (prefix.startsWith(u.substring(0, u.lastIndexOf('.') + 1))
-                    || u.startsWith(prefix)))) {
-                return prefix + "0/24";
+            String candidate = "10." + rnd.nextInt(100, 250) + "." + rnd.nextInt(0, 256) + ".0/24";
+            if (ipv4Used.stream().noneMatch(u -> overlaps(u, candidate))) {
+                return candidate;
             }
         }
         throw new IllegalStateException("no free subnet found");
+    }
+
+    /** True when two IPv4 CIDRs share at least one address. A wider mask covers every subnet inside it. */
+    static boolean overlaps(String a, String b) {
+        Cidr ca = Cidr.parse(a);
+        Cidr cb = Cidr.parse(b);
+        int prefix = Math.min(ca.prefix(), cb.prefix());
+        long mask = prefix == 0 ? 0L : (0xFFFFFFFFL << (32 - prefix)) & 0xFFFFFFFFL;
+        return (ca.address() & mask) == (cb.address() & mask);
+    }
+
+    private static final Pattern IPV4_CIDR =
+            Pattern.compile("(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})");
+
+    private record Cidr(long address, int prefix) {
+        static Cidr parse(String cidr) {
+            Matcher m = IPV4_CIDR.matcher(cidr);
+            if (!m.matches()) {
+                throw new IllegalArgumentException("not an IPv4 CIDR: " + cidr);
+            }
+            long address = 0;
+            for (int g = 1; g <= 4; g++) {
+                address = (address << 8) | Integer.parseInt(m.group(g));
+            }
+            return new Cidr(address, Integer.parseInt(m.group(5)));
+        }
+    }
+
+    @Test
+    void overlapsIsSymmetricForNestedSubnets() {
+        assertThat(overlaps("10.150.7.0/24", "10.150.0.0/16")).isTrue();
+    }
+
+    @Test
+    void pickFreeSubnetIgnoresIpv6Subnets() {
+        assertThat(pickFreeSubnet(List.of("fd00:1::/64"), new Random(7))).startsWith("10.");
+    }
+
+    @Test
+    void overlapsDetectsSubnetInsideWiderNetwork() {
+        assertThat(overlaps("10.150.0.0/16", "10.150.7.0/24")).isTrue();
+    }
+
+    @Test
+    void overlapsIgnoresDisjointSubnets() {
+        assertThat(overlaps("10.150.0.0/16", "10.151.0.0/24")).isFalse();
+    }
+
+    @Test
+    void pickFreeSubnetAvoidsWiderNetwork() {
+        Random rnd = new Random(42);
+        for (int i = 0; i < 1000; i++) {
+            String subnet = pickFreeSubnet(List.of("10.150.0.0/16"), rnd);
+            assertThat(subnet).doesNotStartWith("10.150.");
+        }
+    }
+
+    @Test
+    void pickFreeSubnetFailsWhenEveryCandidateIsCovered() {
+        assertThatThrownBy(() -> pickFreeSubnet(List.of("10.0.0.0/8"), new Random(1)))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
