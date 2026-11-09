@@ -99,7 +99,7 @@ function PasswordSection({ username }: { username: string }) {
             <span aria-hidden="true" className="account__mark">
               {rule.met ? <Check size={16} aria-hidden="true" /> : <Circle size={16} aria-hidden="true" />}
             </span>
-            <span className="account__sr">{rule.met ? t('common:Checklist.met') : t('common:Checklist.notMet')}</span>
+            <span className="visually-hidden">{rule.met ? t('common:Checklist.met') : t('common:Checklist.notMet')}</span>
             {rule.label}
           </li>
         ))}

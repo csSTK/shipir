@@ -52,7 +52,7 @@ function StepIndicator({ step }: { step: SetupStep }) {
               {index < current ? <Check size={16} aria-hidden="true" /> : index + 1}
             </span>
             {label}
-            {index < current && <span className="setup__sr">{t('common:Checklist.completed')}</span>}
+            {index < current && <span className="visually-hidden">{t('common:Checklist.completed')}</span>}
           </li>
         )
       })}
@@ -203,7 +203,7 @@ function PasswordStep({ username }: { username: string }) {
               <span aria-hidden="true" className="setup__mark">
                 {rule.met ? <Check size={16} aria-hidden="true" /> : <Circle size={16} aria-hidden="true" />}
               </span>
-              <span className="setup__sr">{rule.met ? t('common:Checklist.met') : t('common:Checklist.notMet')}</span>
+              <span className="visually-hidden">{rule.met ? t('common:Checklist.met') : t('common:Checklist.notMet')}</span>
               {rule.label}
             </li>
           ))}

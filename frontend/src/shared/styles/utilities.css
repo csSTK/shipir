@@ -1,0 +1,11 @@
+/* Shared utility classes. Loaded globally from index.css; feature CSS uses them instead of copying the rule. */
+
+/* Screen-reader-only text: keeps the element in the accessibility tree, hidden visually. */
+.visually-hidden {
+  position: absolute;
+  width: var(--border-width);
+  height: var(--border-width);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
