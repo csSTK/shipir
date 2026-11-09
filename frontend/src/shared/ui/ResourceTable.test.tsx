@@ -223,7 +223,7 @@ describe('ResourceTable', () => {
         rowLabel: (r) => r.name,
         rowActions: () => ({ primary: [{ label: 'Remove', icon: Trash2, onSelect: () => {}, disabled: true, danger: true }] }),
       })
-      expect(screen.getAllByRole('button', { name: /^Remove / })[0]).toBeDisabled()
+      expect(screen.getAllByRole('button', { name: /^Remove / })[0]).toHaveAttribute('aria-disabled', 'true')
       expect(document.querySelector('th.rtable__actions-cell')).toBeInTheDocument()
     })
   })

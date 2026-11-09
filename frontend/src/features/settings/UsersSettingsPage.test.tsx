@@ -61,9 +61,9 @@ describe('UsersSettingsPage', () => {
     const sso: ManagedUser = { ...base, id: 'u4', username: 'sam', role: 'OPERATOR', disabled: false, externalIdentity: true }
     renderPage(undefined, [me, anna, sso])
     expect(await screen.findByText('sam')).toBeTruthy()
-    expect((screen.getByRole('button', { name: 'Password managed by SSO for sam' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByRole('button', { name: 'Password managed by SSO for sam' }).getAttribute('aria-disabled')).toBe('true')
     expect(screen.queryByRole('button', { name: 'Reset password for sam' })).toBeNull()
-    expect((screen.getByRole('button', { name: 'Reset password for anna' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.getByRole('button', { name: 'Reset password for anna' }).getAttribute('aria-disabled')).toBeNull()
   })
 
   it('shows the password change date, or the pending badge until the user chooses a password', async () => {

@@ -52,6 +52,18 @@ describe('IconButton', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     expect(onClick).toHaveBeenCalled()
   })
+
+  it('shows its label as a visible tooltip on hover/focus even when disabled', async () => {
+    const onClick = vi.fn()
+    render(<IconButton icon={Trash2} aria-label="Password managed by SSO" disabled onClick={onClick} />)
+    const button = screen.getByRole('button', { name: 'Password managed by SSO' })
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    button.focus()
+    expect(button).toHaveFocus()
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Password managed by SSO')
+    fireEvent.click(button)
+    expect(onClick).not.toHaveBeenCalled()
+  })
 })
 
 describe('Tooltip', () => {

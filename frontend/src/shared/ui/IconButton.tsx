@@ -14,9 +14,19 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
   { icon: Icon, variant = 'ghost', className, type = 'button', ...rest },
   ref,
 ) {
+  // Disabled uses aria-disabled (not the disabled attribute) so the button stays focusable and
+  // hoverable: the tooltip (the reason) opens, and activation is suppressed.
+  const { disabled, onClick, ...other } = rest
   return (
     <Tooltip content={rest['aria-label']}>
-      <button ref={ref} type={type} className={['ui-iconbtn', `ui-iconbtn--${variant}`, className].filter(Boolean).join(' ')} {...rest}>
+      <button
+        ref={ref}
+        type={type}
+        className={['ui-iconbtn', `ui-iconbtn--${variant}`, className].filter(Boolean).join(' ')}
+        {...other}
+        aria-disabled={disabled ? true : undefined}
+        onClick={disabled ? (e) => e.preventDefault() : onClick}
+      >
         <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
       </button>
     </Tooltip>

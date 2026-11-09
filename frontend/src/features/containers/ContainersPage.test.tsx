@@ -290,7 +290,7 @@ describe('ContainersPage', () => {
       fireEvent.click(screen.getByRole('menuitem', { name: 'Restart' }))
       const row = await screen.findByRole('row', { name: /web/ })
       expect(await within(row).findByText('Restarting…')).toBeInTheDocument()
-      expect(await screen.findByRole('button', { name: 'Stop web' })).toBeDisabled()
+      expect(await screen.findByRole('button', { name: 'Stop web' })).toHaveAttribute('aria-disabled', 'true')
       expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/containers/1/restart', { method: 'POST' })
       const before = apiFetch.mock.calls.filter((c) => c[0] === '/hosts/h1/containers').length
       resolve()
