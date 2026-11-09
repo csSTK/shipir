@@ -161,4 +161,23 @@ class AccessRevalidatorTest {
         verify(logs).revalidate(any(), any());
         verify(runs).revalidate(any(), any());
     }
+
+    @Test
+    void deploymentRemovalRevalidatesRunOutputSubscriptionsWithTheRunPolicy() {
+        var runs = mock(ComposeOutputStreamService.class);
+        var access = mock(StreamAccess.class);
+        var target = java.util.Optional.of(new ComposeOutputStreamService.RunTarget(
+                java.util.UUID.randomUUID(), java.util.UUID.randomUUID()));
+        org.mockito.Mockito.when(access.mayFollowRun("alice", target)).thenReturn(false);
+        var revalidator = new AccessRevalidator(access, mock(ExecSessionHandler.class), mock(LogStreamHandler.class),
+                mock(DeploymentLogStreamService.class), mock(DockerEventStreamService.class), runs,
+                mock(ChatTopicSubscriptions.class), mock(ChatTopicAccess.class), mock(ContainerStatsStreamService.class));
+
+        revalidator.onDeploymentRemoved(new dev.bethge.shipir.common.security.DeploymentRemovedEvent(
+                java.util.UUID.randomUUID()));
+
+        var check = org.mockito.ArgumentCaptor.forClass(java.util.function.BiPredicate.class);
+        verify(runs).revalidateAll(check.capture());
+        org.assertj.core.api.Assertions.assertThat(check.getValue().test("alice", target)).isEqualTo(false);
+    }
 }

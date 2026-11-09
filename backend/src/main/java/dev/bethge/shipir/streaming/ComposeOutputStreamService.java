@@ -214,6 +214,24 @@ public class ComposeOutputStreamService implements RunOutput {
         });
     }
 
+    /**
+     * Re-asks every subscriber of every run, for changes that name no user (a deleted deployment takes its grants
+     * with it without a {@code UserAccessChangedEvent}). Fails closed per user and run.
+     */
+    void revalidateAll(java.util.function.BiPredicate<String, Optional<RunTarget>> stillAllowed) {
+        List<String> users;
+        synchronized (streams) {
+            users = streams.values().stream().flatMap(stream -> {
+                synchronized (stream) {
+                    return stream.subscribers.stream().map(Subscription::username).toList().stream();
+                }
+            }).distinct().toList();
+        }
+        for (String user : users) {
+            revalidate(user, target -> stillAllowed.test(user, target));
+        }
+    }
+
     private void removeIf(Predicate<Subscription> match) {
         List<Stream> all;
         synchronized (streams) {

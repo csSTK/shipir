@@ -54,6 +54,7 @@ class AccessRevalidator {
         // every log subscriber is asked again with the same policy as at SUBSCRIBE (cheap, deletions are rare)
         isolated("log", () -> logStreams.revalidateAll((user, t) -> access.mayFollowContainer(user, t.hostId(), t.containerId())));
         isolated("project log", () -> projectLogStreams.revalidateAll((user, t) -> access.mayFollowProject(user, t.hostId(), t.project())));
+        isolated("run output", () -> runStreams.revalidateAll((user, target) -> access.mayFollowRun(user, target)));
     }
 
     @TransactionalEventListener(fallbackExecution = true)

@@ -69,4 +69,31 @@ class ComposeOutputStreamRevalidateTest {
 
         assertThat(spy.subscriberCount("run")).isEqualTo(1); // "b" was dropped although "a" threw
     }
+
+    @Test
+    void revalidateAllChecksEveryUserOnEveryRunAndDropsOnlyTheDisallowed() {
+        service.registerRun("run", UUID.randomUUID(), UUID.randomUUID());
+        service.subscribe("run", "alice", "s1", "a");
+        service.subscribe("run", "bob", "s2", "b");
+
+        service.revalidateAll((user, target) -> user.equals("bob"));
+
+        assertThat(service.subscriberCount("run")).isEqualTo(1);
+    }
+
+    @Test
+    void revalidateAllFailsClosedPerUserWhenThePredicateThrows() {
+        service.registerRun("run", UUID.randomUUID(), UUID.randomUUID());
+        service.subscribe("run", "alice", "s1", "a");
+        service.subscribe("run", "bob", "s2", "b");
+
+        service.revalidateAll((user, target) -> {
+            if (user.equals("alice")) {
+                throw new IllegalStateException("db down");
+            }
+            return true;
+        });
+
+        assertThat(service.subscriberCount("run")).isEqualTo(1); // alice dropped, bob kept
+    }
 }
