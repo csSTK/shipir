@@ -28,6 +28,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -82,6 +83,8 @@ public class ProxySyncService {
     private final ExecService exec;
     private final ProxyHostAccess access;
     private final ConcurrentMap<UUID, ReentrantLock> locks = new ConcurrentHashMap<>();
+    /** Hosts whose proxy container Shipir stopped and could not start again; the next sync starts it (not user-stopped ones). */
+    private final Set<UUID> stoppedByShipir = ConcurrentHashMap.newKeySet();
 
     ProxySyncService(ProxyInstanceRepository instances, ProxyRouteRepository routes, ProxyCertificateRepository certificates,
                      List<ProxyConfigRenderer> renderers, SecretCipher cipher, ContainerService containers,
@@ -198,7 +201,7 @@ public class ProxySyncService {
         try {
             ContainerDto proxy = findContainer(hostId, endpoint, instance.getType());
             boolean running = "running".equals(proxy.state());
-            boolean stoppedByUs = false;
+            boolean stoppedByUs = stoppedByShipir.contains(hostId) && !running;
             if ("restarting".equals(proxy.state())) {
                 // the archive API refuses a container that is restarting (e.g. Caddy without a Caddyfile yet)
                 containers.stopContainer(hostId, endpoint, proxy.id(), STOP_TIMEOUT_SECONDS);
@@ -210,6 +213,7 @@ public class ProxySyncService {
             } else if (!running && (stoppedByUs || instance.getType() == ProxyType.CADDY)) {
                 containers.restartContainer(hostId, endpoint, proxy.id(), STOP_TIMEOUT_SECONDS);
             }
+            stoppedByShipir.remove(hostId);
         } catch (DockerConnectionException e) {
             throw failed("The proxy configuration could not be written (" + ViewerErrorCodes.forViewer(e.getCode(), access.isAdmin()) + ")");
         }
@@ -228,7 +232,9 @@ public class ProxySyncService {
             if (stoppedByUs) {
                 try {
                     containers.restartContainer(hostId, endpoint, containerId, STOP_TIMEOUT_SECONDS);
+                    stoppedByShipir.remove(hostId);
                 } catch (RuntimeException startFailure) {
+                    stoppedByShipir.add(hostId);
                     writeFailure.addSuppressed(startFailure);
                     log.warn("Could not start the proxy container again after a failed write on host {}: {}", hostId,
                             startFailure.getClass().getSimpleName());

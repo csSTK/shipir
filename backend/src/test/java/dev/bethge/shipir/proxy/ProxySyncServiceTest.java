@@ -43,6 +43,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -274,6 +275,35 @@ class ProxySyncServiceTest {
             assertThat(e.code()).isEqualTo("PROXY_SYNC_FAILED");
             assertThat(e.getMessage()).contains("could not be written");
         });
+    }
+
+    @Test
+    void aRepairSyncStartsAProxyThatAFailedWriteAndFailedStartLeftExited() {
+        instance(ProxyType.TRAEFIK);
+        container(ProxyType.TRAEFIK, "restarting");
+        doThrow(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "x", null))
+                .doNothing()
+                .when(fileService).writeFiles(any(), any(), any(), any(), any(), anyLong());
+        doThrow(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "y", null))
+                .doNothing()
+                .when(containers).restartContainer(any(), any(), any(), anyInt());
+        assertThatThrownBy(() -> service.sync(HOST)).isInstanceOf(ProxyException.class);
+
+        container(ProxyType.TRAEFIK, "exited");
+        service.sync(HOST);
+
+        // 1st restart failed inside the failed sync, 2nd is the repair
+        verify(containers, times(2)).restartContainer(eq(HOST), eq(ENDPOINT), eq("proxy1"), anyInt());
+    }
+
+    @Test
+    void anExitedTraefikThatShipirDidNotStopStaysStopped() {
+        instance(ProxyType.TRAEFIK);
+        container(ProxyType.TRAEFIK, "exited");
+
+        service.sync(HOST);
+
+        verify(containers, never()).restartContainer(any(), any(), any(), anyInt());
     }
 
     @Test
