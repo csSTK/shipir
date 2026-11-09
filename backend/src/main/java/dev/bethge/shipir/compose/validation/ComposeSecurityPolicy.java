@@ -139,6 +139,13 @@ public class ComposeSecurityPolicy {
      * name): an existing volume of the resolved name must carry this project's {@code com.docker.compose.project} label; a name that
      * does not exist yet is fine. The label is read through the {@code docker/} abstraction; if it cannot be read the check
      * fails closed (an exception, never "allowed").
+     *
+     * <p><b>Residual risk (shipr-kqbc.52):</b> this is a time-of-check/time-of-use check. A volume of a checked name that is
+     * created (or relabelled) on the host after this check and before {@code docker compose} starts is not rechecked, so
+     * someone with Docker access to the same host could race a foreign volume into the deployment. Same class as the graph
+     * hash window between check and process start. Accepted: a recheck after {@code up} would come too late (the container
+     * has already mounted it), Compose offers no lock, and creating volumes on the host already needs Docker access of
+     * equal or higher trust than the non-ADMIN user.
      */
     private List<String> volumeOwnershipViolations(UUID hostId, String deploymentName, DockerEndpoint endpoint, Map<String, NamedVolume> declared) {
         if (declared.isEmpty()) {
