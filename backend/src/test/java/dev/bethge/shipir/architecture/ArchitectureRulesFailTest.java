@@ -60,6 +60,11 @@ class ArchitectureRulesFailTest {
     }
 
     @Test
+    void unpinnedConnectionManagerConstructorReferenceFails() {
+        fails(ArchitectureRules.noUnpinnedConnectionManager(ROOT), "BadUnpinnedConstructorReferenceUser");
+    }
+
+    @Test
     void pinnedConnectionManagerConstructorIsAllowed() {
         assertThatThrownBy(() -> ArchitectureRules.noUnpinnedConnectionManager(ROOT).check(FIXTURE))
                 .hasMessageNotContaining("GoodPinnedDockerUser");

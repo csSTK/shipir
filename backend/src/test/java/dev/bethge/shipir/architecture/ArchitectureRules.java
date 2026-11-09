@@ -1,8 +1,10 @@
 package dev.bethge.shipir.architecture;
 
 import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaAccess;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaConstructorCall;
+import com.tngtech.archunit.core.domain.JavaConstructorReference;
 import com.tngtech.archunit.lang.ArchRule;
 
 import static com.tngtech.archunit.base.DescribedPredicate.describe;
@@ -70,13 +72,24 @@ final class ArchitectureRules {
     /**
      * The one-argument DockerHostConnectionManager constructor resolves host names through system DNS, bypassing the
      * egress policy's DNS pinning. It exists for tests against local daemons; production code must use the pinned one.
+     * Covers direct calls and constructor references ({@code DockerHostConnectionManager::new}), which bypass a
+     * call-only check.
      */
     static ArchRule noUnpinnedConnectionManager(String root) {
         String owner = root + ".docker.DockerHostConnectionManager";
+        DescribedPredicate<JavaConstructorCall> unpinnedCall = describe(
+                "is the unpinned DockerHostConnectionManager constructor",
+                call -> call.getTargetOwner().getName().equals(owner)
+                        && call.getTarget().getRawParameterTypes().size() == 1);
+        DescribedPredicate<JavaAccess<?>> unpinnedReference = describe(
+                "is a reference to the unpinned DockerHostConnectionManager constructor",
+                (JavaAccess<?> access) -> access instanceof JavaConstructorReference reference
+                        && reference.getTargetOwner().getName().equals(owner)
+                        && reference.getTarget().getRawParameterTypes().size() == 1);
         return noClasses()
-                .should().callConstructorWhere(describe("is the unpinned DockerHostConnectionManager constructor",
-                        (JavaConstructorCall call) -> call.getTargetOwner().getName().equals(owner)
-                                && call.getTarget().getRawParameterTypes().size() == 1))
-                .as("main code must not call the unpinned DockerHostConnectionManager(DockerProperties) constructor");
+                .should().callConstructorWhere(unpinnedCall)
+                .orShould().accessTargetWhere(unpinnedReference)
+                .as("main code must not call or reference the unpinned DockerHostConnectionManager(DockerProperties) "
+                        + "constructor");
     }
 }
