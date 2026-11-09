@@ -134,3 +134,29 @@ test('at 375px both tab rows stay on one line and the first step folds the advan
   await expect(page.getByRole('button', { name: 'Add port to service 1' })).toBeVisible()
   await expect(page.getByLabel('Service 1 domain host')).toBeVisible()
 })
+
+test('at 375px each stacked row input shows a visible label and keeps its accessible name', async ({ page, api }) => {
+  mockCommon(api)
+  await page.setViewportSize({ width: 375, height: 800 })
+  await page.goto('/environments/a/deployments')
+  await page.getByRole('button', { name: 'Add deployment' }).click()
+  await page.getByRole('radio', { name: 'Form wizard' }).check()
+  await openAdvanced(page, 1)
+  await page.getByRole('button', { name: 'Add port to service 1' }).click()
+  await page.getByRole('button', { name: 'Add env var to service 1' }).click()
+
+  const labelOf = (name: string) =>
+    page.getByLabel(name).evaluate((el) => {
+      const cell = el.closest('.wz-cell')!
+      const style = getComputedStyle(cell, '::before')
+      return { text: style.content.replace(/^"|" \/ ""$/g, ''), shown: getComputedStyle(cell).display !== 'contents' }
+    })
+  expect(await labelOf('Service 1 port 1 host')).toEqual({ text: 'Host', shown: true })
+  expect(await labelOf('Service 1 port 1 protocol')).toEqual({ text: 'Protocol', shown: true })
+  expect((await labelOf('Service 1 env 1 name')).text).toBe('Variable name')
+  expect((await labelOf('Service 1 env 1 value')).text).toBe('Value')
+  // The visible label is decorative: the accessible name stays exactly the original label (no "Host" prepended).
+  await expect(page.getByRole('textbox', { name: 'Service 1 port 1 host', exact: true })).toBeVisible()
+  const cell = page.getByLabel('Service 1 port 1 host').locator('xpath=ancestor::*[contains(@class,"wz-cell")]')
+  expect(await cell.evaluate((el) => getComputedStyle(el, '::before').content)).toContain('/')
+})

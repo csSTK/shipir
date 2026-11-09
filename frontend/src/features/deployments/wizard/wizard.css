@@ -91,6 +91,10 @@
 .wz-row--domain {
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr);
 }
+/* Wide: the cell wrapper is transparent to the grid (the header row labels the columns). */
+.wz-cell {
+  display: contents;
+}
 .wz-detect {
   display: flex;
   flex-wrap: wrap;
@@ -203,9 +207,25 @@
   .wz-table--env {
     grid-template-columns: minmax(0, 1fr);
   }
-  /* Stacked rows put every input on its own line; per-column headers no longer apply. */
+  /* Stacked rows put every input on its own line; per-column headers no longer apply, each input shows its own label instead. */
   .wz-head {
     display: none;
+  }
+  .wz-cell {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    min-width: 0;
+  }
+  .wz-cell::before {
+    content: attr(data-label);
+    /* Alt-text form: visual only, the input's own hidden label stays its only accessible name. */
+    content: attr(data-label) / "";
+    font-size: var(--text-caption-size);
+    letter-spacing: var(--text-caption-tracking);
+    line-height: var(--text-caption-leading);
+    font-weight: var(--weight-semibold);
+    color: var(--color-text-muted);
   }
   .wz-toggle {
     padding-top: 0;
