@@ -118,4 +118,17 @@ describe('apiFetch Retry-After', () => {
 
     await expect(apiFetch('/x')).rejects.toMatchObject({ retryAfterSeconds: undefined })
   })
+
+  it('exposes the message field of a JSON error body as serverMessage', async () => {
+    const body = JSON.stringify({ code: 'INVALID_PROXY_CONFIG', message: 'line 3: unexpected }' })
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(body, { status: 422 }))))
+    await expect(apiFetch('/x')).rejects.toMatchObject({ serverMessage: 'line 3: unexpected }', message: body })
+  })
+
+  it('has no serverMessage for plain text, blank or missing messages', async () => {
+    for (const body of ['nope', JSON.stringify({ message: '  ' }), JSON.stringify({ code: 'X' })]) {
+      vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(body, { status: 500 }))))
+      await expect(apiFetch('/x')).rejects.toMatchObject({ serverMessage: undefined })
+    }
+  })
 })

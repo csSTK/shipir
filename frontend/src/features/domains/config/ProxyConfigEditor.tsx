@@ -157,7 +157,7 @@ function Editor({ hostId, config }: { hostId: string; config: ProxyConfig }) {
         loading={save.isPending}
         onConfirm={confirmSave}
         size="xl"
-        details={<YamlDiffEditor original={config.custom} modified={value} label={t('ProxyConfigEditor.diffLabel')} sideBySide />}
+        details={<YamlDiffEditor original={config.custom} modified={value} label={t('ProxyConfigEditor.diffLabel')} sideBySide language={LANGUAGE} />}
       />
       <ConfirmDialog
         open={restoring !== null}

@@ -13,7 +13,7 @@ import { fetchFreePorts, type AppTemplate } from './api.ts'
 import { generateSecret, initialEnv, suggestName, webTarget } from './install.ts'
 import { InstallPublishStep } from './InstallPublishStep.tsx'
 import { useCurrentUser } from '../../auth/index.ts'
-import { useManagedProxy } from '../../domains/api.ts'
+import { useManagedProxy } from '../../domains/index.ts'
 import './templates.css'
 
 const NAME_PATTERN = /^[a-z0-9][a-z0-9_-]*$/

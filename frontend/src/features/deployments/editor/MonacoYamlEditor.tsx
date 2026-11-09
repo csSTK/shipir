@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react'
 import composeSchema from './compose-spec.json'
 import { useTranslation } from 'react-i18next'
 import { editorFontSize } from './editorFontSize.ts'
+import { COMPOSE_FILE_MATCH } from './composeFileMatch.ts'
 import { monaco } from './monacoEnvironment.ts'
 
 const SCHEMA_URI = 'inmemory://shipir/compose-spec.json'
@@ -17,7 +18,7 @@ function configureOnce() {
     validate: true,
     completion: true,
     hover: true,
-    schemas: [{ uri: SCHEMA_URI, fileMatch: ['*'], schema }],
+    schemas: [{ uri: SCHEMA_URI, fileMatch: COMPOSE_FILE_MATCH, schema }],
   })
 }
 

@@ -12,6 +12,8 @@ export class ApiError extends Error {
   readonly details?: string[]
   /** Seconds from a numeric `Retry-After` response header (set on 429 throttling), if any. */
   readonly retryAfterSeconds?: number
+  /** The `message` field of a JSON response body, if there is a non-blank one (message itself is the raw body). */
+  readonly serverMessage?: string
 
   constructor(
     status: number,
@@ -20,6 +22,7 @@ export class ApiError extends Error {
     violations?: string[],
     details?: string[],
     retryAfterSeconds?: number,
+    serverMessage?: string,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -28,6 +31,7 @@ export class ApiError extends Error {
     this.violations = violations
     this.details = details
     this.retryAfterSeconds = retryAfterSeconds
+    this.serverMessage = serverMessage
   }
 }
 
@@ -59,6 +63,7 @@ export function parseErrorBody(text: string): {
   code?: string
   violations?: string[]
   details?: string[]
+  serverMessage?: string
 } {
   try {
     const parsed: unknown = JSON.parse(text)
@@ -66,7 +71,9 @@ export function parseErrorBody(text: string): {
     const code = 'code' in parsed && typeof parsed.code === 'string' ? parsed.code : undefined
     const violations = 'violations' in parsed ? stringArray(parsed.violations) : undefined
     const details = 'details' in parsed ? stringArray(parsed.details) : undefined
-    return { code, violations, details }
+    const serverMessage =
+      'message' in parsed && typeof parsed.message === 'string' && parsed.message.trim() ? parsed.message : undefined
+    return { code, violations, details, serverMessage }
   } catch {
     return {} // body is not JSON
   }
@@ -90,7 +97,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   if (!response.ok) {
     const text = await response.text()
-    const { code, violations, details } = parseErrorBody(text)
+    const { code, violations, details, serverMessage } = parseErrorBody(text)
     throw new ApiError(
       response.status,
       text || response.statusText,
@@ -98,6 +105,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
       violations,
       details,
       retryAfterSeconds(response),
+      serverMessage,
     )
   }
   if (response.status === 204) {

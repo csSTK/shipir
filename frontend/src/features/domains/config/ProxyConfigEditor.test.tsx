@@ -84,7 +84,7 @@ describe('ProxyConfigEditor', () => {
   })
 
   it('shows the validator message inline when the config is invalid', async () => {
-    putError = new ApiError(400, JSON.stringify({ code: 'INVALID_PROXY_CONFIG', message: 'line 3: unknown key "foo"' }), 'INVALID_PROXY_CONFIG')
+    putError = new ApiError(400, JSON.stringify({ code: 'INVALID_PROXY_CONFIG', message: 'line 3: unknown key "foo"' }), 'INVALID_PROXY_CONFIG', undefined, undefined, undefined, 'line 3: unknown key "foo"')
     renderEditor()
     fireEvent.change(await screen.findByLabelText('custom.yml'), { target: { value: 'foo: 1' } })
     fireEvent.click(screen.getByRole('button', { name: 'Review changes' }))
@@ -115,7 +115,7 @@ describe('ProxyConfigEditor', () => {
   })
 
   it('shows the error when a restored version no longer validates', async () => {
-    restoreError = new ApiError(400, JSON.stringify({ code: 'INVALID_PROXY_CONFIG', message: 'unknown key "bar"' }), 'INVALID_PROXY_CONFIG')
+    restoreError = new ApiError(400, JSON.stringify({ code: 'INVALID_PROXY_CONFIG', message: 'unknown key "bar"' }), 'INVALID_PROXY_CONFIG', undefined, undefined, undefined, 'unknown key "bar"')
     renderEditor()
     const list = await screen.findByRole('list', { name: 'Earlier versions' })
     fireEvent.click(within(list).getAllByRole('button', { name: /Restore/ })[1])

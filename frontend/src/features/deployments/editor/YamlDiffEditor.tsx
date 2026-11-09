@@ -13,15 +13,17 @@ export interface YamlDiffEditorProps {
   /** Side by side (wide screens) or inline (narrow). */
   sideBySide?: boolean
   height?: string
+  /** Monaco language id; default `yaml`. */
+  language?: string
 }
 
 /** Read-only YAML diff: Monaco DiffEditor, loaded on demand. */
-export function YamlDiffEditor({ original, modified, label, sideBySide = true, height = '280px' }: YamlDiffEditorProps) {
+export function YamlDiffEditor({ original, modified, label, sideBySide = true, height = '280px', language }: YamlDiffEditorProps) {
   const { t } = useTranslation('deployments')
   return (
     <div className="ed-yaml__frame" style={{ height }}>
       <Suspense fallback={<div className="ed-yaml__loading" role="status">{t('YamlDiffEditor.loadingDiff')}</div>}>
-        <MonacoDiffEditor original={original} modified={modified} label={label} height={height} sideBySide={sideBySide} />
+        <MonacoDiffEditor original={original} modified={modified} label={label} height={height} sideBySide={sideBySide} language={language} />
       </Suspense>
     </div>
   )

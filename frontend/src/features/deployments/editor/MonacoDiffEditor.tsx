@@ -18,17 +18,19 @@ export interface MonacoDiffEditorProps {
   height: string
   /** Side by side when true, inline otherwise. */
   sideBySide: boolean
+  /** Monaco language id for highlighting; default `yaml`. */
+  language?: string
 }
 
 /** Read-only Monaco diff view. */
-export default function MonacoDiffEditor({ original, modified, label, height, sideBySide }: MonacoDiffEditorProps) {
+export default function MonacoDiffEditor({ original, modified, label, height, sideBySide, language = 'yaml' }: MonacoDiffEditorProps) {
   const { t } = useTranslation('deployments')
   const dark = useSyncExternalStore(subscribeDark, () => darkQuery?.matches ?? false)
   const reducedMotion = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
   return (
     <DiffEditor
       height={height}
-      language="yaml"
+      language={language}
       theme={dark ? 'vs-dark' : 'light'}
       original={original}
       modified={modified}

@@ -11,7 +11,8 @@ vi.mock('../../../shared/api/client.ts', async (importActual) => ({
   ...(await importActual<typeof import('../../../shared/api/client.ts')>()),
   apiFetch: (...args: unknown[]) => apiFetch(...args),
 }))
-vi.mock('../../domains/index.ts', () => ({
+vi.mock('../../domains/index.ts', async () => ({
+  useManagedProxy: (await import('../../domains/api.ts')).useManagedProxy,
   PublishDialog: (p: { containerName?: string; port?: number; onClose: () => void; onDone?: () => void }) => (
     <div role="dialog" aria-label="Publish stub" data-container={p.containerName} data-port={p.port}>
       <button onClick={p.onDone}>stub done</button>
