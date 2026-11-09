@@ -135,6 +135,42 @@ class ContainerRecreateIntegrationTest {
         assertThat(attached.get(netA).getAliases()).contains("alias-a");
     }
 
+    @Test
+    void recreateKeepsStaticIpsOnPrimaryAndSecondaryNetworks() {
+        String netA = prefix + "-sa";
+        String netB = prefix + "-sb";
+        int octet = java.util.concurrent.ThreadLocalRandom.current().nextInt(100, 200);
+        String subA = "10." + octet + ".71";
+        String subB = "10." + octet + ".72";
+        networkIds.add(docker.createNetworkCmd().withName(netA).withIpam(new com.github.dockerjava.api.model.Network.Ipam()
+                .withConfig(new com.github.dockerjava.api.model.Network.Ipam.Config().withSubnet(subA + ".0/24"))).exec().getId());
+        networkIds.add(docker.createNetworkCmd().withName(netB).withIpam(new com.github.dockerjava.api.model.Network.Ipam()
+                .withConfig(new com.github.dockerjava.api.model.Network.Ipam.Config().withSubnet(subB + ".0/24"))).exec().getId());
+        var nets = List.of(new ContainerCreateSpec.Network(netA, List.of()),
+                new ContainerCreateSpec.Network(netB, List.of("alias-b")));
+        String name = prefix + "-static";
+        String oldId = create(withNetworks(spec(name, Map.of(), List.of(), List.of(), false), nets));
+        // give both networks a static address, as a compose file with ipv4_address does
+        docker.disconnectFromNetworkCmd().withNetworkId(netA).withContainerId(oldId).exec();
+        docker.connectToNetworkCmd().withNetworkId(netA).withContainerId(oldId).withContainerNetwork(
+                new com.github.dockerjava.api.model.ContainerNetwork().withIpamConfig(
+                        new com.github.dockerjava.api.model.ContainerNetwork.Ipam().withIpv4Address(subA + ".10"))).exec();
+        docker.disconnectFromNetworkCmd().withNetworkId(netB).withContainerId(oldId).exec();
+        docker.connectToNetworkCmd().withNetworkId(netB).withContainerId(oldId).withContainerNetwork(
+                new com.github.dockerjava.api.model.ContainerNetwork().withAliases(List.of("alias-b")).withIpamConfig(
+                        new com.github.dockerjava.api.model.ContainerNetwork.Ipam().withIpv4Address(subB + ".20"))).exec();
+        docker.startContainerCmd(oldId).exec();
+
+        var result = service.recreateContainer(hostId, endpoint, oldId,
+                withNetworks(spec(name, Map.of("A", "2"), List.of(), List.of(), false), nets));
+        containerIds.add(result.id());
+
+        var attached = docker.inspectContainerCmd(result.id()).exec().getNetworkSettings().getNetworks();
+        assertThat(attached.get(netA).getIpAddress()).isEqualTo(subA + ".10");
+        assertThat(attached.get(netB).getIpAddress()).isEqualTo(subB + ".20");
+        assertThat(attached.get(netB).getAliases()).contains("alias-b");
+    }
+
     private static ContainerCreateSpec withNetworks(ContainerCreateSpec s, List<ContainerCreateSpec.Network> networks) {
         return new ContainerCreateSpec(s.name(), s.image(), s.command(), s.env(), s.ports(), s.mounts(), networks,
                 s.restartPolicy(), s.privileged(), s.hostNetwork(), s.start());

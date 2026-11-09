@@ -305,7 +305,7 @@ public class ContainerServiceImpl implements ContainerService {
     @Override
     public CreatedResourceDto createContainer(UUID hostId, DockerEndpoint endpoint, ContainerCreateSpec spec) {
         return calls.call(hostId, endpoint, client -> {
-            String id = createFrom(client, spec, spec.name(), HostConfig.newHostConfig(), null, null, null);
+            String id = createFrom(client, spec, spec.name(), HostConfig.newHostConfig(), null, null, null, null);
             if (spec.start()) {
                 try {
                     client.startContainerCmd(id).exec();
@@ -331,7 +331,8 @@ public class ContainerServiceImpl implements ContainerService {
      * and healthcheck (with a new image these would pin the old image's defaults).
      */
     private static String createFrom(DockerClient client, ContainerCreateSpec spec, String name, HostConfig host,
-                                     ContainerConfig old, String oldId, List<InspectContainerResponse.Mount> oldMounts) {
+                                     ContainerConfig old, String oldId, List<InspectContainerResponse.Mount> oldMounts,
+                                     Map<String, ContainerNetwork> oldNetworks) {
         host.withPrivileged(spec.privileged()).withMounts(List.of());
         Ports bindings = new Ports();
         List<ExposedPort> exposed = new ArrayList<>();
@@ -384,7 +385,7 @@ public class ContainerServiceImpl implements ContainerService {
         }
         if (!spec.hostNetwork()) {
             try {
-                attachNetworks(client, id, spec.networks());
+                attachNetworks(client, id, spec.networks(), oldNetworks);
             } catch (RuntimeException e) {
                 try {
                     client.removeContainerCmd(id).withForce(true).withRemoveVolumes(true).exec();
@@ -399,20 +400,32 @@ public class ContainerServiceImpl implements ContainerService {
 
     /**
      * The first network is the create-time network mode (create cannot carry aliases, so a first network with aliases
-     * is re-connected with them); every further network is connected with its aliases. The container is not started yet.
+     * is re-connected with them); every further network is connected with its aliases. A recreate also carries over the
+     * static IPv4/IPv6 addresses (IPAM config, which Docker only reports when set explicitly) the old container had on
+     * the same network; the address is only claimed when the new container starts, after the old one stopped. The
+     * container is not started yet.
      */
-    private static void attachNetworks(DockerClient client, String containerId, List<ContainerCreateSpec.Network> networks) {
+    private static void attachNetworks(DockerClient client, String containerId, List<ContainerCreateSpec.Network> networks,
+                                       Map<String, ContainerNetwork> oldNetworks) {
         for (int i = 0; i < networks.size(); i++) {
             ContainerCreateSpec.Network n = networks.get(i);
-            if (i == 0 && n.aliases().isEmpty()) {
+            var ipam = oldNetworks == null || oldNetworks.get(n.name()) == null ? null : oldNetworks.get(n.name()).getIpamConfig();
+            if (i == 0 && n.aliases().isEmpty() && ipam == null) {
                 continue;
             }
             if (i == 0) {
                 client.disconnectFromNetworkCmd().withNetworkId(n.name()).withContainerId(containerId).exec();
             }
             var cmd = client.connectToNetworkCmd().withNetworkId(n.name()).withContainerId(containerId);
-            if (!n.aliases().isEmpty()) {
-                cmd.withContainerNetwork(new ContainerNetwork().withAliases(n.aliases()));
+            if (!n.aliases().isEmpty() || ipam != null) {
+                var settings = new ContainerNetwork();
+                if (!n.aliases().isEmpty()) {
+                    settings.withAliases(n.aliases());
+                }
+                if (ipam != null) {
+                    settings.withIpamConfig(ipam);
+                }
+                cmd.withContainerNetwork(settings);
             }
             cmd.exec();
         }
@@ -453,7 +466,8 @@ public class ContainerServiceImpl implements ContainerService {
             String newId = null;
             List<String> addedVolumes;
             try {
-                newId = createFrom(client, spec, newName, baseHost, old.getConfig(), old.getId(), old.getMounts());
+                newId = createFrom(client, spec, newName, baseHost, old.getConfig(), old.getId(), old.getMounts(),
+                        old.getNetworkSettings() == null ? null : old.getNetworkSettings().getNetworks());
                 addedVolumes = volumesAddedByNewImage(client, newId, old.getMounts());
             } catch (RuntimeException e) {
                 recreatesInFlight.remove(newName);
