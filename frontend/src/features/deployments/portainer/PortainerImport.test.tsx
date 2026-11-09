@@ -191,6 +191,28 @@ describe('AddDeploymentDialog, Import from Portainer source', () => {
     expect(screen.getByLabelText('Portainer URL')).toHaveValue('')
   })
 
+  it('explains the response size limit and the TLS certificate problem', async () => {
+    serve({ list: () => { throw new ApiError(502, 'x', 'PORTAINER_RESPONSE_TOO_LARGE') } })
+    renderDialog()
+    await connect()
+    expect(await screen.findByRole('alert')).toHaveTextContent('1 MiB')
+    serve({ list: () => { throw new ApiError(502, 'x', 'PORTAINER_TLS_FAILED') } })
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/certificate/i))
+  })
+
+  it('drops URL, token and stack list when the source is switched (the token is not kept around)', async () => {
+    serve()
+    renderDialog()
+    await connect()
+    await screen.findByRole('button', { name: 'Import shop' })
+    fireEvent.click(screen.getByRole('radio', { name: 'Git repository' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Import from Portainer' }))
+    expect(screen.getByLabelText('Portainer URL')).toHaveValue('')
+    expect(screen.getByLabelText('API token')).toHaveValue('')
+    expect(screen.queryByRole('button', { name: 'Import shop' })).not.toBeInTheDocument()
+  })
+
   it('does not carry the Portainer env into a later file import without an env file', async () => {
     serve()
     renderDialog()

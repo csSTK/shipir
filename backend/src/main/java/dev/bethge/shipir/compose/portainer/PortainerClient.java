@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+import javax.net.ssl.SSLException;
 import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
@@ -44,7 +45,7 @@ class PortainerClient {
         try {
             response = http.send("GET", uri, Map.of("X-API-Key", apiToken, "Accept", "application/json"), TIMEOUT);
         } catch (IOException | RuntimeException e) {
-            throw unreachable();
+            throw isTlsFailure(e) ? tlsFailed() : unreachable();
         }
         int status = response.status();
         if (status == 401 || status == 403) {
@@ -58,13 +59,28 @@ class PortainerClient {
             throw unreachable();
         }
         if (response.truncated()) {
-            throw badResponse();
+            throw new PortainerException(HttpStatus.BAD_GATEWAY, "PORTAINER_RESPONSE_TOO_LARGE",
+                    "Portainer's answer is larger than the 1 MiB import limit");
         }
         try {
             return json.readTree(response.body());
         } catch (RuntimeException e) {
             throw badResponse();
         }
+    }
+
+    private static boolean isTlsFailure(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            if (t instanceof SSLException) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static PortainerException tlsFailed() {
+        return new PortainerException(HttpStatus.BAD_GATEWAY, "PORTAINER_TLS_FAILED",
+                "Portainer's TLS certificate is not trusted (self-signed or unknown CA)");
     }
 
     private static PortainerException unreachable() {

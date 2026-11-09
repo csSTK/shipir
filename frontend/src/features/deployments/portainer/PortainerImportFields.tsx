@@ -22,6 +22,10 @@ function describeError(error: unknown, t: TFunction<'deployments'>): string {
         return t('PortainerImportFields.stackNotFound')
       case 'PORTAINER_UNREACHABLE':
         return t('PortainerImportFields.unreachable')
+      case 'PORTAINER_RESPONSE_TOO_LARGE':
+        return t('PortainerImportFields.responseTooLarge')
+      case 'PORTAINER_TLS_FAILED':
+        return t('PortainerImportFields.tlsFailed')
       case 'PORTAINER_BAD_RESPONSE':
         return t('PortainerImportFields.badResponse')
     }

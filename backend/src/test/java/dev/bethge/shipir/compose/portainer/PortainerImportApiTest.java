@@ -236,7 +236,7 @@ class PortainerImportApiTest {
         Login l = login("admin");
         mvc.perform(write(l, "/api/portainer-import/stacks/1", body()))
                 .andExpect(status().isBadGateway())
-                .andExpect(jsonPath("$.code").value("PORTAINER_BAD_RESPONSE"));
+                .andExpect(jsonPath("$.code").value("PORTAINER_RESPONSE_TOO_LARGE"));
     }
 
     @Test

@@ -644,6 +644,8 @@
   "PortainerImportFields.stackNotFound": "This stack no longer exists in Portainer.",
   "PortainerImportFields.unreachable": "Portainer could not be reached.",
   "PortainerImportFields.badResponse": "Portainer sent an unexpected response.",
+  "PortainerImportFields.responseTooLarge": "Portainer's answer is too large (limit 1 MiB). Remove unused stacks or environment variables in Portainer, or import the compose file by upload.",
+  "PortainerImportFields.tlsFailed": "Portainer's TLS certificate is not trusted (often self-signed on port 9443). Use a certificate from a trusted CA or add the CA to the server's trust store.",
   "PortainerImportFields.failed": "The import from Portainer failed.",
   "DeploymentDetailPage.reviewBeforeDeploying": "Review before deploying",
   "DeploymentDetailPage.deployNameThisApprovesTheFiles": "Deploy <strong>{{name}}</strong>? The running containers are replaced.",

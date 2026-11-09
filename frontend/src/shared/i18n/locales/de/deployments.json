@@ -644,6 +644,8 @@
   "PortainerImportFields.stackNotFound": "Dieser Stack existiert in Portainer nicht mehr.",
   "PortainerImportFields.unreachable": "Portainer ist nicht erreichbar.",
   "PortainerImportFields.badResponse": "Portainer hat eine unerwartete Antwort gesendet.",
+  "PortainerImportFields.responseTooLarge": "Die Antwort von Portainer ist zu groß (Limit 1 MiB). Entferne ungenutzte Stacks oder Umgebungsvariablen in Portainer oder importiere die Compose-Datei per Upload.",
+  "PortainerImportFields.tlsFailed": "Das TLS-Zertifikat von Portainer wird nicht vertraut (oft selbstsigniert auf Port 9443). Nutze ein Zertifikat einer vertrauenswürdigen CA oder füge die CA dem Truststore des Servers hinzu.",
   "PortainerImportFields.failed": "Der Import aus Portainer ist fehlgeschlagen.",
   "DeploymentDetailPage.reviewBeforeDeploying": "Vor dem Deployen prüfen",
   "DeploymentDetailPage.deployNameThisApprovesTheFiles": "<strong>{{name}}</strong> deployen? Die laufenden Container werden ersetzt.",
