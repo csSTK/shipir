@@ -1,5 +1,9 @@
 import { expect, mockDeploymentCards, test } from './fixtures/api.ts'
 
+async function openAdvanced(page: import('@playwright/test').Page, n: number) {
+  await page.getByRole('group', { name: `Service ${n}` }).getByText('Advanced options').click()
+}
+
 const host = {
   id: 'a',
   name: 'Local',
@@ -45,8 +49,10 @@ test('operator builds a two-service deployment in the wizard, previews it and cr
 
   await page.getByRole('button', { name: 'Add network' }).click()
   await page.getByLabel('Network 1 name').fill('front')
+  await openAdvanced(page, 1)
   await page.getByRole('group', { name: 'Service 1' }).getByRole('checkbox', { name: 'front' }).check()
 
+  await openAdvanced(page, 2)
   await page.getByRole('button', { name: 'Add env var to service 2' }).click()
   await page.getByLabel('Service 2 env 1 name').fill('POSTGRES_PASSWORD')
   await page.getByRole('group', { name: 'Service 2' }).getByLabel('From deployment variable').check()
@@ -84,6 +90,7 @@ test('invalid wizard input is caught locally and server violations are listed', 
 
   await page.getByLabel('Service 1 name').fill('web')
   await page.getByLabel('Service 1 image').fill('nginx')
+  await openAdvanced(page, 1)
   await page.getByRole('button', { name: 'Add port to service 1' }).click()
   await page.getByLabel('Service 1 port 1 container').fill('99999')
   await page.getByRole('button', { name: 'Preview YAML' }).click()
@@ -92,4 +99,38 @@ test('invalid wizard input is caught locally and server violations are listed', 
   await page.getByLabel('Service 1 port 1 container').fill('80')
   await page.getByRole('button', { name: 'Preview YAML' }).click()
   await expect(page.getByText('services[0].ports[0]: host port 80 is used twice')).toBeVisible()
+})
+
+test('at 375px both tab rows stay on one line and the first step folds the advanced sections', async ({ page, api }) => {
+  mockCommon(api)
+  await page.setViewportSize({ width: 375, height: 800 })
+  await page.goto('/environments/a/deployments')
+  await page.getByRole('button', { name: 'Add deployment' }).click()
+  await page.getByRole('radio', { name: 'Form wizard' }).check()
+
+  // Geometry check (no visual baselines on this branch): every tab is as tall as one line of text and the row fits the dialog.
+  for (const group of ['Source', 'Editing mode']) {
+    const row = page.getByRole('radiogroup', { name: group })
+    const rowBox = (await row.boundingBox())!
+    const dialogBox = (await page.getByRole('dialog').boundingBox())!
+    expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(dialogBox.x + dialogBox.width + 1)
+    const tops = new Set<number>()
+    for (const tab of await row.locator('label').all()) tops.add(Math.round((await tab.boundingBox())!.y))
+    expect(tops.size).toBe(1)
+  }
+  const source = page.getByRole('radiogroup', { name: 'Source' })
+  // The row scrolls inside itself when the tabs do not fit; the last tab can be reached.
+  expect(await source.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true)
+  await source.getByText('Git repository').scrollIntoViewIfNeeded()
+  await expect(source.getByText('Git repository')).toBeInViewport()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+  // Only the essentials are shown until the disclosure is opened.
+  await expect(page.getByLabel('Service 1 name')).toBeVisible()
+  await expect(page.getByLabel('Service 1 image')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Add port to service 1' })).toBeHidden()
+  await expect(page.getByLabel('Service 1 domain host')).toBeHidden()
+  await openAdvanced(page, 1)
+  await expect(page.getByRole('button', { name: 'Add port to service 1' })).toBeVisible()
+  await expect(page.getByLabel('Service 1 domain host')).toBeVisible()
 })

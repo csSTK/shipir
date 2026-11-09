@@ -200,6 +200,7 @@ describe('wizard domain section', () => {
   it('labels the columns of the ports, environment and volume rows with visible headers', () => {
     serve({ visible: false })
     open()
+    fireEvent.click(screen.getByText('Advanced options'))
     for (const name of ['Add port to service 1', 'Add env var to service 1', 'Add volume to service 1']) fireEvent.click(screen.getByRole('button', { name }))
     const columns = (legend: string) => within(screen.getByText(legend, { selector: 'legend' }).closest('fieldset')!)
     for (const h of ['Host', 'Container port', 'Protocol']) expect(columns('Ports').getByText(h)).toBeVisible()
@@ -207,6 +208,14 @@ describe('wizard domain section', () => {
     for (const h of ['Volume or path', 'Path in container']) expect(columns('Volumes').getByText(h)).toBeVisible()
     // Headers are visual only: the inputs keep their own accessible names.
     expect(screen.getByLabelText('Service 1 port 1 host')).toBeInTheDocument()
+  })
+
+  it('starts with the advanced sections closed and opens them for seeded content or invalid fields', () => {
+    serve({ visible: false })
+    open()
+    expect(screen.getByText('Advanced options').closest('details')).not.toHaveAttribute('open')
+    fireEvent.click(screen.getByText('Advanced options'))
+    expect(screen.getByText('Advanced options').closest('details')).toHaveAttribute('open')
   })
 
   it('shows no column headers while a list is empty', () => {

@@ -150,15 +150,27 @@
   padding-left: var(--space-4);
 }
 .wz-modes {
-  display: inline-flex;
+  display: flex;
   padding: var(--space-1);
   gap: var(--space-1);
   border-radius: var(--radius-md);
-  background: var(--color-surface-sunken);
+  background:
+    linear-gradient(to right, var(--color-surface-sunken) 30%, transparent) left / var(--space-4) 100% no-repeat local,
+    linear-gradient(to left, var(--color-surface-sunken) 30%, transparent) right / var(--space-4) 100% no-repeat local,
+    linear-gradient(to right, var(--color-border), transparent) left / var(--space-2) 100% no-repeat scroll,
+    linear-gradient(to left, var(--color-border), transparent) right / var(--space-2) 100% no-repeat scroll,
+    var(--color-surface-sunken);
   align-self: flex-start;
+  max-width: 100%;
+  /* One line always: when the tabs do not fit (phones) the row scrolls inside itself. */
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
 }
 .wz-mode {
   position: relative;
+  flex: none;
+  white-space: nowrap;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   font-size: var(--text-body-size);
@@ -211,4 +223,28 @@
 /* Class display rules must not override the hidden attribute of the mode panels. */
 .ui-dialog [hidden] {
   display: none !important;
+}
+
+/* Advanced service options: one disclosure per service so step one shows only the essentials. */
+.wz-advanced {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.wz-advanced__summary {
+  cursor: pointer;
+  font-size: var(--text-body-size);
+  font-weight: var(--weight-semibold);
+  border-radius: var(--radius-sm);
+  width: fit-content;
+}
+.wz-advanced__summary:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+.wz-advanced__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
 }

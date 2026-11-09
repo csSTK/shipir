@@ -215,7 +215,8 @@ describe('design token usage', () => {
     return [
       ...c.matchAll(/opacity\s*:\s*0?\.\d+/gi),
       ...c.matchAll(/(?<![\w.-])\d*\.?\d+m?s\b/gi),
-      ...c.matchAll(/\b(?:ease-in-out|ease-in|ease-out|ease|linear)\b|cubic-bezier/gi),
+      // (?![\w-]) keeps `linear` from matching inside `linear-gradient(`.
+      ...c.matchAll(/(?<![\w-])(?:ease-in-out|ease-in|ease-out|ease|linear)(?![\w-])|cubic-bezier/gi),
     ].map((m) => m[0])
   }
 
@@ -223,6 +224,8 @@ describe('design token usage', () => {
     expect(wizardViolations('.a { opacity: 0.65; }')).toEqual(['opacity: 0.65'])
     expect(wizardViolations('.a { transition: opacity 150ms ease-out; }')).toHaveLength(2)
     expect(wizardViolations('.a { transition: x .2s linear; }')).toHaveLength(2)
+    expect(wizardViolations('.a { background: linear-gradient(to right, red, transparent); }')).toEqual([])
+    expect(wizardViolations('.a { transition: x var(--duration-fast) linear; }')).toEqual(['linear'])
     expect(wizardViolations('.a { transition: x 1s cubic-bezier(0, 0, 1, 1); }')).toHaveLength(2)
     expect(wizardViolations('.a { transition: x var(--duration-fast) var(--ease-out); opacity: 0; }')).toEqual([])
   })

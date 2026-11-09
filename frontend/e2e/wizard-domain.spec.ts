@@ -31,13 +31,19 @@ async function openWizard(page: import('@playwright/test').Page) {
   await page.getByRole('radio', { name: 'Form wizard' }).check()
 }
 
+/** Ports, environment, volumes, domain and networks sit in a per-service disclosure that starts closed. */
+async function openAdvanced(page: import('@playwright/test').Page, n = 1) {
+  await page.getByRole('group', { name: `Service ${n}` }).getByText('Advanced options').click()
+}
+
 test('detected proxy prefills the domain section and the domain is sent to generate', async ({ page, api }) => {
   mockCommon(api, { visible: true, proxy: 'TRAEFIK', container: 'traefik', network: 'proxy' })
   api.mock('POST', '/api/compose/generate', { body: { yaml: 'services: {}\n' } })
   await openWizard(page)
 
-  await expect(page.getByText(/Traefik detected \(traefik\) on network proxy/)).toBeVisible()
   await page.getByLabel('Service 1 name').fill('web')
+  await openAdvanced(page)
+  await expect(page.getByText(/Traefik detected \(traefik\) on network proxy/)).toBeVisible()
   await page.getByLabel('Service 1 image').fill('nginx:1.27')
   await page.getByLabel('Service 1 domain host').fill('app.example.com')
   await expect(page.getByLabel('Service 1 domain network')).toHaveValue('proxy')
@@ -54,6 +60,7 @@ test('without a proxy the Traefik template is offered, invalid domains are caugh
   mockCommon(api, { visible: true, proxy: null, container: null, network: null })
   api.mock('GET', '/api/compose/proxy-templates/traefik', { body: { yaml: 'services:\n  traefik:\n    image: traefik:v3.1\n' } })
   await openWizard(page)
+  await openAdvanced(page)
 
   await expect(page.getByText('No reverse proxy detected on this host.', { exact: false })).toBeVisible()
   await page.getByRole('button', { name: 'Copy Traefik template' }).click()
@@ -73,11 +80,13 @@ test('two Traefik domains that Traefik would name the same router are flagged be
 
   await page.getByLabel('Service 1 name').fill('web')
   await page.getByLabel('Service 1 image').fill('nginx:1.27')
+  await openAdvanced(page)
   await page.getByLabel('Service 1 domain host').fill('a.b-c.com')
   await page.getByLabel('Service 1 domain port').fill('80')
   await page.getByRole('button', { name: 'Add service' }).click()
   await page.getByLabel('Service 2 name').fill('api')
   await page.getByLabel('Service 2 image').fill('nginx:1.27')
+  await openAdvanced(page, 2)
   await page.getByLabel('Service 2 domain host').fill('a-b.c.com')
   await page.getByLabel('Service 2 domain port').fill('80')
   await page.getByRole('button', { name: 'Preview YAML' }).click()
@@ -87,6 +96,7 @@ test('two Traefik domains that Traefik would name the same router are flagged be
 test('a host that is not fully visible gets a neutral hint, not "no reverse proxy"', async ({ page, api }) => {
   mockCommon(api, { visible: false, proxy: null, container: null, network: null })
   await openWizard(page)
+  await openAdvanced(page)
 
   await expect(page.getByText('Proxy detection is not available', { exact: false })).toBeVisible()
   await expect(page.getByText('No reverse proxy detected', { exact: false })).toHaveCount(0)
@@ -99,6 +109,7 @@ test('a host with a managed Caddy gets no Caddy labels and a link to Domains', a
 
   await page.getByLabel('Service 1 name').fill('web')
   await page.getByLabel('Service 1 image').fill('nginx:1.27')
+  await openAdvanced(page)
   await page.getByLabel('Service 1 domain host').fill('app.example.com')
   await expect(page.getByText('does not read Docker labels', { exact: false })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Open Domains' })).toHaveAttribute('href', '/environments/a/domains')

@@ -256,6 +256,11 @@ function ServiceCard({
   const err = (k: string) => fields.get(`${p}.${k}`)
   const others = state.services.filter((_, i) => i !== index).map((s) => s.name.trim()).filter(Boolean)
   const networkNames = state.networks.map((x) => x.name.trim()).filter(Boolean)
+  // Essentials (name, image, command, restart) stay visible; the rest folds away unless it already holds something.
+  const hasAdvancedContent =
+    service.ports.length > 0 || service.env.length > 0 || service.volumes.length > 0 || service.networks.length > 0 || service.dependsOn.length > 0 || service.domain.host.trim() !== ''
+  const hasAdvancedErrors = [...fields.keys()].some((k) => /^services\.\d+\./.test(k) && k.startsWith(p + '.') && !/\.(name|image)$/.test(k))
+  const [advancedOpen, setAdvancedOpen] = useState(hasAdvancedContent)
   return (
     <fieldset className="wz-card" aria-label={t('ComposeWizard.serviceN', { n })}>
       <div className="wz-card__head">
@@ -282,6 +287,9 @@ function ServiceCard({
         </Select>
       </div>
 
+      <details className="wz-advanced" open={advancedOpen || hasAdvancedErrors} onToggle={(e) => setAdvancedOpen(e.currentTarget.open)}>
+        <summary className="wz-advanced__summary">{t('ComposeWizard.advancedOptions')}</summary>
+        <div className="wz-advanced__body">
       <fieldset className="wz-group">
         <legend>{t('ComposeWizard.ports')}</legend>
         <div className="wz-table wz-table--port">
@@ -353,6 +361,8 @@ function ServiceCard({
 
       <Toggle name={`${p}-networks`} label={t('ComposeWizard.networks')} options={networkNames} selected={service.networks} onChange={(networks) => onChange({ networks })} />
       <Toggle name={`${p}-depends`} label={t('ComposeWizard.startsAfter')} options={others} selected={service.dependsOn} onChange={(dependsOn) => onChange({ dependsOn })} />
+        </div>
+      </details>
     </fieldset>
   )
 }

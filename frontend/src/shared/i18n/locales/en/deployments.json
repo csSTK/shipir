@@ -426,6 +426,7 @@
   "ComposeWizard.restart": "Restart",
   "ComposeWizard.serviceNRestart": "Service {{n}} restart",
   "ComposeWizard.default": "Default",
+  "ComposeWizard.advancedOptions": "Advanced options",
   "ComposeWizard.ports": "Ports",
   "ComposeWizard.host": "Host",
   "ComposeWizard.serviceNPortValueHost": "Service {{n}} port {{value}} host",
