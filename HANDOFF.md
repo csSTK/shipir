@@ -31,6 +31,7 @@ This file holds the parts of the original planning handoff that aren't permanent
 - [x] **DECIDED (shipr-kqbc.48):** Logs, stats, events and run output of system-managed deployments (the managed proxy) are ADMIN-only, consistent with the exec and REST locks; a demoted ADMIN loses them without reconnecting.
 - [x] **DECIDED (shipr-kqbc.53, 2026-11-09):** A compose whose env_file/include/extends references use `$`, `~`, remote sources or paths outside the deployment directory gets no graph hash. Accepted and documented: such deployments stay restricted for automatic (system) runs until an ADMIN deploys by hand; there is no fallback to the "only Shipir's own files" rule (shipr-kqbc.55, .56).
 - [x] **DECIDED (shipr-kqbc.52):** The volume-ownership check before `docker compose` is a documented time-of-check/time-of-use residual risk (Javadoc on `ComposeSecurityPolicy`).
+- [x] **DECIDED (shipr-0qbh.54, 2026-11-09):** A deployment-level OPERATE grant covers start/stop/restart/pause/unpause/kill of that deployment's containers only. Remove, recreate, duplicate and resource edits stay at host OPERATE, because they change the deployment outside Compose (`HostResourcesService.requireOperate`, pinned by `HostResourceActionsAccessTest`).
 
 ## Recommended build order
 
