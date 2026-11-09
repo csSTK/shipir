@@ -12,7 +12,7 @@ Work out the changed area with `git status --porcelain` plus `git diff --name-on
 - **Focused:** collect the feature packages that were touched, e.g. `docker`, `compose`. Run:
 
   ```bash
-  ./backend/mvnw -f backend/pom.xml verify -Dtest='dev.bethge.shipir.<pkg>.**' -Dsurefire.failIfNoSpecifiedTests=false
+  ./backend/mvnw -f backend/pom.xml test -Dtest='dev.bethge.shipir.<pkg>.**' -Dsurefire.failIfNoSpecifiedTests=false
   ```
 
   Join several packages with commas. Run the full backend suite instead if any of these changed:
