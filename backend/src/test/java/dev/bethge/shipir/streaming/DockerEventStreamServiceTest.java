@@ -481,6 +481,54 @@ class DockerEventStreamServiceTest {
         assertThat(eventsOf("sv")).extracting(DockerEventDto::id).containsExactly("img");
     }
 
+    @Test
+    void omittedCountOfViewersLeavesOutHiddenSystemEvents() {
+        when(access.systemManagedProjects(hostId)).thenReturn(java.util.Set.of("shipir-proxy"));
+        service.subscribe(hostId, "viewer", "sv", "a");
+        service.subscribe(hostId, "root", "sa", "b");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !stub.sinks.isEmpty());
+        // cap is 3: three kept, then 2 proxy + 1 plain dropped
+        for (int i = 0; i < 3; i++) stub.lastSink().accept(event("start", "c" + i));
+        for (int i = 0; i < 2; i++) {
+            stub.lastSink().accept(new DockerEventDto(DockerEventDto.Type.CONTAINER, "die", "p" + i, "proxy",
+                    "shipir-proxy", Instant.now()));
+        }
+        stub.lastSink().accept(event("start", "c9"));
+        await().atMost(5, TimeUnit.SECONDS).until(() -> batches("sa").size() == 1 && batches("sv").size() == 1);
+
+        assertThat(batches("sa").get(0).omitted()).isEqualTo(3);
+        assertThat(batches("sv").get(0).omitted()).isEqualTo(1);
+    }
+
+    @Test
+    void aSlowSystemProjectLookupDoesNotBlockSubscribe() throws Exception {
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        when(access.systemManagedProjects(hostId)).thenAnswer(inv -> {
+            entered.countDown();
+            release.await(10, TimeUnit.SECONDS);
+            return java.util.Set.<String>of();
+        });
+        service.subscribe(hostId, "viewer", "sv", "a");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !stub.sinks.isEmpty());
+        stub.lastSink().accept(event("start", "c1"));
+        assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+
+        var done = new java.util.concurrent.atomic.AtomicBoolean();
+        Thread t = Thread.ofVirtual().start(() -> {
+            service.subscribe(hostId, "other", "s2", "b");
+            done.set(true);
+        });
+        await().atMost(2, TimeUnit.SECONDS).untilTrue(done); // lookup still blocked, stream lock is free
+        release.countDown();
+        t.join();
+        await().atMost(5, TimeUnit.SECONDS).until(() -> !eventsOf("sv").isEmpty());
+    }
+
+    private List<DockerEventMessage> batches(String session) {
+        return frames(session).stream().filter(m -> m.type() == DockerEventMessage.Type.EVENT).toList();
+    }
+
     private List<DockerEventDto> eventsOf(String session) {
         return frames(session).stream().filter(m -> m.type() == DockerEventMessage.Type.EVENT)
                 .flatMap(m -> m.events().stream()).toList();

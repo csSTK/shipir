@@ -59,7 +59,8 @@ public class DockerEventStreamService {
         final UUID hostId;
         final List<Subscription> subscribers = new ArrayList<>();
         final Map<EventKey, DockerEventDto> pending = new LinkedHashMap<>();
-        int omitted;
+        /** Events over the per-frame cap, kept by Compose project (null key = unlabelled) so each viewer gets its own count. */
+        final Map<String, Integer> omitted = new HashMap<>();
         long nextSeq = 1;
         boolean closed;
         ReconnectingEventStream loop;
@@ -368,7 +369,7 @@ public class DockerEventStreamService {
             EventKey key = new EventKey(event.type(), event.action(), event.id());
             if (!stream.pending.containsKey(key)) {
                 if (stream.pending.size() >= properties.maxEventsPerFrame()) {
-                    stream.omitted++;
+                    stream.omitted.merge(event.composeProject(), 1, Integer::sum);
                     return;
                 }
                 stream.pending.put(key, event);
@@ -380,21 +381,40 @@ public class DockerEventStreamService {
         }
     }
 
+    /**
+     * Debounce timer. The batch is taken under the stream lock, the system-project lookup (DB) runs outside it so it
+     * cannot block subscribe/unsubscribe, then the frames are numbered and sent under the lock again (order kept).
+     * Runs on the single flush thread, so flushes never overlap; events arriving meanwhile schedule the next one.
+     */
     private void flush(HostStream stream) {
+        List<DockerEventDto> batch;
+        Map<String, Integer> omitted;
+        boolean needsLookup;
         synchronized (stream) {
             stream.flush = null;
             if (stream.closed || stream.pending.isEmpty()) {
                 return;
             }
-            var batch = List.copyOf(stream.pending.values());
-            int omitted = stream.omitted;
+            batch = List.copyOf(stream.pending.values());
+            omitted = new HashMap<>(stream.omitted);
             stream.pending.clear();
-            stream.omitted = 0;
-            var message = new DockerEventMessage(stream.nextSeq++, DockerEventMessage.Type.EVENT, batch,
-                    omitted > 0 ? omitted : null, null, null);
-            Set<String> system = stream.subscribers.stream().anyMatch(s -> !s.admin) ? systemProjects(stream) : null;
+            stream.omitted.clear();
+            needsLookup = stream.subscribers.stream().anyMatch(s -> !s.admin);
+        }
+        Set<String> system = needsLookup ? systemProjects(stream) : null; // outside the lock
+        synchronized (stream) {
+            if (stream.closed) {
+                return;
+            }
+            long seq = stream.nextSeq++;
+            int omittedTotal = omitted.values().stream().mapToInt(Integer::intValue).sum();
             for (Subscription s : stream.subscribers) {
-                send(stream, s, s.admin ? message : withoutSystemEvents(message, system));
+                // a non-ADMIN who subscribed during the lookup sees no project-labelled event (system == null = unknown)
+                DockerEventMessage frame = s.admin
+                        ? new DockerEventMessage(seq, DockerEventMessage.Type.EVENT, batch,
+                                omittedTotal > 0 ? omittedTotal : null, null, null)
+                        : forViewer(seq, batch, omitted, needsLookup ? system : null);
+                send(stream, s, frame);
             }
         }
     }
@@ -412,15 +432,24 @@ public class DockerEventStreamService {
         }
     }
 
-    /** The frame as a non-ADMIN may see it; null when nothing is left to show (no frame is sent then). */
-    private static DockerEventMessage withoutSystemEvents(DockerEventMessage message, Set<String> system) {
-        List<DockerEventDto> visible = message.events().stream()
+    /**
+     * The frame as a non-ADMIN may see it; null when nothing is left to show (no frame is sent then). The omitted
+     * count leaves out dropped events of system projects (unknown lookup: all project-labelled ones), so hidden
+     * proxy activity does not show up as a number either.
+     */
+    private static DockerEventMessage forViewer(long seq, List<DockerEventDto> batch, Map<String, Integer> omitted,
+                                                Set<String> system) {
+        List<DockerEventDto> visible = batch.stream()
                 .filter(e -> e.composeProject() == null || (system != null && !system.contains(e.composeProject())))
                 .toList();
-        if (visible.isEmpty() && message.omitted() == null) {
+        int omittedVisible = omitted.entrySet().stream()
+                .filter(e -> e.getKey() == null || (system != null && !system.contains(e.getKey())))
+                .mapToInt(Map.Entry::getValue).sum();
+        if (visible.isEmpty() && omittedVisible == 0) {
             return null;
         }
-        return new DockerEventMessage(message.seq(), message.type(), visible, message.omitted(), null, null);
+        return new DockerEventMessage(seq, DockerEventMessage.Type.EVENT, visible,
+                omittedVisible > 0 ? omittedVisible : null, null, null);
     }
 
     /** Caller holds the stream lock. */
