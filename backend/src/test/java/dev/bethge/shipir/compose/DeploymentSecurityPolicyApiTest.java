@@ -26,6 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * The fake compose emits the YAML as JSON, so volumes use the long form that real {@code config --format json} normalizes to.
  * Non-ADMIN users cannot reach host root through Compose; ADMIN can; system runs follow the content author's role. */
+@org.springframework.test.context.TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class DeploymentSecurityPolicyApiTest extends DeploymentTestBase {
 
     private static final String PRIVILEGED = "services:\n  x:\n    image: alpine\n    privileged: true\n";
@@ -390,5 +391,45 @@ class DeploymentSecurityPolicyApiTest extends DeploymentTestBase {
         UUID id = approvedGitCheckout("gitwrong");
         jdbc.update("UPDATE deployment_versions SET graph_hash = ? WHERE deployment_id = ?", "0".repeat(64), id);
         assertThat(runs.rollbackImages(id, Map.of("x", "alpine@sha256:" + "a".repeat(64)))).isFalse();
+    }
+
+    @Test
+    void operatorEnvOnlyUpdateOfAnAdminAuthoredPrivilegedDeploymentIsRefused() throws Exception {
+        // an env-only change still re-validates the whole compose file under the caller's role
+        UUID id = create(login("admin"), "envonly", PRIVILEGED);
+        Login op = login("operator");
+        mvc.perform(op.write(put(url() + "/" + id).contentType(APPLICATION_JSON)
+                        .content(updateJson(PRIVILEGED, "[{\"key\":\"A\",\"value\":\"b\"}]"))))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ADMIN_REQUIRED"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM deployment_versions", Integer.class)).isEqualTo(1);
+        assertThat(files.readEnv(hostId, "envonly")).isEmpty();
+    }
+
+    @Test
+    void autoPullUpdateOfAnOperatorAuthoredPrivilegedFileDeploymentIsRefused() throws Exception {
+        // the path of the image auto-update scheduler: a system run follows the content author's role
+        UUID id = create(login("admin"), "imgauto", PRIVILEGED);
+        jdbc.update("UPDATE deployment_versions SET deployed_at = now(), deploy_succeeded_at = now(), created_by = (SELECT id FROM users WHERE username = 'operator') "
+                + "WHERE deployment_id = ?", id);
+        commands.clear();
+        assertThatThrownBy(() -> runs.autoPullUpdate(id))
+                .isInstanceOfSatisfying(DeploymentException.class, e -> assertThat(e.code()).isEqualTo("ADMIN_REQUIRED"));
+        assertThat(commands).doesNotContain(ComposeCommand.PULL, ComposeCommand.UP);
+    }
+
+    @Test
+    void systemRunIsRefusedWhenTheAdminAuthorIsDisabled() throws Exception {
+        UUID id = deployedAdminPrivileged("disabledauthor");
+        jdbc.update("UPDATE users SET disabled_at = now() WHERE username = 'admin'");
+        try {
+            commands.clear();
+            assertThatThrownBy(() -> runs.webhookTrigger(id))
+                    .isInstanceOfSatisfying(DeploymentException.class, e -> assertThat(e.code()).isEqualTo("ADMIN_REQUIRED"));
+            assertThatThrownBy(() -> runs.autoPullUpdate(id))
+                    .isInstanceOfSatisfying(DeploymentException.class, e -> assertThat(e.code()).isEqualTo("ADMIN_REQUIRED"));
+        } finally {
+            jdbc.update("UPDATE users SET disabled_at = NULL WHERE username = 'admin'");
+        }
+        assertThat(commands).doesNotContain(ComposeCommand.PULL, ComposeCommand.UP);
     }
 }
