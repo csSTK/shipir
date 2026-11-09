@@ -68,6 +68,9 @@ describe('TokensSection', () => {
     serve()
     renderSection()
     expect(await screen.findByText(/no api tokens/i)).toBeInTheDocument()
+    // The empty state carries the create action like other empty states.
+    expect(screen.getAllByRole('button', { name: 'Create token' })).toHaveLength(1)
+    expect(document.querySelector('.ui-empty')).toContainElement(screen.getByRole('button', { name: 'Create token' }))
   })
 
   it('explains how to use a token with a Bearer header', async () => {

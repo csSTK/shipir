@@ -124,9 +124,11 @@ export function TwoFactorEnrollment({
             {t('TwoFactorEnrollment.preparing')}
           </p>
         ) : (
-          <Button variant="primary" onClick={start}>
-            {t('TwoFactorEnrollment.enableTwoFactorAuthentication')}
-          </Button>
+          <div className="tfa__start">
+            <Button variant="primary" onClick={start}>
+              {t('TwoFactorEnrollment.enableTwoFactorAuthentication')}
+            </Button>
+          </div>
         )}
       </div>
     )

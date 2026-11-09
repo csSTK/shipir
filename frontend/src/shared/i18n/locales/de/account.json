@@ -65,5 +65,8 @@
   "AccountPage.automaticFollowsYourBrowserLanguage": "Automatisch folgt der Sprache deines Browsers.",
   "AccountPage.couldNotSaveTheLanguage": "Die Sprache konnte nicht gespeichert werden. Bitte versuche es erneut.",
   "AccountPage.language_en": "English",
-  "AccountPage.language_de": "Deutsch"
+  "AccountPage.language_de": "Deutsch",
+  "AccountPage.noNotificationSettings": "Noch keine Benachrichtigungseinstellungen",
+  "AccountPage.noNotificationSettingsHint": "Sobald es Ereignisse gibt, über die Shipir dich informieren kann, wählst du sie hier aus.",
+  "TokensSection.noApiTokensHint": "Erstelle ein Token, damit Skripte und Tools die Shipir-API in deinem Namen aufrufen können."
 }

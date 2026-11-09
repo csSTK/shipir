@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { ApiError } from '../../../shared/api/client.ts'
+import { KeyRound } from 'lucide-react'
 import { Button, Card, Dialog, EmptyState, Select, Skeleton, TextField } from '../../../shared/ui/index.ts'
 import { OneTimeSecret } from '../../one-time-secret/index.ts'
 import { useApiTokens, useCreateApiToken, useRevokeApiToken, type ApiToken, type CreatedApiToken } from './api.ts'
@@ -133,6 +134,7 @@ export function TokensSection() {
   const tokens = useApiTokens()
   const [creating, setCreating] = useState(false)
   const [revoking, setRevoking] = useState<ApiToken | null>(null)
+  const hasTokens = (tokens.data?.length ?? 0) > 0
   const origin = window.location.origin
 
   return (
@@ -141,7 +143,7 @@ export function TokensSection() {
         <h2 className="account__heading" id="account-tokens">
           {tr('TokensSection.apiTokens')}
         </h2>
-        <Button onClick={() => setCreating(true)}>{tr('TokensSection.createToken')}</Button>
+        {hasTokens && <Button onClick={() => setCreating(true)}>{tr('TokensSection.createToken')}</Button>}
       </div>
       <p className="tokens__text">
         {tr('TokensSection.tokensLetScriptsCallThe')}
@@ -158,7 +160,14 @@ export function TokensSection() {
           {tr('TokensSection.couldNotLoadYourTokens')}
         </p>
       )}
-      {tokens.data && tokens.data.length === 0 && <EmptyState title={tr('TokensSection.noApiTokensYet')} />}
+      {tokens.data && tokens.data.length === 0 && (
+        <EmptyState
+          icon={KeyRound}
+          title={tr('TokensSection.noApiTokensYet')}
+          description={tr('TokensSection.noApiTokensHint')}
+          action={<Button onClick={() => setCreating(true)}>{tr('TokensSection.createToken')}</Button>}
+        />
+      )}
       {tokens.data && tokens.data.length > 0 && (
         <ul className="tokens__list" aria-label={tr('TokensSection.apiTokens')}>
           {tokens.data.map((t) => (

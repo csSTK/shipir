@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
-import { Check, Circle } from 'lucide-react'
-import { Badge, Button, Card, PageHeader, Select, Skeleton, Switch, TextField } from '../../shared/ui/index.ts'
+import { Bell, Check, Circle } from 'lucide-react'
+import { Badge, Button, Card, EmptyState, PageHeader, Select, Skeleton, Switch, TextField } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -95,7 +95,7 @@ function PasswordSection({ username }: { username: string }) {
       ))}
       <ul className="account__rules">
         {rules.map((rule) => (
-          <li key={rule.id} data-met={rule.met}>
+          <li key={rule.id} className="account__rule" data-met={rule.met}>
             <span aria-hidden="true" className="account__mark">
               {rule.met ? <Check size={16} aria-hidden="true" /> : <Circle size={16} aria-hidden="true" />}
             </span>
@@ -111,9 +111,11 @@ function PasswordSection({ username }: { username: string }) {
       <div className="account__success" role="status">
         {changePassword.isSuccess && t('AccountPage.passwordChanged')}
       </div>
-      <Button className="account__button" variant="primary" type="submit" disabled={!canSubmit} loading={changePassword.isPending}>
-        {changePassword.isPending ? t('AccountPage.saving') : t('AccountPage.changePassword')}
-      </Button>
+      <div className="account__actions">
+        <Button variant="primary" type="submit" disabled={!canSubmit} loading={changePassword.isPending}>
+          {changePassword.isPending ? t('AccountPage.saving') : t('AccountPage.changePassword')}
+        </Button>
+      </div>
     </form>
     </Card>
   )
@@ -181,6 +183,13 @@ function PreferencesSection() {
         </div>
       )}
       {preferences.isError && <p role="alert" className="account__error">{t('AccountPage.couldNotLoadNotificationPreferences')}</p>}
+      {preferences.data?.length === 0 && (
+        <EmptyState
+          icon={Bell}
+          title={t('AccountPage.noNotificationSettings')}
+          description={t('AccountPage.noNotificationSettingsHint')}
+        />
+      )}
       {preferences.data?.map((p) => (
         <Switch
           key={p.type}
@@ -262,7 +271,7 @@ function TwoFactorSection({ enabled }: { enabled: boolean }) {
           {disabling ? (
             <DisableForm onCancel={() => setDisabling(false)} />
           ) : (
-            <div>
+            <div className="account__actions">
               <Button onClick={() => setDisabling(true)}>{t('AccountPage.disableTwoFactorAuthentication')}</Button>
             </div>
           )}

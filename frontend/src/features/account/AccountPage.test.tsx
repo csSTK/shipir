@@ -169,6 +169,22 @@ describe('AccountPage', () => {
     )
   })
 
+  it('shows an empty state instead of an empty card when there are no notification preferences', async () => {
+    route({ 'GET /notifications/preferences': () => [] })
+    renderPage()
+    const region = await screen.findByRole('region', { name: 'Notifications' })
+    expect(await within(region).findByText(/no notification settings/i)).toBeInTheDocument()
+    expect(within(region).queryByRole('switch')).toBeNull()
+  })
+
+  it('lists the password rules as a spaced checklist', () => {
+    route()
+    renderPage()
+    const list = document.querySelector('.account__rules')
+    expect(list?.querySelectorAll('li').length).toBeGreaterThan(0)
+    expect(list?.querySelector('li')?.className).toContain('account__rule')
+  })
+
   it('shows an error when preferences cannot be loaded', async () => {
     route({
       'GET /notifications/preferences': () => {

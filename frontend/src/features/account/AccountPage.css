@@ -1,17 +1,17 @@
 .account {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-6);
 }
 .account__card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
 }
 .account__form {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
 }
 .account__heading {
   margin: 0;
@@ -68,6 +68,15 @@
   padding: 0;
   font-size: var(--text-small-size);
   color: var(--color-text-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.account__rule {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--space-6);
 }
 .account__rules li[data-met='true'] {
   color: var(--color-ok);
@@ -75,7 +84,11 @@
 .account__mark {
   display: inline-flex;
   vertical-align: middle;
-  margin-inline-end: var(--space-1);
+}
+.account__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
 }
 .account__sr {
   position: absolute;
@@ -108,4 +121,10 @@
   margin: 0;
   font-size: var(--text-small-size);
   color: var(--color-text-muted);
+}
+
+/* Account card: the enrolment start button matches the other right-aligned card actions. */
+.account__card .tfa__start {
+  display: flex;
+  justify-content: flex-end;
 }
