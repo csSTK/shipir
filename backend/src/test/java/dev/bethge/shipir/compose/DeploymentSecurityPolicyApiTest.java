@@ -283,6 +283,18 @@ class DeploymentSecurityPolicyApiTest extends DeploymentTestBase {
         assertThat(jdbc.queryForObject("SELECT graph_hash FROM deployment_versions WHERE deployment_id = ? AND deployed_at IS NOT NULL", String.class, id)).isNull();
     }
 
+    /** shipr-kqbc.55: no hash because of unhashed references means restricted system runs, not the only-own-files fallback. */
+    @Test
+    void systemRunStaysRestrictedForAFileDeploymentWhoseComposeHasUnhashedReferences() throws Exception {
+        String source = files.deploymentDir(hostId, "unhashedsys") + "/.shipir-backups";
+        UUID id = adminDeployed("unhashedsys", "services:\n  x:\n    image: alpine\n    privileged: true\n    volumes:\n      - {type: bind, source: %s, target: /b}\n".formatted(source));
+        assertThat(jdbc.queryForObject("SELECT graph_hash FROM deployment_versions WHERE deployment_id = ? AND deployed_at IS NOT NULL", String.class, id)).isNull();
+        commands.clear();
+        assertThatThrownBy(() -> runs.webhookTrigger(id))
+                .isInstanceOfSatisfying(DeploymentException.class, e -> assertThat(e.code()).isEqualTo("ADMIN_REQUIRED"));
+        assertThat(commands).doesNotContain(ComposeCommand.PULL, ComposeCommand.UP);
+    }
+
     @Test
     void adminDeployWithEnvFileFromTheGitMetadataStoresNoGraphHash() throws Exception {
         UUID id = adminDeployed("gitref", "services:\n  x:\n    image: alpine\n    env_file: repo/.git/config\n");

@@ -489,11 +489,14 @@ public class DeploymentRunService {
      * ({@link ComposeGraphHasher}: include/extends/env_file targets, Git checkout). The system run stays unrestricted only
      * while the directory still hashes to it; an edited aux file or a new commit (an OPERATOR can change both) makes it use
      * the restricted profile. Versions without a hash (older, or not deployed by an ADMIN) keep the earlier rule: only a FILE
-     * deployment whose directory holds nothing but Shipir's own files.
+     * deployment whose directory holds nothing but Shipir's own files. That fallback does not apply when the compose has
+     * references the hash cannot cover (variable/remote paths, backups, Git metadata): such a deploy stores no hash on purpose
+     * (shipr-kqbc.42, decided in shipr-kqbc.53) and stays restricted for system runs.
      *
      * @param approved the version whose graph the run executes (its hash is the ADMIN's approval); may be null
      */
-    private boolean unrestricted(String username, UUID authorId, Deployment deployment, DeploymentVersion approved) {
+    private boolean unrestricted(String username, UUID authorId, Deployment deployment, DockerEndpoint endpoint,
+                                 DeploymentVersion approved) {
         if (!SYSTEM_USER.equals(username)) {
             var caller = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
             // an API token never carries ADMIN power, whatever role its user has
@@ -502,15 +505,17 @@ public class DeploymentRunService {
                     .orElse(false);
         }
         return authorId != null && users.findById(authorId).filter(u -> !u.isDisabled()).map(u -> u.getRole() == Role.ADMIN)
-                .orElse(false) && graphIsApproved(deployment, approved);
+                .orElse(false) && graphIsApproved(deployment, endpoint, approved);
     }
 
-    private boolean graphIsApproved(Deployment deployment, DeploymentVersion approved) {
+    private boolean graphIsApproved(Deployment deployment, DockerEndpoint endpoint, DeploymentVersion approved) {
         if (approved != null && approved.getGraphHash() != null) {
             return ComposeGraphHasher.hash(files.deploymentDir(deployment.getHostId(), deployment.getName()))
                     .filter(approved.getGraphHash()::equals).isPresent();
         }
-        return graphIsOnlyApprovedFiles(deployment);
+        return graphIsOnlyApprovedFiles(deployment)
+                && !deploymentService.referencesUnhashedPaths(deployment.getHostId(), deployment.getName(), endpoint,
+                        deploymentService.composeFileOf(deployment));
     }
 
     private String graphHashOf(Deployment deployment) {
@@ -523,7 +528,7 @@ public class DeploymentRunService {
      */
     private boolean enforceRunPolicy(Deployment deployment, DockerEndpoint endpoint, String username, UUID authorId,
                                      DeploymentVersion approved) {
-        boolean unrestricted = unrestricted(username, authorId, deployment, approved);
+        boolean unrestricted = unrestricted(username, authorId, deployment, endpoint, approved);
         try {
             deploymentService.enforcePolicy(deployment.getHostId(), deployment.getName(), endpoint,
                     deploymentService.composeFileOf(deployment), unrestricted);
@@ -574,7 +579,7 @@ public class DeploymentRunService {
             restoreSource = source;
             restoreEnv = envText;
             GitCheckout checkout = pullGit ? pull(deployment, endpoint, envText,
-                    () -> unrestricted(username, userId, deployment, source)) : null;
+                    () -> unrestricted(username, userId, deployment, endpoint, source)) : null;
             if (!pullGit) {
                 alignCheckout(deployment, source);
             }
