@@ -132,4 +132,22 @@ class RecreateLeftoverReconcilerTest {
         reconciler.reconcileOnStatusChange(new HostStatusChangedEvent(id, "local", Status.DOWN, Status.UP, null, Instant.now()));
         verify(containers, times(1)).reconcileRecreateLeftovers(eq(id), any());
     }
+
+    @Test
+    void auditsARemovedStaleNewContainerAsASuccess() {
+        UUID id = UUID.randomUUID();
+        DockerHost h = host(id, "local");
+        when(hosts.findAll()).thenReturn(List.of(h));
+        when(containers.reconcileRecreateLeftovers(eq(id), any())).thenReturn(List.of(
+                new RecreateLeftoverAction("web", "web-shipir-new-1a2b3c4d", Outcome.NEW_REMOVED)));
+
+        reconciler.reconcileAll();
+
+        ArgumentCaptor<AuditRecord> captor = ArgumentCaptor.forClass(AuditRecord.class);
+        verify(audit).record(captor.capture());
+        assertThat(captor.getValue().action()).isEqualTo("CONTAINER_RECREATE_LEFTOVER_NEW_REMOVED");
+        assertThat(captor.getValue().outcome()).isEqualTo(AuditLogEntry.Outcome.SUCCESS);
+        assertThat(captor.getValue().details()).containsEntry("container", "web")
+                .containsEntry("leftover", "web-shipir-new-1a2b3c4d");
+    }
 }

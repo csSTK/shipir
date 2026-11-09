@@ -168,7 +168,7 @@ class ContainerRecreateLeftoverTest {
     @Test
     void ignoresContainersThatMerelyLookSimilar() {
         listing(container("a", "web-shipir-old-zzz"), container("b", "shipir-old-1a2b3c4d"),
-                container("c", "web-shipir-new-1a2b3c4d"), container("d", "web"),
+                container("c", "web-shipir-new-zzz"), container("d", "web"),
                 container("e", OLD + "-x"));
 
         assertThat(service.reconcileRecreateLeftovers(UUID.randomUUID(), endpoint)).isEmpty();
@@ -187,5 +187,110 @@ class ContainerRecreateLeftoverTest {
         assertThat(service.reconcileRecreateLeftovers(UUID.randomUUID(), endpoint)).containsExactlyInAnyOrder(
                 new RecreateLeftoverAction("web", OLD, Outcome.FAILED),
                 new RecreateLeftoverAction("db", otherOld, Outcome.REMOVED));
+    }
+
+    private static final String NEW = "web-shipir-new-1a2b3c4d";
+
+    /** What inspecting {@code new1} right before removal says. */
+    private void inspectNew1(String name, String status, java.time.Instant created) {
+        var r = mock(com.github.dockerjava.api.command.InspectContainerResponse.class, Answers.RETURNS_DEEP_STUBS);
+        when(r.getName()).thenReturn("/" + name);
+        when(r.getState().getStatus()).thenReturn(status);
+        when(r.getCreated()).thenReturn(created.toString());
+        when(client.inspectContainerCmd("new1").exec()).thenReturn(r);
+    }
+
+    private static final java.time.Instant LONG_AGO = java.time.Instant.now().minus(java.time.Duration.ofHours(1));
+
+    @Test
+    void aStaleListingWhoseContainerIsNowTheLiveOriginalIsNeverRemoved() {
+        listing(container("new1", NEW, "created"), container("cur1", "web", "running"));
+        holders("web", container("cur1", "web", "running"));
+        inspectNew1("web", "running", LONG_AGO); // the recreate finished since the listing
+
+        assertThat(service.reconcileRecreateLeftovers(UUID.randomUUID(), endpoint))
+                .containsExactly(new RecreateLeftoverAction("web", NEW, Outcome.SKIPPED));
+        verify(client, never()).removeContainerCmd(any());
+    }
+
+    @Test
+    void aTooYoungNewContainerIsLeftForAnotherInstancesRecreate() {
+        listing(container("new1", NEW, "created"), container("cur1", "web", "running"));
+        holders("web", container("cur1", "web", "running"));
+        inspectNew1(NEW, "created", java.time.Instant.now());
+
+        assertThat(service.reconcileRecreateLeftovers(UUID.randomUUID(), endpoint))
+                .containsExactly(new RecreateLeftoverAction("web", NEW, Outcome.SKIPPED));
+        verify(client, never()).removeContainerCmd(any());
+    }
+
+    @Test
+    void aNewContainerThatWasStartedIsNotRemoved() {
+        listing(container("new1", NEW, "created"), container("cur1", "web", "running"));
+        holders("web", container("cur1", "web", "running"));
+        inspectNew1(NEW, "running", LONG_AGO);
+
+        assertThat(service.reconcileRecreateLeftovers(UUID.randomUUID(), endpoint))
+                .containsExactly(new RecreateLeftoverAction("web", NEW, Outcome.SKIPPED));
+        verify(client, never()).removeContainerCmd(any());
+    }
+
+    @Test
+    void removesAStaleNewContainerWhenTheOriginalNameExists() {
+        inspectNew1(NEW, "created", LONG_AGO);
+        listing(container("new1", NEW, "created"), container("cur1", "web", "running"));
+        holders("web", container("cur1", "web", "running"));
+
+        assertThat(service.reconcileRecreateLeftovers(UUID.randomUUID(), endpoint))
+                .containsExactly(new RecreateLeftoverAction("web", NEW, Outcome.NEW_REMOVED));
+        verify(client.removeContainerCmd("new1").withForce(true)).withRemoveVolumes(false);
+        verify(client, never()).renameContainerCmd(any());
+        verify(client, never()).startContainerCmd(any());
+    }
+
+    @Test
+    void keepsAStaleNewContainerWhenNoContainerCarriesTheOriginalName() {
+        listing(container("new1", NEW, "created"));
+        holders("web");
+
+        assertThat(service.reconcileRecreateLeftovers(UUID.randomUUID(), endpoint))
+                .containsExactly(new RecreateLeftoverAction("web", NEW, Outcome.SKIPPED));
+        verify(client, never()).removeContainerCmd(any());
+    }
+
+    @Test
+    void anOldLeftoverIsRestoredBeforeTheStaleNewContainerIsJudged() {
+        inspectNew1(NEW, "created", LONG_AGO);
+        listing(container("new1", NEW, "created"), container("old1", OLD));
+        List<Container> restored = List.of(container("old1", "web"));
+        when(client.listContainersCmd().withShowAll(true).withNameFilter(List.of("web")).exec())
+                .thenReturn(List.of(), restored);
+
+        assertThat(service.reconcileRecreateLeftovers(UUID.randomUUID(), endpoint)).containsExactly(
+                new RecreateLeftoverAction("web", OLD, Outcome.RESTORED),
+                new RecreateLeftoverAction("web", NEW, Outcome.NEW_REMOVED));
+    }
+
+    @Test
+    void aNewContainerOfARecreateRunningInThisProcessIsLeftAlone() {
+        listing(container("new1", NEW, "created"), container("cur1", "web", "running"));
+        holders("web", container("cur1", "web", "running"));
+        service.recreatesInFlight.add(NEW);
+
+        assertThat(service.reconcileRecreateLeftovers(UUID.randomUUID(), endpoint)).isEmpty();
+        verify(client, never()).removeContainerCmd(any());
+    }
+
+    @Test
+    void theLeftoverNameIsTheOneWithoutASlashPathNotJustTheFirst() {
+        Container linked = mock(Container.class);
+        when(linked.getId()).thenReturn("old1");
+        when(linked.getNames()).thenReturn(new String[]{"/app/db-alias", "/" + OLD});
+        when(linked.getState()).thenReturn("exited");
+        listing(linked, container("cur1", "web", "running"));
+        holders("web", container("cur1", "web", "running"));
+
+        assertThat(service.reconcileRecreateLeftovers(UUID.randomUUID(), endpoint))
+                .containsExactly(new RecreateLeftoverAction("web", OLD, Outcome.REMOVED));
     }
 }

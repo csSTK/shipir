@@ -1,7 +1,7 @@
 package dev.bethge.shipir.docker.dto;
 
 /**
- * One action of the recreate-leftover reconciliation: {@code leftoverName} is the {@code *-shipir-old-*} container,
+ * One action of the recreate-leftover reconciliation: {@code leftoverName} is the {@code *-shipir-old-*} (or unfinished {@code *-shipir-new-*}) container,
  * {@code name} the original name it was renamed from.
  */
 public record RecreateLeftoverAction(String name, String leftoverName, Outcome outcome) {
@@ -9,6 +9,8 @@ public record RecreateLeftoverAction(String name, String leftoverName, Outcome o
     public enum Outcome {
         /** A container with the original name exists: the leftover was removed. */
         REMOVED,
+        /** {@code leftoverName} is an unfinished {@code *-shipir-new-*} container; the original name exists, so it was removed. */
+        NEW_REMOVED,
         /**
          * The leftover was running before the recreate, but the container under the original name (the new one, which
          * the crash left unstarted) was not: that container was started, then the leftover removed.

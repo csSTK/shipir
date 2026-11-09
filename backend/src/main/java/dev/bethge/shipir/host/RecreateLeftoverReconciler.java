@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Cleans up containers an interrupted recreate left behind ({@code *-shipir-old-*}, see
+ * Cleans up containers an interrupted recreate left behind ({@code *-shipir-old-*} and unfinished {@code *-shipir-new-*}, see
  * {@link ContainerService#reconcileRecreateLeftovers}) on every host: once at application start and again whenever a
  * host turns UP. An unreachable host is skipped; every action is logged and audited as {@code system}. Assumes a
  * single Shipir instance per Docker host (a second instance's running recreate would look like a leftover). Runs on a
@@ -90,6 +90,7 @@ class RecreateLeftoverReconciler {
         boolean failed = action.outcome() == RecreateLeftoverAction.Outcome.FAILED;
         String auditAction = switch (action.outcome()) {
             case REMOVED -> "CONTAINER_RECREATE_LEFTOVER_REMOVED";
+            case NEW_REMOVED -> "CONTAINER_RECREATE_LEFTOVER_NEW_REMOVED";
             case ORIGINAL_STARTED -> "CONTAINER_RECREATE_LEFTOVER_ORIGINAL_STARTED";
             case SKIPPED -> throw new IllegalStateException();
             case RESTORED, RESTORED_AND_STARTED -> "CONTAINER_RECREATE_LEFTOVER_RESTORED";

@@ -41,6 +41,10 @@ class ContainerRecreateNamingTest {
     private final List<String> oldRenames = new ArrayList<>();
     private final List<Boolean> inFlightDuringRename = new ArrayList<>();
 
+    /** Names given to the new container at creation, and whether each was registered in flight at that moment. */
+    private final List<String> newNames = new ArrayList<>();
+    private final List<Boolean> inFlightDuringCreate = new ArrayList<>();
+
     private void stubRecreate(boolean running) {
         when(manager.readTimeout()).thenReturn(Duration.ofSeconds(2));
         when(manager.client(any(), any())).thenReturn(client);
@@ -54,10 +58,16 @@ class ContainerRecreateNamingTest {
 
         CreateContainerResponse created = mock(CreateContainerResponse.class);
         when(created.getId()).thenReturn("new1");
-        CreateContainerCmd create = mock(CreateContainerCmd.class, invocation ->
-                invocation.getMethod().getName().equals("exec") ? created
+        CreateContainerCmd create = mock(CreateContainerCmd.class, invocation -> {
+            if (invocation.getMethod().getName().equals("withName")) {
+                String n = invocation.getArgument(0);
+                newNames.add(n);
+                inFlightDuringCreate.add(service.recreatesInFlight.contains(n));
+            }
+            return invocation.getMethod().getName().equals("exec") ? created
                         : CreateContainerCmd.class.isAssignableFrom(invocation.getMethod().getReturnType())
-                        ? invocation.getMock() : null);
+                        ? invocation.getMock() : null;
+        });
         when(client.createContainerCmd(any())).thenReturn(create);
 
         when(client.renameContainerCmd(any())).thenAnswer(inv -> {
@@ -114,6 +124,27 @@ class ContainerRecreateNamingTest {
         assertThat(oldRenames.get(0)).matches(OLD_NAME + "-r");
         assertThat(oldRenames.get(1)).isEqualTo("web");
         assertThat(inFlightDuringRename.get(0)).isTrue();
+        assertThat(service.recreatesInFlight).isEmpty();
+    }
+
+    @Test
+    void theNewContainerNameIsInFlightWhileItIsCreatedAndClearedAfterwards() {
+        stubRecreate(true);
+
+        recreate();
+
+        assertThat(newNames).singleElement().satisfies(n -> assertThat(n).matches("web-shipir-new-[0-9a-f]{8}"));
+        assertThat(inFlightDuringCreate).containsExactly(true);
+        assertThat(service.recreatesInFlight).isEmpty();
+    }
+
+    @Test
+    void theNewContainerMarkIsClearedWhenCreatingItFails() {
+        stubRecreate(true);
+        when(client.createContainerCmd(any())).thenThrow(new InternalServerErrorException("boom"));
+
+        assertThatThrownBy(this::recreate).isInstanceOf(RuntimeException.class);
+
         assertThat(service.recreatesInFlight).isEmpty();
     }
 }

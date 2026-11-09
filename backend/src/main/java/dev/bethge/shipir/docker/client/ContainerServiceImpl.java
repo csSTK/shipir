@@ -64,6 +64,11 @@ public class ContainerServiceImpl implements ContainerService {
     static final String OLD_NAME_MARKER = "-shipir-old-";
     /** Appended to the temporary old name when the container was running, so a crash cannot lose that fact. */
     static final String WAS_RUNNING_SUFFIX = "-r";
+    /** Infix of the temporary name the new container has until it takes over the original name. */
+    static final String NEW_NAME_MARKER = "-shipir-new-";
+    /** An unfinished new container younger than this may belong to a recreate of another Shipir instance. */
+    static final Duration STALE_NEW_MIN_AGE = Duration.ofMinutes(5);
+    private static final Pattern STALE_NEW_NAME = Pattern.compile("(.+)" + NEW_NAME_MARKER + "[0-9a-f]{8}");
     private static final Pattern LEFTOVER_NAME =
             Pattern.compile("(.+)" + OLD_NAME_MARKER + "[0-9a-f]{8}(" + WAS_RUNNING_SUFFIX + ")?");
 
@@ -443,8 +448,24 @@ public class ContainerServiceImpl implements ContainerService {
             String suffix = UUID.randomUUID().toString().substring(0, 8);
             String oldName = name + OLD_NAME_MARKER + suffix + (running ? WAS_RUNNING_SUFFIX : "");
             HostConfig baseHost = old.getHostConfig() == null ? HostConfig.newHostConfig() : old.getHostConfig();
-            String newId = createFrom(client, spec, name + "-shipir-new-" + suffix, baseHost, old.getConfig(), old.getId(), old.getMounts());
-            List<String> addedVolumes = volumesAddedByNewImage(client, newId, old.getMounts());
+            String newName = name + NEW_NAME_MARKER + suffix;
+            recreatesInFlight.add(newName);
+            String newId = null;
+            List<String> addedVolumes;
+            try {
+                newId = createFrom(client, spec, newName, baseHost, old.getConfig(), old.getId(), old.getMounts());
+                addedVolumes = volumesAddedByNewImage(client, newId, old.getMounts());
+            } catch (RuntimeException e) {
+                recreatesInFlight.remove(newName);
+                if (newId != null) {
+                    try {
+                        client.removeContainerCmd(newId).withForce(true).withRemoveVolumes(false).exec();
+                    } catch (RuntimeException removeFailed) {
+                        log.warn("Could not remove the unfinished new container {}: {}", newName, removeFailed.toString());
+                    }
+                }
+                throw e;
+            }
             boolean stopped = running; // set before stopping: a failed stop may still have stopped it
             boolean oldRenamed = false;
             recreatesInFlight.add(oldName);
@@ -469,6 +490,7 @@ public class ContainerServiceImpl implements ContainerService {
                         : "The container could not be recreated and restoring the previous one failed.", e);
             } finally {
                 recreatesInFlight.remove(oldName);
+                recreatesInFlight.remove(newName);
             }
             try {
                 client.removeContainerCmd(id).withForce(true).withRemoveVolumes(false).exec();
@@ -483,7 +505,8 @@ public class ContainerServiceImpl implements ContainerService {
     public List<RecreateLeftoverAction> reconcileRecreateLeftovers(UUID hostId, DockerEndpoint endpoint) {
         return calls.call(hostId, endpoint, client -> {
             List<RecreateLeftoverAction> actions = new ArrayList<>();
-            for (Container c : client.listContainersCmd().withShowAll(true).exec()) {
+            List<Container> listing = client.listContainersCmd().withShowAll(true).exec();
+            for (Container c : listing) {
                 String leftover = primaryName(c);
                 if (leftover == null || recreatesInFlight.contains(leftover)) {
                     continue;
@@ -496,8 +519,63 @@ public class ContainerServiceImpl implements ContainerService {
                 actions.add(new RecreateLeftoverAction(name, leftover,
                         reconcileLeftover(client, c.getId(), name, m.group(2) != null)));
             }
+            // Second pass, so an old leftover that was just renamed back counts as the holder of its name.
+            for (Container c : listing) {
+                String stale = primaryName(c);
+                if (stale == null || recreatesInFlight.contains(stale)) {
+                    continue;
+                }
+                Matcher m = STALE_NEW_NAME.matcher(stale);
+                if (m.matches()) {
+                    actions.add(new RecreateLeftoverAction(m.group(1), stale,
+                            reconcileStaleNew(client, c.getId(), m.group(1))));
+                }
+            }
             return actions;
         });
+    }
+
+    /**
+     * A crash between creating the new container and renaming it leaves {@code <name>-shipir-new-*} next to the
+     * untouched original. It is removed only when a different container under the original name exists (fresh look)
+     * and, inspected by id right before removal, it still has the stale name, was never started and is older than
+     * {@link #STALE_NEW_MIN_AGE}. The in-flight set only protects recreates of this process; state and age guard the
+     * rest (another instance's recreate, a recreate that finished since the listing). Without a holder it may be the
+     * only copy left, so it stays for a human.
+     */
+    private RecreateLeftoverAction.Outcome reconcileStaleNew(DockerClient client, String id, String name) {
+        try {
+            Container holder = client.listContainersCmd().withShowAll(true).withNameFilter(List.of(name)).exec()
+                    .stream().filter(c -> name.equals(primaryName(c))).findFirst().orElse(null);
+            if (holder == null || id.equals(holder.getId())) {
+                return RecreateLeftoverAction.Outcome.SKIPPED;
+            }
+            // The listing is stale: a recreate may have finished since. Judge the container as it is right now.
+            InspectContainerResponse now = client.inspectContainerCmd(id).exec();
+            String currentName = stripSlash(now.getName());
+            boolean neverStarted = now.getState() != null && "created".equals(now.getState().getStatus());
+            if (currentName == null || !STALE_NEW_NAME.matcher(currentName).matches() || !neverStarted
+                    || recreatesInFlight.contains(currentName) || !olderThanMinAge(now.getCreated())) {
+                return RecreateLeftoverAction.Outcome.SKIPPED;
+            }
+            client.removeContainerCmd(id).withForce(true).withRemoveVolumes(false).exec();
+            log.warn("Removed unfinished new container of an interrupted recreate; {} exists", name);
+            return RecreateLeftoverAction.Outcome.NEW_REMOVED;
+        } catch (ConflictException | NotFoundException e) {
+            log.info("Unfinished new container of {} changed under us, leaving it for the next pass: {}", name, e.toString());
+            return RecreateLeftoverAction.Outcome.SKIPPED;
+        } catch (RuntimeException e) {
+            log.error("Could not remove unfinished new container of {}: {}", name, e.toString());
+            return RecreateLeftoverAction.Outcome.FAILED;
+        }
+    }
+
+    private static boolean olderThanMinAge(String created) {
+        try {
+            return created != null && Instant.parse(created).isBefore(Instant.now().minus(STALE_NEW_MIN_AGE));
+        } catch (java.time.format.DateTimeParseException e) {
+            return false;
+        }
     }
 
     /** Decides on a fresh look at the original name, not on the listing the leftover came from (it may be stale). */
@@ -534,7 +612,14 @@ public class ContainerServiceImpl implements ContainerService {
     }
 
     private static String primaryName(Container c) {
-        return c.getNames() == null || c.getNames().length == 0 ? null : stripSlash(c.getNames()[0]);
+        // Linked containers also list "/other/alias" names and the order is unspecified: take the plain "/name".
+        if (c.getNames() == null) {
+            return null;
+        }
+        return Arrays.stream(c.getNames())
+                .filter(n -> n != null && n.startsWith("/") && n.indexOf('/', 1) < 0)
+                .map(ContainerServiceImpl::stripSlash)
+                .findFirst().orElse(null);
     }
 
     /**
