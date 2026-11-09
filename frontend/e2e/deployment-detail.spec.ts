@@ -1,20 +1,5 @@
 import { expect, mockDeploymentCards, test } from './fixtures/api.ts'
 
-// Monaco worker setup errors ('module is not defined', 'reading toUrl', 'Could not create web worker(s)')
-// only show up as page errors or console messages, so every test here fails on them.
-const monacoErrors: string[] = []
-const MONACO_ERROR = /module is not defined|toUrl|Could not create web worker|Cannot read properties of undefined/i
-test.beforeEach(({ page }) => {
-  monacoErrors.length = 0
-  page.on('pageerror', (e) => monacoErrors.push(e.message))
-  page.on('console', (m) => {
-    if (m.type() === 'error' || m.type() === 'warning') monacoErrors.push(m.text())
-  })
-})
-test.afterEach(() => {
-  expect(monacoErrors.filter((m) => MONACO_ERROR.test(m))).toEqual([])
-})
-
 const host = {
   id: 'a',
   name: 'Local',

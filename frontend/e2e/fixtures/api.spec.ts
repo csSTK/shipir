@@ -16,6 +16,36 @@ test('serves a registered mock to the page', async ({ page, api }) => {
   expect(result).toEqual({ status: 200, body: [{ id: 'h1', name: 'local' }] })
 })
 
+test('fails the test on a Monaco worker page error, without a spec guard', async ({ page, api }) => {
+  test.fail()
+  api.mock('GET', '/api/auth/me', { status: 401 })
+  await page.goto('/')
+
+  // The fixture's check at the end reports the Monaco error, so the test fails (test.fail() turns that into a pass).
+  const error = page.waitForEvent('pageerror')
+  await page.evaluate(() => setTimeout(() => { throw new Error('Could not create web worker(s)') }, 0))
+  await error
+})
+
+test('fails the test on a Monaco worker console error, without a spec guard', async ({ page, api }) => {
+  test.fail()
+  api.mock('GET', '/api/auth/me', { status: 401 })
+  await page.goto('/')
+
+  const message = page.waitForEvent('console', (m) => m.type() === 'error')
+  await page.evaluate(() => console.error('module is not defined'))
+  await message
+})
+
+test('ignores unrelated app errors that only share the Cannot read properties wording', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', { status: 401 })
+  await page.goto('/')
+
+  const error = page.waitForEvent('pageerror')
+  await page.evaluate(() => setTimeout(() => { throw new TypeError("Cannot read properties of undefined (reading 'name')") }, 0))
+  await error
+})
+
 test('fails the test when an /api call has no mock', async ({ page, api }) => {
   test.fail()
   api.mock('GET', '/api/auth/me', { status: 401 })

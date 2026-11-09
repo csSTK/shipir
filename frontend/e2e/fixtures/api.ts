@@ -41,8 +41,16 @@ export function mockDeploymentCards(api: ApiMock, deployment: string, versions: 
 }
 
 /**
+ * Monaco editor worker setup errors. They only show up as page errors or console messages, not as failed requests,
+ * so every test checks them. Narrow on purpose: an app error that merely says "Cannot read properties of undefined"
+ * is not a Monaco error; Monaco's own failure is "reading 'toUrl'".
+ */
+const MONACO_ERROR = /module is not defined|reading 'toUrl'|Could not create web worker/i
+
+/**
  * Intercepts every `/api/**` request of a test. Specs register mocks;
  * a call without a mock answers 501 and fails the test afterwards.
+ * Also fails the test on Monaco worker errors (page errors and console errors or warnings) in any spec.
  */
 export const test = base.extend<{ api: ApiMock }>({
   api: [
@@ -60,6 +68,11 @@ export const test = base.extend<{ api: ApiMock }>({
         [key('GET', '/api/exec/access'), { body: { hostOperable: false, operableProjects: [] } }],
       ])
       const unmocked: string[] = []
+      const monacoErrors: string[] = []
+      page.on('pageerror', (e) => monacoErrors.push(e.message))
+      page.on('console', (m) => {
+        if (m.type() === 'error' || m.type() === 'warning') monacoErrors.push(m.text())
+      })
 
       // Predicate, not a glob: '**/api/**' would also match source files such as /src/shared/api/client.ts.
       await page.route(
@@ -88,6 +101,7 @@ export const test = base.extend<{ api: ApiMock }>({
       await page.unrouteAll({ behavior: 'wait' })
 
       expect(unmocked, 'API calls without a registered mock').toEqual([])
+      expect(monacoErrors.filter((m) => MONACO_ERROR.test(m)), 'Monaco worker errors').toEqual([])
     },
     { auto: true },
   ],
