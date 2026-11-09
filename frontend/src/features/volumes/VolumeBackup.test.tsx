@@ -227,6 +227,22 @@ describe('BackupSchedulesDialog', () => {
     expect(within(dialog).getByRole('button', { name: 'Restore gone-20260101T000000Z.tar' })).toBeInTheDocument()
   })
 
+  it('hints to create a deleted volume again before restoring its stored archive', async () => {
+    apiFetch.mockImplementation((path: string) => {
+      if (path === '/hosts/h1/volume-backup-schedules') return Promise.resolve([schedule({ volumeName: 'gone' })])
+      if (path === '/hosts/h1/volumes/gone/stored-backups')
+        return Promise.resolve([{ name: 'gone-20260101T000000Z.tar', sizeBytes: 12, createdAt: '2026-01-01T00:00:00Z' }])
+      return Promise.resolve([])
+    })
+    render(wrap(<BackupSchedulesDialog hostId="h1" volumes={volumes} initialVolume="cache" onClose={() => {}} />))
+    fireEvent.click(await screen.findByRole('button', { name: 'Stored backups of gone' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Stored backups of gone' })
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Restore gone-20260101T000000Z.tar' }))
+    expect(await within(dialog).findByText('Create the volume first, then restore.')).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Restore' })).toBeDisabled()
+    expect(apiFetch.mock.calls.filter(([path]) => String(path).includes('/restore'))).toHaveLength(0)
+  })
+
   const deleteCalls = () => apiFetch.mock.calls.filter(([, init]) => init?.method === 'DELETE')
 
   it('asks before deleting a schedule and says its stored backups go too', async () => {

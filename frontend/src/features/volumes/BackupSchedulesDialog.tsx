@@ -121,6 +121,7 @@ export function BackupSchedulesDialog({ hostId, volumes, initialVolume, onClose,
           hostId={hostId}
           volume={storedFor}
           inUse={volumes.find((v) => v.name === storedFor)?.inUse}
+          volumeMissing={!volumes.some((v) => v.name === storedFor)}
           onDone={onDone}
           onClose={() => setStoredFor(null)}
         />

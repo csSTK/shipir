@@ -74,6 +74,7 @@
   "StoredBackupsDialog.restoreName": "{{name}} wiederherstellen",
   "StoredBackupsDialog.restoreNameIntoVolume": "{{name}} in {{volume}} wiederherstellen?",
   "StoredBackupsDialog.theArchiveIsOverlaidOnto": "Das Archiv wird über das bestehende Volume gelegt: Dateien mit gleichem Pfad werden überschrieben, Dateien, die nicht im Archiv sind, bleiben erhalten.",
+  "StoredBackupsDialog.createTheVolumeFirstThenRestore": "Erstelle das Volume zuerst neu, dann stelle das Backup wieder her.",
   "StoredBackupsDialog.restoredNameIntoVolume": "{{name}} in {{volume}} wiederhergestellt.",
   "BackupSchedulesDialog.deleteScheduleForVolumenameQuestion": "Zeitplan für {{volumeName}} löschen?",
   "BackupSchedulesDialog.theScheduleAndAllItsStoredBackups": "Der Zeitplan und alle zugehörigen gespeicherten Backups werden gelöscht. Das lässt sich nicht rückgängig machen.",

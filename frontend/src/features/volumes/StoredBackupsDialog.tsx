@@ -14,12 +14,14 @@ interface Props {
   volume: string
   /** The volume is known to be mounted by a container, so a restore needs the confirmation up front. */
   inUse?: boolean
+  /** The volume no longer exists in Docker (a schedule outlived it): its archives can be listed and downloaded, not restored. */
+  volumeMissing?: boolean
   onClose: () => void
   onDone?: (message: string) => void
 }
 
 /** Archives that scheduled backups stored on the Shipir server for one volume, each downloadable or restorable. */
-export function StoredBackupsDialog({ hostId, volume, inUse: volumeInUse = false, onClose, onDone }: Props) {
+export function StoredBackupsDialog({ hostId, volume, inUse: volumeInUse = false, volumeMissing = false, onClose, onDone }: Props) {
   const { t } = useTranslation('volumes')
   const stored = useStoredBackups(hostId, volume)
   const queryClient = useQueryClient()
@@ -52,7 +54,7 @@ export function StoredBackupsDialog({ hostId, volume, inUse: volumeInUse = false
   }
 
   async function restore() {
-    if (!chosen) return
+    if (!chosen || volumeMissing) return
     setPending(true)
     setError(null)
     try {
@@ -123,6 +125,7 @@ export function StoredBackupsDialog({ hostId, volume, inUse: volumeInUse = false
           <div className="vbackup__confirm" role="group" aria-labelledby={titleId}>
             <p id={titleId} ref={titleRef} tabIndex={-1} className="ui-dialog-text vbackup__confirm-title">{t('StoredBackupsDialog.restoreNameIntoVolume', { name: chosen, volume })}</p>
             <p className="ui-hint">{t('StoredBackupsDialog.theArchiveIsOverlaidOnto')}</p>
+            {volumeMissing && <p className="ui-hint">{t('StoredBackupsDialog.createTheVolumeFirstThenRestore')}</p>}
             {inUse && (
               <Switch
                 label={t('RestoreVolumeDialog.volumeIsInUseRestore')}
@@ -135,7 +138,7 @@ export function StoredBackupsDialog({ hostId, volume, inUse: volumeInUse = false
               <Button variant="ghost" disabled={pending} onClick={() => choose(null)}>
                 {t('RestoreVolumeDialog.cancel')}
               </Button>
-              <Button variant="primary" loading={pending} disabled={inUse && !confirmed} onClick={() => void restore()}>
+              <Button variant="primary" loading={pending} disabled={volumeMissing || (inUse && !confirmed)} onClick={() => void restore()}>
                 {t('RestoreVolumeDialog.restore')}
               </Button>
             </div>

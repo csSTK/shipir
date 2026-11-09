@@ -172,4 +172,7 @@ test('operator opens the stored backups of a schedule whose volume is gone from 
   const download = page.waitForEvent('download')
   await dialog.getByRole('button', { name: 'Download gone-20260101T000000Z.tar' }).click()
   expect((await download).suggestedFilename()).toBe('gone-20260101T000000Z.tar')
+  await dialog.getByRole('button', { name: 'Restore gone-20260101T000000Z.tar' }).click()
+  await expect(dialog.getByText('Create the volume first, then restore.')).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Restore', exact: true })).toBeDisabled()
 })

@@ -212,6 +212,17 @@ describe('StoredBackupsDialog restore', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('no longer exists')
   })
 
+  it('says to create the volume first and keeps Restore disabled when the volume is gone', async () => {
+    mockApi()
+    const onDone = vi.fn()
+    render(wrap(<StoredBackupsDialog hostId="h1" volume="cache" volumeMissing onClose={() => {}} onDone={onDone} />))
+    await choose()
+    expect(await screen.findByText('Create the volume first, then restore.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Restore' })).toBeDisabled()
+    expect(restoreCalls()).toHaveLength(0)
+    expect(onDone).not.toHaveBeenCalled()
+  })
+
   it('can cancel the restore step', async () => {
     mockApi()
     setup()
