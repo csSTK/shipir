@@ -27,8 +27,18 @@ class PortainerClient {
         this.http = http;
     }
 
-    /** GET {@code base + path} and parse the JSON answer. */
+    /** GET {@code base + path} and parse the JSON answer. A 404 means the endpoint is missing (wrong URL, not Portainer). */
     JsonNode get(URI base, String apiToken, String path) {
+        return send(base, apiToken, path, unreachable());
+    }
+
+    /** Like {@link #get}, for a single stack lookup: a 404 means Portainer does not know the stack. */
+    JsonNode getStack(URI base, String apiToken, String path) {
+        return send(base, apiToken, path, new PortainerException(HttpStatus.NOT_FOUND, "PORTAINER_STACK_NOT_FOUND",
+                "Portainer does not know this stack"));
+    }
+
+    private JsonNode send(URI base, String apiToken, String path, PortainerException notFound) {
         URI uri = URI.create(base.toString() + path);
         EgressHttpClient.Response response;
         try {
@@ -42,8 +52,7 @@ class PortainerClient {
                     "Portainer rejected the API token");
         }
         if (status == 404) {
-            throw new PortainerException(HttpStatus.NOT_FOUND, "PORTAINER_STACK_NOT_FOUND",
-                    "Portainer does not know this stack");
+            throw notFound;
         }
         if (status < 200 || status >= 300) {
             throw unreachable();

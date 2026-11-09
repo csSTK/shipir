@@ -55,12 +55,12 @@ public class PortainerImportService {
             details = "{'stack': #result?.name, 'portainerHost': T(dev.bethge.shipir.compose.portainer.PortainerImportService).hostOf(#url)}")
     public PortainerStackFile fetchStack(String url, String apiToken, long stackId) {
         URI base = validate(url);
-        JsonNode stack = client.get(base, apiToken, "/api/stacks/" + stackId);
+        JsonNode stack = client.getStack(base, apiToken, "/api/stacks/" + stackId);
         int type = stack.path("Type").asInt();
         if (type != TYPE_COMPOSE) {
             throw new PortainerException(HttpStatus.BAD_REQUEST, "UNSUPPORTED_STACK", reason(type));
         }
-        JsonNode file = client.get(base, apiToken, "/api/stacks/" + stackId + "/file");
+        JsonNode file = client.getStack(base, apiToken, "/api/stacks/" + stackId + "/file");
         String yaml = file.path("StackFileContent").asString("");
         if (yaml.isBlank()) {
             throw new PortainerException(HttpStatus.BAD_GATEWAY, "PORTAINER_BAD_RESPONSE",

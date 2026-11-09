@@ -62,6 +62,7 @@ class PortainerImportApiTest {
     final List<String> seenKeys = new CopyOnWriteArrayList<>();
     volatile int authStatus = 200;
     volatile int oversize = 0;
+    volatile boolean listMissing = false;
 
     @BeforeEach
     void setUp() throws IOException {
@@ -82,7 +83,10 @@ class PortainerImportApiTest {
             String path = ex.getRequestURI().getPath();
             String body;
             int code = authStatus;
-            if (code == 200) {
+            if (code == 200 && listMissing && path.equals("/api/stacks")) {
+                code = 404;
+                body = "UPSTREAM-LEAK";
+            } else if (code == 200) {
                 switch (path) {
                     case "/api/stacks" -> body = "[{\"Id\":1,\"Name\":\"web\",\"Type\":2,\"EndpointId\":3},"
                             + "{\"Id\":2,\"Name\":\"swarmy\",\"Type\":1,\"EndpointId\":3},"
@@ -182,6 +186,17 @@ class PortainerImportApiTest {
         mvc.perform(write(l, "/api/portainer-import/stacks/99", body()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PORTAINER_STACK_NOT_FOUND"));
+    }
+
+    @Test
+    void listCall404IsUnreachableNotStackNotFound() throws Exception {
+        listMissing = true;
+        Login l = login("admin");
+        String res = mvc.perform(write(l, "/api/portainer-import/stacks", body()))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("PORTAINER_UNREACHABLE"))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(res).doesNotContain("PORTAINER_STACK_NOT_FOUND").doesNotContain("UPSTREAM-LEAK");
     }
 
     @Test
