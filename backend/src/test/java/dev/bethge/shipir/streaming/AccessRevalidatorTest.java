@@ -168,7 +168,9 @@ class AccessRevalidatorTest {
         var access = mock(StreamAccess.class);
         var target = java.util.Optional.of(new ComposeOutputStreamService.RunTarget(
                 java.util.UUID.randomUUID(), java.util.UUID.randomUUID()));
-        org.mockito.Mockito.when(access.mayFollowRun("alice", target)).thenReturn(false);
+        // different answers per user: an always-true or always-false lambda cannot pass both
+        org.mockito.Mockito.when(access.mayFollowRun("alice", target)).thenReturn(true);
+        org.mockito.Mockito.when(access.mayFollowRun("bob", target)).thenReturn(false);
         var revalidator = new AccessRevalidator(access, mock(ExecSessionHandler.class), mock(LogStreamHandler.class),
                 mock(DeploymentLogStreamService.class), mock(DockerEventStreamService.class), runs,
                 mock(ChatTopicSubscriptions.class), mock(ChatTopicAccess.class), mock(ContainerStatsStreamService.class));
@@ -178,6 +180,7 @@ class AccessRevalidatorTest {
 
         var check = org.mockito.ArgumentCaptor.forClass(java.util.function.BiPredicate.class);
         verify(runs).revalidateAll(check.capture());
-        org.assertj.core.api.Assertions.assertThat(check.getValue().test("alice", target)).isEqualTo(false);
+        org.assertj.core.api.Assertions.assertThat(check.getValue().test("alice", target)).isEqualTo(true);
+        org.assertj.core.api.Assertions.assertThat(check.getValue().test("bob", target)).isEqualTo(false);
     }
 }
