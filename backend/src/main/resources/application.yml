@@ -2,6 +2,10 @@ shipir:
   security:
     # true when users reach Shipir over HTTPS (TLS at a reverse proxy): Secure session + XSRF cookies, HSTS header.
     https: ${SHIPIR_SECURITY_HTTPS:false}
+    # Peers (comma-separated exact IPs or CIDRs) whose X-Forwarded-For is believed for per-client login throttling.
+    # Empty = trust no one (header ignored, every client shares the peer address). docker-compose.yml sets it to the
+    # stack's fixed subnet; an invalid entry fails startup.
+    trusted-proxies: ${SHIPIR_SECURITY_TRUSTED_PROXIES:}
     login:
       max-attempts: 5
       window: 15m
