@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures/api.ts'
+import { expect, mockDeploymentCards, test } from './fixtures/api.ts'
 
 // Smoke check, no pixel baselines: each main page renders in light and dark at phone, laptop and wide
 // viewports without a page-level horizontal scrollbar. Screenshots are attached for manual review.
@@ -50,6 +50,56 @@ const pages = [
   { name: 'networks', path: '/environments/a/networks' },
   { name: 'volumes', path: '/environments/a/volumes' },
   { name: 'account', path: '/account' },
+  { name: 'notifications', path: '/notifications' },
+  { name: 'deployment-detail', path: '/environments/a/deployments/s1' },
+  { name: 'assistant', path: '/assistant/s1' },
+  { name: 'ai-settings', path: '/settings/ai' },
+  { name: 'retention-settings', path: '/settings/retention' },
+  { name: 'webhook-settings', path: '/settings/notifications' },
+]
+const aiSettings = {
+  activeProvider: 'OPENAI_COMPATIBLE',
+  enabled: true,
+  providers: [
+    { provider: 'OPENAI_COMPATIBLE', baseUrl: 'https://integrate.api.nvidia.example/v1', model: 'glm-5.3-flash-long-model-name', keyConfigured: true, apiKeyHint: '…9f2c' },
+    { provider: 'GEMINI', baseUrl: 'https://generativelanguage.googleapis.com', model: 'gemini-x', keyConfigured: false, apiKeyHint: null },
+  ],
+}
+const retention = { auditLogDays: 90, notificationDays: 30, chatSessionDays: 60, statsDays: 7 }
+const webhook = {
+  id: 'w1',
+  name: 'Ops chat with a rather long webhook name',
+  urlHint: 'https://hooks.example.com/…x9f2',
+  eventTypes: ['HOST_DOWN', 'DEPLOYMENT_FAILED'],
+  enabled: true,
+  lastDeliveryAt: null,
+  lastDeliveryStatus: null,
+}
+const notifications = [
+  { id: 'a', type: 'HOST_DOWN', hostId: 'a', hostName: 'Local', deploymentId: null, deploymentName: null, containerId: null, containerName: null, message: 'Local is unreachable (a), and the message wraps over several lines on a phone', read: false, createdAt: '2026-10-30T10:00:00Z' },
+  { id: 'b', type: 'HOST_DOWN', hostId: 'a', hostName: 'Local', deploymentId: null, deploymentName: null, containerId: null, containerName: null, message: 'Local is unreachable (b)', read: true, createdAt: '2026-10-29T10:00:00Z' },
+]
+const chatSession = { id: 's1', title: 'Deploy help for the shop stack with a long title', sharedWithAdmin: false, createdAt: '2026-10-30T10:00:00Z', updatedAt: '2026-10-30T10:00:00Z', ownerUsername: null }
+const chatMessages = [
+  { id: 'm1', seq: 1, role: 'USER', content: 'How many deployments run on this host and which of them are unhealthy right now?', toolCalls: null, toolCallId: null, status: null, createdAt: '2026-10-30T10:00:00Z' },
+  { id: 'm2', seq: 2, role: 'ASSISTANT', content: 'Two deployments run: shop (1 of 2 containers) and blog (1 of 1).', toolCalls: null, toolCallId: null, status: null, createdAt: '2026-10-30T10:00:01Z' },
+]
+const deploymentDetail = {
+  id: 's1',
+  name: 'shop',
+  status: 'STOPPED',
+  source: 'FILE',
+  lastDeployedAt: null,
+  createdAt: '2026-10-01T10:00:00Z',
+  yaml: 'services:\n  web:\n    image: nginx',
+  git: null,
+  imageAutoUpdate: null,
+  envKeys: ['TOKEN'],
+  profiles: [],
+}
+const deploymentVersions = [
+  { id: 'v2', source: 'MANUAL', commitSha: null, createdBy: 'ann', createdAt: '2026-10-02T10:00:00Z', current: true, deployed: true },
+  { id: 'v1', source: 'MANUAL', commitSha: null, createdBy: 'ann', createdAt: '2026-10-01T10:00:00Z', current: false, deployed: true },
 ]
 const viewports = [
   { name: '375', width: 375, height: 800 },
@@ -71,6 +121,21 @@ test.beforeEach(({ api }) => {
   api.mock('GET', '/api/hosts/a/volume-backup-schedules', { body: [] })
   api.mock('GET', '/api/account/tokens', { body: [] })
   api.mock('GET', '/api/notifications/preferences', { body: [] })
+  api.mock('GET', '/api/notifications', { body: { content: notifications, totalElements: notifications.length } })
+  api.mock('GET', '/api/notifications/unread-count', { body: { count: 1 } })
+
+  const deploymentBase = '/api/hosts/a/managed-deployments/s1'
+  api.mock('GET', deploymentBase, { body: deploymentDetail })
+  mockDeploymentCards(api, deploymentBase, deploymentVersions)
+  for (const v of deploymentVersions) {
+    api.mock('GET', `${deploymentBase}/versions/${v.id}`, { body: { ...v, yaml: deploymentDetail.yaml, baselineVersionId: 'v2', env: [], removedKeys: [] } })
+  }
+
+  api.mock('GET', '/api/ai/sessions', { body: { items: [chatSession] } })
+  api.mock('GET', '/api/ai/sessions/s1', { body: { session: chatSession, messages: chatMessages } })
+  api.mock('GET', '/api/settings/ai', { body: aiSettings })
+  api.mock('GET', '/api/settings/retention', { body: retention })
+  api.mock('GET', '/api/notifications/webhooks', { body: [webhook] })
 })
 
 for (const scheme of schemes) {
@@ -80,7 +145,8 @@ for (const scheme of schemes) {
         await page.emulateMedia({ colorScheme: scheme })
         await page.setViewportSize({ width: viewport.width, height: viewport.height })
         await page.goto(target.path)
-        await expect(page.getByRole('main')).toBeVisible()
+        // The assistant page nests its own <main> inside the shell's, so take the outer (shell) one.
+        await expect(page.getByRole('main').first()).toBeVisible()
         await expect(page.getByText('Loading')).toHaveCount(0)
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
         expect(overflow, 'page-level horizontal overflow in px').toBeLessThanOrEqual(0)
