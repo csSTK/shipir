@@ -106,10 +106,15 @@ export function buildContainerSpec(f: FormState, isAdmin: boolean): ContainerSpe
 type DetailMount = ContainerDetails['mounts'][number]
 
 /** Docker names the volumes it creates for an image's VOLUME declarations with a 64-character hex id. */
-const ANONYMOUS_VOLUME = /^[0-9a-f]{64}$/
+const ANONYMOUS_VOLUME_NAME = /^[0-9a-f]{64}$/
+
+/** True when a volume name is one of Docker's anonymous (64-hex) volume ids. */
+export function isAnonymousVolumeName(name: string): boolean {
+  return ANONYMOUS_VOLUME_NAME.test(name)
+}
 
 function isAnonymousVolume(m: DetailMount): boolean {
-  return m.type === 'volume' && m.name != null && ANONYMOUS_VOLUME.test(m.name)
+  return m.type === 'volume' && m.name != null && isAnonymousVolumeName(m.name)
 }
 
 /** Mount paths of the container's anonymous volumes: the backend carries them over on edit, so they are not form rows. */

@@ -94,6 +94,21 @@ describe('ContainerDetailsPage', () => {
     expect(screen.getByText('curl: refused')).toBeInTheDocument()
   })
 
+  it('shows anonymous volumes as anonymous with their path and hides the hash', async () => {
+    role = 'ADMIN'
+    const hash = 'a'.repeat(64)
+    const withAnonymous = {
+      ...details,
+      mounts: [...details.mounts, { type: 'volume', name: hash, source: `/var/lib/docker/volumes/${hash}/_data`, destination: '/var/lib/anon', readOnly: false }],
+    }
+    renderPage(() => withAnonymous)
+    await screen.findByRole('heading', { name: 'web', level: 1 })
+    openTab('Storage & network')
+    expect(screen.getByText('anonymous')).toBeInTheDocument()
+    expect(screen.getByText('/var/lib/anon')).toBeInTheDocument()
+    expect(screen.queryByText(new RegExp(hash))).toBeNull()
+  })
+
   it('masks env values until revealed', async () => {
     role = 'ADMIN'
     renderPage(() => details)

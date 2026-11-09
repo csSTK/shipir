@@ -6,6 +6,7 @@ import { Badge, Button, Card, PageHeader, Sparkline, StatusDot, Tabs } from '../
 import { formatSize } from '../../hosts/format.ts'
 import { useCurrentUser } from '../../auth/index.ts'
 import { ContainerUsageHistory } from '../../usage-history/UsageHistory.tsx'
+import { isAnonymousVolumeName } from '../containerForm.ts'
 import { ContainerResourcesDialog } from '../ContainerResourcesDialog.tsx'
 import { CreateContainerDialog } from '../CreateContainerDialog.tsx'
 import { PublishDialog } from '../../domains/index.ts'
@@ -180,6 +181,10 @@ function Env({ env }: { env: ContainerDetails['env'] }) {
   )
 }
 
+function isAnonymousVolume(m: ContainerDetails['mounts'][number]): boolean {
+  return m.type === 'volume' && m.name != null && isAnonymousVolumeName(m.name)
+}
+
 function Mounts({ mounts }: { mounts: ContainerDetails['mounts'] }) {
   const { t } = useTranslation('containers')
   return (
@@ -190,7 +195,10 @@ function Mounts({ mounts }: { mounts: ContainerDetails['mounts'] }) {
         <ul className="cdetails__list">
           {mounts.map((m) => (
             <li key={m.destination} className="cdetails__item">
-              <Badge tone="muted">{m.type}</Badge> <code>{m.source ?? m.name ?? '–'}</code> → <code>{m.destination}</code>
+              <Badge tone="muted">{m.type}</Badge>{' '}
+              {/* Docker's id hash is hidden: the source path embeds it too. */}
+              {isAnonymousVolume(m) ? <span>{t('ContainerDetailsPage.anonymousVolume')}</span> : <code>{m.source ?? m.name ?? '–'}</code>} →{' '}
+              <code>{m.destination}</code>
               {m.readOnly && <span className="cdetails__muted"> {t('ContainerDetailsPage.readOnly')}</span>}
             </li>
           ))}

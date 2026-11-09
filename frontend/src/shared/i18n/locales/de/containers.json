@@ -132,6 +132,7 @@
   "ContainerDetailsPage.mounts": "Mounts",
   "ContainerDetailsPage.noMounts": "Keine Mounts.",
   "ContainerDetailsPage.readOnly": "schreibgeschützt",
+  "ContainerDetailsPage.anonymousVolume": "anonym",
   "ContainerDetailsPage.network": "Netzwerk",
   "ContainerDetailsPage.notConnectedToAnyNetwork": "Mit keinem Netzwerk verbunden.",
   "ContainerDetailsPage.labels": "Labels",
