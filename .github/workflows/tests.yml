@@ -110,6 +110,22 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # Screenshot regression: renders inside the Playwright docker image (tag read from pnpm-lock.yaml) so the
+      # committed baselines in frontend/e2e/visual-baselines match pixel for pixel. Regenerate with `pnpm e2e:visual:update`.
+      - name: Screenshot regression tests
+        run: pnpm e2e:visual
+
+      - name: Upload screenshot diffs
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-diffs
+          path: |
+            frontend/test-results/
+            frontend/playwright-report-visual/
+          if-no-files-found: ignore
+          retention-days: 7
+
   # Runs with the frontend tests (so on dev pushes too): CSP regressions must not wait for a release.
   csp:
     if: ${{ inputs.frontend }}

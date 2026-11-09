@@ -53,3 +53,6 @@ backend/data/
 
 # Local backups (contain plaintext stack .env files)
 backups/
+
+### Playwright visual run ###
+frontend/playwright-report-visual/

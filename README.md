@@ -362,7 +362,18 @@ pnpm e2e
 
 # Run the e2e tests in Playwright's UI mode
 pnpm e2e:ui
+
+# Screenshot regression tests (needs Docker): pixel-compare the main pages with the committed baselines in
+# e2e/visual-baselines/. Runs inside the official Playwright image (tag taken from pnpm-lock.yaml) so macOS and CI render
+# identically. Per page and viewport (375 and 1440 px) it captures the viewport as a user sees it (`<page>-<width>-<scheme>.png`,
+# shell included), plus `<page>-<width>-<scheme>-content.png`, the full-height main region, when the page scrolls. Not part of `pnpm e2e`.
+pnpm e2e:visual
+
+# After a deliberate UI change: regenerate the baselines (same image), review the PNG diff in git, commit them
+pnpm e2e:visual:update
 ```
+
+A failing screenshot test leaves `expected`, `actual` and `diff` images in `frontend/test-results/` (and an HTML report in `frontend/playwright-report-visual/`); CI uploads both as the `visual-diffs` artifact. Text is rendered with the image's Linux fonts, so the baselines do not look like your Mac; that is intended.
 
 ### App template images
 
@@ -388,7 +399,7 @@ shipir/
 │   ├── src/app/                      # Root, providers, React Query client
 │   ├── src/features/                 # Feature folders (containers, deployments, hosts, images, networks, volumes, ...)
 │   ├── src/shared/                   # Shared (api, charts, i18n, lib, realtime, styles, ui)
-│   └── e2e/                          # Playwright e2e specs; fixtures/api.ts mocks /api
+│   └── e2e/                          # Playwright e2e specs; fixtures/api.ts mocks /api; visual.spec.ts = screenshot baselines
 ├── README.md                         # This file
 ├── CLAUDE.md                         # Development rules and architecture
 └── HANDOFF.md                        # Planning context
