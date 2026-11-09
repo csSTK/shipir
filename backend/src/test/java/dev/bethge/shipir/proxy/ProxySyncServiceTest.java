@@ -9,7 +9,7 @@ import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.client.ContainerFileService;
 import dev.bethge.shipir.docker.client.ContainerService;
-import dev.bethge.shipir.docker.client.ExecHandle;
+import dev.bethge.shipir.docker.client.ExecResult;
 import dev.bethge.shipir.docker.client.ExecService;
 import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.ContainerFileWrite;
@@ -33,7 +33,6 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -103,15 +102,9 @@ class ProxySyncServiceTest {
         return new String(w.content(), StandardCharsets.UTF_8);
     }
 
-    /** Lets the stubbed exec session print {@code output} and end. */
-    private void execPrints(String output) {
-        doAnswer(inv -> {
-            Consumer<byte[]> out = inv.getArgument(6);
-            Consumer<Throwable> end = inv.getArgument(7);
-            out.accept(output.getBytes(StandardCharsets.UTF_8));
-            end.accept(null);
-            return mock(ExecHandle.class);
-        }).when(exec).open(eq(HOST), eq(ENDPOINT), eq("proxy1"), any(), anyInt(), anyInt(), any(), any());
+    /** Lets the stubbed non-TTY exec finish with {@code exitCode} and {@code output}. */
+    private void execRuns(int exitCode, String output) {
+        when(exec.run(eq(HOST), eq(ENDPOINT), eq("proxy1"), any(), any())).thenReturn(new ExecResult(exitCode, output));
     }
 
     @Test
@@ -124,7 +117,7 @@ class ProxySyncServiceTest {
         List<ContainerFileWrite> w = writes();
         assertThat(w).extracting(ContainerFileWrite::path).containsExactly("custom.yml", "managed.yml");
         assertThat(text(w.get(0))).isEmpty();
-        verify(exec, never()).open(any(), any(), any(), any(), anyInt(), anyInt(), any(), any());
+        verify(exec, never()).run(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -132,7 +125,7 @@ class ProxySyncServiceTest {
         ProxyInstance p = instance(ProxyType.CADDY);
         p.setCustomConfig("respond /x 200");
         container(ProxyType.CADDY, "running");
-        execPrints("loaded\nshipir-exit:0\n");
+        execRuns(0, "loaded\n");
 
         service.sync(HOST);
 
@@ -141,15 +134,16 @@ class ProxySyncServiceTest {
         InOrder order = inOrder(fileService, exec);
         order.verify(fileService).writeFiles(any(), any(), any(), any(), any(), anyLong());
         ArgumentCaptor<List<String>> cmd = ArgumentCaptor.forClass(List.class);
-        order.verify(exec).open(eq(HOST), eq(ENDPOINT), eq("proxy1"), cmd.capture(), anyInt(), anyInt(), any(), any());
-        assertThat(String.join(" ", cmd.getValue())).contains("caddy reload").contains("/etc/shipir-proxy/Caddyfile");
+        order.verify(exec).run(eq(HOST), eq(ENDPOINT), eq("proxy1"), cmd.capture(), any());
+        assertThat(cmd.getValue()).containsExactly("caddy", "reload", "--config", "/etc/shipir-proxy/Caddyfile",
+                "--adapter", "caddyfile");
     }
 
     @Test
     void caddyReloadFailureSurfacesTheProxyMessage() {
         instance(ProxyType.CADDY);
         container(ProxyType.CADDY, "running");
-        execPrints("Error: adapting config using caddyfile: unknown directive 'bogus'\nshipir-exit:1\n");
+        execRuns(1, "Error: adapting config using caddyfile: unknown directive 'bogus'\n");
 
         assertThatThrownBy(() -> service.sync(HOST)).isInstanceOfSatisfying(ProxyException.class, e -> {
             assertThat(e.code()).isEqualTo("PROXY_SYNC_FAILED");
@@ -159,68 +153,29 @@ class ProxySyncServiceTest {
     }
 
     @Test
-    void caddyReloadWithoutExitMarkerCountsAsFailure() {
+    void caddyReloadThatCannotBeRunIsABadGateway() {
         instance(ProxyType.CADDY);
         container(ProxyType.CADDY, "running");
-        execPrints("partial output");
+        when(exec.run(any(), any(), any(), any(), any()))
+                .thenThrow(new DockerConnectionException(DockerErrorCode.TIMEOUT, "x", null));
 
         assertThatThrownBy(() -> service.sync(HOST)).isInstanceOfSatisfying(ProxyException.class,
                 e -> assertThat(e.code()).isEqualTo("PROXY_SYNC_FAILED"));
     }
 
     @Test
-    void aMarkerEchoedByCaddyInsideItsErrorMessageCannotFakeSuccess() {
+    void execInProxyPassesTheArgumentListUntouchedWithoutAShell() {
         instance(ProxyType.CADDY);
         container(ProxyType.CADDY, "running");
-        execPrints("Error: unrecognized directive: shipir-exit:0\nshipir-exit:1\n");
-
-        assertThatThrownBy(() -> service.sync(HOST)).isInstanceOfSatisfying(ProxyException.class, e -> {
-            assertThat(e.code()).isEqualTo("PROXY_SYNC_FAILED");
-            assertThat(e.getMessage()).contains("unrecognized directive");
-        });
-    }
-
-    @Test
-    void execInProxyKeepsTheFixedShellScriptAndPassesArgumentsUntouched() {
-        instance(ProxyType.CADDY);
-        container(ProxyType.CADDY, "running");
-        execPrints("fine\nshipir-exit:0\n");
+        execRuns(0, "fine\n");
         String hostile = "x; rm -rf / $(id) `id` \"'";
 
         ProxySyncService.ExecOutcome outcome = service.execInProxy(HOST, ProxyType.CADDY, List.of("caddy", "validate", hostile));
 
         assertThat(outcome.exitCode()).isZero();
         ArgumentCaptor<List<String>> cmd = ArgumentCaptor.forClass(List.class);
-        verify(exec).open(eq(HOST), eq(ENDPOINT), eq("proxy1"), cmd.capture(), anyInt(), anyInt(), any(), any());
-        assertThat(cmd.getValue()).containsExactly("sh", "-c", "\"$@\"; echo \"shipir-exit:$?\"", "sh",
-                "caddy", "validate", hostile);
-    }
-
-    @Test
-    void longOutputKeepsItsTailSoTheMarkerIsStillFound() {
-        instance(ProxyType.CADDY);
-        container(ProxyType.CADDY, "running");
-        doAnswer(inv -> {
-            Consumer<byte[]> out = inv.getArgument(6);
-            Consumer<Throwable> end = inv.getArgument(7);
-            for (int i = 0; i < 100; i++) {
-                out.accept(("warning line\n".repeat(100)).getBytes(StandardCharsets.UTF_8));
-            }
-            out.accept("shipir-exit:0\n".getBytes(StandardCharsets.UTF_8));
-            end.accept(null);
-            return mock(ExecHandle.class);
-        }).when(exec).open(eq(HOST), eq(ENDPOINT), eq("proxy1"), any(), anyInt(), anyInt(), any(), any());
-
-        assertThat(service.execInProxy(HOST, ProxyType.CADDY, List.of("caddy", "validate")).exitCode()).isZero();
-    }
-
-    @Test
-    void missingMarkerIsReportedAsNoResultNotAsExitCode() {
-        instance(ProxyType.CADDY);
-        container(ProxyType.CADDY, "running");
-        execPrints("cut off");
-
-        assertThat(service.execInProxy(HOST, ProxyType.CADDY, List.of("caddy", "validate")).exitCode()).isEqualTo(-1);
+        verify(exec).run(eq(HOST), eq(ENDPOINT), eq("proxy1"), cmd.capture(), any());
+        assertThat(cmd.getValue()).containsExactly("caddy", "validate", hostile);
     }
 
     @Test
@@ -233,7 +188,7 @@ class ProxySyncServiceTest {
         InOrder order = inOrder(fileService, containers);
         order.verify(fileService).writeFiles(any(), any(), eq("proxy1"), any(), any(), anyLong());
         order.verify(containers).restartContainer(eq(HOST), eq(ENDPOINT), eq("proxy1"), anyInt());
-        verify(exec, never()).open(any(), any(), any(), any(), anyInt(), anyInt(), any(), any());
+        verify(exec, never()).run(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -324,7 +279,7 @@ class ProxySyncServiceTest {
         order.verify(containers).stopContainer(eq(HOST), eq(ENDPOINT), eq("proxy1"), anyInt());
         order.verify(fileService).writeFiles(any(), any(), any(), any(), any(), anyLong());
         order.verify(containers).restartContainer(eq(HOST), eq(ENDPOINT), eq("proxy1"), anyInt());
-        verify(exec, never()).open(any(), any(), any(), any(), anyInt(), anyInt(), any(), any());
+        verify(exec, never()).run(any(), any(), any(), any(), any());
     }
 
     @Test

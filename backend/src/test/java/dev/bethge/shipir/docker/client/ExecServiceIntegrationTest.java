@@ -161,4 +161,50 @@ class ExecServiceIntegrationTest {
         docker.execStartCmd(exec.getId()).exec(sink).awaitCompletion(10, TimeUnit.SECONDS);
         return (int) sink.sb.toString().lines().filter(l -> l.trim().equals(commandLine)).count();
     }
+
+    @Test
+    void runReturnsTheExitCodeAndMergedOutput() {
+        ExecResult ok = service.run(hostId, endpoint, id, List.of("sh", "-c", "echo out; echo err >&2"), Duration.ofSeconds(10));
+        assertThat(ok.exitCode()).isZero();
+        assertThat(ok.output()).contains("out").contains("err");
+
+        ExecResult failed = service.run(hostId, endpoint, id, List.of("sh", "-c", "echo boom; exit 7"), Duration.ofSeconds(10));
+        assertThat(failed.exitCode()).isEqualTo(7);
+        assertThat(failed.output()).contains("boom");
+    }
+
+    @Test
+    void runPassesArgumentsWithoutAShell() {
+        String hostile = "x; echo injected $(id)";
+        ExecResult result = service.run(hostId, endpoint, id, List.of("echo", hostile), Duration.ofSeconds(10));
+
+        assertThat(result.exitCode()).isZero();
+        assertThat(result.output().trim()).isEqualTo(hostile);
+    }
+
+    @Test
+    void runKeepsOnlyTheTailOfHugeOutput() {
+        ExecResult result = service.run(hostId, endpoint, id,
+                List.of("sh", "-c", "yes line | head -c 300000; echo THE-END"), Duration.ofSeconds(20));
+
+        assertThat(result.exitCode()).isZero();
+        assertThat(result.output()).endsWith("THE-END\n");
+        assertThat(result.output().length()).isLessThanOrEqualTo(ExecService.MAX_RUN_OUTPUT_BYTES);
+    }
+
+    @Test
+    void runTimesOutWithTheTimeoutCode() {
+        assertThatThrownBy(() -> service.run(hostId, endpoint, id, List.of("sleep", "30"), Duration.ofSeconds(1)))
+                .isInstanceOfSatisfying(DockerConnectionException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(DockerErrorCode.TIMEOUT));
+    }
+
+    @Test
+    void runOnAStoppedContainerIsInvalidState() {
+        docker.stopContainerCmd(id).withTimeout(0).exec();
+
+        assertThatThrownBy(() -> service.run(hostId, endpoint, id, List.of("true"), Duration.ofSeconds(5)))
+                .isInstanceOfSatisfying(DockerConnectionException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(DockerErrorCode.INVALID_STATE));
+    }
 }

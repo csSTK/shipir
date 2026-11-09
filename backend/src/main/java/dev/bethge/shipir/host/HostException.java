@@ -23,7 +23,7 @@ public class HostException extends RuntimeException implements CodedException {
         this(status, code, message, List.of());
     }
 
-    HttpStatus status() {
+    public HttpStatus status() {
         return status;
     }
 
@@ -32,7 +32,7 @@ public class HostException extends RuntimeException implements CodedException {
         return code;
     }
 
-    List<String> details() {
+    public List<String> details() {
         return details;
     }
 }

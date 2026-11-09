@@ -8,8 +8,10 @@ import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
@@ -39,13 +41,7 @@ public class ExecServiceImpl implements ExecService {
     @Override
     public ExecHandle open(UUID hostId, DockerEndpoint endpoint, String containerId, List<String> cmd, int cols,
                            int rows, Consumer<byte[]> output, Consumer<Throwable> onEnd) {
-        // exec on a stopped container only fails with a generic conflict, so check the state ourselves
-        boolean running = calls.call(hostId, endpoint,
-                client -> Boolean.TRUE.equals(client.inspectContainerCmd(containerId).exec().getState().getRunning()));
-        if (!running) {
-            throw new DockerConnectionException(DockerErrorCode.INVALID_STATE,
-                    "The container is not in a state that allows this action.", null);
-        }
+        requireRunning(hostId, endpoint, containerId);
         StdinPipe stdin = new StdinPipe();
         SessionCallback callback = new SessionCallback(output, onEnd);
         String execId = calls.call(hostId, endpoint, client -> {
@@ -57,6 +53,89 @@ public class ExecServiceImpl implements ExecService {
         Handle handle = new Handle(hostId, endpoint, execId, stdin, callback);
         handle.resize(cols, rows);
         return handle;
+    }
+
+    @Override
+    public ExecResult run(UUID hostId, DockerEndpoint endpoint, String containerId, List<String> cmd, Duration timeout) {
+        requireRunning(hostId, endpoint, containerId);
+        TailCollector collector = new TailCollector();
+        String execId = calls.call(hostId, endpoint, client -> {
+            String id = client.execCreateCmd(containerId).withAttachStdout(true).withAttachStderr(true).withTty(false)
+                    .withCmd(cmd.toArray(String[]::new)).exec().getId();
+            client.execStartCmd(id).exec(collector);
+            return id;
+        });
+        try {
+            if (!collector.awaitCompletion(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                throw new DockerConnectionException(DockerErrorCode.TIMEOUT, "The command did not finish in time.", null);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new DockerConnectionException(DockerErrorCode.TIMEOUT, "The command was interrupted.", e);
+        } finally {
+            try {
+                collector.close();
+            } catch (IOException ignored) {
+                // already gone
+            }
+        }
+        if (collector.failure() != null) {
+            Throwable failure = collector.failure();
+            throw calls.translate(failure instanceof Exception e ? e : new RuntimeException(failure));
+        }
+        Long exit = calls.call(hostId, endpoint, client -> client.inspectExecCmd(execId).exec().getExitCodeLong());
+        if (exit == null) {
+            throw new DockerConnectionException(DockerErrorCode.INVALID_RESPONSE, "The daemon gave no exit code.", null);
+        }
+        return new ExecResult(exit.intValue(), collector.text());
+    }
+
+    /** exec on a stopped container only fails with a generic conflict, so check the state ourselves. */
+    private void requireRunning(UUID hostId, DockerEndpoint endpoint, String containerId) {
+        boolean running = calls.call(hostId, endpoint,
+                client -> Boolean.TRUE.equals(client.inspectContainerCmd(containerId).exec().getState().getRunning()));
+        if (!running) {
+            throw new DockerConnectionException(DockerErrorCode.INVALID_STATE,
+                    "The container is not in a state that allows this action.", null);
+        }
+    }
+
+    /** Collects non-TTY output, keeping only the last {@link ExecService#MAX_RUN_OUTPUT_BYTES} bytes. */
+    private static final class TailCollector extends ResultCallback.Adapter<Frame> {
+
+        private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        private volatile Throwable failure;
+
+        @Override
+        public synchronized void onNext(Frame frame) {
+            buffer.writeBytes(frame.getPayload());
+            if (buffer.size() > 2 * MAX_RUN_OUTPUT_BYTES) {
+                trim();
+            }
+        }
+
+        private void trim() {
+            byte[] all = buffer.toByteArray();
+            buffer.reset();
+            buffer.write(all, all.length - MAX_RUN_OUTPUT_BYTES, MAX_RUN_OUTPUT_BYTES);
+        }
+
+        @Override
+        public void onError(Throwable throwable) {
+            failure = throwable;
+            super.onError(throwable);
+        }
+
+        Throwable failure() {
+            return failure;
+        }
+
+        synchronized String text() {
+            if (buffer.size() > MAX_RUN_OUTPUT_BYTES) {
+                trim();
+            }
+            return buffer.toString(StandardCharsets.UTF_8);
+        }
     }
 
     private final class Handle implements ExecHandle {

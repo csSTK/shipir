@@ -8,7 +8,7 @@ import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.client.ContainerFileService;
 import dev.bethge.shipir.docker.client.ContainerService;
-import dev.bethge.shipir.docker.client.ExecHandle;
+import dev.bethge.shipir.docker.client.ExecResult;
 import dev.bethge.shipir.docker.client.ExecService;
 import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.ContainerFileWrite;
@@ -33,7 +33,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -78,7 +77,8 @@ class ProxyCustomConfigApiTest {
     ExecService exec;
 
     UUID hostId;
-    volatile String execOutput = "ok\nshipir-exit:0\n";
+    volatile String execOutput = "ok\n";
+    volatile int execExit = 0;
     final List<List<String>> execCommands = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     @BeforeEach
@@ -97,16 +97,13 @@ class ProxyCustomConfigApiTest {
                 + "SELECT 'Proxy host', 'LOCAL', id FROM users WHERE username = 'admin'");
         hostId = jdbc.queryForObject("SELECT id FROM docker_hosts", UUID.class);
         org.mockito.Mockito.reset(containers, fileService, exec);
-        execOutput = "ok\nshipir-exit:0\n";
+        execOutput = "ok\n";
+        execExit = 0;
         execCommands.clear();
-        doAnswer(inv -> {
+        when(exec.run(any(), any(), eq("proxy1"), any(), any())).thenAnswer(inv -> {
             execCommands.add(inv.getArgument(3));
-            Consumer<byte[]> out = inv.getArgument(6);
-            Consumer<Throwable> end = inv.getArgument(7);
-            out.accept(execOutput.getBytes(StandardCharsets.UTF_8));
-            end.accept(null);
-            return mock(ExecHandle.class);
-        }).when(exec).open(any(), any(), eq("proxy1"), any(), anyInt(), anyInt(), any(), any());
+            return new ExecResult(execExit, execOutput);
+        });
     }
 
     // ---- GET --------------------------------------------------------------------------------------------------
@@ -319,7 +316,8 @@ class ProxyCustomConfigApiTest {
     void caddyValidationFailureIsRejectedWithCaddysMessageAndNothingReachesTheProxy() throws Exception {
         addProxy("CADDY", "respond 200");
         container("caddy", "running");
-        execOutput = "Error: adapting config using caddyfile: unknown directive 'bogus'\nshipir-exit:1\n";
+        execOutput = "Error: adapting config using caddyfile: unknown directive 'bogus'\n";
+        execExit = 1;
 
         putCustom("bogus").andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_PROXY_CONFIG"))
@@ -342,21 +340,11 @@ class ProxyCustomConfigApiTest {
     }
 
     @Test
-    void aMarkerEchoedByCaddyInsideItsErrorCannotMakeAnInvalidConfigPass() throws Exception {
+    void validationThatCannotBeRunIsABadGatewayNotAnInvalidConfig() throws Exception {
         addProxy("CADDY", "");
         container("caddy", "running");
-        execOutput = "Error: unrecognized directive: shipir-exit:0\nshipir-exit:1\n";
-
-        putCustom("shipir-exit:0").andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_PROXY_CONFIG"));
-        assertThat(customOf()).isEmpty();
-    }
-
-    @Test
-    void validationThatReportsNoResultIsABadGatewayNotAnInvalidConfig() throws Exception {
-        addProxy("CADDY", "");
-        container("caddy", "running");
-        execOutput = "output without a marker";
+        when(exec.run(any(), any(), eq("proxy1"), any(), any()))
+                .thenThrow(new DockerConnectionException(DockerErrorCode.TIMEOUT, "x", null));
 
         putCustom("respond 200").andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.code").value("PROXY_SYNC_FAILED"));

@@ -7,7 +7,11 @@ services:
   caddy:
     image: caddy:2.10.2-alpine
     restart: unless-stopped
-    command: ["caddy", "run", "--config", "/etc/shipir-proxy/Caddyfile", "--adapter", "caddyfile"]
+    # The first start precedes the first sync, so write a minimal Caddyfile (global options only) when none exists yet.
+    command:
+      - sh
+      - -c
+      - "[ -f /etc/shipir-proxy/Caddyfile ] || printf '{\\n\\tadmin localhost:2019\\n}\\n' > /etc/shipir-proxy/Caddyfile; exec caddy run --config /etc/shipir-proxy/Caddyfile --adapter caddyfile"
     ports:
       - "80:80"
       - "443:443"

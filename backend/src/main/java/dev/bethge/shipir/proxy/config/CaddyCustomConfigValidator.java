@@ -64,10 +64,6 @@ class CaddyCustomConfigValidator implements CustomConfigValidator {
                     COPY_LIMIT);
             ProxySyncService.ExecOutcome result = sync.execInProxy(hostId, ProxyType.CADDY,
                     List.of("caddy", "validate", "--config", absolute + "/Caddyfile", "--adapter", "caddyfile"));
-            if (result.exitCode() < 0) {
-                throw new ProxyException(HttpStatus.BAD_GATEWAY, "PROXY_SYNC_FAILED",
-                        "Caddy gave no validation result (the output may have been cut off)");
-            }
             if (result.exitCode() != 0) {
                 throw CustomConfigValidator.invalid("Caddy rejected the configuration: " + result.output());
             }

@@ -11,6 +11,7 @@ import dev.bethge.shipir.docker.ViewerErrorCodes;
 import dev.bethge.shipir.docker.client.ContainerFileService;
 import dev.bethge.shipir.docker.client.ContainerService;
 import dev.bethge.shipir.docker.client.ExecHandle;
+import dev.bethge.shipir.docker.client.ExecResult;
 import dev.bethge.shipir.docker.client.ExecService;
 import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.ContainerFileWrite;
@@ -22,8 +23,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumMap;
@@ -36,11 +37,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -66,14 +64,9 @@ public class ProxySyncService {
     private static final int STOP_TIMEOUT_SECONDS = 10;
     private static final int MAX_MESSAGE = 500;
     private static final long RELOAD_TIMEOUT_SECONDS = 30;
-    private static final Pattern EXIT_MARKER = Pattern.compile("shipir-exit:(\\d{1,5})\\s*$");
-    private static final int OUTPUT_TAIL_BYTES = 16 * 1024;
-    /**
-     * Fixed command, no input is interpolated: the marker lets us read the exit status, which a TTY exec session does
-     * not report, and proves that all output arrived before we look at it.
-     */
-    private static final List<String> CADDY_RELOAD = List.of("sh", "-c",
-            "caddy reload --config " + ProxyConfigRenderer.CONFIG_DIR + "/Caddyfile --adapter caddyfile; echo \"shipir-exit:$?\"");
+    /** Fixed command, no input is interpolated. */
+    private static final List<String> CADDY_RELOAD = List.of("caddy", "reload", "--config",
+            ProxyConfigRenderer.CONFIG_DIR + "/Caddyfile", "--adapter", "caddyfile");
 
     private final ProxyInstanceRepository instances;
     private final ProxyRouteRepository routes;
@@ -333,22 +326,18 @@ public class ProxySyncService {
     }
 
     private void reloadCaddy(UUID hostId, DockerEndpoint endpoint, String containerId) {
-        ExecOutcome result = runMarked(hostId, endpoint, containerId, CADDY_RELOAD);
-        if (result.exitCode() < 0) {
-            throw failed("Caddy gave no result to the reload" + (result.output().isEmpty() ? "" : ": " + result.output()));
-        }
+        ExecOutcome result = runExec(hostId, endpoint, containerId, CADDY_RELOAD);
         if (result.exitCode() != 0) {
             throw failed("Caddy rejected the configuration: " + result.output());
         }
     }
 
-    /** Result of {@link #execInProxy}: the exit status ({@code -1} when the final marker is missing, e.g. cut-off output) and cleaned output. */
+    /** Result of {@link #execInProxy}: the exit status and cleaned output. */
     public record ExecOutcome(int exitCode, String output) {
     }
 
     /**
-     * Runs a command inside the running proxy container, as an argument list (no shell sees {@code args}: they are
-     * positional parameters of a fixed {@code sh -c} script that only adds the exit marker). Used for Caddy's own
+     * Runs a command inside the running proxy container, as an argument list (no shell sees {@code args}: the exec runs without a shell). Used for Caddy's own
      * validation of a configuration. A failure to run it at all is a 502 {@code PROXY_SYNC_FAILED}.
      */
     public ExecOutcome execInProxy(UUID hostId, ProxyType type, List<String> args) {
@@ -358,9 +347,7 @@ public class ProxySyncService {
             if (!"running".equals(proxy.state())) {
                 throw failed("The proxy container is not running");
             }
-            List<String> command = new ArrayList<>(List.of("sh", "-c", "\"$@\"; echo \"shipir-exit:$?\"", "sh"));
-            command.addAll(args);
-            return runMarked(hostId, endpoint, proxy.id(), command);
+            return runExec(hostId, endpoint, proxy.id(), args);
         } catch (DockerConnectionException e) {
             throw failed("The proxy could not be reached (" + ViewerErrorCodes.forViewer(e.getCode(), access.isAdmin()) + ")");
         }
@@ -375,49 +362,9 @@ public class ProxySyncService {
         }
     }
 
-    private ExecOutcome runMarked(UUID hostId, DockerEndpoint endpoint, String containerId, List<String> command) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        CompletableFuture<Void> ended = new CompletableFuture<>();
-        ExecHandle handle = exec.open(hostId, endpoint, containerId, command, 200, 24, bytes -> {
-            synchronized (out) {
-                // keep the tail: the exit marker is the last thing the script prints
-                out.writeBytes(bytes);
-                if (out.size() > 2 * OUTPUT_TAIL_BYTES) {
-                    byte[] all = out.toByteArray();
-                    out.reset();
-                    out.write(all, all.length - OUTPUT_TAIL_BYTES, OUTPUT_TAIL_BYTES);
-                }
-            }
-        }, failure -> {
-            if (failure == null) {
-                ended.complete(null);
-            } else {
-                ended.completeExceptionally(failure);
-            }
-        });
-        try {
-            ended.get(RELOAD_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-        } catch (TimeoutException e) {
-            throw failed("The proxy did not answer in time");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw failed("The command was interrupted");
-        } catch (java.util.concurrent.ExecutionException e) {
-            throw failed("The command could not be run");
-        } finally {
-            handle.close();
-        }
-        String output;
-        synchronized (out) {
-            output = out.toString(StandardCharsets.UTF_8);
-        }
-        // Only the marker at the very end counts: the proxy echoes parts of the user's file in its error messages, so a
-        // "shipir-exit:0" earlier in the output may come from the content being validated.
-        Matcher marker = EXIT_MARKER.matcher(output);
-        if (!marker.find()) {
-            return new ExecOutcome(-1, printable(output));
-        }
-        return new ExecOutcome(Integer.parseInt(marker.group(1)), printable(output.substring(0, marker.start())));
+    private ExecOutcome runExec(UUID hostId, DockerEndpoint endpoint, String containerId, List<String> command) {
+        ExecResult result = exec.run(hostId, endpoint, containerId, command, Duration.ofSeconds(RELOAD_TIMEOUT_SECONDS));
+        return new ExecOutcome(result.exitCode(), printable(result.output()));
     }
 
     private static ProxyException failed(String message) {
