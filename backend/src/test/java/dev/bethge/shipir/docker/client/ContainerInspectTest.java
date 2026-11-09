@@ -21,7 +21,11 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /** Inspect mapping from a realistic daemon JSON payload; no docker-java types in the result. */
@@ -68,7 +72,7 @@ class ContainerInspectTest {
 
     @Test
     void exposesTheImageBakedEnvSeparatelyFromTheContainerEnv() {
-        ContainerDetailsDto d = service.inspect(hostId, ENDPOINT, "abc");
+        ContainerDetailsDto d = service.inspectWithImageEnv(hostId, ENDPOINT, "abc");
 
         assertThat(d.imageEnv()).containsExactly(new ContainerDetailsDto.EnvVar("PATH", "/usr/bin"),
                 new ContainerDetailsDto.EnvVar("A", "0"), new ContainerDetailsDto.EnvVar("NGINX_VERSION", "1.27"));
@@ -78,12 +82,30 @@ class ContainerInspectTest {
     void imageEnvIsEmptyWhenTheImageCannotBeInspected() throws Exception {
         when(client.inspectImageCmd("sha256:img1").exec()).thenThrow(new NotFoundException("gone"));
 
-        assertThat(service.inspect(hostId, ENDPOINT, "abc").imageEnv()).isEmpty();
+        assertThat(service.inspectWithImageEnv(hostId, ENDPOINT, "abc").imageEnv()).isEmpty();
+    }
+
+    @Test
+    void plainInspectDoesNotInspectTheImage() {
+        clearInvocations(client); // drop the stubbing calls made in setUp
+        ContainerDetailsDto d = service.inspect(hostId, ENDPOINT, "abc");
+
+        assertThat(d.imageEnv()).isEmpty();
+        assertThat(d.name()).isEqualTo("shop-web-1");
+        verify(client, never()).inspectImageCmd(any());
+    }
+
+    @Test
+    void inspectWithImageEnvInspectsTheImageOnce() {
+        clearInvocations(client);
+        service.inspectWithImageEnv(hostId, ENDPOINT, "abc");
+
+        verify(client, times(1)).inspectImageCmd("sha256:img1");
     }
 
     @Test
     void withoutEnvValuesAlsoWithholdsTheImageEnvValues() {
-        ContainerDetailsDto d = service.inspect(hostId, ENDPOINT, "abc").withoutEnvValues();
+        ContainerDetailsDto d = service.inspectWithImageEnv(hostId, ENDPOINT, "abc").withoutEnvValues();
 
         assertThat(d.imageEnv()).extracting(ContainerDetailsDto.EnvVar::value).containsOnlyNulls();
     }

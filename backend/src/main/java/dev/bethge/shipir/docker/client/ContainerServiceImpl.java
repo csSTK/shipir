@@ -93,6 +93,11 @@ public class ContainerServiceImpl implements ContainerService {
 
     @Override
     public ContainerDetailsDto inspect(UUID hostId, DockerEndpoint endpoint, String id) {
+        return calls.call(hostId, endpoint, client -> toDetails(client.inspectContainerCmd(id).exec(), List.of()));
+    }
+
+    @Override
+    public ContainerDetailsDto inspectWithImageEnv(UUID hostId, DockerEndpoint endpoint, String id) {
         return calls.call(hostId, endpoint, client -> {
             InspectContainerResponse r = client.inspectContainerCmd(id).exec();
             return toDetails(r, imageEnv(client, r.getImageId()));

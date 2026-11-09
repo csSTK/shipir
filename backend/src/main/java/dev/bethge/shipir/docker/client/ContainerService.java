@@ -18,8 +18,15 @@ public interface ContainerService {
     /** All containers of the host including stopped ones. Throws {@code DockerConnectionException}. */
     List<ContainerDto> listContainers(UUID hostId, DockerEndpoint endpoint);
 
-    /** Inspect of one container (env with values). Throws {@code DockerConnectionException}, NOT_FOUND if unknown. */
+    /**
+     * Inspect of one container (env with values) without the image's own env: {@code imageEnv} is empty and the image
+     * is not inspected. For callers that only need container fields. Throws {@code DockerConnectionException},
+     * NOT_FOUND if unknown.
+     */
     ContainerDetailsDto inspect(UUID hostId, DockerEndpoint endpoint, String id);
+
+    /** Like {@link #inspect} plus {@code imageEnv} (one extra image inspect); for the details endpoint only. */
+    ContainerDetailsDto inspectWithImageEnv(UUID hostId, DockerEndpoint endpoint, String id);
 
     /** Compose projects of the host, grouped by the {@code com.docker.compose.project} label, sorted by name. */
     List<DeploymentSummaryDto> listDeployments(UUID hostId, DockerEndpoint endpoint);

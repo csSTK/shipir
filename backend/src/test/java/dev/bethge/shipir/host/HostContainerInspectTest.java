@@ -48,7 +48,7 @@ class HostContainerInspectTest extends HostApiTestBase {
         jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
                 + "SELECT 'local', 'LOCAL', id FROM users WHERE username = 'admin'");
         host = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'local'", UUID.class);
-        when(containers.inspect(any(), any(), eq("web1"))).thenReturn(details("shop"));
+        when(containers.inspectWithImageEnv(any(), any(), eq("web1"))).thenReturn(details("shop"));
     }
 
     private static ContainerDetailsDto details(String project) {
@@ -85,14 +85,14 @@ class HostContainerInspectTest extends HostApiTestBase {
 
     @Test
     void unknownContainerIs404ResourceNotFound() throws Exception {
-        when(containers.inspect(any(), any(), eq("gone"))).thenThrow(new DockerConnectionException(DockerErrorCode.NOT_FOUND, "x", null));
+        when(containers.inspectWithImageEnv(any(), any(), eq("gone"))).thenThrow(new DockerConnectionException(DockerErrorCode.NOT_FOUND, "x", null));
         mvc.perform(get("/api/hosts/{h}/containers/gone", host).session(login("admin").session()))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
     }
 
     @Test
     void unreachableHostIs502() throws Exception {
-        when(containers.inspect(any(), any(), eq("web1"))).thenThrow(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "x", null));
+        when(containers.inspectWithImageEnv(any(), any(), eq("web1"))).thenThrow(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "x", null));
         mvc.perform(get("/api/hosts/{h}/containers/web1", host).session(login("admin").session()))
                 .andExpect(status().isBadGateway()).andExpect(jsonPath("$.code").value("UNREACHABLE"));
     }
@@ -101,6 +101,7 @@ class HostContainerInspectTest extends HostApiTestBase {
     void invalidIdIs400AndNeverReachesDocker() throws Exception {
         mvc.perform(get("/api/hosts/{h}/containers/{c}", host, "-rf").session(login("admin").session()))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_RESOURCE_ID"));
+        verify(containers, never()).inspectWithImageEnv(any(), any(), any());
         verify(containers, never()).inspect(any(), any(), any());
     }
 
@@ -116,8 +117,8 @@ class HostContainerInspectTest extends HostApiTestBase {
                 + "SELECT 'shop', ?, 'x', id FROM users WHERE username = 'admin' RETURNING id", UUID.class, host);
         jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) SELECT id, ?, 'OPERATE' "
                 + "FROM users WHERE username = 'operator'", dep);
-        when(containers.inspect(any(), any(), eq("other1"))).thenReturn(details("unmanaged"));
-        when(containers.inspect(any(), any(), eq("plain1"))).thenReturn(details(null));
+        when(containers.inspectWithImageEnv(any(), any(), eq("other1"))).thenReturn(details("unmanaged"));
+        when(containers.inspectWithImageEnv(any(), any(), eq("plain1"))).thenReturn(details(null));
         var op = login("operator");
 
         mvc.perform(get("/api/hosts/{h}/containers/web1", host).session(op.session())).andExpect(status().isOk());
@@ -139,7 +140,7 @@ class HostContainerInspectTest extends HostApiTestBase {
                 List.of(new ContainerDetailsDto.EnvVar("CF_DNS_API_TOKEN", "dns-s3cr3t")),
                 List.of(new ContainerDetailsDto.EnvVar("IMG_SECRET", "img-s3cr3t")), List.of(), Map.of(), List.of(),
                 List.of(), null, "shipir-proxy", "traefik", null, null);
-        when(containers.inspect(any(), any(), eq("proxy1"))).thenReturn(proxy);
+        when(containers.inspectWithImageEnv(any(), any(), eq("proxy1"))).thenReturn(proxy);
 
         mvc.perform(get("/api/hosts/{h}/containers/proxy1", host).session(login("operator").session()))
                 .andExpect(status().isOk())

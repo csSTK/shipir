@@ -56,7 +56,7 @@ class HostResourcesController {
 
     @GetMapping("/containers/{containerId}")
     ContainerDetailsDto container(@PathVariable UUID id, @PathVariable String containerId) {
-        return service.container(id, containerId);
+        return service.containerWithImageEnv(id, containerId);
     }
 
     @GetMapping("/images")
