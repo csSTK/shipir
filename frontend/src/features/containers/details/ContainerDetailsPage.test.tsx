@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../shared/api/client.ts'
@@ -176,7 +176,7 @@ describe('ContainerDetailsPage', () => {
     execScope = { hostOperable: false, operableProjects: ['other'] }
     renderPage(() => details)
     await screen.findByRole('link', { name: 'Logs' })
-    await vi.waitFor(() => expect(apiFetch.mock.calls.map((c) => c[0])).toContain('/exec/access?hostId=h1'))
+    await waitFor(() => expect(apiFetch.mock.calls.map((c) => c[0])).toContain('/exec/access?hostId=h1'))
     expect(screen.queryByRole('link', { name: 'Console' })).not.toBeInTheDocument()
     cleanup()
     execScope = { hostOperable: false, operableProjects: ['shop'] }

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAdvancedMode } from './advancedMode.ts'
@@ -36,7 +36,7 @@ describe('useAdvancedMode', () => {
     expect(first.result.current[0]).toBe(true)
     first.unmount()
     const second = renderHook(() => useAdvancedMode(), { wrapper })
-    await vi.waitFor(() => expect(second.result.current[0]).toBe(true))
+    await waitFor(() => expect(second.result.current[0]).toBe(true))
   })
 
   it('is not ready and stores nothing until the user is known', async () => {

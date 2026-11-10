@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../shared/api/client.ts'
@@ -215,7 +215,7 @@ describe('ContainersPage', () => {
       await openMenu('web')
       expect(menuItems()).toEqual(['Restart', 'Pause', 'Details', 'Publish with a domain', 'Kill', 'Delete'])
       fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
-      await vi.waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+      await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
       await openMenu('api')
       expect(menuItems()).toEqual(['Details', 'Publish with a domain', 'Delete'])
     })
@@ -247,7 +247,7 @@ describe('ContainersPage', () => {
         mockCaps(true, { hostOperable: false, operableProjects: [] })
         renderAt('/environments/h1/containers', 'OPERATOR')
         await screen.findByRole('button', { name: 'Logs web' })
-        await vi.waitFor(() => expect(apiFetch.mock.calls.map((c) => c[0])).toContain('/exec/access?hostId=h1'))
+        await waitFor(() => expect(apiFetch.mock.calls.map((c) => c[0])).toContain('/exec/access?hostId=h1'))
         expect(screen.queryByRole('button', { name: 'Console web' })).toBeNull()
       })
 
@@ -259,7 +259,7 @@ describe('ContainersPage', () => {
         mockCaps(true, { hostOperable: false, operableProjects: ['other'] })
         renderAt('/environments/h1/containers', 'OPERATOR')
         await screen.findByRole('button', { name: 'Logs web' })
-        await vi.waitFor(() => expect(apiFetch.mock.calls.map((c) => c[0])).toContain('/exec/access?hostId=h1'))
+        await waitFor(() => expect(apiFetch.mock.calls.map((c) => c[0])).toContain('/exec/access?hostId=h1'))
         expect(screen.queryByRole('button', { name: 'Console web' })).toBeNull()
       })
 
@@ -294,7 +294,7 @@ describe('ContainersPage', () => {
       expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/containers/1/restart', { method: 'POST' })
       const before = apiFetch.mock.calls.filter((c) => c[0] === '/hosts/h1/containers').length
       resolve()
-      await vi.waitFor(() => expect(apiFetch.mock.calls.filter((c) => c[0] === '/hosts/h1/containers').length).toBeGreaterThan(before))
+      await waitFor(() => expect(apiFetch.mock.calls.filter((c) => c[0] === '/hosts/h1/containers').length).toBeGreaterThan(before))
     })
 
     it('asks before killing', async () => {
@@ -306,8 +306,8 @@ describe('ContainersPage', () => {
       expect(apiFetch).not.toHaveBeenCalledWith(expect.stringContaining('/kill'), expect.anything())
       const dialog = await screen.findByRole('dialog')
       fireEvent.click(within(dialog).getByRole('button', { name: 'Kill' }))
-      await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/containers/1/kill', { method: 'POST' }))
-      await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/containers/1/kill', { method: 'POST' }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     })
 
     it('asks before deleting', async () => {
