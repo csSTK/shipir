@@ -48,7 +48,7 @@ public class ExternalIdentityService {
         }
         // With OIDC configured the pair must match what sign-in compares: the configured issuer, stored as saved
         cleanIssuer = settings.activeIssuer().map(active -> {
-            if (!normalize(active).equals(normalize(inputIssuer(issuer)))) {
+            if (!dev.bethge.shipir.common.util.EndpointUrls.sameEndpoint(active, inputIssuer(issuer))) {
                 throw new OidcException(HttpStatus.BAD_REQUEST, "ISSUER_MISMATCH",
                         "The issuer must be the configured provider: " + active);
             }
@@ -94,23 +94,6 @@ public class ExternalIdentityService {
 
     private static String inputIssuer(String issuer) {
         return issuer == null ? "" : issuer.strip();
-    }
-
-    /** Strip, drop one trailing slash, lower-case scheme and host only (path, port and case of the rest stay). */
-    static String normalize(String issuer) {
-        String s = issuer.strip();
-        if (s.endsWith("/")) {
-            s = s.substring(0, s.length() - 1);
-        }
-        int schemeEnd = s.indexOf("://");
-        if (schemeEnd < 0) {
-            return s;
-        }
-        int hostEnd = s.indexOf('/', schemeEnd + 3);
-        if (hostEnd < 0) {
-            hostEnd = s.length();
-        }
-        return s.substring(0, hostEnd).toLowerCase(java.util.Locale.ROOT) + s.substring(hostEnd);
     }
 
     private static boolean validSubject(String subject) {
