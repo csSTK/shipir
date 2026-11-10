@@ -307,6 +307,22 @@ class DeploymentSecurityPolicyApiTest extends DeploymentTestBase {
         assertThat(commands).doesNotContain(ComposeCommand.PULL, ComposeCommand.UP);
     }
 
+    /**
+     * shipr-kqbc.59: a version hashed before kqbc.56 may carry a hash although its compose references an env_file outside
+     * the deployment dir. The stored hash must not be trusted at system-run time then.
+     */
+    @Test
+    void systemRunDoesNotTrustAStoredHashWhenTheComposeReferencesFilesOutsideTheDirectory() throws Exception {
+        UUID id = adminDeployed("legacyhash", "services:\n  x:\n    image: alpine\n    privileged: true\n    env_file: ../x\n");
+        // what a pre-kqbc.56 deploy stored: the matching hash of the directory
+        jdbc.update("UPDATE deployment_versions SET graph_hash = ? WHERE deployment_id = ?",
+                ComposeGraphHasher.hash(files.deploymentDir(hostId, "legacyhash")).orElseThrow(), id);
+        commands.clear();
+        assertThatThrownBy(() -> runs.webhookTrigger(id))
+                .isInstanceOfSatisfying(DeploymentException.class, e -> assertThat(e.code()).isEqualTo("ADMIN_REQUIRED"));
+        assertThat(commands).doesNotContain(ComposeCommand.PULL, ComposeCommand.UP);
+    }
+
     @Test
     void adminDeployWithEnvFileFromTheGitMetadataStoresNoGraphHash() throws Exception {
         UUID id = adminDeployed("gitref", "services:\n  x:\n    image: alpine\n    env_file: repo/.git/config\n");

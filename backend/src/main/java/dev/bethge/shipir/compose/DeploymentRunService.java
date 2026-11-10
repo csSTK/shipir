@@ -510,8 +510,11 @@ public class DeploymentRunService {
 
     private boolean graphIsApproved(Deployment deployment, DockerEndpoint endpoint, DeploymentVersion approved) {
         if (approved != null && approved.getGraphHash() != null) {
+            // a hash stored before shipr-kqbc.56 may vouch for an env_file/include outside the directory it never covered
             return ComposeGraphHasher.hash(files.deploymentDir(deployment.getHostId(), deployment.getName()))
-                    .filter(approved.getGraphHash()::equals).isPresent();
+                    .filter(approved.getGraphHash()::equals).isPresent()
+                    && !deploymentService.referencesUnhashedPaths(deployment.getHostId(), deployment.getName(), endpoint,
+                            deploymentService.composeFileOf(deployment));
         }
         return graphIsOnlyApprovedFiles(deployment)
                 && !deploymentService.referencesUnhashedPaths(deployment.getHostId(), deployment.getName(), endpoint,
