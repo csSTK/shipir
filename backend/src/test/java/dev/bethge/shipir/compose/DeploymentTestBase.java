@@ -93,6 +93,8 @@ abstract class DeploymentTestBase {
     protected boolean downFails;
     protected volatile boolean upFails;
     protected volatile boolean pullFails;
+    /** Makes {@code up} throw (compose cannot be run) instead of returning a result. */
+    protected volatile boolean upThrows;
     /** Blocks every {@code up} until counted down; replaced per test. */
     protected volatile java.util.concurrent.CountDownLatch upGate = new java.util.concurrent.CountDownLatch(0);
 
@@ -116,6 +118,7 @@ abstract class DeploymentTestBase {
         downFails = false;
         upFails = false;
         pullFails = false;
+        upThrows = false;
         upGate = new java.util.concurrent.CountDownLatch(0);
         composeFiles.clear();
         overrideYamls.clear();
@@ -189,6 +192,9 @@ abstract class DeploymentTestBase {
                 java.util.function.Consumer<String> onLine = inv.getArgument(4);
                 onLine.accept("Container web  Starting");
                 upGate.await();
+                if (upThrows) {
+                    throw new IllegalStateException("compose binary missing");
+                }
                 onLine.accept(upFails ? "Error: boom" : "Container web  Started");
                 return upFails ? new ComposeProcessResult(1, false, List.of("Error: boom"))
                         : new ComposeProcessResult(0, false, List.of("Container web  Started"));

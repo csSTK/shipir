@@ -820,6 +820,7 @@ public class DeploymentRunService {
             }
         } catch (RuntimeException e) {
             log.warn("Deployment {} could not run: {}", runId, e.toString());
+            success = false; // an earlier step may have succeeded; a throwing later step still fails the run
             details.put("error", "COMPOSE_UNAVAILABLE");
             runError = "COMPOSE_UNAVAILABLE";
             sink.accept("docker compose could not be run");

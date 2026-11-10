@@ -106,6 +106,26 @@ class DeploymentPullUpdateApiTest extends DeploymentTestBase {
     }
 
     @Test
+    void upThrowingAfterSuccessfulPullIsFailureNotSuccess() throws Exception {
+        Login op = login("operator");
+        String id = create(op);
+        deployAndWait(op, id);
+        upThrows = true;
+
+        String body = mvc.perform(op.write(post(url() + "/" + id + "/pull-update")))
+                .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
+        String runId = JsonPath.read(body, "$.runId");
+        awaitResults(2);
+
+        assertThat(commands).containsExactly(ComposeCommand.PULL, ComposeCommand.UP);
+        assertThat(jdbc.queryForObject("SELECT status FROM deployments WHERE id = ?::uuid", String.class, id))
+                .isEqualTo("ERROR");
+        verify(streams, timeout(5000)).complete(runId, RunStatus.FAILED);
+        assertThat(audit()).contains("DEPLOYMENT_PULL_UPDATE_RESULT:FAILURE")
+                .doesNotContain("DEPLOYMENT_PULL_UPDATE_RESULT:SUCCESS");
+    }
+
+    @Test
     void neverDeployedIs400NotDeployedAndRunsNothing() throws Exception {
         Login op = login("operator");
         String id = create(op);
