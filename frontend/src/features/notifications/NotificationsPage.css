@@ -3,11 +3,6 @@
   flex-direction: column;
   gap: var(--space-4);
 }
-/* Title and controls share one center line (the header default aligns to the bottom edge, and the checkbox row is taller than the button). */
-.notifs .ui-pageheader,
-.notifs .ui-pageheader__actions {
-  align-items: center;
-}
 .notifs__filter {
   display: flex;
   align-items: center;
