@@ -20,7 +20,8 @@ final class ImageReferenceRules {
 
     private static final String PATH_PART = "[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*";
     private static final String DOMAIN = "[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?(?::[0-9]{1,5})?";
-    private static final String TAG = "[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}";
+    /** Shared with {@link ImageReference}, which must accept exactly the same tags. */
+    static final String TAG = "[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}";
     private static final String REPOSITORY = "(?:" + DOMAIN + "/)?" + PATH_PART + "(?:/" + PATH_PART + ")*";
     private static final Pattern IMAGE_REFERENCE = Pattern.compile(REPOSITORY + "(?::" + TAG + ")?(?:@sha256:[a-f0-9]{64})?");
     private static final Pattern REPOSITORY_ONLY = Pattern.compile(REPOSITORY);

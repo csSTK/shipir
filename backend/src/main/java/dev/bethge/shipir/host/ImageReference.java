@@ -13,7 +13,7 @@ public record ImageReference(String registryHost, String repository, String tag)
     private static final Set<String> HUB_ALIASES = Set.of("docker.io", "index.docker.io", "registry-1.docker.io");
     private static final Pattern REPOSITORY = Pattern.compile("[a-z0-9]+(?:[._/-][a-z0-9]+)*");
     private static final Pattern REGISTRY = Pattern.compile("[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?(?::[0-9]{1,5})?");
-    private static final Pattern TAG = Pattern.compile("[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}");
+    private static final Pattern TAG = Pattern.compile(ImageReferenceRules.TAG);
 
     /** @return the reference, or null when it is blank, digest-only or not a valid tagged reference */
     public static ImageReference parse(String raw) {
