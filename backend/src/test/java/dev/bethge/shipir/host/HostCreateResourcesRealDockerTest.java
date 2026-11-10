@@ -1,5 +1,6 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.SetupGateFixture;
 import com.github.dockerjava.api.DockerClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -26,8 +27,7 @@ class HostCreateResourcesRealDockerTest extends HostApiTestBase {
     private final DockerClient docker = DockerClientFactory.lazyClient();
 
     private String localHostId() {
-        jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
-                + "SELECT 'local', 'LOCAL', id FROM users WHERE username = 'admin'");
+        SetupGateFixture.resetWithAdminHost(jdbc, "local");
         return jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'local'", UUID.class).toString();
     }
 

@@ -1,5 +1,6 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.SetupGateFixture;
 import dev.bethge.shipir.compose.execution.RegistryAuthSource;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerErrorCode;
@@ -81,8 +82,7 @@ class HostImageBuildTest extends HostApiTestBase {
         lines.clear();
         when(streams.start(any())).thenReturn((Consumer<String>) lines::add);
         when(registryAuths.auths()).thenReturn(List.of(new RegistryAuthSource.Auth("ghcr.io", "bot", "s3cret-token")));
-        jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
-                + "SELECT 'local', 'LOCAL', id FROM users WHERE username = 'admin'");
+        SetupGateFixture.resetWithAdminHost(jdbc, "local");
         host = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'local'", UUID.class).toString();
     }
 

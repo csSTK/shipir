@@ -1,5 +1,6 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.SetupGateFixture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -24,8 +25,7 @@ class HostPermissionTest extends HostApiTestBase {
 
     @BeforeEach
     void hosts() {
-        jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
-                + "SELECT 'visible', 'LOCAL', id FROM users WHERE username = 'admin'");
+        SetupGateFixture.resetWithAdminHost(jdbc, "visible");
         jdbc.update("INSERT INTO docker_hosts (name, connection_type, host, port, owner_user_id) "
                 + "SELECT 'hidden', 'TCP', 'hidden.local', 2375, id FROM users WHERE username = 'admin'");
         visible = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'visible'", UUID.class);

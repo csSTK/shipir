@@ -1,5 +1,6 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.SetupGateFixture;
 import dev.bethge.shipir.docker.client.ContainerService;
 import dev.bethge.shipir.docker.client.ImageService;
 import dev.bethge.shipir.docker.client.NetworkService;
@@ -45,8 +46,7 @@ class HostSystemManagedContainerActionsTest extends HostApiTestBase {
 
     @BeforeEach
     void setUp() {
-        jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
-                + "SELECT 'local', 'LOCAL', id FROM users WHERE username = 'admin'");
+        SetupGateFixture.resetWithAdminHost(jdbc, "local");
         host = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'local'", UUID.class);
         proxy = jdbc.queryForObject("INSERT INTO deployments (name, host_id, compose_file_path, created_by, system_managed) "
                 + "SELECT 'shipir-proxy', ?, 'x', id, TRUE FROM users WHERE username = 'admin' RETURNING id", UUID.class, host);

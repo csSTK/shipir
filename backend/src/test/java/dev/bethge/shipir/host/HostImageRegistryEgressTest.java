@@ -1,5 +1,6 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.SetupGateFixture;
 import dev.bethge.shipir.compose.execution.RegistryAuthSource;
 import dev.bethge.shipir.docker.client.ImageService;
 import dev.bethge.shipir.streaming.ComposeOutputStreamService;
@@ -35,8 +36,7 @@ class HostImageRegistryEgressTest extends HostApiTestBase {
     @BeforeEach
     void setUp() {
         when(registryAuths.auths()).thenReturn(List.of());
-        jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
-                + "SELECT 'local', 'LOCAL', id FROM users WHERE username = 'admin'");
+        SetupGateFixture.resetWithAdminHost(jdbc, "local");
         host = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'local'", UUID.class).toString();
     }
 

@@ -1,5 +1,6 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.SetupGateFixture;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,8 +33,7 @@ class StatsHistoryApiTest extends HostApiTestBase {
 
     @BeforeEach
     void hosts() {
-        jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
-                + "SELECT 'stats-host', 'LOCAL', id FROM users WHERE username = 'admin'");
+        SetupGateFixture.resetWithAdminHost(jdbc, "stats-host");
         jdbc.update("INSERT INTO docker_hosts (name, connection_type, host, port, owner_user_id) "
                 + "SELECT 'stats-other', 'TCP', 'other.local', 2375, id FROM users WHERE username = 'admin'");
         host = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'stats-host'", UUID.class);

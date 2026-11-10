@@ -1,5 +1,6 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.SetupGateFixture;
 import dev.bethge.shipir.docker.client.ContainerService;
 import dev.bethge.shipir.docker.client.ImageService;
 import dev.bethge.shipir.docker.client.NetworkService;
@@ -46,8 +47,7 @@ class HostSystemManagedStoppedProxyTest extends HostApiTestBase {
 
     @BeforeEach
     void setUp() {
-        jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
-                + "SELECT 'local', 'LOCAL', id FROM users WHERE username = 'admin'");
+        SetupGateFixture.resetWithAdminHost(jdbc, "local");
         UUID hostId = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'local'", UUID.class);
         host = hostId.toString();
         jdbc.update("INSERT INTO deployments (name, host_id, compose_file_path, created_by, system_managed) "

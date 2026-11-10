@@ -1,5 +1,6 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.SetupGateFixture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -49,8 +50,7 @@ class VolumeBackupStoredApiTest extends HostApiTestBase {
     @BeforeEach
     void setUp() throws Exception {
         jdbc.update("DELETE FROM audit_log");
-        jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
-                + "SELECT 'local', 'LOCAL', id FROM users WHERE username = 'admin'");
+        SetupGateFixture.resetWithAdminHost(jdbc, "local");
         jdbc.update("INSERT INTO docker_hosts (name, connection_type, host, port, owner_user_id) "
                 + "SELECT 'second', 'TCP', 'second.local', 2375, id FROM users WHERE username = 'admin'");
         hostId = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'local'", UUID.class);

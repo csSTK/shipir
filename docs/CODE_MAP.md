@@ -272,7 +272,7 @@ Backend (`backend/src/main/java/dev/bethge/shipir/`):
 - `backend/src/test/java/dev/bethge/shipir/migration/RenameStacksToDeploymentsMigrationTest.java`: own DB, stops at V15, applies V16, checks stacks->deployments rename keeps data
 - `backend/src/test/java/dev/bethge/shipir/architecture/{ArchitectureRules,ArchitectureTest,ArchitectureRulesFailTest}.java`, `fixture/**`: ArchUnit rules (docker/ no feature, docker-java only in docker/, no feature on ai/, audit not on ai/, git not on compose/, host/ not on streaming/, controllers not on repositories, no exceptions); fail test runs each rule against deliberate violations in `fixture/` Also `noUnpinnedConnectionManager`: main code must not call or reference (`::new`) the one-arg `DockerHostConnectionManager` constructor (shipr-kqbc.44, shipr-ycvc.88).
 - `backend/src/test/java/dev/bethge/shipir/PostgresTestConfiguration.java`: reusable `@TestConfiguration`, `@ServiceConnection` postgres:16-alpine; integration tests `@Import` it
-- `backend/src/test/java/dev/bethge/shipir/SetupGateFixture.java`: shared test helper `resetWithAdminHost` (clears deployments/docker hosts, gives ADMIN one LOCAL host for the setup gate); used by `registry/RegistryTestBase`, `compose/portainer/PortainerImportApiTest`
+- `backend/src/test/java/dev/bethge/shipir/SetupGateFixture.java`: shared test helper `resetWithAdminHost` (clears deployments/docker hosts, gives ADMIN one LOCAL host for the setup gate); used by `registry/RegistryTestBase`, `compose/portainer/PortainerImportApiTest` and the host tests that give ADMIN the local host by hand (shipr-k31n.63)
 
 Frontend (`frontend/`):
 - `vite.config.ts`: dev proxy (`/api`, `/ws` → :8080), Vitest config (testTimeout 15s for CPU-loaded runs)

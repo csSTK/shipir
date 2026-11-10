@@ -1,5 +1,6 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.SetupGateFixture;
 import dev.bethge.shipir.docker.client.VolumeArchiveService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,8 +31,7 @@ class VolumeBackupScheduleApiTest extends HostApiTestBase {
     @BeforeEach
     void setUp() {
         jdbc.update("DELETE FROM audit_log");
-        jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
-                + "SELECT 'local', 'LOCAL', id FROM users WHERE username = 'admin'");
+        SetupGateFixture.resetWithAdminHost(jdbc, "local");
         hostId = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'local'", UUID.class);
         url = "/api/hosts/" + hostId + "/volume-backup-schedules";
     }

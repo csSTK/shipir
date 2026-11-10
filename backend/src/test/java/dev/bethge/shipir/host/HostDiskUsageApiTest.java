@@ -1,5 +1,6 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.SetupGateFixture;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.client.DockerSystemService;
@@ -44,8 +45,7 @@ class HostDiskUsageApiTest extends HostApiTestBase {
 
     @BeforeEach
     void setUp() {
-        jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
-                + "SELECT 'local', 'LOCAL', id FROM users WHERE username = 'admin'");
+        SetupGateFixture.resetWithAdminHost(jdbc, "local");
         jdbc.update("INSERT INTO docker_hosts (name, connection_type, host, port, owner_user_id) "
                 + "SELECT 'hidden', 'TCP', 'hidden.local', 2375, id FROM users WHERE username = 'admin'");
         host = jdbc.queryForObject("SELECT id FROM docker_hosts WHERE name = 'local'", UUID.class);

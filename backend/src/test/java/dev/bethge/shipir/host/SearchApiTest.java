@@ -1,5 +1,6 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.SetupGateFixture;
 import dev.bethge.shipir.docker.DockerConnectionException;
 import dev.bethge.shipir.docker.DockerErrorCode;
 import dev.bethge.shipir.docker.client.ContainerService;
@@ -45,8 +46,7 @@ class SearchApiTest extends HostApiTestBase {
 
     @BeforeEach
     void hosts() {
-        jdbc.update("INSERT INTO docker_hosts (name, connection_type, owner_user_id) "
-                + "SELECT 'alpha-host', 'LOCAL', id FROM users WHERE username = 'admin'");
+        SetupGateFixture.resetWithAdminHost(jdbc, "alpha-host");
         jdbc.update("INSERT INTO docker_hosts (name, connection_type, host, port, tls_ca_encrypted, "
                 + "tls_cert_encrypted, tls_key_encrypted, owner_user_id) SELECT 'beta-host', 'TCP', '203.0.113.8', 2376, "
                 + "?, ?, ?, id FROM users WHERE username = 'admin'",
