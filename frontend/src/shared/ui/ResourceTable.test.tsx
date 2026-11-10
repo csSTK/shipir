@@ -228,6 +228,33 @@ describe('ResourceTable', () => {
     })
   })
 
+  describe('row actions on narrow screens', () => {
+    afterEach(() => vi.unstubAllGlobals())
+
+    it('collapses the icon actions into the overflow menu, one slot wide', async () => {
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: true,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }))
+      const start = vi.fn()
+      setup({
+        rowLabel: (r) => r.name,
+        rowActions: (r) => ({
+          primary: [{ label: 'Start', icon: Play, onSelect: () => start(r.id) }],
+          menu: [{ label: 'Delete', onSelect: () => {}, danger: true }],
+        }),
+      })
+      expect(screen.queryByRole('button', { name: 'Start beta' })).not.toBeInTheDocument()
+      expect(document.querySelector('table')?.style.getPropertyValue('--rt-action-slots')).toBe('1')
+      fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions for beta' }), { button: 0, ctrlKey: false })
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Start' }))
+      expect(start).toHaveBeenCalledWith('1')
+      expect(await screen.findByRole('menuitem', { name: 'Delete' })).toBeInTheDocument()
+    })
+  })
+
   describe('column sizing', () => {
     const sized: ResourceColumn<Row>[] = [
       { id: 'name', header: 'Name', render: (r) => r.name, sortValue: (r) => r.name, hideable: false, flex: true },

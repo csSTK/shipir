@@ -17,6 +17,7 @@ import { Menu, type MenuEntry } from './Menu.tsx'
 import { SearchField } from './SearchField.tsx'
 import { Skeleton } from './Skeleton.tsx'
 import { useTranslation } from 'react-i18next'
+import { useMediaQuery } from '../lib/useMediaQuery.ts'
 import './ResourceTable.css'
 
 export interface ResourceColumn<T> {
@@ -41,6 +42,8 @@ export interface ResourceColumn<T> {
   /** True when the row has no value here. A column empty for every row is hidden unless the user turns it on. */
   isEmpty?: (row: T) => boolean
 }
+
+const NARROW_QUERY = '(max-width: 720px)'
 
 /** One icon button in the pinned actions column. */
 export interface RowAction {
@@ -246,12 +249,23 @@ export function ResourceTable<T>({
   const hideableColumns = table.getAllLeafColumns().filter((c) => c.getCanHide())
   const visibleColumns = table.getVisibleLeafColumns()
   const hasActions = !!rowActions
+  // On phones the pinned icon buttons would cover the data columns: they move into the overflow menu.
+  const narrow = useMediaQuery(NARROW_QUERY)
+  const actionsOf = (row: T): RowActions => {
+    const a = rowActions!(row)
+    if (!narrow || !a.primary?.length) return a
+    const moved: MenuEntry[] = a.primary.map((p) => {
+      const Icon = p.icon
+      return { label: p.label, icon: <Icon aria-hidden />, onSelect: p.onSelect, danger: p.danger, disabled: p.disabled }
+    })
+    return { menu: a.menu?.length ? [...moved, { type: 'separator' }, ...a.menu] : moved }
+  }
   const flexIds = new Set(columns.filter((c) => c.flex && sizing[c.id] === undefined).map((c) => c.id))
   const hasFlex = visibleColumns.some((c) => flexIds.has(c.id))
   // the actions column is sized to its widest row so content never spills into the neighbouring column
   const actionSlots = hasActions
     ? filtered.reduce((max, r) => {
-        const a = rowActions(r)
+        const a = actionsOf(r)
         return Math.max(max, (a.primary?.length ?? 0) + (a.menu && a.menu.length > 0 ? 1 : 0))
       }, 1)
     : 0
@@ -344,7 +358,7 @@ export function ResourceTable<T>({
           </thead>
           <tbody>
             {table.getRowModel().rows.map((row) => {
-              const actions = rowActions?.(row.original)
+              const actions = hasActions ? actionsOf(row.original) : undefined
               const name = rowLabel?.(row.original)
               return (
                 <tr key={row.id}>

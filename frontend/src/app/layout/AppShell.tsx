@@ -11,7 +11,7 @@ import { ErrorBoundary } from './ErrorBoundary.tsx'
 import { EnvironmentSwitcher } from './EnvironmentSwitcher.tsx'
 import { Sidebar } from './Sidebar.tsx'
 import { UserMenu } from './UserMenu.tsx'
-import { useMediaQuery } from './useMediaQuery.ts'
+import { useMediaQuery } from '../../shared/lib/useMediaQuery.ts'
 import { useTranslation } from 'react-i18next'
 import './AppShell.css'
 import '../../shared/ui/Page.css'
@@ -76,7 +76,7 @@ export function AppShell({ user, onSignOut, signingOut, children }: Props) {
         </header>
         <div className="shell__body">
           {!narrow && <Sidebar role={user.role} onNavigate={() => setNavOpen(false)} />}
-          <main className="shell__content">
+          <main className="shell__content" data-dock={pathname.startsWith('/assistant') ? undefined : 'true'}>
             <div className="shell__page">
               <ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary>
             </div>
