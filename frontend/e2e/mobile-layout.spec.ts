@@ -25,8 +25,9 @@ async function intersects(a: Locator, b: Locator) {
 }
 
 for (const target of [
-  { name: 'containers', path: '/environments/a/containers', row: 'web-with-a-rather-long-container-name', actions: 'More actions for web-with-a-rather-long-container-name' },
-  { name: 'users', path: '/settings/users', row: 'anna', actions: 'More actions for anna' },
+  { name: 'containers', path: '/environments/a/containers', row: 'web-with-a-rather-long-container-name', actions: 'More actions for web-with-a-rather-long-container-name', statusCol: 'state' },
+  { name: 'deployments', path: '/environments/a/deployments', row: 'shop', actions: 'More actions for shop', statusCol: 'status' },
+  { name: 'users', path: '/settings/users', row: 'anna', actions: 'More actions for anna', statusCol: 'role' },
 ]) {
   test(`${target.name} table at 375px: actions never overlap the status, no page scroll`, async ({ page }) => {
     await page.goto(target.path)
@@ -38,6 +39,11 @@ for (const target of [
     await expect(row.locator('.rtable__actions button')).toHaveCount(1)
     // name and actions are on screen without scrolling the table
     await expect(row.getByText(target.row, { exact: true }).first()).toBeVisible()
+    // without scrolling, the status/role cell is whole and ends before the pinned actions
+    const statusCell = row.locator(`td[data-col="${target.statusCol}"]`)
+    const [sb, ab] = [(await statusCell.boundingBox())!, (await row.locator('td.rtable__actions-cell').boundingBox())!]
+    expect(sb.x + sb.width, 'status cell right edge <= actions cell left edge').toBeLessThanOrEqual(ab.x + 1)
+    expect(await statusCell.locator('.rtable__cell').evaluate((el) => el.scrollWidth - el.clientWidth), 'status content is not cut off').toBeLessThanOrEqual(0)
     // scrolled to the end, the last column (status/role) ends where the pinned actions begin, so no cell is covered
     await page.locator('.rtable__scroll').evaluate((el) => el.scrollTo({ left: el.scrollWidth }))
     for (const cell of await row.locator('td[data-col]').all()) expect(await intersects(actions, cell)).toBe(false)

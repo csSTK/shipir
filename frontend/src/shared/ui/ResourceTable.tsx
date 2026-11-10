@@ -44,6 +44,8 @@ export interface ResourceColumn<T> {
 }
 
 const NARROW_QUERY = '(max-width: 720px)'
+/** On phones the first column is capped so the next one (status) still fits before the pinned actions. */
+const NARROW_PRIMARY_WIDTH = 112
 
 /** One icon button in the pinned actions column. */
 export interface RowAction {
@@ -260,8 +262,10 @@ export function ResourceTable<T>({
     })
     return { menu: a.menu?.length ? [...moved, { type: 'separator' }, ...a.menu] : moved }
   }
-  const flexIds = new Set(columns.filter((c) => c.flex && sizing[c.id] === undefined).map((c) => c.id))
+  const primaryId = narrow ? visibleColumns[0]?.id : undefined
+  const flexIds = new Set(columns.filter((c) => c.flex && sizing[c.id] === undefined && c.id !== primaryId).map((c) => c.id))
   const hasFlex = visibleColumns.some((c) => flexIds.has(c.id))
+  const widthOf = (c: { id: string; getSize: () => number }) => (c.id === primaryId ? Math.min(c.getSize(), NARROW_PRIMARY_WIDTH) : c.getSize())
   // the actions column is sized to its widest row so content never spills into the neighbouring column
   const actionSlots = hasActions
     ? filtered.reduce((max, r) => {
@@ -269,7 +273,7 @@ export function ResourceTable<T>({
         return Math.max(max, (a.primary?.length ?? 0) + (a.menu && a.menu.length > 0 ? 1 : 0))
       }, 1)
     : 0
-  const sizeSum = visibleColumns.reduce((sum, c) => sum + c.getSize(), 0)
+  const sizeSum = visibleColumns.reduce((sum, c) => sum + widthOf(c), 0)
   // Runtime column sizes (data-driven, see tokenUsage.test.ts); the actions column adds its token-based width.
   const tableMinWidth = hasActions ? `calc(${sizeSum}px + var(--rt-actions-width))` : sizeSum
 
@@ -305,7 +309,7 @@ export function ResourceTable<T>({
         <table ref={tableRef} className="rtable__table" aria-label={label} style={{ ['--rt-action-slots' as string]: actionSlots, minWidth: tableMinWidth }}>
           <colgroup>
             {visibleColumns.map((c) => (
-              <col key={c.id} style={flexIds.has(c.id) ? undefined : { width: c.getSize() }} />
+              <col key={c.id} style={flexIds.has(c.id) ? undefined : { width: widthOf(c) }} />
             ))}
             <col style={hasFlex ? { width: 0 } : undefined} />
             {hasActions && <col className="rtable__col-actions" />}

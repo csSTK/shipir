@@ -104,11 +104,14 @@ test.describe('table column layout at 1440px', () => {
 test.describe('table column layout at 375px', () => {
   test.use({ viewport: { width: 375, height: 800 } })
 
-  test('the name column keeps its width next to the pinned actions (the table scrolls sideways)', async ({ page, api }) => {
+  test('the name column is capped on phones so the state fits before the pinned actions', async ({ page, api }) => {
     api.mock('GET', '/api/auth/me', as('ADMIN'))
     await page.goto('/environments/a/containers')
     await expect(page.getByRole('link', { name: 'Details of web' })).toBeVisible()
     const name = await page.locator('th[data-col="name"]').boundingBox()
-    expect(name!.width).toBeGreaterThanOrEqual(200)
+    expect(name!.width).toBeGreaterThanOrEqual(100)
+    const state = await page.locator('th[data-col="state"]').boundingBox()
+    const actions = await page.locator('th.rtable__actions-cell').boundingBox()
+    expect(state!.x + state!.width).toBeLessThanOrEqual(actions!.x + 1)
   })
 })
