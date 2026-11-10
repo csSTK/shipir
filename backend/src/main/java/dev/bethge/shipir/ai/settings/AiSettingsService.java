@@ -142,14 +142,15 @@ public class AiSettingsService {
         String scheme = uri.getScheme();
         boolean schemeOk = "https".equalsIgnoreCase(scheme)
                 || (properties.allowInsecureHttp() && "http".equalsIgnoreCase(scheme));
-        if (!schemeOk || uri.getHost() == null || uri.getHost().isBlank() || uri.getUserInfo() != null) {
+        if (!schemeOk || uri.getHost() == null || uri.getHost().isBlank() || uri.getUserInfo() != null
+                || uri.getQuery() != null || uri.getFragment() != null) {
             throw invalidUrl();
         }
     }
 
     private static AiSettingsException invalidUrl() {
         return new AiSettingsException(HttpStatus.BAD_REQUEST, "INVALID_BASE_URL",
-                "The base URL must be an https URL without credentials");
+                "The base URL must be an https URL without credentials, query string or fragment");
     }
 
     /** Masked display value: the last four characters of a long key, otherwise only dots. */
