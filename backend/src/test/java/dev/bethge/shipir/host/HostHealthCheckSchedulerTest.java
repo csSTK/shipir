@@ -158,4 +158,25 @@ class HostHealthCheckSchedulerTest {
         assertThat(events).singleElement().isInstanceOfSatisfying(HostStatusChangedEvent.class,
                 e -> assertThat(e.hostName()).isEqualTo("a"));
     }
+
+    @Test
+    void failingListenerForOneHostDoesNotStopTheOtherHosts() {
+        host("a");
+        host("b");
+        scheduler.check();
+        List<Object> published = new ArrayList<>();
+        scheduler = new HostHealthCheckScheduler(overview, e -> {
+            published.add(e);
+            if (published.size() == 1) {
+                throw new IllegalStateException("listener failed");
+            }
+        }, clock);
+        scheduler.check(); // baseline for the new scheduler
+        failing.put("a", true);
+        failing.put("b", true);
+
+        scheduler.check();
+
+        assertThat(published).hasSize(2);
+    }
 }

@@ -3,6 +3,8 @@ package dev.bethge.shipir.host;
 import dev.bethge.shipir.common.security.SystemScope;
 import dev.bethge.shipir.host.dto.HostOverviewResponse;
 import dev.bethge.shipir.host.dto.HostOverviewResponse.Status;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -24,6 +26,8 @@ import java.util.concurrent.ConcurrentHashMap;
 @ConditionalOnProperty(name = "shipir.host.health-check-enabled", matchIfMissing = true)
 class HostHealthCheckScheduler {
 
+    private static final Logger log = LoggerFactory.getLogger(HostHealthCheckScheduler.class);
+
     private final HostOverviewService overview;
     private final ApplicationEventPublisher events;
     private final Clock clock;
@@ -44,8 +48,12 @@ class HostHealthCheckScheduler {
             seen.put(h.id(), h.status());
             Status previous = lastKnown.put(h.id(), h.status());
             if (previous != null && previous != h.status()) {
-                events.publishEvent(new HostStatusChangedEvent(h.id(), h.name(), previous, h.status(),
-                        h.error(), clock.instant()));
+                try {
+                    events.publishEvent(new HostStatusChangedEvent(h.id(), h.name(), previous, h.status(),
+                            h.error(), clock.instant()));
+                } catch (RuntimeException e) {
+                    log.warn("Publishing the status change of host {} failed", h.id(), e);
+                }
             }
         }
         lastKnown.keySet().retainAll(seen.keySet());

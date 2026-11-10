@@ -64,6 +64,7 @@ class WebhookDeliveryService {
     }
 
     @EventListener
+    @Order(Ordered.HIGHEST_PRECEDENCE)
     void onHostStatusChanged(HostStatusChangedEvent event) {
         NotificationType type = event.current() == Status.DOWN ? NotificationType.HOST_DOWN : NotificationType.HOST_UP;
         Map<String, Object> payload = new LinkedHashMap<>();
