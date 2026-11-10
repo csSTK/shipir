@@ -25,7 +25,9 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermission;
@@ -59,6 +61,8 @@ import java.util.stream.Stream;
 public class ConfigFileService {
 
     static final String BACKUP_DIR = ".shipir-backups";
+    /** Backups are read into memory through a no-follow channel, so they are capped (the editor cap is much lower). */
+    private static final long BACKUP_MAX_BYTES = 64L * 1024 * 1024;
     private static final int MAX_TREE_ENTRIES = 5000;
     private static final Pattern BACKUP_ID = Pattern.compile("\\d{17}-[0-9a-f]{8}");
     private static final DateTimeFormatter ID_TIME = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS").withZone(ZoneOffset.UTC);
@@ -70,6 +74,9 @@ public class ConfigFileService {
     private final DeploymentService deployments;
     private final ConfigFileProperties properties;
     private final Clock clock;
+    /** Test seam: runs in the gap between the up-front path check and the file operation (to inject a symlink swap). */
+    Runnable beforeUse = () -> {
+    };
 
     ConfigFileService(DeploymentService deployments, ConfigFileProperties properties, Clock clock) {
         this.deployments = deployments;
@@ -127,6 +134,7 @@ public class ConfigFileService {
         Target t = target(hostId, id, path, false);
         requireEnvReadAccess(hostId, id, t.rel());
         requireFile(t.file());
+        guard(t);
         return response(t);
     }
 
@@ -141,6 +149,7 @@ public class ConfigFileService {
                     "Environment and secret files cannot be read here");
         }
         requireFile(t.file());
+        guard(t);
         return response(t);
     }
 
@@ -153,8 +162,9 @@ public class ConfigFileService {
             throw new ConfigFileException(HttpStatus.BAD_REQUEST, "NOT_A_FILE", "Path is a directory");
         }
         return deployments.whileNoRunInProgress(id, () -> {
+            guard(t);
             backupIfExists(t);
-            writeAtomically(t.file(), content);
+            writeAtomically(t, content);
             return response(t);
         });
     }
@@ -165,8 +175,10 @@ public class ConfigFileService {
         Target t = target(hostId, id, path, true);
         requireFile(t.file());
         deployments.whileNoRunInProgress(id, () -> {
+            guard(t);
             backupIfExists(t);
             try {
+                verify(t.root(), t.file());
                 Files.delete(t.file());
             } catch (IOException e) {
                 throw new UncheckedIOException("Could not delete file", e);
@@ -181,8 +193,10 @@ public class ConfigFileService {
         if (!Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) {
             return List.of();
         }
+        verify(t.root(), dir);
         try (Stream<Path> stream = Files.list(dir)) {
             return stream.filter(p -> p.getFileName().toString().endsWith(".bak"))
+                    .filter(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS))
                     .sorted(Comparator.comparing((Path p) -> p.getFileName().toString()).reversed())
                     .map(this::backupOf)
                     .toList();
@@ -205,10 +219,11 @@ public class ConfigFileService {
         if (Files.isDirectory(t.file(), LinkOption.NOFOLLOW_LINKS)) {
             throw new ConfigFileException(HttpStatus.BAD_REQUEST, "NOT_A_FILE", "Path is a directory");
         }
-        String content = decode(backup);
         return deployments.whileNoRunInProgress(id, () -> {
+            guard(t);
+            String content = decode(t.root(), backup);
             backupIfExists(t);
-            writeAtomically(t.file(), content);
+            writeAtomically(t, content);
             return response(t);
         });
     }
@@ -309,6 +324,20 @@ public class ConfigFileService {
         }
     }
 
+    /** Runs the test seam, then re-verifies at use time that no symlink was swapped in since {@link #target}. */
+    private void guard(Target t) {
+        beforeUse.run();
+        verify(t.root(), t.file());
+    }
+
+    private static void verify(Path root, Path path) {
+        try {
+            PathValidationUtil.requireNoSymlinks(root, path);
+        } catch (PathValidationException e) {
+            throw new ConfigFileException(HttpStatus.BAD_REQUEST, "INVALID_PATH", "Symbolic links are not allowed");
+        }
+    }
+
     private static void requireFile(Path file) {
         if (Files.isDirectory(file, LinkOption.NOFOLLOW_LINKS)) {
             throw new ConfigFileException(HttpStatus.BAD_REQUEST, "NOT_A_FILE", "Path is a directory");
@@ -335,12 +364,17 @@ public class ConfigFileService {
     }
 
     /** Reads a file as strict UTF-8 text within the size cap. */
-    private String decode(Path file) {
+    private String decode(Path root, Path file) {
         try {
-            if (Files.size(file) > properties.maxFileBytes()) {
+            byte[] bytes;
+            try {
+                bytes = PathValidationUtil.readNoFollow(root, file, properties.maxFileBytes());
+            } catch (PathValidationException e) {
+                throw new ConfigFileException(HttpStatus.BAD_REQUEST, "INVALID_PATH", "Symbolic links are not allowed");
+            }
+            if (bytes.length > properties.maxFileBytes()) {
                 throw tooLarge();
             }
-            byte[] bytes = Files.readAllBytes(file);
             String text = StandardCharsets.UTF_8.newDecoder()
                     .onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
                     .decode(ByteBuffer.wrap(bytes)).toString();
@@ -356,27 +390,36 @@ public class ConfigFileService {
     }
 
     private ConfigFileResponse response(Target t) {
-        String content = decode(t.file());
+        String content = decode(t.root(), t.file());
         try {
-            return new ConfigFileResponse(t.rel(), content, Files.size(t.file()),
-                    Files.getLastModifiedTime(t.file()).toInstant(), readOnly(t.rel()));
+            BasicFileAttributes attrs = Files.readAttributes(t.file(), BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+            return new ConfigFileResponse(t.rel(), content, attrs.size(), attrs.lastModifiedTime().toInstant(), readOnly(t.rel()));
         } catch (IOException e) {
             throw new UncheckedIOException("Could not read file", e);
         }
     }
 
-    private static void writeAtomically(Path target, String content) {
+    /**
+     * Temp file in the target's directory, then rename over the target. The path is re-verified after every step that
+     * could have followed a swapped-in link; a rename replaces a link at the target instead of following it.
+     */
+    private static void writeAtomically(Target t, String content) {
+        Path target = t.file();
         Path temp = null;
         try {
+            verify(t.root(), target);
             Files.createDirectories(target.getParent(), DIR_PERMISSIONS);
+            verify(t.root(), target);
             temp = Files.createTempFile(target.getParent(), ".shipir-", ".tmp", FILE_PERMISSIONS);
+            verify(t.root(), temp);
             Files.writeString(temp, content, StandardCharsets.UTF_8);
+            verify(t.root(), target);
             try {
                 Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (AtomicMoveNotSupportedException e) {
                 Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
             }
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             if (temp != null) {
                 try {
                     Files.deleteIfExists(temp);
@@ -384,7 +427,10 @@ public class ConfigFileService {
                     // best effort
                 }
             }
-            throw new UncheckedIOException("Could not write file", e);
+            if (e instanceof IOException io) {
+                throw new UncheckedIOException("Could not write file", io);
+            }
+            throw (RuntimeException) e;
         }
     }
 
@@ -405,12 +451,27 @@ public class ConfigFileService {
         }
         Path dir = backupDir(t);
         String backupId = ID_TIME.format(clock.instant()) + "-" + "%08x".formatted(ThreadLocalRandom.current().nextInt());
+        Path backup = dir.resolve(backupId + ".bak");
         try {
+            // content is read through a no-follow channel (never Files.copy, which follows a link at the source)
+            byte[] bytes;
+            try {
+                bytes = PathValidationUtil.readNoFollow(t.root(), t.file(), BACKUP_MAX_BYTES);
+                if (bytes.length > BACKUP_MAX_BYTES) {
+                    throw tooLarge();
+                }
+            } catch (PathValidationException e) {
+                throw new ConfigFileException(HttpStatus.BAD_REQUEST, "INVALID_PATH", "Symbolic links are not allowed");
+            }
+            verify(t.root(), dir);
             Files.createDirectories(dir.getParent(), DIR_PERMISSIONS);
             Files.createDirectories(dir, DIR_PERMISSIONS);
-            Path backup = dir.resolve(backupId + ".bak");
-            Files.copy(t.file(), backup);
-            Files.setPosixFilePermissions(backup, PosixFilePermissions.fromString("rw-------"));
+            verify(t.root(), backup);
+            try (SeekableByteChannel out = Files.newByteChannel(backup, Set.of(StandardOpenOption.CREATE_NEW,
+                    StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS), FILE_PERMISSIONS)) {
+                out.write(ByteBuffer.wrap(bytes));
+            }
+            verify(t.root(), backup);
             prune(dir);
         } catch (IOException e) {
             throw new UncheckedIOException("Could not create backup", e);
