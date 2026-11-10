@@ -17,7 +17,8 @@ test('phone drawer and content keep clear of the notch and the home indicator', 
   const bar = page.locator('.shell__bar')
   await expect(bar).toHaveCSS('padding-left', '56px')
   await expect(bar).toHaveCSS('padding-right', '56px')
-  await expect(page.locator('.shell__content')).toHaveCSS('padding-bottom', '50px')
+  // --space-4 (16px) + home indicator (34px) + the floating assistant button's clearance (--space-7 + --space-5 = 72px).
+  await expect(page.locator('.shell__content')).toHaveCSS('padding-bottom', '122px')
   await expect(page.locator('.shell__content')).toHaveCSS('padding-left', '60px')
 
   await page.getByRole('button', { name: /navigation|menu/i }).click()
@@ -56,4 +57,15 @@ test('phone: the assistant sheet keeps its text clear of the notch', async ({ pa
   // --space-4 (16px) plus the inset on each side.
   await expect(sheet).toHaveCSS('padding-left', '60px')
   await expect(sheet).toHaveCSS('padding-right', '60px')
+})
+
+test('phone: without the assistant button the content only clears the home indicator', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', { body: { username: 'admin', role: 'ADMIN', setupRequired: false } })
+  api.mock('GET', '/api/ai/sessions', { body: { items: [] } })
+  await page.goto('/assistant')
+  await page.addStyleTag({ content: INSETS })
+
+  await expect(page.locator('.shell__content')).not.toHaveAttribute('data-dock', 'true')
+  // --space-4 (16px) + home indicator (34px).
+  await expect(page.locator('.shell__content')).toHaveCSS('padding-bottom', '50px')
 })
