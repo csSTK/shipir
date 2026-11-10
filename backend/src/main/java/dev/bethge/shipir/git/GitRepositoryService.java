@@ -5,6 +5,7 @@ import dev.bethge.shipir.common.security.SecretCipher;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
 import dev.bethge.shipir.common.util.PathValidationException;
 import dev.bethge.shipir.common.util.PathValidationUtil;
+import dev.bethge.shipir.common.util.SecureFiles;
 import org.eclipse.jgit.api.FetchCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.LsRemoteCommand;
@@ -28,10 +29,12 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Collection;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
@@ -120,7 +123,7 @@ public class GitRepositoryService {
         boolean fresh = !Files.exists(repoDir.resolve(".git"));
         prepare(repoDir);
         // reject a traversing/absolute path before any network traffic (the final check follows the checkout)
-        composeFile(repoDir, composePath, false);
+        composeFile(repoDir, composePath);
 
         CloneGuard guard = new CloneGuard(repoDir, properties.maxCheckoutSize().toBytes(),
                 properties.cloneTimeout().toNanos());
@@ -151,8 +154,7 @@ public class GitRepositoryService {
                     : new GitOperationException(HttpStatus.PAYLOAD_TOO_LARGE, "GIT_REPO_TOO_LARGE",
                             "The repository is larger than the allowed checkout size");
         }
-        Path file = composeFile(repoDir, composePath, true);
-        return new GitCheckout(commit, read(file));
+        return new GitCheckout(commit, readComposeFile(repoDir, composePath, null));
     }
 
     /**
@@ -164,13 +166,13 @@ public class GitRepositoryService {
     public GitCheckout ensureCommit(Path repoDir, String repoUrl, String commitSha, String composePath,
                                     UUID credentialId) {
         if (commitSha != null && SHA.matcher(commitSha).matches() && Files.exists(repoDir.resolve(".git"))) {
-            composeFile(repoDir, composePath, false);
+            composeFile(repoDir, composePath);
             try (Git git = Git.open(repoDir.toFile())) {
                 // the commit is usually still in the object store (HEAD, or the commit a pull moved away from)
                 ObjectId local = git.getRepository().resolve(commitSha + "^{commit}");
                 if (local != null) {
                     git.reset().setMode(ResetCommand.ResetType.HARD).setRef(local.name()).call();
-                    return new GitCheckout(local.name(), read(composeFile(repoDir, composePath, true)));
+                    return new GitCheckout(local.name(), readComposeFile(repoDir, composePath, null));
                 }
             } catch (GitAPIException | IOException e) {
                 log.warn("Local git check failed: {}", e.getClass().getSimpleName());
@@ -359,33 +361,49 @@ public class GitRepositoryService {
         }
     }
 
-    /** Validated location of the compose file; with {@code mustExist} also a regular file inside the real checkout. */
-    private static Path composeFile(Path repoDir, String composePath, boolean mustExist) {
-        Path file;
+    /** Validated location of the compose file (traversal, absolute and existing symlink-out paths are refused). */
+    private static Path composeFile(Path repoDir, String composePath) {
         try {
-            file = PathValidationUtil.resolve(repoDir, composePath);
+            return PathValidationUtil.resolve(repoDir, composePath);
         } catch (PathValidationException e) {
-            throw new GitOperationException(HttpStatus.BAD_REQUEST, "INVALID_COMPOSE_PATH",
-                    "The compose file path must be a relative path inside the repository");
+            throw invalidComposePath();
         }
-        if (mustExist && !Files.isRegularFile(file)) {
-            throw new GitOperationException(HttpStatus.BAD_REQUEST, "COMPOSE_FILE_NOT_FOUND",
-                    "The compose file does not exist in the repository at this ref");
-        }
-        return file;
     }
 
-    private static String read(Path file) {
-        try {
-            if (Files.size(file) > MAX_COMPOSE_BYTES) {
+    private static GitOperationException invalidComposePath() {
+        return new GitOperationException(HttpStatus.BAD_REQUEST, "INVALID_COMPOSE_PATH",
+                "The compose file path must be a relative path inside the repository");
+    }
+
+    /**
+     * Reads the compose file from the checkout through no-follow directory handles ({@link SecureFiles}), so a link that
+     * a repository (or a racing process) puts in place after the path check is refused instead of followed. The file the
+     * subprocess later runs is still addressed by path; that is inherent to {@code docker compose -f}.
+     */
+    static String readComposeFile(Path repoDir, String composePath, Consumer<String> seam) {
+        Path file = composeFile(repoDir, composePath);
+        String rel = repoDir.relativize(file).toString().replace('\\', '/');
+        try (SecureFiles.Parent parent = SecureFiles.openParent(repoDir, rel, false, seam)) {
+            if (!parent.dir().isRegularFile(parent.name())) {
+                throw composeNotFound("The compose file does not exist in the repository at this ref");
+            }
+            byte[] bytes = parent.dir().readAll(parent.name(), MAX_COMPOSE_BYTES);
+            if (bytes.length > MAX_COMPOSE_BYTES) {
                 throw new GitOperationException(HttpStatus.BAD_REQUEST, "COMPOSE_FILE_TOO_LARGE",
                         "The compose file is larger than 500 KB");
             }
-            return Files.readString(file, StandardCharsets.UTF_8);
+            return new String(bytes, StandardCharsets.UTF_8);
+        } catch (PathValidationException e) {
+            throw invalidComposePath();
+        } catch (NoSuchFileException e) {
+            throw composeNotFound("The compose file does not exist in the repository at this ref");
         } catch (IOException e) {
-            throw new GitOperationException(HttpStatus.BAD_REQUEST, "COMPOSE_FILE_NOT_FOUND",
-                    "The compose file could not be read");
+            throw composeNotFound("The compose file could not be read");
         }
+    }
+
+    private static GitOperationException composeNotFound(String message) {
+        return new GitOperationException(HttpStatus.BAD_REQUEST, "COMPOSE_FILE_NOT_FOUND", message);
     }
 
     private int timeoutSeconds() {

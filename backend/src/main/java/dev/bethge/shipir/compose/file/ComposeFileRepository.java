@@ -1,6 +1,7 @@
 package dev.bethge.shipir.compose.file;
 
 import dev.bethge.shipir.common.util.PathValidationUtil;
+import dev.bethge.shipir.common.util.SecureFiles;
 import dev.bethge.shipir.compose.DeploymentProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Repository;
@@ -8,11 +9,12 @@ import org.springframework.stereotype.Repository;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -20,6 +22,7 @@ import java.util.Comparator;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 /**
@@ -45,39 +48,52 @@ public class ComposeFileRepository {
 
     private final Path baseDir;
 
+    /** Test seam: receives the stages of {@link SecureFiles} (where a symlink swap could strike); null = none. */
+    Consumer<String> seam;
+
     public ComposeFileRepository(DeploymentProperties properties) {
         this.baseDir = properties.baseDir().toAbsolutePath().normalize();
     }
 
     /** Writes compose.yaml and, if {@code envContent} is non-null, .env; a null {@code envContent} removes an existing .env. */
     public void write(UUID hostId, String deploymentName, String composeContent, String envContent) {
-        Path dir = ensureDeploymentDir(hostId, deploymentName);
-        writeAtomically(dir.resolve(COMPOSE_FILE), composeContent);
-        if (envContent != null) {
-            writeAtomically(dir.resolve(ENV_FILE), envContent);
-        } else {
-            deleteQuietly(dir.resolve(ENV_FILE));
+        try (SecureFiles.Parent parent = openDeploymentDir(hostId, deploymentName, true)) {
+            writeAtomically(parent.dir(), COMPOSE_FILE, composeContent);
+            if (envContent != null) {
+                writeAtomically(parent.dir(), ENV_FILE, envContent);
+            } else {
+                deleteQuietly(parent.dir(), ENV_FILE);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not write deployment files", e);
         }
     }
 
     /** Writes the temporary rollback override next to {@code compose.yaml}; returns its path. */
     public Path writeRollbackOverride(UUID hostId, String deploymentName, String content) {
-        Path dir = ensureDeploymentDir(hostId, deploymentName);
-        Path file = dir.resolve(ROLLBACK_OVERRIDE_FILE);
-        writeAtomically(file, content);
+        Path file = deploymentDir(hostId, deploymentName).resolve(ROLLBACK_OVERRIDE_FILE);
+        try (SecureFiles.Parent parent = openDeploymentDir(hostId, deploymentName, true)) {
+            writeAtomically(parent.dir(), ROLLBACK_OVERRIDE_FILE, content);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not write " + ROLLBACK_OVERRIDE_FILE, e);
+        }
         return file;
     }
 
     public void deleteRollbackOverride(UUID hostId, String deploymentName) {
-        deleteQuietly(deploymentDir(hostId, deploymentName).resolve(ROLLBACK_OVERRIDE_FILE));
+        try (SecureFiles.Parent parent = openDeploymentDir(hostId, deploymentName, false)) {
+            deleteQuietly(parent.dir(), ROLLBACK_OVERRIDE_FILE);
+        } catch (IOException | RuntimeException ignored) {
+            // best effort: nothing to remove, or the directory was swapped and is refused
+        }
     }
 
     public Optional<String> readCompose(UUID hostId, String deploymentName) {
-        return read(deploymentDir(hostId, deploymentName).resolve(COMPOSE_FILE));
+        return read(hostId, deploymentName, COMPOSE_FILE);
     }
 
     public Optional<String> readEnv(UUID hostId, String deploymentName) {
-        return read(deploymentDir(hostId, deploymentName).resolve(ENV_FILE));
+        return read(hostId, deploymentName, ENV_FILE);
     }
 
     /** Removes the whole deployment directory including a Git checkout in {@code repo/}. Symlinks are removed, never followed. */
@@ -99,13 +115,18 @@ public class ComposeFileRepository {
      * followed. Unlike {@link #write} this fails loudly: callers use it to take back a refused file.
      */
     public void deleteManagedFiles(UUID hostId, String deploymentName) {
-        Path dir = deploymentDir(hostId, deploymentName);
-        for (String file : SHIPIR_WRITTEN_FILES) {
-            try {
-                Files.deleteIfExists(dir.resolve(file));
-            } catch (IOException e) {
-                throw new UncheckedIOException("Could not delete " + file, e);
+        try (SecureFiles.Parent parent = openDeploymentDir(hostId, deploymentName, false)) {
+            for (String file : SHIPIR_WRITTEN_FILES) {
+                try {
+                    parent.dir().deleteFileIfExists(file);
+                } catch (IOException e) {
+                    throw new UncheckedIOException("Could not delete " + file, e);
+                }
             }
+        } catch (NoSuchFileException missing) {
+            // no deployment directory, nothing to take back
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not open deployment directory", e);
         }
     }
 
@@ -145,51 +166,51 @@ public class ComposeFileRepository {
         }
     }
 
-    private Path ensureDeploymentDir(UUID hostId, String deploymentName) {
-        Path dir = deploymentDir(hostId, deploymentName);
+    /**
+     * Opens {@code <base>/<host>/<name>} as a held, no-follow directory handle (the returned parent's leaf is a dummy
+     * name). All file use below happens relative to that handle, so a link swapped in after the path check is refused or
+     * ignored, never followed.
+     */
+    private SecureFiles.Parent openDeploymentDir(UUID hostId, String deploymentName, boolean create) throws IOException {
+        deploymentDir(hostId, deploymentName); // up-front validation (traversal, existing symlinks)
+        return SecureFiles.openParent(existingBaseDir(), segment(hostId, deploymentName) + "/" + COMPOSE_FILE, create, seam,
+                DIR_PERMISSIONS);
+    }
+
+    private static void writeAtomically(SecureFiles.Dir dir, String name, String content) throws IOException {
+        String temp = name + "." + UUID.randomUUID() + ".tmp";
         try {
-            Files.createDirectories(dir.getParent(), DIR_PERMISSIONS);
-            if (!Files.isDirectory(dir)) {
-                Files.createDirectory(dir, DIR_PERMISSIONS);
+            try (SeekableByteChannel channel = dir.createNew(temp, FILE_PERMISSIONS)) {
+                ByteBuffer buffer = ByteBuffer.wrap(content.getBytes(StandardCharsets.UTF_8));
+                while (buffer.hasRemaining()) {
+                    channel.write(buffer);
+                }
             }
-            return dir;
-        } catch (IOException e) {
-            throw new UncheckedIOException("Could not create deployment directory", e);
+            dir.move(temp, name);
+        } catch (IOException | RuntimeException e) {
+            deleteQuietly(dir, temp);
+            throw e instanceof IOException io
+                    ? new UncheckedIOException("Could not write " + name, io)
+                    : (RuntimeException) e;
         }
     }
 
-    private static void writeAtomically(Path target, String content) {
-        Path temp = null;
-        try {
-            temp = Files.createTempFile(target.getParent(), target.getFileName() + ".", ".tmp", FILE_PERMISSIONS);
-            Files.writeString(temp, content, StandardCharsets.UTF_8);
-            try {
-                Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException e) {
-                Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } catch (IOException e) {
-            if (temp != null) {
-                deleteQuietly(temp);
-            }
-            throw new UncheckedIOException("Could not write " + target.getFileName(), e);
-        }
-    }
-
-    private static Optional<String> read(Path file) {
-        try {
-            if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+    private Optional<String> read(UUID hostId, String deploymentName, String name) {
+        try (SecureFiles.Parent parent = openDeploymentDir(hostId, deploymentName, false)) {
+            if (!parent.dir().isRegularFile(name)) {
                 return Optional.empty();
             }
-            return Optional.of(Files.readString(file, StandardCharsets.UTF_8));
+            return Optional.of(new String(parent.dir().readAll(name, Integer.MAX_VALUE - 8L), StandardCharsets.UTF_8));
+        } catch (NoSuchFileException missing) {
+            return Optional.empty();
         } catch (IOException e) {
-            throw new UncheckedIOException("Could not read " + file.getFileName(), e);
+            throw new UncheckedIOException("Could not read " + name, e);
         }
     }
 
-    private static void deleteQuietly(Path path) {
+    private static void deleteQuietly(SecureFiles.Dir dir, String name) {
         try {
-            Files.deleteIfExists(path);
+            dir.deleteFileIfExists(name);
         } catch (IOException ignored) {
             // best effort
         }
