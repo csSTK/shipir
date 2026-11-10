@@ -575,7 +575,7 @@ public class HostResourcesService {
 
     /** Image references may be registry paths: slash-separated segments of plain characters, no empty or dot-only parts. */
     private static final Pattern IMAGE_REF = Pattern.compile(
-            "[A-Za-z0-9][A-Za-z0-9_.:-]*(?:/[A-Za-z0-9][A-Za-z0-9_.:@-]*)*");
+            "[A-Za-z0-9][A-Za-z0-9_.:-]*(?:@sha256:[a-f0-9]{64})?(?:/[A-Za-z0-9][A-Za-z0-9_.:@-]*)*");
 
     private static void validateImageRef(String value) {
         if (value == null || value.length() > 255 || !IMAGE_REF.matcher(value).matches()) {

@@ -155,4 +155,25 @@ class HostResourceDeleteTest extends HostApiTestBase {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_RESOURCE_ID"));
     }
+
+    @Test
+    void bareDigestReferenceIsAcceptedAndPassedToTheDaemon() throws Exception {
+        String host = localHostId();
+        String ref = "nginx@sha256:" + "a".repeat(64);
+        mvc.perform(login("operator").write(delete("/api/hosts/{h}/images/{ref}", host, ref)))
+                .andExpect(status().isNoContent());
+        verify(images).removeImage(any(), any(), eq(ref));
+    }
+
+    @Test
+    void malformedDigestReferencesAre400AndNeverReachTheDaemon() throws Exception {
+        String host = localHostId();
+        String hex = "a".repeat(64);
+        for (String bad : List.of("nginx@sha256:xyz", "nginx@sha256:" + hex.substring(1), "@sha256:" + hex, "nginx@")) {
+            mvc.perform(login("admin").write(delete("/api/hosts/{h}/images/{ref}", host, bad)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_RESOURCE_ID"));
+        }
+        verify(images, never()).removeImage(any(), any(), any());
+    }
 }
