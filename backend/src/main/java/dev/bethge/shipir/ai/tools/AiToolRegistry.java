@@ -28,6 +28,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Set;
@@ -342,7 +343,7 @@ public class AiToolRegistry {
                 }
                 items.add(item.asString());
             }
-            return List.copyOf(items);
+            return Collections.unmodifiableList(items);
         }
         return UNSUPPORTED;
     }

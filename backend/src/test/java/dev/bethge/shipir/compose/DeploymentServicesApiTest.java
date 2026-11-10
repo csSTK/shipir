@@ -241,6 +241,17 @@ class DeploymentServicesApiTest extends DeploymentTestBase {
     }
 
     @Test
+    void viewerWithViewGrantIs403OnServicesOfASystemManagedDeploymentButAdminStillReads() throws Exception {
+        String id = create(login("admin"));
+        jdbc.update("UPDATE deployments SET system_managed = TRUE WHERE id = ?", UUID.fromString(id));
+
+        mvc.perform(get(url() + "/" + id + "/services").session(login("viewer").session()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        mvc.perform(get(url() + "/" + id + "/services").session(login("admin").session())).andExpect(status().isOk());
+    }
+
+    @Test
     void operatorWithoutGrantCannotListOrActOnServices() throws Exception {
         String id = deployed(login("admin"));
         Login op = login("operator");

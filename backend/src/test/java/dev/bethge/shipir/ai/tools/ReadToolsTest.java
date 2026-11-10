@@ -40,9 +40,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -297,12 +300,21 @@ class ReadToolsTest {
             Files.writeString(file, "PASSWORD=" + fileSecret + "\n");
         }
 
+        // explicit allow-list: the only tools that may touch config files. A tool whose name has a file-ish word
+        // (whole '_' segment, so 'profiles' is not 'file') must be on this list on purpose; every other read tool is
+        // still checked for leaked content below.
+        Set<String> configFileTools = Set.of("list_config_files", "read_config_file");
+        Set<String> fileWords = Set.of("file", "files", "config", "env");
+        Set<String> offered = Arrays.stream(Role.values()).flatMap(r -> registry.toolsFor(r).stream())
+                .map(AiTool::name).collect(Collectors.toSet());
+        assertThat(offered.stream()
+                .filter(n -> Arrays.stream(n.split("_")).anyMatch(fileWords::contains))
+                .collect(Collectors.toSet()))
+                .as("only the config file tools may touch files")
+                .isEqualTo(configFileTools);
+
         for (Role role : Role.values()) {
             for (AiTool tool : registry.toolsFor(role)) {
-                if (!List.of("list_config_files", "read_config_file", "set_deployment_profiles").contains(tool.name())) {
-                    assertThat(tool.name()).as("only the two config tools may touch files (set_deployment_profiles: 'profiles' is no file access)").doesNotContainIgnoringCase("file")
-                            .doesNotContainIgnoringCase("config").doesNotContainIgnoringCase("env_");
-                }
                 if (tool.write()) {
                     continue;
                 }
