@@ -20,4 +20,20 @@ record OidcProperties(@DefaultValue("false") boolean allowInsecureHttp,
                       @DefaultValue("") String publicBaseUrl,
                       @DefaultValue("5s") Duration timeout,
                       @DefaultValue("10m") Duration discoveryCacheTtl) {
+
+    /** https URL (http only when {@code allowInsecureHttp}) with a host and no credentials, query or fragment. */
+    boolean isValidIssuer(String issuer) {
+        if (issuer == null || issuer.length() > 2048) {
+            return false;
+        }
+        try {
+            java.net.URI uri = new java.net.URI(issuer);
+            boolean schemeOk = "https".equalsIgnoreCase(uri.getScheme())
+                    || (allowInsecureHttp && "http".equalsIgnoreCase(uri.getScheme()));
+            return schemeOk && uri.getHost() != null && uri.getUserInfo() == null && uri.getQuery() == null
+                    && uri.getFragment() == null;
+        } catch (java.net.URISyntaxException e) {
+            return false;
+        }
+    }
 }

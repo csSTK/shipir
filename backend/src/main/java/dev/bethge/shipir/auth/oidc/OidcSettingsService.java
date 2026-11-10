@@ -159,19 +159,10 @@ class OidcSettingsService implements LocalLoginPolicy {
     }
 
     private void validateIssuer(String issuer) {
-        try {
-            URI uri = new URI(issuer);
-            boolean schemeOk = "https".equalsIgnoreCase(uri.getScheme())
-                    || (properties.allowInsecureHttp() && "http".equalsIgnoreCase(uri.getScheme()));
-            if (schemeOk && uri.getHost() != null && uri.getUserInfo() == null && uri.getQuery() == null
-                    && uri.getFragment() == null) {
-                return;
-            }
-        } catch (URISyntaxException e) {
-            // fall through
+        if (!properties.isValidIssuer(issuer)) {
+            throw new OidcException(HttpStatus.BAD_REQUEST, "INVALID_ISSUER_URL",
+                    "The issuer URL must be an https URL without credentials, query or fragment");
         }
-        throw new OidcException(HttpStatus.BAD_REQUEST, "INVALID_ISSUER_URL",
-                "The issuer URL must be an https URL without credentials, query or fragment");
     }
 
     private static String hostOf(String issuer) {

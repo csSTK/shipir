@@ -107,6 +107,17 @@ public class User {
         this.passwordChangedAt = changedAt;
     }
 
+    /** Pre-links an existing account to a provider identity (ADMIN); the caller has validated and de-duplicated it. */
+    public void linkExternalIdentity(String issuer, String subject) {
+        this.externalIssuer = issuer;
+        this.externalSubject = subject;
+    }
+
+    public void unlinkExternalIdentity() {
+        this.externalIssuer = null;
+        this.externalSubject = null;
+    }
+
     public void changeLocale(String newLocale) {
         this.locale = newLocale;
     }

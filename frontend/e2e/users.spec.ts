@@ -48,6 +48,21 @@ test('role change on the last admin and deleting a user with history show inline
   await expect(page.getByText(/recorded activity/)).toBeVisible()
 })
 
+test('admin links an SSO identity to a user, then a taken identity shows an inline error', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', { body: me('ADMIN') })
+  api.mock('GET', '/api/users', { body: users })
+  api.mock('GET', '/api/settings/security', { body: { require2faForAdmins: false, updatedAt: null } })
+  api.mock('GET', '/api/settings/oidc', { body: { issuerUrl: 'https://idp.example.com', clientId: 'c', clientSecretConfigured: true, scopes: 'openid', groupsClaim: 'groups', roleMapping: {}, autoProvision: false, localLoginEnabled: true } })
+  api.mock('PUT', '/api/users/u2/external-identity', { status: 409, body: { code: 'IDENTITY_TAKEN', message: 'x' } })
+  await page.goto('/settings/users')
+  await page.getByRole('button', { name: 'Link SSO identity for anna' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByLabel('Issuer URL')).toHaveValue('https://idp.example.com')
+  await dialog.getByLabel('Subject (sub)').fill('sub-1')
+  await dialog.getByRole('button', { name: 'Link', exact: true }).click()
+  await expect(dialog.getByRole('alert')).toContainText('already linked to another user')
+})
+
 test('operator cannot reach the page', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: me('OPERATOR') })
   await page.goto('/settings/users')

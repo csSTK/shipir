@@ -1,4 +1,4 @@
-import { Ban, CircleCheck, KeyRound, RotateCcw, ShieldOff, Trash2 } from 'lucide-react'
+import { Ban, CircleCheck, KeyRound, Link2, Link2Off, RotateCcw, ShieldOff, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { ApiError } from '../../shared/api/client.ts'
 import { Badge, Button, Card, ConfirmDialog, Dialog, ResourceTable, Select, Switch, TextField, type ResourceColumn, type RowActions } from '../../shared/ui/index.ts'
@@ -6,11 +6,14 @@ import {
   useChangeUserRole,
   useCreateUser,
   useDeleteUser,
+  useLinkUserIdentity,
+  useOidcSettings,
   useResetUserPassword,
   useResetUserTwoFactor,
   useSaveSecuritySettings,
   useSecuritySettings,
   useSetUserDisabled,
+  useUnlinkUserIdentity,
   useUsers,
   type ManagedUser,
   type OneTimePassword,
@@ -49,6 +52,20 @@ function errorMessage(error: unknown, fallback: string): string {
         return i18n.t('settings:UsersSettingsPage.manageYourOwnTwoFactor')
       case 'SELF_RESET_PASSWORD':
         return i18n.t('settings:UsersSettingsPage.changeYourOwnPasswordUnder')
+      case 'IDENTITY_TAKEN':
+        return i18n.t('settings:UsersSettingsPage.identityTaken')
+      case 'IDENTITY_ALREADY_LINKED':
+        return i18n.t('settings:UsersSettingsPage.identityAlreadyLinked')
+      case 'ISSUER_MISMATCH':
+        return i18n.t('settings:UsersSettingsPage.issuerMismatch')
+      case 'INVALID_ISSUER_URL':
+        return i18n.t('settings:UsersSettingsPage.invalidIssuer')
+      case 'INVALID_SUBJECT':
+        return i18n.t('settings:UsersSettingsPage.invalidSubject')
+      case 'SELF_LINK':
+        return i18n.t('settings:UsersSettingsPage.cannotLinkYourself')
+      case 'SELF_UNLINK':
+        return i18n.t('settings:UsersSettingsPage.cannotUnlinkYourself')
       case 'EXTERNAL_IDENTITY':
         return i18n.t('settings:UsersSettingsPage.thisUserSignsInViaSso')
     }
@@ -152,9 +169,60 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
   )
 }
 
+/** ADMIN pre-link: issuer + subject of the identity this existing account may sign in with. */
+function LinkIdentityDialog({ user, onClose }: { user: ManagedUser; onClose: () => void }) {
+  const { t } = useTranslation('settings')
+  const configured = useOidcSettings().data?.issuerUrl ?? ''
+  const [typedIssuer, setIssuer] = useState<string | null>(null)
+  const issuer = typedIssuer ?? configured
+  const [subject, setSubject] = useState('')
+  const [problem, setProblem] = useState<string | null>(null)
+  const link = useLinkUserIdentity()
+
+  function submit(e: FormEvent) {
+    e.preventDefault()
+    if (!issuer.trim() || !subject.trim()) return setProblem(t('UsersSettingsPage.enterIssuerAndSubject'))
+    setProblem(null)
+    link.mutate(
+      { id: user.id, issuer: issuer.trim(), subject: subject.trim() },
+      { onSuccess: onClose, onError: (err) => setProblem(errorMessage(err, t('UsersSettingsPage.couldNotLinkTheIdentity'))) },
+    )
+  }
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={t('UsersSettingsPage.linkSsoIdentity')}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            {t('UsersSettingsPage.cancel')}
+          </Button>
+          <Button variant="primary" type="submit" form="user-link-form" loading={link.isPending}>
+            {t('UsersSettingsPage.link')}
+          </Button>
+        </>
+      }
+    >
+      <form id="user-link-form" onSubmit={submit} className="settings__form">
+        <p className="settings__muted">{t('UsersSettingsPage.linkSsoHelp')}</p>
+        <p className="settings__muted">{t('UsersSettingsPage.linkSsoPasswordNote')}</p>
+        <TextField label={t('UsersSettingsPage.ssoIssuer')} value={issuer} onChange={(e) => setIssuer(e.target.value)} autoFocus autoComplete="off" />
+        <TextField label={t('UsersSettingsPage.ssoSubject')} value={subject} onChange={(e) => setSubject(e.target.value)} autoComplete="off" />
+        {problem && (
+          <p role="alert" className="settings__error">
+            {problem}
+          </p>
+        )}
+      </form>
+    </Dialog>
+  )
+}
+
 type DialogState =
   | { kind: 'create' }
-  | { kind: 'reset' | 'reset2fa' | 'delete' | 'access'; user: ManagedUser }
+  | { kind: 'reset' | 'reset2fa' | 'delete' | 'access' | 'link' | 'unlink'; user: ManagedUser }
   | { kind: 'password'; result: OneTimePassword }
   | null
 
@@ -202,6 +270,7 @@ export function UsersSettingsPage({ currentUsername }: { currentUsername: string
   const reset = useResetUserPassword()
   const reset2fa = useResetUserTwoFactor()
   const remove = useDeleteUser()
+  const unlink = useUnlinkUserIdentity()
 
   const open = (d: DialogState) => {
     setDialogProblem(null)
@@ -308,6 +377,9 @@ export function UsersSettingsPage({ currentUsername }: { currentUsername: string
                 disabled: u.externalIdentity,
                 onSelect: () => open({ kind: 'reset', user: u }),
               },
+              u.externalIdentity
+                ? { label: t('UsersSettingsPage.unlinkSsoIdentityFor'), icon: Link2Off, onSelect: () => open({ kind: 'unlink', user: u }) }
+                : { label: t('UsersSettingsPage.linkSsoIdentityFor'), icon: Link2, onSelect: () => open({ kind: 'link', user: u }) },
               { label: t('UsersSettingsPage.delete'), icon: Trash2, danger: true, onSelect: () => open({ kind: 'delete', user: u }) },
             ]
           : []),
@@ -390,6 +462,32 @@ export function UsersSettingsPage({ currentUsername }: { currentUsername: string
         >
           <p className="settings__text">
             <Trans t={t} i18nKey="UsersSettingsPage.removeTwoFactorAuthenticationFor" values={{ username: dialog.user.username }} components={{ strong: <strong /> }} />
+          </p>
+          {dialogProblem && (
+            <p role="alert" className="settings__error">
+              {dialogProblem}
+            </p>
+          )}
+        </ConfirmDialog>
+      )}
+      {dialog?.kind === 'link' && <LinkIdentityDialog user={dialog.user} onClose={close} />}
+      {dialog?.kind === 'unlink' && (
+        <ConfirmDialog
+          open
+          onOpenChange={(o) => !o && close()}
+          title={t('UsersSettingsPage.unlinkSsoIdentity')}
+          confirmLabel={t('UsersSettingsPage.unlinkSsoIdentity')}
+          danger
+          loading={unlink.isPending}
+          onConfirm={() =>
+            unlink.mutate(dialog.user.id, {
+              onSuccess: close,
+              onError: (err) => setDialogProblem(errorMessage(err, t('UsersSettingsPage.couldNotUnlinkTheIdentity'))),
+            })
+          }
+        >
+          <p className="settings__text">
+            <Trans t={t} i18nKey="UsersSettingsPage.unlinkSsoIdentityText" values={{ username: dialog.user.username }} components={{ strong: <strong /> }} />
           </p>
           {dialogProblem && (
             <p role="alert" className="settings__error">

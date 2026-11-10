@@ -155,6 +155,34 @@ describe('UsersSettingsPage', () => {
     expect((await screen.findByRole('alert')).textContent).toMatch(/single sign-on/i)
   })
 
+  it('links an SSO identity with issuer and subject and shows IDENTITY_TAKEN inline', async () => {
+    renderPage((path, method) =>
+      method === 'PUT' && path === '/users/u2/external-identity' ? new ApiError(409, 'x', 'IDENTITY_TAKEN') : undefined,
+    )
+    await screen.findByText('anna')
+    fireEvent.click(screen.getByRole('button', { name: 'Link SSO identity for anna' }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Link' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/issuer URL and the subject/i)
+    expect(calls('PUT')).toHaveLength(0)
+    fireEvent.change(within(dialog).getByLabelText('Issuer URL'), { target: { value: ' https://idp.example.com ' } })
+    fireEvent.change(within(dialog).getByLabelText('Subject (sub)'), { target: { value: 'sub-1' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Link' }))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/already linked to another user/i))
+    expect(calls('PUT')[0]).toEqual(['/users/u2/external-identity', { method: 'PUT', body: { issuer: 'https://idp.example.com', subject: 'sub-1' } }])
+  })
+
+  it('unlinks an SSO identity after confirmation and offers no link for SSO users', async () => {
+    const sso: ManagedUser = { ...anna, externalIdentity: true }
+    renderPage(() => sso, [me, sso])
+    await screen.findByText('anna')
+    expect(screen.queryByRole('button', { name: 'Link SSO identity for anna' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Unlink SSO identity for anna' }))
+    expect(calls('DELETE')).toHaveLength(0)
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Unlink SSO identity' }))
+    await waitFor(() => expect(calls('DELETE')[0][0]).toBe('/users/u2/external-identity'))
+  })
+
   it('deletes after confirmation and shows USER_HAS_HISTORY inline', async () => {
     renderPage((_path, method) => (method === 'DELETE' ? new ApiError(409, 'x', 'USER_HAS_HISTORY') : undefined))
     await screen.findByText('anna')
