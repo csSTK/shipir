@@ -46,5 +46,6 @@ describe('shared visually-hidden utility', () => {
   it('FormField hides a bare label with the shared class, not its own rule', () => {
     expect(read('shared/ui/FormField.tsx')).toContain('visually-hidden')
     expect(read('shared/ui/FormField.css')).not.toContain('ui-field--bare')
+    for (const f of ['TextField', 'Select']) expect(read(`shared/ui/${f}.tsx`)).not.toContain('ui-field--bare')
   })
 })

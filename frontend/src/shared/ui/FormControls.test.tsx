@@ -24,16 +24,16 @@ describe('TextField', () => {
 })
 
 describe('TextField hideLabel', () => {
-  it('keeps the label in the DOM as the accessible name and marks the wrapper bare', () => {
+  it('keeps the label in the DOM as the accessible name, visually hidden, without a wrapper class', () => {
     render(<TextField label="Port 1" hideLabel defaultValue="" />)
     const input = screen.getByRole('textbox', { name: 'Port 1' })
-    expect(input.closest('.ui-field--bare')).not.toBeNull()
+    expect(input.closest('.ui-field--bare')).toBeNull()
     expect(screen.getByText('Port 1', { selector: 'label' })).toHaveClass('visually-hidden')
   })
 
-  it('has no bare wrapper without hideLabel', () => {
+  it('shows the label without hideLabel', () => {
     render(<TextField label="Port 1" defaultValue="" />)
-    expect(screen.getByRole('textbox', { name: 'Port 1' }).closest('.ui-field--bare')).toBeNull()
+    expect(screen.getByText('Port 1', { selector: 'label' })).not.toHaveClass('visually-hidden')
   })
 })
 
@@ -47,18 +47,19 @@ describe('Select', () => {
       </Select>,
     )
     const select = screen.getByRole('combobox', { name: 'Role' })
-    expect(select.closest('.ui-field--bare')).not.toBeNull()
+    expect(select.closest('.ui-field--bare')).toBeNull()
+    expect(screen.getByText('Role', { selector: 'label' })).toHaveClass('visually-hidden')
     fireEvent.change(select, { target: { value: 'b' } })
     expect(onChange).toHaveBeenCalled()
   })
 
-  it('has no bare wrapper without hideLabel', () => {
+  it('shows the label without hideLabel', () => {
     render(
       <Select label="Role" defaultValue="a">
         <option value="a">A</option>
       </Select>,
     )
-    expect(screen.getByRole('combobox', { name: 'Role' }).closest('.ui-field--bare')).toBeNull()
+    expect(screen.getByText('Role', { selector: 'label' })).not.toHaveClass('visually-hidden')
   })
 })
 

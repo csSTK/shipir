@@ -15,10 +15,8 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   ref,
 ) {
   return (
-    <div className={hideLabel ? 'ui-field--bare' : undefined}>
-      <FormField label={label} help={help} error={error} hideLabel={hideLabel}>
-        {(control) => <input ref={ref} className={['ui-control', className].filter(Boolean).join(' ')} {...control} {...rest} />}
-      </FormField>
-    </div>
+    <FormField label={label} help={help} error={error} hideLabel={hideLabel}>
+      {(control) => <input ref={ref} className={['ui-control', className].filter(Boolean).join(' ')} {...control} {...rest} />}
+    </FormField>
   )
 })

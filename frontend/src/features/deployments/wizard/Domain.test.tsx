@@ -188,7 +188,7 @@ describe('wizard domain section', () => {
     expect(controls.length).toBeGreaterThan(30)
     for (const control of controls) {
       const label = document.querySelector(`label[for="${control.id}"]`)!
-      const bare = label.closest('.ui-field--bare') !== null
+      const bare = label.classList.contains('visually-hidden')
       const accessibleName = control.getAttribute('aria-label') ?? label.textContent!
       if (!bare) {
         visible.push(label.textContent!)
