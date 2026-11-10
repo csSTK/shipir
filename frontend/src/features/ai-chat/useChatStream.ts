@@ -59,6 +59,7 @@ export function useChatStream(sessionId: string | null, onDone: () => Promise<un
 
   useEffect(() => {
     if (sessionId === null) return
+    let current = true
     const unsubscribe = subscribeToTopic(`/topic/chat/${sessionId}`, {
       onState: setConnection,
       onMessage: (body) => {
@@ -66,7 +67,10 @@ export function useChatStream(sessionId: string | null, onDone: () => Promise<un
         if (!frame) return
         if (frame.type === 'DONE') {
           doneCountRef.current += 1
-          void Promise.resolve(doneRef.current()).finally(clear)
+          // Only clear while this session's subscription is still the active one: a late refresh must not wipe the next session.
+          void Promise.resolve(doneRef.current()).finally(() => {
+            if (current) clear()
+          })
           return
         }
         setRunning(true)
@@ -89,6 +93,7 @@ export function useChatStream(sessionId: string | null, onDone: () => Promise<un
       },
     })
     return () => {
+      current = false
       unsubscribe()
       clear()
       setConnection('connecting')
