@@ -39,13 +39,23 @@ test('fails the test on a Monaco worker console error, without a spec guard', as
   await message
 })
 
-test('ignores unrelated app errors that only share the Cannot read properties wording', async ({ page, api }) => {
+test('fails the test on any uncaught page error, not only Monaco ones', async ({ page, api }) => {
+  test.fail()
   api.mock('GET', '/api/auth/me', { status: 401 })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
 
   const error = page.waitForEvent('pageerror')
   await page.evaluate(() => setTimeout(() => { throw new TypeError("Cannot read properties of undefined (reading 'name')") }, 0))
   await error
+})
+
+test('ignores console errors that are not Monaco ones (failed requests log those)', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', { status: 401 })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+  const message = page.waitForEvent('console', (m) => m.type() === 'error')
+  await page.evaluate(() => console.error('Failed to load resource'))
+  await message
 })
 
 test('fails the test when an /api call has no mock', async ({ page, api }) => {

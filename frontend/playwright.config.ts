@@ -11,6 +11,7 @@ export default defineConfig({
   testDir: './e2e',
   // Pixel screenshots run on their own (`pnpm e2e:visual`, playwright.visual.config.ts), inside docker.
   testIgnore: 'visual.spec.ts',
+  globalSetup: './e2e-config/warm-up.ts',
   retries: process.env.CI ? 2 : 0,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {

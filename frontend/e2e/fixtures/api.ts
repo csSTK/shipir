@@ -55,7 +55,7 @@ const MONACO_ERROR = /module is not defined|reading 'toUrl'|Could not create web
 /**
  * Intercepts every `/api/**` request of a test. Specs register mocks;
  * a call without a mock answers 501 and fails the test afterwards.
- * Also fails the test on Monaco worker errors (page errors and console errors or warnings) in any spec.
+ * Also fails the test on any uncaught page error (shipr-k31n.60) and on Monaco worker errors (console errors or warnings) in any spec.
  */
 export const test = base.extend<{ api: ApiMock }>({
   api: [
@@ -74,7 +74,11 @@ export const test = base.extend<{ api: ApiMock }>({
       ])
       const unmocked: string[] = []
       const monacoErrors: string[] = []
-      page.on('pageerror', (e) => monacoErrors.push(e.message))
+      const pageErrors: string[] = []
+      page.on('pageerror', (e) => {
+        pageErrors.push(e.message)
+        monacoErrors.push(e.message)
+      })
       page.on('console', (m) => {
         if (m.type() === 'error' || m.type() === 'warning') monacoErrors.push(m.text())
       })
@@ -118,6 +122,7 @@ export const test = base.extend<{ api: ApiMock }>({
       await page.unrouteAll({ behavior: 'ignoreErrors' })
 
       expect(unmocked, 'API calls without a registered mock').toEqual([])
+      expect(pageErrors, 'Uncaught page errors').toEqual([])
       expect(monacoErrors.filter((m) => MONACO_ERROR.test(m)), 'Monaco worker errors').toEqual([])
     },
     { auto: true },

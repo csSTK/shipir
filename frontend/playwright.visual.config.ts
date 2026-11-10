@@ -12,6 +12,7 @@ export default defineConfig({
   testDir: './e2e',
   testMatch: 'visual.spec.ts',
   // No retries: a retry would hide a flaky screenshot instead of exposing it.
+  globalSetup: './e2e-config/warm-up.ts',
   retries: 0,
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report-visual' }]],
   // One folder of baselines named after the test, no platform suffix: there is exactly one valid platform (the image).
