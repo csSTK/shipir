@@ -70,6 +70,14 @@ test('container detail at 375px fits the screen, tabs scroll inside their row, c
   const [lb, rb] = [(await last.boundingBox())!, (await list.boundingBox())!]
   expect(lb.x + lb.width, 'last tab fully inside the list').toBeLessThanOrEqual(rb.x + rb.width + 1)
   await noPageScroll(page)
+  // the scrolling row hints at hidden tabs with an edge fade that follows the scroll position
+  await list.evaluate((el) => el.scrollTo({ left: 0 }))
+  await expect(list).toHaveAttribute('data-fade-end', 'true')
+  await expect(list).not.toHaveAttribute('data-fade-start', 'true')
+  await list.evaluate((el) => el.scrollTo({ left: el.scrollWidth }))
+  await expect(list).toHaveAttribute('data-fade-start', 'true')
+  await expect(list).not.toHaveAttribute('data-fade-end', 'true')
+  expect(await list.evaluate((el) => getComputedStyle(el).maskImage), 'fade is a mask').not.toBe('none')
   // a focused tab's ring is not clipped by the list, and the list has no vertical scroll
   await short.focus()
   await page.keyboard.press('Shift+Tab')

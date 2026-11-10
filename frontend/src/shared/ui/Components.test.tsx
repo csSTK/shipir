@@ -310,4 +310,42 @@ describe('Tabs', () => {
     fireEvent.keyDown(alpha, { key: 'ArrowRight' })
     await waitFor(() => expect(screen.getByRole('tab', { name: 'Beta' })).toHaveFocus())
   })
+
+  describe('scroll hint', () => {
+    const items = [{ value: 'a', label: 'Alpha', content: 'A' }, { value: 'b', label: 'Beta', content: 'B' }]
+    const layout = (list: HTMLElement, scrollWidth: number, clientWidth: number) => {
+      Object.defineProperty(list, 'scrollWidth', { configurable: true, value: scrollWidth })
+      Object.defineProperty(list, 'clientWidth', { configurable: true, value: clientWidth })
+    }
+
+    it('fades the end edge while more tabs are hidden, and the start edge once scrolled', async () => {
+      const resize = vi.fn()
+      vi.stubGlobal('ResizeObserver', class { constructor(cb: () => void) { resize.mockImplementation(cb) } observe() {} disconnect() {} unobserve() {} })
+      render(<Tabs label="Sections" items={items} />)
+      const list = screen.getByRole('tablist')
+      layout(list, 600, 300)
+      resize()
+      await waitFor(() => expect(list).toHaveAttribute('data-fade-end', 'true'))
+      expect(list).not.toHaveAttribute('data-fade-start', 'true')
+      list.scrollLeft = 150
+      fireEvent.scroll(list)
+      await waitFor(() => expect(list).toHaveAttribute('data-fade-start', 'true'))
+      expect(list).toHaveAttribute('data-fade-end', 'true')
+      list.scrollLeft = 300
+      fireEvent.scroll(list)
+      await waitFor(() => expect(list).not.toHaveAttribute('data-fade-end', 'true'))
+      vi.unstubAllGlobals()
+    })
+
+    it('shows no fade when every tab fits', async () => {
+      vi.stubGlobal('ResizeObserver', class { constructor(cb: () => void) { cb() } observe() {} disconnect() {} unobserve() {} })
+      render(<Tabs label="Sections" items={items} />)
+      const list = screen.getByRole('tablist')
+      layout(list, 300, 300)
+      fireEvent.scroll(list)
+      expect(list).not.toHaveAttribute('data-fade-end', 'true')
+      expect(list).not.toHaveAttribute('data-fade-start', 'true')
+      vi.unstubAllGlobals()
+    })
+  })
 })
