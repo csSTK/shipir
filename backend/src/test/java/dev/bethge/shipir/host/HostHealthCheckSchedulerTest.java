@@ -42,6 +42,12 @@ class HostHealthCheckSchedulerTest {
     private HostOverviewService overview;
     private HostHealthCheckScheduler scheduler;
 
+    private static dev.bethge.shipir.permission.CurrentAccess fullAccess() {
+        var access = mock(dev.bethge.shipir.permission.CurrentAccess.class);
+        when(access.hostFullyVisible(any())).thenReturn(true);
+        return access;
+    }
+
     @BeforeEach
     void setUp() {
         when(connections.localEndpoint()).thenReturn(new DockerEndpoint.Local("/var/run/docker.sock"));
@@ -60,7 +66,7 @@ class HostHealthCheckSchedulerTest {
         });
         overview = new HostOverviewService(repository, resolver, docker, connections,
                 new HostOverviewProperties(Duration.ofSeconds(1), Duration.ofSeconds(60), true),
-                mock(dev.bethge.shipir.permission.CurrentAccess.class), mock(HostTagService.class)); // unstubbed = no filtering
+                fullAccess(), mock(HostTagService.class), mock(HostResourcesService.class)); // no filtering
         scheduler = new HostHealthCheckScheduler(overview, publisher, clock);
     }
 
@@ -81,6 +87,7 @@ class HostHealthCheckSchedulerTest {
     @Test
     void checkRunsInsideTheSystemScope() {
         var access = mock(dev.bethge.shipir.permission.CurrentAccess.class);
+        when(access.hostFullyVisible(any())).thenReturn(true);
         List<Boolean> scope = new ArrayList<>();
         when(access.visibleHostIds()).thenAnswer(inv -> {
             scope.add(dev.bethge.shipir.common.security.SystemScope.active());
@@ -89,7 +96,7 @@ class HostHealthCheckSchedulerTest {
         overview.shutdown();
         overview = new HostOverviewService(repository, mock(HostEndpointResolver.class), docker, connections,
                 new HostOverviewProperties(Duration.ofSeconds(1), Duration.ofSeconds(60), true), access,
-                mock(HostTagService.class));
+                mock(HostTagService.class), mock(HostResourcesService.class));
         scheduler = new HostHealthCheckScheduler(overview, publisher, clock);
 
         scheduler.check();

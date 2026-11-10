@@ -7,6 +7,7 @@ import dev.bethge.shipir.docker.DockerEndpoint;
 import dev.bethge.shipir.docker.ViewerErrorCodes;
 import dev.bethge.shipir.docker.DockerHostConnectionManager;
 import dev.bethge.shipir.docker.client.DockerSystemService;
+import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.DockerSystemInfoDto;
 import dev.bethge.shipir.host.dto.HostOverviewResponse;
 import dev.bethge.shipir.host.dto.HostOverviewResponse.Containers;
@@ -16,13 +17,17 @@ import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -47,12 +52,14 @@ public class HostOverviewService {
     private final HostOverviewProperties properties;
     private final CurrentAccess access;
     private final HostTagService tags;
+    private final HostResourcesService resources;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     HostOverviewService(DockerHostRepository hosts, HostEndpointResolver endpoints, DockerSystemService docker,
                         DockerHostConnectionManager connections, HostOverviewProperties properties,
-                        CurrentAccess access, HostTagService tags) {
+                        CurrentAccess access, HostTagService tags, HostResourcesService resources) {
         this.tags = tags;
+        this.resources = resources;
         this.hosts = hosts;
         this.endpoints = endpoints;
         this.docker = docker;
@@ -78,8 +85,13 @@ public class HostOverviewService {
                 .sorted(Comparator.comparing(DockerHost::getName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
         Map<UUID, List<String>> tagsByHost = tags.tagsByHost(all.stream().map(DockerHost::getId).toList());
+        SecurityContext context = SecurityContextHolder.getContext();
+        // Decided on the request thread: the virtual threads have no subject and would see every host as fully visible.
+        Set<UUID> restricted = all.stream().map(DockerHost::getId).filter(id -> !access.hostFullyVisible(id))
+                .collect(Collectors.toSet());
         List<Future<HostOverviewResponse>> futures = all.stream()
-                .map(h -> executor.submit(() -> query(h, tagsOf(tagsByHost, h), admin)))
+                .map(h -> executor.submit(() -> query(h, tagsOf(tagsByHost, h), admin, restricted.contains(h.getId()),
+                        context)))
                 .toList();
         long deadline = System.nanoTime() + properties.overviewTimeout().toNanos();
         List<HostOverviewResponse> result = new ArrayList<>(all.size());
@@ -110,14 +122,18 @@ public class HostOverviewService {
     }
 
     /** Never throws: every failure of one environment is reported as {@code DOWN}. */
-    private HostOverviewResponse query(DockerHost host, List<String> tagList, boolean admin) {
+    private HostOverviewResponse query(DockerHost host, List<String> tagList, boolean admin, boolean restricted,
+                                       SecurityContext context) {
         try {
             DockerSystemInfoDto info = docker.info(host.getId(), endpoints.endpointOf(host));
+            // Visible only through deployment grants: counts of what the lists show (own containers; images and
+            // volumes are not listed there), never the host-wide numbers.
+            Containers containers = restricted ? visibleContainers(host, context)
+                    : new Containers(info.containersRunning(), info.containersStopped(), info.containersHealthy(),
+                            info.containersUnhealthy());
             return new HostOverviewResponse(host.getId(), host.getName(), host.getConnectionType(), endpointOf(host),
-                    Status.UP, null, info.dockerVersion(), info.cpus(), info.memoryBytes(),
-                    new Containers(info.containersRunning(), info.containersStopped(), info.containersHealthy(),
-                            info.containersUnhealthy()),
-                    info.images(), info.volumes(), tagList);
+                    Status.UP, null, info.dockerVersion(), info.cpus(), info.memoryBytes(), containers,
+                    restricted ? 0 : info.images(), restricted ? 0 : info.volumes(), tagList);
         } catch (DockerConnectionException e) {
             return down(host, ViewerErrorCodes.forViewer(e.getCode(), admin), tagList);
         } catch (EncryptionKeyMissingException e) {
@@ -128,6 +144,20 @@ public class HostOverviewService {
             // class only: the message could contain connection details
             log.warn("Overview of environment {} failed: {}", host.getId(), e.getClass().getSimpleName());
             return down(host, "UNKNOWN", tagList);
+        }
+    }
+
+    /** Runs on a virtual thread: carries the caller's security context so the list filter applies. */
+    private Containers visibleContainers(DockerHost host, SecurityContext context) {
+        SecurityContextHolder.setContext(context);
+        try {
+            List<ContainerDto> list = resources.containers(host.getId());
+            int running = (int) list.stream().filter(c -> "running".equalsIgnoreCase(c.state())).count();
+            int healthy = (int) list.stream().filter(c -> "healthy".equalsIgnoreCase(c.health())).count();
+            int unhealthy = (int) list.stream().filter(c -> "unhealthy".equalsIgnoreCase(c.health())).count();
+            return new Containers(running, list.size() - running, healthy, unhealthy);
+        } finally {
+            SecurityContextHolder.clearContext();
         }
     }
 
