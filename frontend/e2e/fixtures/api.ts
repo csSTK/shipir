@@ -20,10 +20,15 @@ const EMPTY_HISTORY = { range: '24h', from: '2026-10-24T10:00:00Z', to: '2026-10
 /** No reverse proxy detected: the add-deployment wizard asks for it whenever the dialog is open; specs override. */
 const NO_PROXY = { visible: true, proxy: null, container: null, network: null }
 
+/** Raw proxy configuration (ADMIN, advanced mode on the domains page): nothing generated, no custom content, no history; specs override. */
+const EMPTY_PROXY_CONFIG = { type: 'TRAEFIK', managed: [], customFileName: 'custom.yml', custom: '', customUpdatedAt: null }
+
 function defaultFor(method: string, path: string): MockResponse | undefined {
   if (method !== 'GET') return undefined
   if (/^\/api\/hosts\/[^/]+\/stats\/history$/.test(path)) return { body: EMPTY_HISTORY }
   if (/^\/api\/hosts\/[^/]+\/proxy$/.test(path)) return { body: NO_PROXY }
+  if (/^\/api\/hosts\/[^/]+\/proxy\/config$/.test(path)) return { body: EMPTY_PROXY_CONFIG }
+  if (/^\/api\/hosts\/[^/]+\/proxy\/config\/custom\/versions$/.test(path)) return { body: [] }
   return undefined
 }
 

@@ -58,3 +58,15 @@ test('fails the test when an /api call has no mock', async ({ page, api }) => {
 
   expect(result.status).toBe(501)
 })
+
+test('answers the proxy config endpoints of the raw configuration editor without a spec mock', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', { status: 401 })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+  const config = await callApi(page, '/api/hosts/a/proxy/config')
+  const versions = await callApi(page, '/api/hosts/a/proxy/config/custom/versions')
+
+  expect(config.status).toBe(200)
+  expect(config.body).toMatchObject({ managed: [], custom: '' })
+  expect(versions).toEqual({ status: 200, body: [] })
+})
