@@ -124,10 +124,8 @@ const iconBoxAllowlist: Record<string, number> = {
 }
 
 const literalAllowlist: Record<string, number> = {
-  'size /features/ai-chat/ChatPane.css': 2, // visually-hidden composer label
-  'size /shared/ui/FormField.css': 2, // visually-hidden bare label
   'var-fallback /shared/ui/ResourceTable.css': 1, // --rtable-max-height is the table's public API; 70vh is its viewport-relative default
-  'size /shared/ui/ResourceTable.css': 3, // visually-hidden .rtable__sr (2) + shrink-to-fit actions cell width (1)
+  'size /shared/ui/ResourceTable.css': 1, // shrink-to-fit actions cell width
 }
 
 describe('design token usage', () => {

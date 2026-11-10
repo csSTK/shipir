@@ -20,6 +20,8 @@ const PAGES = [
   { tsx: 'features/auth/SetupPage.tsx', css: 'features/auth/SetupPage.css', old: 'setup__sr' },
   { tsx: 'features/auth/PasswordResetPage.tsx', css: 'features/auth/PasswordResetPage.css', old: 'reset__sr' },
   { tsx: 'features/account/AccountPage.tsx', css: 'features/account/AccountPage.css', old: 'account__sr' },
+  { tsx: 'shared/ui/ResourceTable.tsx', css: 'shared/ui/ResourceTable.css', old: 'rtable__sr' },
+  { tsx: 'features/ai-chat/ChatPane.tsx', css: 'features/ai-chat/ChatPane.css', old: 'chat-composer__label' },
 ]
 
 describe('shared visually-hidden utility', () => {
@@ -39,5 +41,10 @@ describe('shared visually-hidden utility', () => {
     expect(source).toContain('className="visually-hidden"')
     expect(source).not.toContain(old)
     expect(read(css)).not.toContain(`.${old}`)
+  })
+
+  it('FormField hides a bare label with the shared class, not its own rule', () => {
+    expect(read('shared/ui/FormField.tsx')).toContain('visually-hidden')
+    expect(read('shared/ui/FormField.css')).not.toContain('ui-field--bare')
   })
 })

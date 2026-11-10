@@ -28,7 +28,7 @@ describe('TextField hideLabel', () => {
     render(<TextField label="Port 1" hideLabel defaultValue="" />)
     const input = screen.getByRole('textbox', { name: 'Port 1' })
     expect(input.closest('.ui-field--bare')).not.toBeNull()
-    expect(screen.getByText('Port 1', { selector: 'label' })).toBeInTheDocument()
+    expect(screen.getByText('Port 1', { selector: 'label' })).toHaveClass('visually-hidden')
   })
 
   it('has no bare wrapper without hideLabel', () => {

@@ -350,7 +350,7 @@ export function ResourceTable<T>({
                 <th className="rtable__filler" aria-hidden="true" />
                 {hasActions && (
                   <th scope="col" className="rtable__actions-cell">
-                    <span className="rtable__sr">{t('ResourceTable.actions')}</span>
+                    <span className="visually-hidden">{t('ResourceTable.actions')}</span>
                   </th>
                 )}
               </tr>

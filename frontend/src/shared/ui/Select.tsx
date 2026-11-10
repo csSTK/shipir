@@ -19,7 +19,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
 ) {
   return (
     <div className={hideLabel ? 'ui-field--bare' : undefined}>
-      <FormField label={label} help={help} error={error}>
+      <FormField label={label} help={help} error={error} hideLabel={hideLabel}>
         {(control) => (
           <span className="ui-select">
             <select ref={ref} className={['ui-control', 'ui-select__input', className].filter(Boolean).join(' ')} {...control} {...rest}>

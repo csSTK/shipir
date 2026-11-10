@@ -119,14 +119,6 @@
   align-items: flex-end;
 }
 
-.chat-composer__label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-}
-
 .chat-composer textarea {
   flex: 1;
   resize: none;

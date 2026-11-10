@@ -13,18 +13,20 @@ interface FormFieldProps {
   /** Already-mapped message; marks the control invalid. */
   error?: string | null
   /** Receives the props that tie the control to its label, help and error. */
+  /** Visually hide the label; it stays the accessible name. */
+  hideLabel?: boolean
   children: (control: FieldControlProps) => ReactNode
 }
 
 /** Label, control, help text and inline error in one consistent block. */
-export function FormField({ label, help, error, children }: FormFieldProps) {
+export function FormField({ label, help, error, hideLabel, children }: FormFieldProps) {
   const id = useId()
   const helpId = help ? `${id}-help` : undefined
   const errorId = error ? `${id}-error` : undefined
   const describedBy = [helpId, errorId].filter(Boolean).join(' ') || undefined
   return (
     <div className="ui-field">
-      <label className="ui-field__label" htmlFor={id}>
+      <label className={hideLabel ? 'ui-field__label visually-hidden' : 'ui-field__label'} htmlFor={id}>
         {label}
       </label>
       {children({ id, 'aria-describedby': describedBy, 'aria-invalid': error ? true : undefined })}

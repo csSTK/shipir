@@ -235,7 +235,7 @@ export function ChatPane({ sessionId, isAdmin, compact = false }: { sessionId: s
       )}
       {showChip && viewing.label && <ViewContextChip label={viewing.label} onRemove={() => setDismissed(viewKey)} />}
       <form className="chat-composer" onSubmit={submit}>
-        <label className="chat-composer__label" htmlFor="chat-input">
+        <label className="visually-hidden" htmlFor="chat-input">
           {t('ChatPane.message')}
         </label>
         <textarea
