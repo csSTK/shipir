@@ -508,13 +508,37 @@ public class DeploymentRunService {
                 .orElse(false) && graphIsApproved(deployment, endpoint, approved);
     }
 
+    /** Upper bound of {@link #referenceFreeGraphs}; the cache is cleared when it is reached (shipr-0qbh.78). */
+    private static final int REFERENCE_CACHE_LIMIT = 1_000;
+
+    /**
+     * Deployment id + directory hash of graphs whose compose config has no unhashed-path references. The hash covers the
+     * compose file and {@code .env}, so a changed graph misses the cache. Only the "no references" answer is cached: a
+     * compose failure answers "yes, references" (fail-closed) and is asked again next time.
+     */
+    private final java.util.Set<String> referenceFreeGraphs = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     private boolean graphIsApproved(Deployment deployment, DockerEndpoint endpoint, DeploymentVersion approved) {
         if (approved != null && approved.getGraphHash() != null) {
             // a hash stored before shipr-kqbc.56 may vouch for an env_file/include outside the directory it never covered
-            return ComposeGraphHasher.hash(files.deploymentDir(deployment.getHostId(), deployment.getName()))
-                    .filter(approved.getGraphHash()::equals).isPresent()
-                    && !deploymentService.referencesUnhashedPaths(deployment.getHostId(), deployment.getName(), endpoint,
-                            deploymentService.composeFileOf(deployment));
+            var current = ComposeGraphHasher.hash(files.deploymentDir(deployment.getHostId(), deployment.getName()))
+                    .filter(approved.getGraphHash()::equals);
+            if (current.isEmpty()) {
+                return false;
+            }
+            String key = deployment.getId() + ":" + current.get();
+            if (referenceFreeGraphs.contains(key)) {
+                return true;
+            }
+            if (deploymentService.referencesUnhashedPaths(deployment.getHostId(), deployment.getName(), endpoint,
+                    deploymentService.composeFileOf(deployment))) {
+                return false;
+            }
+            if (referenceFreeGraphs.size() >= REFERENCE_CACHE_LIMIT) {
+                referenceFreeGraphs.clear();
+            }
+            referenceFreeGraphs.add(key);
+            return true;
         }
         return graphIsOnlyApprovedFiles(deployment)
                 && !deploymentService.referencesUnhashedPaths(deployment.getHostId(), deployment.getName(), endpoint,

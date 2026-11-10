@@ -277,6 +277,45 @@ class DeploymentSecurityPolicyApiTest extends DeploymentTestBase {
                 .isEqualTo(ComposeGraphHasher.hash(files.deploymentDir(hostId, "hashed")).orElseThrow());
     }
 
+    /** shipr-0qbh.78: the extra compose config call of the graph check is cached per (deployment, graph hash). */
+    @Test
+    void repeatedSystemRunsOfAnUnchangedHashedGraphAskComposeConfigOnlyOnce() throws Exception {
+        UUID id = adminDeployed("cachedgraph", PRIVILEGED);
+        int before = configCalls();
+        runs.webhookTrigger(id);
+        awaitPullUpdateResults(id, 1);
+        int first = configCalls() - before;
+        before = configCalls();
+        runs.webhookTrigger(id);
+        awaitPullUpdateResults(id, 2);
+        int second = configCalls() - before;
+        assertThat(second).isLessThan(first);
+    }
+
+    /** The cache is keyed by the directory hash, so an edited graph is checked again (fail-closed kept). */
+    @Test
+    void cachedGraphApprovalDoesNotSurviveAChangedDirectory() throws Exception {
+        UUID id = adminDeployed("cachedchg", PRIVILEGED);
+        runs.webhookTrigger(id);
+        awaitPullUpdateResults(id, 1);
+        addAuxFile("cachedchg");
+        assertThatThrownBy(() -> runs.webhookTrigger(id))
+                .isInstanceOfSatisfying(DeploymentException.class, e -> assertThat(e.code()).isEqualTo("ADMIN_REQUIRED"));
+    }
+
+    private void awaitPullUpdateResults(UUID id, int count) {
+        await().atMost(10, java.util.concurrent.TimeUnit.SECONDS).untilAsserted(() -> assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM audit_log WHERE action = 'DEPLOYMENT_PULL_UPDATE_RESULT' AND target_id = ?",
+                Integer.class, id.toString())).isEqualTo(count));
+    }
+
+    private int configCalls() {
+        return (int) org.mockito.Mockito.mockingDetails(execution).getInvocations().stream()
+                .filter(i -> i.getMethod().getName().equals("execute") && i.getArguments().length > 2
+                        && i.getArgument(2) == ComposeCommand.CONFIG_JSON)
+                .count();
+    }
+
     @Test
     void adminDeployThatMountsABackupDirectoryStoresNoGraphHash() throws Exception {
         String source = files.deploymentDir(hostId, "bkref") + "/.shipir-backups";
