@@ -176,4 +176,25 @@ class HostResourceDeleteTest extends HostApiTestBase {
         }
         verify(images, never()).removeImage(any(), any(), any());
     }
+
+    /** shipr-0qbh.81: a '@' in a later path segment needs the same sha256 structure as in the first one. */
+    @Test
+    void looseAtSignInALaterSegmentIs400AndNeverReachesTheDaemon() throws Exception {
+        String host = localHostId();
+        for (String bad : List.of("a/b@xyz", "reg.io/team/app@latest", "a/b@sha256:xyz", "a/b@@sha256:" + "a".repeat(64))) {
+            mvc.perform(login("admin").write(delete("/api/hosts/{h}/images/{ref}", host, bad)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_RESOURCE_ID"));
+        }
+        verify(images, never()).removeImage(any(), any(), any());
+    }
+
+    @Test
+    void registryPathWithTrailingDigestIsAccepted() throws Exception {
+        String host = localHostId();
+        String ref = "reg.io/team/app:1.2@sha256:" + "a".repeat(64);
+        mvc.perform(login("operator").write(delete("/api/hosts/{h}/images/{ref}", host, ref)))
+                .andExpect(status().isNoContent());
+        verify(images).removeImage(any(), any(), eq(ref));
+    }
 }

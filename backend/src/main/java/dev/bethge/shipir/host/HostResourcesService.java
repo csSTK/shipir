@@ -573,9 +573,12 @@ public class HostResourcesService {
         }
     }
 
-    /** Image references may be registry paths: slash-separated segments of plain characters, no empty or dot-only parts. */
+    /**
+     * Image references may be registry paths: slash-separated segments of plain characters, no empty or dot-only parts.
+     * A digest ({@code @sha256:<64 hex>}) is only valid once, at the very end.
+     */
     private static final Pattern IMAGE_REF = Pattern.compile(
-            "[A-Za-z0-9][A-Za-z0-9_.:-]*(?:@sha256:[a-f0-9]{64})?(?:/[A-Za-z0-9][A-Za-z0-9_.:@-]*)*");
+            "[A-Za-z0-9][A-Za-z0-9_.:-]*(?:/[A-Za-z0-9][A-Za-z0-9_.:-]*)*(?:@sha256:[a-f0-9]{64})?");
 
     private static void validateImageRef(String value) {
         if (value == null || value.length() > 255 || !IMAGE_REF.matcher(value).matches()) {
