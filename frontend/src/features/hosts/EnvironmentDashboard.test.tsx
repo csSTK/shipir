@@ -50,8 +50,9 @@ const usage = {
   buildCache: { count: 0, totalSize: 0, reclaimableSize: 0 },
 }
 
-function serve(overview: HostOverview[], role = 'VIEWER') {
+function serve(overview: HostOverview[], role = 'VIEWER', routes: unknown = [{ id: 'r1' }, { id: 'r2' }, { id: 'r3' }]) {
   apiFetch.mockImplementation((path: string) => {
+    if (path.endsWith('/proxy/routes')) return routes instanceof Error ? Promise.reject(routes) : Promise.resolve(routes)
     if (path === '/auth/me') return Promise.resolve({ username: 'u', role, setupRequired: false })
     if (path.endsWith('/disk-usage')) return Promise.resolve(usage)
     if (path.endsWith('/managed-deployments')) return Promise.resolve([{ id: 'm1', name: 'web' }, { id: 'm2', name: 'draft' }])
@@ -95,6 +96,34 @@ describe('EnvironmentDashboard', () => {
         `/environments/a/${name.toLowerCase()}`,
       )
     }
+  })
+
+  it('counts the published domains on the Domains tile', async () => {
+    serve([up])
+    renderAt('a')
+    await waitFor(() => expect(screen.getByRole('link', { name: /Domains/ })).toHaveTextContent('3'))
+    expect(screen.getByRole('link', { name: /Domains/ })).toHaveAttribute('href', '/environments/a/domains')
+    expect(apiFetch).toHaveBeenCalledWith('/hosts/a/proxy/routes')
+  })
+
+  it('shows 0 domains for a user whose permission-filtered route list is empty', async () => {
+    serve([up], 'VIEWER', [])
+    renderAt('a')
+    await waitFor(() => expect(screen.getByRole('link', { name: /Domains/ })).toHaveTextContent('0'))
+  })
+
+  it('shows a dash when the routes cannot be loaded and never queries them for a DOWN environment', async () => {
+    serve([up], 'VIEWER', new Error('boom'))
+    renderAt('a')
+    await screen.findByRole('heading', { name: 'Local' })
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/hosts/a/proxy/routes'))
+    expect(screen.getByRole('link', { name: /Domains/ })).toHaveTextContent('–')
+    cleanup()
+    apiFetch.mockClear()
+    serve([up, down])
+    renderAt('b')
+    await screen.findByRole('heading', { name: 'Staging' })
+    expect(apiFetch).not.toHaveBeenCalledWith('/hosts/b/proxy/routes')
   })
 
   it('shows the disk usage card only for a running environment', async () => {

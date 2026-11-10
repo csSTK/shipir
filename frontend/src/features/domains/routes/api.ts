@@ -65,8 +65,8 @@ export interface RouteRequest {
 const routesKey = (hostId: string) => ['hosts', hostId, 'proxy', 'routes'] as const
 const base = (hostId: string) => `/hosts/${hostId}/proxy/routes`
 
-export function useRoutes(hostId: string) {
-  return useQuery({ queryKey: routesKey(hostId), queryFn: () => apiFetch<ProxyRoute[]>(base(hostId)) })
+export function useRoutes(hostId: string, enabled = true) {
+  return useQuery({ queryKey: routesKey(hostId), queryFn: () => apiFetch<ProxyRoute[]>(base(hostId)), enabled })
 }
 
 export function useRouteCandidates(hostId: string, enabled = true) {

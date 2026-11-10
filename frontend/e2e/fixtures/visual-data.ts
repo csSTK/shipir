@@ -120,6 +120,7 @@ export function mockCommon(api: ApiMock) {
   api.mock('GET', '/api/hosts/a/containers', { body: containers })
   api.mock('GET', '/api/hosts/a/deployments', { body: deployments })
   api.mock('GET', '/api/hosts/a/managed-deployments', { body: [] })
+  api.mock('GET', '/api/hosts/a/proxy/routes', { body: [] })
   api.mock('GET', '/api/hosts/a/images', { body: images })
   api.mock('GET', '/api/hosts/a/networks', { body: networks })
   api.mock('GET', '/api/hosts/a/volumes', { body: volumes })

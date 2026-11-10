@@ -70,6 +70,7 @@ test.beforeEach(({ api }) => {
   api.mock('GET', '/api/hosts/overview', { body: [host] })
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   api.mock('GET', '/api/hosts/a/managed-deployments', { body: [] })
+  api.mock('GET', '/api/hosts/a/proxy/routes', { body: [] })
   api.mock('GET', '/api/hosts/a/networks', { body: [] })
 })
 

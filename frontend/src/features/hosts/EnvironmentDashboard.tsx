@@ -13,6 +13,7 @@ import { DiskUsageCard } from './DiskUsageCard.tsx'
 import { joinRows } from '../deployments/joinRows.ts'
 import { useDeployments, useManagedDeployments } from '../deployments/api.ts'
 import { useNetworks } from '../networks/api.ts'
+import { useRoutes } from '../domains/routes/api.ts'
 import { useTranslation } from 'react-i18next'
 import './EnvironmentsOverview.css'
 import './EnvironmentDashboard.css'
@@ -21,7 +22,7 @@ import './EnvironmentDashboard.css'
 function countFor(
   env: HostOverview,
   slug: EnvResourceSlug,
-  listed: { deployments?: number; networks?: number },
+  listed: { deployments?: number; networks?: number; domains?: number },
 ): number | null {
   switch (slug) {
     case 'containers':
@@ -34,6 +35,8 @@ function countFor(
       return listed.deployments ?? null
     case 'networks':
       return listed.networks ?? null
+    case 'domains':
+      return listed.domains ?? null
     default:
       return null
   }
@@ -48,13 +51,14 @@ function Back() {
   )
 }
 
-/** Resource tiles; deployments and networks are not in the overview, so they come from their own lists (running environments only). */
+/** Resource tiles; deployments, networks and domains are not in the overview, so they come from their own lists (running environments only). */
 function ResourceTiles({ env, up }: { env: HostOverview; up: boolean }) {
   const deployments = useDeployments(env.id, up)
   const managed = useManagedDeployments(env.id, up)
   const networks = useNetworks(env.id, up)
+  const routes = useRoutes(env.id, up) // the server filters it like the Domains page, so the count is what this user may see
   const listed = { // Same union as the Deployments page: live projects plus managed ones that were never deployed.
-    deployments: deployments.data ? joinRows(deployments.data, managed.data ?? []).length : undefined, networks: networks.data?.length }
+    deployments: deployments.data ? joinRows(deployments.data, managed.data ?? []).length : undefined, networks: networks.data?.length, domains: routes.data?.length }
   return (
       <ul className="dash__tiles">
         {ENV_RESOURCES.map(({ slug, label, icon: Icon, tone }) => {

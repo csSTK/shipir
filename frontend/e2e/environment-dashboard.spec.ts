@@ -41,6 +41,7 @@ test('overview -> dashboard -> sidebar items', async ({ page, api }) => {
   api.mock('GET', '/api/hosts/a/disk-usage', { body: DISK_USAGE })
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   api.mock('GET', '/api/hosts/a/managed-deployments', { body: [] })
+  api.mock('GET', '/api/hosts/a/proxy/routes', { body: [] })
   api.mock('GET', '/api/hosts/a/networks', { body: [] })
   api.mock('GET', '/api/hosts/a/containers', { body: [] })
   api.mock('GET', '/api/hosts/a/images', { body: [] })
@@ -76,7 +77,9 @@ test('tile counts and a DOWN environment', async ({ page, api }) => {
   api.mock('GET', '/api/hosts/a/deployments', { body: [{ name: 'web' }, { name: 'db' }, { name: 'cache' }] })
   api.mock('GET', '/api/hosts/a/managed-deployments', { body: [{ id: 'm1', name: 'web' }, { id: 'm2', name: 'draft' }] })
   api.mock('GET', '/api/hosts/a/networks', { body: [{ id: 'n1' }, { id: 'n2' }] })
+  api.mock('GET', '/api/hosts/a/proxy/routes', { body: [{ id: 'r1' }, { id: 'r2' }, { id: 'r3' }] })
   await page.goto('/environments/a')
+  await expect(page.getByRole('main').getByRole('link', { name: /Domains/ })).toContainText('3')
   await expect(page.getByRole('main').getByRole('link', { name: /Deployments/ })).toContainText('4')
   await expect(page.getByRole('main').getByRole('link', { name: /Networks/ })).toContainText('2')
   await expect(page.getByRole('main').getByRole('link', { name: /Containers/ })).toContainText('7')
@@ -102,6 +105,7 @@ test('sidebar section works on a narrow screen', async ({ page, api }) => {
   api.mock('GET', '/api/hosts/a/disk-usage', { body: DISK_USAGE })
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   api.mock('GET', '/api/hosts/a/managed-deployments', { body: [] })
+  api.mock('GET', '/api/hosts/a/proxy/routes', { body: [] })
   api.mock('GET', '/api/hosts/a/networks', { body: [] })
   api.mock('GET', '/api/hosts/a/images', { body: [] })
   await page.goto('/environments/a')
@@ -120,6 +124,7 @@ test('resource tiles fill every row: 2 columns on a phone, no orphan on desktop'
   api.mock('GET', '/api/hosts/a/deployments', { body: [] })
   api.mock('GET', '/api/hosts/a/managed-deployments', { body: [] })
   api.mock('GET', '/api/hosts/a/networks', { body: [] })
+  api.mock('GET', '/api/hosts/a/proxy/routes', { body: [] })
   const tileLabels = ['Deployments', 'Containers', 'Images', 'Networks', 'Volumes', 'Domains']
 
   for (const { width, height, columns } of [

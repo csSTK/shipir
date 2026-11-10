@@ -92,6 +92,7 @@ test('opens the dashboard and navigates back', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: user('OPERATOR') })
   api.mock('GET', '/api/hosts/overview', { body: [local] })
   api.mock('GET', '/api/hosts/a/disk-usage', { body: DISK_USAGE })
+  api.mock('GET', '/api/hosts/a/proxy/routes', { body: [] })
   await page.goto('/')
 
   await page.getByRole('link', { name: /Local/ }).click()
