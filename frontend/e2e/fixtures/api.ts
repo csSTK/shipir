@@ -26,6 +26,8 @@ const EMPTY_PROXY_CONFIG = { type: 'TRAEFIK', managed: [], customFileName: 'cust
 function defaultFor(method: string, path: string): MockResponse | undefined {
   if (method !== 'GET') return undefined
   if (/^\/api\/hosts\/[^/]+\/stats\/history$/.test(path)) return { body: EMPTY_HISTORY }
+  // The environment dashboard counts deployments, managed deployments and networks on every visit; specs override.
+  if (/^\/api\/hosts\/[^/]+\/(deployments|managed-deployments|networks)$/.test(path)) return { body: [] }
   if (/^\/api\/hosts\/[^/]+\/proxy$/.test(path)) return { body: NO_PROXY }
   if (/^\/api\/hosts\/[^/]+\/proxy\/config$/.test(path)) return { body: EMPTY_PROXY_CONFIG }
   if (/^\/api\/hosts\/[^/]+\/proxy\/config\/custom\/versions$/.test(path)) return { body: [] }
