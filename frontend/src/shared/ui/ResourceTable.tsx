@@ -19,6 +19,7 @@ import { Skeleton } from './Skeleton.tsx'
 import { useTranslation } from 'react-i18next'
 import { useMediaQuery } from '../lib/useMediaQuery.ts'
 import './ResourceTable.css'
+import { PHONE_QUERY } from '../lib/breakpoints.ts'
 
 export interface ResourceColumn<T> {
   id: string
@@ -43,7 +44,6 @@ export interface ResourceColumn<T> {
   isEmpty?: (row: T) => boolean
 }
 
-const NARROW_QUERY = '(max-width: 720px)'
 /** On phones the first column is capped so the next one (status) still fits before the pinned actions. */
 const NARROW_PRIMARY_WIDTH = 112
 
@@ -252,7 +252,7 @@ export function ResourceTable<T>({
   const visibleColumns = table.getVisibleLeafColumns()
   const hasActions = !!rowActions
   // On phones the pinned icon buttons would cover the data columns: they move into the overflow menu.
-  const narrow = useMediaQuery(NARROW_QUERY)
+  const narrow = useMediaQuery(PHONE_QUERY)
   const actionsOf = (row: T): RowActions => {
     const a = rowActions!(row)
     if (!narrow || !a.primary?.length) return a

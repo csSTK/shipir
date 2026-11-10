@@ -5,9 +5,9 @@ import { YamlDiffEditor } from '../editor/index.ts'
 import { useTranslation } from 'react-i18next'
 import { Trans } from '../../../shared/i18n/Trans.tsx'
 import './VersionDiff.css'
+import { PHONE_QUERY } from '../../../shared/lib/breakpoints.ts'
 
-const NARROW = '(max-width: 720px)'
-const narrowQuery = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(NARROW) : null
+const narrowQuery = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(PHONE_QUERY) : null
 function subscribeNarrow(cb: () => void) {
   narrowQuery?.addEventListener('change', cb)
   return () => narrowQuery?.removeEventListener('change', cb)

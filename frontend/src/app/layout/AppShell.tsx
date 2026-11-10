@@ -15,6 +15,7 @@ import { useMediaQuery } from '../../shared/lib/useMediaQuery.ts'
 import { useTranslation } from 'react-i18next'
 import './AppShell.css'
 import '../../shared/ui/Page.css'
+import { PHONE_QUERY } from '../../shared/lib/breakpoints.ts'
 
 interface Props {
   user: CurrentUser
@@ -27,7 +28,7 @@ interface Props {
 export function AppShell({ user, onSignOut, signingOut, children }: Props) {
   const { t } = useTranslation('app')
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const narrow = useMediaQuery('(max-width: 720px)')
+  const narrow = useMediaQuery(PHONE_QUERY)
   const reduced = useReducedMotion()
   const { pathname } = useLocation()
   // The drawer is open for one location only, so navigating (or leaving the narrow layout) closes it.

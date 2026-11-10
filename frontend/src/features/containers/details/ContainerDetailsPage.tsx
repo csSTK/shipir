@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next'
 import { useMediaQuery } from '../../../shared/lib/useMediaQuery.ts'
 import { dateTimeFormat, formatNumber, ONE_DECIMAL } from '../../../shared/i18n/format.ts'
 import './ContainerDetailsPage.css'
+import { PHONE_QUERY } from '../../../shared/lib/breakpoints.ts'
 
 const dateFormat = dateTimeFormat({ dateStyle: 'medium', timeStyle: 'medium' })
 const formatDate = (iso: string | null) => (iso ? dateFormat.format(new Date(iso)) : '–')
@@ -293,7 +294,7 @@ export function ContainerDetailsPage() {
   const { data: user } = useCurrentUser()
   const canOpenConsole = useCanOpenConsole(hostId)
   // On phones the four change buttons would not fit one row: they collapse into a menu.
-  const narrow = useMediaQuery('(max-width: 720px)')
+  const narrow = useMediaQuery(PHONE_QUERY)
   const { data: c, isPending, error, refetch } = useContainerDetails(hostId, cid)
   const navigate = useNavigate()
   const [dialog, setDialog] = useState<'edit' | 'duplicate' | 'limits' | 'publish' | null>(null)
