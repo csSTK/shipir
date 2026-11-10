@@ -20,6 +20,8 @@ import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -93,11 +95,37 @@ class AuditAspect {
             UUID userId = authName == null ? null
                     : users.findByUsername(authName).map(u -> u.getId()).orElse(null);
             String targetType = a.targetType().isEmpty() ? null : a.targetType();
-            auditService.record(new AuditRecord(userId, truncate(username, 50), a.action(), outcome,
-                    targetType, eval(a.targetId(), ctx), details(a, ctx, outcome)));
+            AuditRecord entry = new AuditRecord(userId, truncate(username, 50), a.action(), outcome,
+                    targetType, eval(a.targetId(), ctx), details(a, ctx, outcome));
+            writeAfterTransaction(entry, a.action());
         } catch (RuntimeException e) {
             log.warn("Could not write audit entry for {}: {}", a.action(), e.toString());
         }
+    }
+
+    /**
+     * The entry is built while the audited call's data is at hand, but written only once the surrounding
+     * transaction (if the audited method is transactional) has committed or rolled back. The write uses its own
+     * transaction with a foreign key to the acting user; if the audited method updated an indexed column of that
+     * user's own row, its still open transaction holds a lock the FK check would wait on forever (self-deadlock).
+     * Trade-off: a success entry is written a moment after the commit instead of before it, so a crash in
+     * between loses the entry; failure entries are kept because they are written after the rollback.
+     */
+    private void writeAfterTransaction(AuditRecord entry, String action) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            auditService.record(entry);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                try {
+                    auditService.record(entry);
+                } catch (RuntimeException e) {
+                    log.warn("Could not write audit entry for {}: {}", action, e.toString());
+                }
+            }
+        });
     }
 
     private EvaluationContext context(ProceedingJoinPoint pjp) {
