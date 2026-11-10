@@ -51,6 +51,15 @@ public final class SecureFiles {
     private SecureFiles() {
     }
 
+    /** True when the default file system offers {@link SecureDirectoryStream} (Linux, macOS); false e.g. on Windows. */
+    public static boolean isSupported() {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(Path.of(System.getProperty("java.io.tmpdir")))) {
+            return stream instanceof SecureDirectoryStream;
+        } catch (IOException | RuntimeException e) {
+            return false;
+        }
+    }
+
     /** The leaf is not a regular file (FIFO, device, socket, directory) and is not opened. */
     public static final class NotRegularFileException extends IOException {
         public NotRegularFileException(String name) {
