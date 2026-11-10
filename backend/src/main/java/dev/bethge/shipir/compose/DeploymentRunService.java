@@ -804,8 +804,10 @@ public class DeploymentRunService {
         if (services != null) {
             details.put("service", services.get(0));
         }
+        ComposeCommand current = null;
         try {
             for (ComposeCommand step : steps) {
+                current = step;
                 ComposeProcessResult result = deploymentService.runCompose(deployment, step, endpoint, sink, null, services);
                 success = result.success();
                 details.put("exitCode", result.exitCode());
@@ -820,6 +822,10 @@ public class DeploymentRunService {
             }
         } catch (RuntimeException e) {
             log.warn("Deployment {} could not run: {}", runId, e.toString());
+            if (current != null) {
+                details.put("failedStep", current.name());
+                failedStep = current.name();
+            }
             success = false; // an earlier step may have succeeded; a throwing later step still fails the run
             details.put("error", "COMPOSE_UNAVAILABLE");
             runError = "COMPOSE_UNAVAILABLE";

@@ -350,6 +350,19 @@ class ImageAutoUpdateSchedulerTest extends DeploymentTestBase {
     }
 
     @Test
+    void composeUpThrowingIsReportedAsFailedAndNeverApplied() throws Exception {
+        UUID id = deployed("web", true);
+        upThrows = true;
+
+        scheduler.tick();
+
+        assertThat(notificationTypes()).containsExactly("IMAGE_UPDATE_FAILED");
+        assertThat(notificationTypes()).doesNotContain("IMAGE_UPDATE_APPLIED");
+        assertThat(lastResult(id)).startsWith("FAILED");
+        assertThat(audit("IMAGE_AUTO_UPDATE")).containsExactly("system:FAILURE");
+    }
+
+    @Test
     void failedComposeUpIsRolledBackAndReported() throws Exception {
         UUID id = deployed("web", true);
         upFails = true;

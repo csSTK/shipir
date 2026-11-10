@@ -28,10 +28,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** {@code POST managed-deployments/{id}/pull-update}: pull then up on the deployed version, stubbed compose execution. */
 @TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+@org.springframework.test.context.event.RecordApplicationEvents
 class DeploymentPullUpdateApiTest extends DeploymentTestBase {
 
     @MockitoBean
     ComposeOutputStreamService streams;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    org.springframework.test.context.event.ApplicationEvents appEvents;
 
     private final List<String> streamed = new CopyOnWriteArrayList<>();
 
@@ -123,6 +127,10 @@ class DeploymentPullUpdateApiTest extends DeploymentTestBase {
         verify(streams, timeout(5000)).complete(runId, RunStatus.FAILED);
         assertThat(audit()).contains("DEPLOYMENT_PULL_UPDATE_RESULT:FAILURE")
                 .doesNotContain("DEPLOYMENT_PULL_UPDATE_RESULT:SUCCESS");
+        assertThat(jdbc.queryForObject("SELECT details->>'failedStep' FROM audit_log WHERE action = 'DEPLOYMENT_PULL_UPDATE_RESULT'",
+                String.class)).isEqualTo("UP");
+        assertThat(appEvents.stream(DeploymentRunFailedEvent.class)).singleElement()
+                .satisfies(e -> assertThat(e.failedStep()).isEqualTo("UP"));
     }
 
     @Test
