@@ -61,14 +61,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "shipir.proxy.status.log-timeout=300ms", "shipir.proxy.status.cache-ttl=3s", "shipir.proxy.status.refresh-floor=2s"})
 class ProxyStatusApiTest {
 
-    static class MutableClock extends java.time.Clock {
-        volatile Instant now = Instant.now();
-
-        @Override public java.time.ZoneId getZone() { return java.time.ZoneOffset.UTC; }
-        @Override public java.time.Clock withZone(java.time.ZoneId zone) { return this; }
-        @Override public Instant instant() { return now; }
-    }
-
     @org.springframework.boot.test.context.TestConfiguration
     static class ClockConfig {
         @org.springframework.context.annotation.Bean

@@ -2,10 +2,8 @@ package dev.bethge.shipir.proxy.status;
 
 import org.junit.jupiter.api.Test;
 
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -14,15 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class StatusCacheTest {
 
-    static class MutableClock extends Clock {
-        Instant now = Instant.parse("2030-01-01T00:00:00Z");
-
-        @Override public java.time.ZoneId getZone() { return ZoneOffset.UTC; }
-        @Override public Clock withZone(java.time.ZoneId zone) { return this; }
-        @Override public Instant instant() { return now; }
-    }
-
-    final MutableClock clock = new MutableClock();
+    final MutableClock clock = new MutableClock(Instant.parse("2030-01-01T00:00:00Z"));
     final StatusCache cache = new StatusCache(clock, Duration.ofSeconds(30), Duration.ofSeconds(5), Duration.ofMinutes(5));
     final AtomicInteger loads = new AtomicInteger();
     final UUID host = UUID.randomUUID();
