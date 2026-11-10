@@ -208,27 +208,26 @@ class VolumeBackupStoredRestoreCopyTest {
         }
     }
 
-    @Test
-    void copyPrivatelyDoesNotFollowASymlink() throws Exception {
-        Path target = Files.writeString(base.resolve("secret.tar"), "secret");
-        Path link = Files.createSymbolicLink(base.resolve("link.tar"), target);
+    /** A source that fails on read, like a disk error part way through the copy. */
+    private static InputStream failingAfter(int bytes) {
+        return new InputStream() {
+            private int served;
 
-        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(link, 1024))
-                .isInstanceOfSatisfying(HostException.class, e -> assertThat(e.code()).isEqualTo("STORED_BACKUP_NOT_FOUND"));
-    }
-
-    @Test
-    void copyPrivatelyReportsAMissingFileAsNotFound() {
-        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(base.resolve("gone.tar"), 1024))
-                .isInstanceOfSatisfying(HostException.class, e -> assertThat(e.code()).isEqualTo("STORED_BACKUP_NOT_FOUND"));
+            @Override
+            public int read() throws IOException {
+                if (served++ >= bytes) {
+                    throw new IOException("disk error");
+                }
+                return 1;
+            }
+        };
     }
 
     @Test
     void copyPrivatelyDeletesItsTempFileWhenTheFileIsTooLarge() throws Exception {
-        Path big = Files.write(base.resolve("big.tar"), new byte[100]);
         Path copies = Files.createDirectory(base.resolve("copies"));
 
-        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(big, 50, copies))
+        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(new java.io.ByteArrayInputStream(new byte[100]), 50, copies))
                 .isInstanceOfSatisfying(HostException.class, e -> assertThat(e.status().value()).isEqualTo(413));
 
         assertThat(listDirectory(copies)).isEmpty();
@@ -236,22 +235,17 @@ class VolumeBackupStoredRestoreCopyTest {
 
     @Test
     void copyPrivatelyDeletesItsTempFileOnAMidCopyReadError() throws Exception {
-        // a directory can be opened for reading on some platforms but fails on read: use it as the failing source.
-        // Whether the failure comes before or after the temp file is created, the directory must end up empty.
-        Path dir = Files.createDirectory(base.resolve("d.tar"));
         Path copies = Files.createDirectory(base.resolve("copies"));
 
-        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(dir, 50, copies)).isInstanceOf(HostException.class);
+        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(failingAfter(10), 50, copies))
+                .isInstanceOf(HostException.class);
 
         assertThat(listDirectory(copies)).isEmpty();
     }
 
     @Test
-    void copyPrivatelyReportsAFailedReadAsServerErrorNotAsMissing() throws Exception {
-        // an I/O failure that is not "file missing or symlink" (here: read fails on a directory) is a server problem
-        Path dir = Files.createDirectory(base.resolve("unreadable.tar"));
-
-        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(dir, 50))
+    void copyPrivatelyReportsAFailedReadAsServerErrorNotAsMissing() {
+        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(failingAfter(0), 50, null))
                 .isInstanceOfSatisfying(HostException.class, e -> {
                     assertThat(e.status().value()).isEqualTo(500);
                     assertThat(e.code()).isEqualTo("STORED_BACKUP_UNREADABLE");
@@ -259,12 +253,11 @@ class VolumeBackupStoredRestoreCopyTest {
     }
 
     @Test
-    void copyPrivatelyReportsAFileWithoutReadPermissionAsServerErrorNotAsMissing() throws Exception {
-        Path locked = Files.writeString(base.resolve("locked.tar"), "validated-bytes");
-        Files.setPosixFilePermissions(locked, java.nio.file.attribute.PosixFilePermissions.fromString("---------"));
-        org.junit.jupiter.api.Assumptions.assumeFalse(Files.isReadable(locked), "needs a non-root user to deny reads");
+    void restoreOfAFileWithoutReadPermissionIsAServerErrorNotNotFound() throws Exception {
+        Files.setPosixFilePermissions(file, java.nio.file.attribute.PosixFilePermissions.fromString("---------"));
+        org.junit.jupiter.api.Assumptions.assumeFalse(Files.isReadable(file), "needs a non-root user to deny reads");
 
-        assertThatThrownBy(() -> VolumeBackupService.copyPrivately(locked, 1024))
+        assertThatThrownBy(() -> service.restoreStored(hostId, VOLUME, NAME, false))
                 .isInstanceOfSatisfying(HostException.class, e -> {
                     assertThat(e.status().value()).isEqualTo(500);
                     assertThat(e.code()).isEqualTo("STORED_BACKUP_UNREADABLE");

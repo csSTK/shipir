@@ -2,13 +2,16 @@ package dev.bethge.shipir.host;
 
 import dev.bethge.shipir.common.util.PathValidationException;
 import dev.bethge.shipir.common.util.PathValidationUtil;
+import dev.bethge.shipir.common.util.SecureFiles;
 import dev.bethge.shipir.host.dto.StoredVolumeBackup;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.Channels;
 import java.nio.file.DirectoryNotEmptyException;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -25,6 +28,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -104,29 +108,30 @@ class VolumeBackupStore {
     }
 
     /**
-     * The file of one stored archive, or empty when it does not exist. The name must be exactly
-     * {@code <volume>-<yyyyMMdd'T'HHmmss'Z'>.tar} (400 INVALID_RESOURCE_ID otherwise); the file must be a regular file
-     * (no symlink) that really lives in the directory of that host and volume.
+     * Opens one stored archive for reading, or empty when it does not exist. The name must be exactly
+     * {@code <volume>-<yyyyMMdd'T'HHmmss'Z'>.tar} (400 INVALID_RESOURCE_ID otherwise). Host directory, volume directory and
+     * file are opened one step at a time relative to held handles without following links ({@link SecureFiles}), so a
+     * link swapped in between the check and the open is never followed: a symlinked directory or archive, a directory
+     * or other non-regular entry counts as not found. Any other I/O failure is thrown. The caller closes the stream.
      */
-    Optional<Path> resolve(UUID hostId, String volume, String fileName) {
+    Optional<InputStream> open(UUID hostId, String volume, String fileName) throws IOException {
         if (fileName == null || !namePattern(volume).matcher(fileName).matches()) {
             throw new HostException(HttpStatus.BAD_REQUEST, "INVALID_RESOURCE_ID", "Invalid resource id");
         }
-        Path dir = volumeDir(hostId, volume);
-        if (dir == null) {
-            return Optional.empty();
-        }
-        try {
-            Path file = PathValidationUtil.resolve(dir, fileName);
-            if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+        Path base = properties.dir().toAbsolutePath().normalize();
+        try (SecureFiles.Parent parent = SecureFiles.openParent(base, hostId + "/" + volume + "/" + fileName, false, seam)) {
+            if (!parent.dir().isRegularFile(parent.name())) {
                 return Optional.empty();
             }
-            Path expected = properties.dir().toRealPath().resolve(hostId.toString()).resolve(volume).resolve(fileName);
-            return file.toRealPath().equals(expected) ? Optional.of(file) : Optional.empty();
-        } catch (PathValidationException | IOException e) {
-            return Optional.empty(); // a symlink leaving the store counts as not found
+            // the directory handle is closed on leaving the block; the channel keeps its own descriptor
+            return Optional.of(Channels.newInputStream(parent.dir().openRead(parent.name())));
+        } catch (NoSuchFileException | PathValidationException e) {
+            return Optional.empty(); // missing, or a symlink on the way: not this host's data
         }
     }
+
+    /** Test seam: receives the stages of {@link SecureFiles} (where a symlink swap could strike); null = none. */
+    Consumer<String> seam;
 
     /** {@code <dir>/<hostId>/<volume>}, or null when the store directory or that subtree does not exist. */
     private Path volumeDir(UUID hostId, String volume) {

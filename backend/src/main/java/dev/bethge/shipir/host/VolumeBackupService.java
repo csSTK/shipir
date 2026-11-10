@@ -21,7 +21,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.ZoneOffset;
@@ -134,13 +133,16 @@ public class VolumeBackupService {
         requireOperate(hostId);
         validateVolumeName(volume);
         systemManaged.requireNotSystemManagedVolume(hostId, volume);
-        Path file = store.resolve(hostId, volume, fileName).orElseThrow(
-                () -> new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found"));
+        return new VolumeBackupDownload(openStored(hostId, volume, fileName), fileName);
+    }
+
+    /** Opens a stored archive through the store's no-follow handle walk: 404 if missing or a link, 500 on other I/O errors. */
+    private InputStream openStored(UUID hostId, String volume, String fileName) {
         try {
-            // NOFOLLOW: a symlink swapped in after resolve() must not be followed
-            return new VolumeBackupDownload(Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS), fileName);
+            return store.open(hostId, volume, fileName).orElseThrow(
+                    () -> new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found"));
         } catch (IOException e) {
-            throw unreadableOrMissing(file);
+            throw unreadable();
         }
     }
 
@@ -154,15 +156,18 @@ public class VolumeBackupService {
         requireOperate(hostId);
         validateVolumeName(volume);
         systemManaged.requireNotSystemManagedVolume(hostId, volume);
-        Path file = store.resolve(hostId, volume, fileName).orElseThrow(
-                () -> new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found"));
         long max = properties.maxBytes().toBytes();
         // The archive is read from disk exactly once, into a private copy; the restore pipeline (which opens its source
         // twice, to validate and to stream) works on the copy. A file swapped or rewritten in the backup directory
         // meanwhile can therefore never make the validated bytes differ from the extracted bytes. This is an integrity
         // guard, not an access control: someone who can write the backup directory can still plant a (valid) archive
         // before the copy is made.
-        Path copy = copyPrivately(file, max);
+        Path copy;
+        try (InputStream stored = openStored(hostId, volume, fileName)) {
+            copy = copyPrivately(stored, max, null);
+        } catch (IOException e) {
+            throw unreadable();
+        }
         try {
             call(hostId, (id, endpoint) -> {
                 archives.restore(id, endpoint, volume, properties.helperImage(), () -> Files.newInputStream(copy), max, confirm);
@@ -182,35 +187,22 @@ public class VolumeBackupService {
         }
     }
 
-    /**
-     * The error for a stored archive that could not be opened or read. Only a file that is missing or a symbolic link
-     * is 404; any other I/O failure (permissions, disk) is a server problem, 500 STORED_BACKUP_UNREADABLE. Opening a
-     * symlink with NOFOLLOW fails with an I/O error, so it is judged by its link status.
-     */
-    private static HostException unreadableOrMissing(Path file) {
-        if (Files.isSymbolicLink(file) || !Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
-            return new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found");
-        }
+    private static HostException unreadable() {
         return new HostException(HttpStatus.INTERNAL_SERVER_ERROR, "STORED_BACKUP_UNREADABLE",
                 "The stored backup could not be read");
     }
 
     /**
-     * Copies the stored archive into an owner-only temp file through one NOFOLLOW open, reading at most {@code max}
-     * bytes (413 when the file is larger).
+     * Copies the stored archive (already opened through the store's no-follow walk) into an owner-only temp file,
+     * reading at most {@code max} bytes (413 when it is larger).
      * <p>
-     * The temp file is created in {@code java.io.tmpdir}, which may be a small tmpfs (e.g. in a container). A full
-     * tmpdir or a file that cannot be read is a server problem and gives 500 STORED_BACKUP_UNREADABLE. Only a file
-     * that is missing or a symbolic link gives 404 STORED_BACKUP_NOT_FOUND.
+     * The temp file is created in {@code tempDir}, {@code null} for {@code java.io.tmpdir}, which may be a small tmpfs
+     * (e.g. in a container). A full tmpdir or an archive that cannot be read is a server problem and gives 500
+     * STORED_BACKUP_UNREADABLE.
      */
-    static Path copyPrivately(Path file, long max) {
-        return copyPrivately(file, max, null);
-    }
-
-    /** As {@link #copyPrivately(Path, long)}; {@code tempDir} is where the copy is created, {@code null} for java.io.tmpdir (tests pass their own). */
-    static Path copyPrivately(Path file, long max, Path tempDir) {
+    static Path copyPrivately(InputStream in, long max, Path tempDir) {
         Path copy = null;
-        try (InputStream in = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)) {
+        try {
             copy = tempDir == null
                     ? Files.createTempFile("shipir-restore-", ".tar")
                     : Files.createTempFile(tempDir, "shipir-restore-", ".tar"); // owner-only (0600) on POSIX
@@ -224,7 +216,7 @@ public class VolumeBackupService {
             return copy;
         } catch (IOException e) {
             deleteQuietly(copy);
-            throw unreadableOrMissing(file);
+            throw unreadable();
         } catch (RuntimeException e) {
             deleteQuietly(copy);
             throw e;

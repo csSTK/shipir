@@ -73,58 +73,60 @@ class VolumeBackupStoreReadTest {
     }
 
     @Test
-    void resolvesAStoredArchive() {
-        assertThat(store.resolve(host, "data", NEW)).contains(base.resolve(host.toString()).resolve("data").resolve(NEW));
+    void opensAStoredArchive() throws Exception {
+        try (var in = store.open(host, "data", NEW).orElseThrow()) {
+            assertThat(new String(in.readAllBytes())).isEqualTo(Files.readString(base.resolve(host.toString()).resolve("data").resolve(NEW)));
+        }
     }
 
     @Test
-    void resolveOfAMissingArchiveIsEmpty() {
-        assertThat(store.resolve(host, "data", "data-20250101T000000Z.tar")).isEmpty();
+    void openOfAMissingArchiveIsEmpty() throws Exception {
+        assertThat(store.open(host, "data", "data-20250101T000000Z.tar")).isEmpty();
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"../data/data-20260101T000000Z.tar", "..", "/etc/passwd", "%2e%2e%2fpasswd", "data-20260101T000000Z.tar/",
             "data-20260101T000000Z.tar.part", "data-20260101T000000Z.TAR", "sub/data-20260101T000000Z.tar", "..\\x.tar",
             "data-2026.tar", "other-20260101T000000Z.tar", "", " ", "data-20260101T000000Z.tar\0"})
-    void resolveRejectsNamesThatAreNotExactlyTheStoredPattern(String name) {
-        assertThatThrownBy(() -> store.resolve(host, "data", name))
+    void openRejectsNamesThatAreNotExactlyTheStoredPattern(String name) throws Exception {
+        assertThatThrownBy(() -> store.open(host, "data", name))
                 .isInstanceOfSatisfying(HostException.class, e -> assertThat(e.code()).isEqualTo("INVALID_RESOURCE_ID"));
     }
 
     @Test
-    void resolveCannotReachAnotherHostsArchiveByName() {
+    void openCannotReachAnotherHostsArchiveByName() throws Exception {
         // same name pattern, but the file only exists under the other host
-        assertThat(store.resolve(host, "data", "data-20260103T000000Z.tar")).isEmpty();
+        assertThat(store.open(host, "data", "data-20260103T000000Z.tar")).isEmpty();
     }
 
     @Test
-    void resolveCannotReachAnotherVolumesArchive() {
-        assertThatThrownBy(() -> store.resolve(host, "other", NEW)).isInstanceOf(HostException.class);
-        assertThatThrownBy(() -> store.resolve(host, "other", "data-20260101T000000Z.tar")).isInstanceOf(HostException.class);
+    void openCannotReachAnotherVolumesArchive() throws Exception {
+        assertThatThrownBy(() -> store.open(host, "other", NEW)).isInstanceOf(HostException.class);
+        assertThatThrownBy(() -> store.open(host, "other", "data-20260101T000000Z.tar")).isInstanceOf(HostException.class);
     }
 
     @Test
-    void resolveRejectsASymlinkedArchiveEvenWhenItPointsInsideTheStore() throws Exception {
+    void openRejectsASymlinkedArchiveEvenWhenItPointsInsideTheStore() throws Exception {
         Path link = base.resolve(host.toString()).resolve("data").resolve("data-20260105T000000Z.tar");
         Files.createSymbolicLink(link, base.resolve(otherHost.toString()).resolve("data").resolve("data-20260103T000000Z.tar"));
-        assertThat(store.resolve(host, "data", link.getFileName().toString())).isEmpty();
+        assertThat(store.open(host, "data", link.getFileName().toString())).isEmpty();
         assertThat(store.list(host, "data")).extracting(StoredVolumeBackup::name).doesNotContain(link.getFileName().toString());
     }
 
     @Test
-    void resolveRejectsASymlinkedArchiveThatPointsOutsideTheStore() throws Exception {
+    void openRejectsASymlinkedArchiveThatPointsOutsideTheStore() throws Exception {
         Path outside = Files.writeString(Files.createTempFile("outside", ".tar"), "outside");
         Path link = base.resolve(host.toString()).resolve("data").resolve("data-20260106T000000Z.tar");
         Files.createSymbolicLink(link, outside);
-        assertThat(store.resolve(host, "data", link.getFileName().toString())).isEmpty();
+        assertThat(store.open(host, "data", link.getFileName().toString())).isEmpty();
     }
 
     @Test
-    void resolveRejectsAVolumeDirectorySymlinkedToAnotherHost() throws Exception {
+    void openRejectsAVolumeDirectorySymlinkedToAnotherHost() throws Exception {
         UUID third = UUID.randomUUID();
         Files.createDirectories(base.resolve(third.toString()));
         Files.createSymbolicLink(base.resolve(third.toString()).resolve("data"), base.resolve(otherHost.toString()).resolve("data"));
-        assertThat(store.resolve(third, "data", "data-20260103T000000Z.tar")).isEmpty();
+        assertThat(store.open(third, "data", "data-20260103T000000Z.tar")).isEmpty();
         assertThat(store.list(third, "data")).isEmpty();
     }
 
