@@ -256,6 +256,8 @@ export function ResourceTable<T>({
       }, 1)
     : 0
   const sizeSum = visibleColumns.reduce((sum, c) => sum + c.getSize(), 0)
+  // Runtime column sizes (data-driven, see tokenUsage.test.ts); the actions column adds its token-based width.
+  const tableMinWidth = hasActions ? `calc(${sizeSum}px + var(--rt-actions-width))` : sizeSum
 
   let body: ReactNode
   if (error) {
@@ -286,7 +288,7 @@ export function ResourceTable<T>({
   } else {
     body = (
       <div className="rtable__scroll">
-        <table ref={tableRef} className="rtable__table" aria-label={label} style={{ ['--rt-action-slots' as string]: actionSlots, minWidth: `calc(${sizeSum}px + ${hasActions ? 'var(--rt-actions-width)' : '0px'})` }}>
+        <table ref={tableRef} className="rtable__table" aria-label={label} style={{ ['--rt-action-slots' as string]: actionSlots, minWidth: tableMinWidth }}>
           <colgroup>
             {visibleColumns.map((c) => (
               <col key={c.id} style={flexIds.has(c.id) ? undefined : { width: c.getSize() }} />
