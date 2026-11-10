@@ -68,6 +68,10 @@ public class ContainerStatsStreamService {
     }
 
     private final Map<UUID, HostStream> streams = new HashMap<>();
+
+    /** Test seams for the subscribe/release race: run after subscribe fetched a stream, and before release stops it. */
+    volatile Runnable afterLookup = () -> { };
+    volatile Runnable beforeStop = () -> { };
     private final ContainerService containers;
     private final ContainerStatsService stats;
     private final DockerHostRepository hosts;
@@ -128,6 +132,7 @@ public class ContainerStatsStreamService {
                     streams.put(hostId, stream);
                 }
             }
+            afterLookup.run();
             synchronized (stream) {
                 if (stream.closed) {
                     continue; // released concurrently, start over with a fresh stream
@@ -213,9 +218,12 @@ public class ContainerStatsStreamService {
                 if (!stream.subscribers.isEmpty() || stream.closed) {
                     return;
                 }
+                // closed together with the removal: a subscriber that already fetched this stream must see it
+                stream.closed = true;
             }
             streams.remove(stream.hostId, stream);
         }
+        beforeStop.run();
         stop(stream);
     }
 

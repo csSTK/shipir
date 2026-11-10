@@ -120,6 +120,45 @@ class DockerEventStreamServiceTest {
         await().atMost(5, TimeUnit.SECONDS).until(() -> stub.sinks.size() == 2);
     }
 
+    /**
+     * Subscribe fetched the stream, then the last other subscriber leaves: release must already have marked it closed,
+     * so the late subscriber starts a fresh stream instead of joining one that is about to be stopped.
+     */
+    @Test
+    void subscribeRacingTheLastUnsubscribeNeverEndsOnAClosedStream() throws Exception {
+        service.subscribe(hostId, "u", "s1", "a");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> stub.sinks.size() == 1);
+        var fetched = new java.util.concurrent.CountDownLatch(1);
+        var go = new java.util.concurrent.CountDownLatch(1);
+        var once = new java.util.concurrent.atomic.AtomicBoolean();
+        service.afterLookup = () -> {
+            if (once.compareAndSet(false, true)) {
+                fetched.countDown();
+                try {
+                    go.await(5, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        };
+        service.beforeStop = () -> {
+            go.countDown();
+            long end = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(500);
+            while (service.subscriberCount(hostId) == 0 && System.nanoTime() < end) {
+                Thread.onSpinWait();
+            }
+        };
+        Thread late = Thread.ofVirtual().start(() -> service.subscribe(hostId, "u", "s2", "b"));
+        assertThat(fetched.await(5, TimeUnit.SECONDS)).isTrue();
+
+        service.unsubscribe("s1", null);
+        late.join(5000);
+
+        assertThat(service.subscriberCount(hostId)).isEqualTo(1);
+        assertThat(service.activeStreams()).isEqualTo(1);
+        await().atMost(5, TimeUnit.SECONDS).until(() -> stub.sinks.size() == 2);
+    }
+
     @Test
     void revalidateDropsOnlyTheSubscriptionsOfTheUserWhoLostAccess() {
         service.subscribe(hostId, "alice", "s1", "a");

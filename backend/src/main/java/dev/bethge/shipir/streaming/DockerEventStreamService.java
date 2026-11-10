@@ -73,6 +73,10 @@ public class DockerEventStreamService {
     }
 
     private final Map<UUID, HostStream> streams = new HashMap<>();
+
+    /** Test seams for the subscribe/release race: run after subscribe fetched a stream, and before release stops it. */
+    volatile Runnable afterLookup = () -> { };
+    volatile Runnable beforeStop = () -> { };
     private final DockerEventService events;
     private final DockerHostRepository hosts;
     private final HostEndpointResolver endpoints;
@@ -137,6 +141,7 @@ public class DockerEventStreamService {
                     streams.put(hostId, stream);
                 }
             }
+            afterLookup.run();
             synchronized (stream) {
                 if (stream.closed) {
                     continue; // released concurrently, start over with a fresh stream
@@ -276,9 +281,12 @@ public class DockerEventStreamService {
                 if (!stream.subscribers.isEmpty() || stream.closed) {
                     return;
                 }
+                // closed together with the removal: a subscriber that already fetched this stream must see it
+                stream.closed = true;
             }
             streams.remove(stream.hostId, stream);
         }
+        beforeStop.run();
         stop(stream);
     }
 

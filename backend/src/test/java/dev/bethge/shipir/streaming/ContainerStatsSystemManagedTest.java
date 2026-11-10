@@ -85,6 +85,49 @@ class ContainerStatsSystemManagedTest {
                 .flatMap(m -> m.samples().stream()).map(ContainerStatsMessage.Sample::containerId).distinct().toList();
     }
 
+    /**
+     * Subscribe fetched the stream, then the last other subscriber leaves: release must already have marked it closed,
+     * so the late subscriber starts a fresh stream instead of joining one that is about to be stopped.
+     */
+    @Test
+    void subscribeRacingTheLastUnsubscribeNeverEndsOnAClosedStream() throws Exception {
+        when(hosts.findById(hostId)).thenReturn(Optional.of(mock(DockerHost.class)));
+        when(endpoints.endpointOf(any())).thenReturn(new DockerEndpoint.Local("unix:///x"));
+        when(containers.listContainers(eq(hostId), any())).thenReturn(List.of());
+        when(access.roleOf(any())).thenReturn(Optional.of(dev.bethge.shipir.auth.Role.ADMIN));
+        service = new ContainerStatsStreamService(containers, statsService, hosts, endpoints, sender,
+                new ContainerStatsProperties(Duration.ofMillis(200), 50), access);
+        service.subscribe(hostId, "u", "s1", "a");
+        var fetched = new java.util.concurrent.CountDownLatch(1);
+        var go = new java.util.concurrent.CountDownLatch(1);
+        var once = new java.util.concurrent.atomic.AtomicBoolean();
+        service.afterLookup = () -> {
+            if (once.compareAndSet(false, true)) {
+                fetched.countDown();
+                try {
+                    go.await(5, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        };
+        service.beforeStop = () -> {
+            go.countDown();
+            long end = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(500);
+            while (service.subscriberCount(hostId) == 0 && System.nanoTime() < end) {
+                Thread.onSpinWait();
+            }
+        };
+        Thread late = Thread.ofVirtual().start(() -> service.subscribe(hostId, "u", "s2", "b"));
+        assertThat(fetched.await(5, TimeUnit.SECONDS)).isTrue();
+
+        service.unsubscribe("s1", null);
+        late.join(5000);
+
+        assertThat(service.subscriberCount(hostId)).isEqualTo(1);
+        assertThat(service.activeStreams()).isEqualTo(1);
+    }
+
     @Test
     void demotedAdminLosesTheProxySamplesAndRawCodes() {
         when(hosts.findById(hostId)).thenReturn(Optional.of(mock(DockerHost.class)));
