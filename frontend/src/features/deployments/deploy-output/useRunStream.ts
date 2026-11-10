@@ -31,6 +31,14 @@ export function useRunStream(runId: string, onFinished?: (result: RunResult) => 
   const [lines, setLines] = useState<OutputLine[]>([])
   const [result, setResult] = useState<RunResult | null>(null)
   const [connection, setConnection] = useState<ConnectionState>('connecting')
+  const [seenRunId, setSeenRunId] = useState(runId)
+  if (seenRunId !== runId) {
+    // A new run starts empty: drop the previous run's lines and result while rendering, before the new subscription.
+    setSeenRunId(runId)
+    setLines([])
+    setResult(null)
+    setConnection('connecting')
+  }
   const finished = useRef(onFinished)
   useEffect(() => {
     finished.current = onFinished

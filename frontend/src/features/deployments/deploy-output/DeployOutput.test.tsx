@@ -78,4 +78,17 @@ describe('DeployOutput', () => {
     expect(log.scrollTop).toBe(1000)
     expect(screen.queryByRole('button', { name: 'Jump to latest' })).toBeNull()
   })
+
+  it('resets lines and result when the runId changes', () => {
+    const { rerender } = render(<DeployOutput title="Deployment" runId="dep-1" />)
+    send({ seq: 1, type: 'LINE', line: 'run one' })
+    send({ seq: 2, type: 'STATUS', status: 'DONE' })
+    expect(screen.getByRole('status')).toHaveTextContent('Succeeded')
+    rerender(<DeployOutput title="Deployment" runId="dep-2" />)
+    expect(subscribe).toHaveBeenLastCalledWith('/topic/deployments/dep-2', expect.anything())
+    expect(screen.queryByText('run one')).not.toBeInTheDocument()
+    expect(screen.getByRole('status')).not.toHaveTextContent('Succeeded')
+    send({ seq: 1, type: 'STATUS', status: 'FAILED' })
+    expect(screen.getByRole('status')).toHaveTextContent('Failed')
+  })
 })
