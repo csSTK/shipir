@@ -56,8 +56,8 @@ class ManagedDeploymentIndex implements ManagedDeploymentLookup {
             Map<String, String> env = new HashMap<>();
             files.readEnv(hostId, d.getName()).ifPresent(text -> EnvFile.parse(text).forEach(e -> env.put(e.key(), e.value())));
             files.readCompose(hostId, d.getName()).ifPresent(yaml -> result.add(ComposeInterpolation.apply(yaml, env)));
-            versions.findByDeploymentIdOrderByCreatedAtDesc(d.getId())
-                    .forEach(v -> result.add(ComposeInterpolation.apply(v.getYamlContent(), env)));
+            versions.findYamlContentByDeploymentId(d.getId())
+                    .forEach(yaml -> result.add(ComposeInterpolation.apply(yaml, env)));
         }
         return result;
     }
