@@ -13,6 +13,7 @@ import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.LogLine;
 import dev.bethge.shipir.proxy.ProxySyncService;
 import dev.bethge.shipir.proxy.cert.TestCerts;
+import dev.bethge.shipir.MutableClock;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
@@ -66,7 +68,7 @@ class ProxyStatusApiTest {
         @org.springframework.context.annotation.Bean
         @org.springframework.context.annotation.Primary
         MutableClock testClock() {
-            return new MutableClock();
+            return new MutableClock(Instant.now());
         }
     }
 
@@ -248,7 +250,7 @@ class ProxyStatusApiTest {
         MockHttpSession admin = login("admin");
 
         body(admin);
-        clock.now = clock.now.plusSeconds(2).plusMillis(500); // past the refresh floor (2s), within the ttl (3s)
+        clock.advance(Duration.ofSeconds(2).plusMillis(500)); // past the refresh floor (2s), within the ttl (3s)
         body(admin);
 
         verify(files, times(1)).readFile(any(), any(), eq("proxy1"), eq("/letsencrypt/acme-http.json"), anyLong());
@@ -265,7 +267,7 @@ class ProxyStatusApiTest {
         MockHttpSession admin = login("admin");
 
         body(admin);
-        clock.now = clock.now.plusSeconds(2).plusMillis(500); // past the refresh floor (2s), within the ttl (3s)
+        clock.advance(Duration.ofSeconds(2).plusMillis(500)); // past the refresh floor (2s), within the ttl (3s)
         body(admin);
 
         verify(files, times(2)).readFile(any(), any(), eq("proxy1"), eq("/letsencrypt/acme-http.json"), anyLong());
@@ -277,7 +279,7 @@ class ProxyStatusApiTest {
         MockHttpSession admin = login("admin");
 
         body(admin);
-        clock.now = clock.now.plusSeconds(2).plusMillis(500);
+        clock.advance(Duration.ofSeconds(2).plusMillis(500));
         body(admin);
 
         verify(files, times(2)).readFile(any(), any(), eq("proxy1"), eq("/letsencrypt/acme-dns.json"), anyLong());
@@ -290,7 +292,7 @@ class ProxyStatusApiTest {
         MockHttpSession admin = login("admin");
 
         body(admin);
-        clock.now = clock.now.plusSeconds(2).plusMillis(500);
+        clock.advance(Duration.ofSeconds(2).plusMillis(500));
         body(admin);
 
         verify(files, times(1)).readFile(any(), any(), eq("proxy1"), eq("/letsencrypt/acme-http.json"), anyLong());
@@ -450,7 +452,7 @@ class ProxyStatusApiTest {
         org.mockito.Mockito.doThrow(new dev.bethge.shipir.proxy.ProxyException(
                 org.springframework.http.HttpStatus.BAD_GATEWAY, "PROXY_SYNC_FAILED", "none"))
                 .when(sync).proxyContainerId(any(), any());
-        clock.now = clock.now.plusSeconds(4);
+        clock.advance(Duration.ofSeconds(4));
 
         assertThat(statusOf(body(admin), "shop.example.com")).isEqualTo("ISSUED");
     }

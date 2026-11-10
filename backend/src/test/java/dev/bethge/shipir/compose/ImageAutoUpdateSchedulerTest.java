@@ -10,6 +10,7 @@ import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.ImageDto;
 import dev.bethge.shipir.host.ImageUpdates;
 import dev.bethge.shipir.streaming.ComposeOutputStreamService;
+import dev.bethge.shipir.MutableClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.mockito.AdditionalAnswers;
 import org.junit.jupiter.api.Test;
@@ -18,11 +19,8 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.nio.file.Files;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -90,37 +88,6 @@ class ImageAutoUpdateSchedulerTest extends DeploymentTestBase {
         @Override
         public void markApplied(UUID hostId, java.util.Collection<String> applied) {
             keys.removeAll(applied);
-        }
-    }
-
-    static final class MutableClock extends Clock {
-        private volatile Instant now;
-
-        MutableClock(Instant now) {
-            this.now = now;
-        }
-
-        void advance(Duration d) {
-            now = now.plus(d);
-        }
-
-        void set(Instant at) {
-            now = at;
-        }
-
-        @Override
-        public ZoneId getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return this;
-        }
-
-        @Override
-        public Instant instant() {
-            return now;
         }
     }
 

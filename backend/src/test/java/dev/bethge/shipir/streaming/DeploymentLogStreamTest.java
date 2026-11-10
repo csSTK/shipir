@@ -13,6 +13,7 @@ import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.LogLine;
 import dev.bethge.shipir.host.DockerHost;
 import dev.bethge.shipir.host.DockerHostRepository;
+import dev.bethge.shipir.MutableClock;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,9 +38,8 @@ import java.io.Closeable;
 import java.lang.reflect.Type;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -83,37 +83,12 @@ class DeploymentLogStreamTest {
 
     static final String PASSWORD = "A-test-Passw0rd-for-streams!";
 
-    /** Test clock that only moves when the test says so, so per-second rate windows are deterministic. */
-    static final class MutableClock extends Clock {
-        volatile long millis = 1_000_000_000L;
-
-        @Override
-        public java.time.ZoneId getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(java.time.ZoneId zone) {
-            return this;
-        }
-
-        @Override
-        public Instant instant() {
-            return Instant.ofEpochMilli(millis);
-        }
-
-        @Override
-        public long millis() {
-            return millis;
-        }
-    }
-
     @TestConfiguration
     static class FixedClockConfig {
         @Bean
         @Primary
         MutableClock testClock() {
-            return new MutableClock();
+            return new MutableClock(Instant.ofEpochMilli(1_000_000_000L));
         }
     }
 
@@ -159,7 +134,7 @@ class DeploymentLogStreamTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        clock.millis = 1_000_000_000L;
+        clock.set(Instant.ofEpochMilli(1_000_000_000L));
         user = users.findByUsername("viewer").orElseGet(() -> new User("viewer", "x", Role.VIEWER));
         user.changePasswordHash(encoder.encode(PASSWORD), Instant.now());
         user = users.save(user);
@@ -319,7 +294,7 @@ class DeploymentLogStreamTest {
         for (int i = 0; i < 4; i++) {
             lineSinks.get("c-web").accept(line("old" + i));
         }
-        clock.millis += 1000;
+        clock.advance(Duration.ofMillis(1000));
         for (int i = 4; i < 8; i++) {
             lineSinks.get("c-web").accept(line("old" + i));
         }
@@ -625,7 +600,7 @@ class DeploymentLogStreamTest {
             lineSinks.get("c-web").accept(line("spam" + i));
         }
         assertThat(drain(q, 500)).hasSize(5);
-        clock.millis += 1000;
+        clock.advance(Duration.ofMillis(1000));
         lineSinks.get("c-web").accept(line("next second"));
         List<String> next = drain(q, 500);
         assertThat(next).hasSize(2);

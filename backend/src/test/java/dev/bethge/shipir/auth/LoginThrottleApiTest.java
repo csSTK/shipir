@@ -1,6 +1,7 @@
 package dev.bethge.shipir.auth;
 
 import dev.bethge.shipir.PostgresTestConfiguration;
+import dev.bethge.shipir.MutableClock;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,11 +19,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -47,35 +45,12 @@ class LoginThrottleApiTest {
 
     private static final String PASSWORD = "Old-Passw0rd-for-tests!";
 
-    static class MutableClock extends Clock {
-        volatile Instant now = Instant.parse("2030-01-01T10:00:00Z");
-
-        void advance(Duration d) {
-            now = now.plus(d);
-        }
-
-        @Override
-        public ZoneId getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return this;
-        }
-
-        @Override
-        public Instant instant() {
-            return now;
-        }
-    }
-
     @TestConfiguration
     static class TestBeans {
         @Bean
         @Primary
         MutableClock mutableClock() {
-            return new MutableClock();
+            return new MutableClock(Instant.parse("2030-01-01T10:00:00Z"));
         }
     }
 

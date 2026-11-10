@@ -8,6 +8,7 @@ import dev.bethge.shipir.docker.client.ContainerService;
 import dev.bethge.shipir.docker.client.ContainerStatsService;
 import dev.bethge.shipir.docker.dto.ContainerDto;
 import dev.bethge.shipir.docker.dto.ContainerStatsDto;
+import dev.bethge.shipir.MutableClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,11 +17,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -40,30 +38,6 @@ import static org.mockito.Mockito.when;
 @Import(PostgresTestConfiguration.class)
 @Transactional
 class StatsRecorderTest {
-
-    /** Clock the test can move. */
-    static final class MutableClock extends Clock {
-        volatile Instant now;
-
-        MutableClock(Instant now) {
-            this.now = now;
-        }
-
-        @Override
-        public ZoneId getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return this;
-        }
-
-        @Override
-        public Instant instant() {
-            return now;
-        }
-    }
 
     @Autowired
     JdbcTemplate jdbc;
@@ -189,7 +163,7 @@ class StatsRecorderTest {
         recorder.tick();
         assertThat(rows(h)).isEqualTo(1);
 
-        clock.now = clock.now.plusSeconds(60);
+        clock.advance(Duration.ofSeconds(60));
         recorder.tick();
         assertThat(rows(h)).isEqualTo(2);
     }
@@ -199,7 +173,7 @@ class StatsRecorderTest {
         UUID h = host("rec-a", container("c1", "running", null));
         recorder.tick();
         containersByHost.put("rec-a", List.of(container("c1", "exited", null)));
-        clock.now = clock.now.plusSeconds(60);
+        clock.advance(Duration.ofSeconds(60));
         recorder.tick();
 
         assertThat(rows(h)).isEqualTo(1);
@@ -233,7 +207,7 @@ class StatsRecorderTest {
             host("rec-b", container("d1", "running", null));
             StatsRecorder capped = cappedRecorder(2);
             capped.tick();
-            clock.now = clock.now.plusSeconds(60);
+            clock.advance(Duration.ofSeconds(60));
             capped.tick();
 
             var warns = appender.list.stream().filter(e -> e.getLevel() == ch.qos.logback.classic.Level.WARN).toList();

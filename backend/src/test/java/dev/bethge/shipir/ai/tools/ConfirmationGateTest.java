@@ -2,16 +2,14 @@ package dev.bethge.shipir.ai.tools;
 
 import dev.bethge.shipir.auth.Role;
 import dev.bethge.shipir.common.security.AiInvocationContext;
+import dev.bethge.shipir.MutableClock;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -32,7 +30,7 @@ class ConfirmationGateTest {
     private final AtomicInteger runs = new AtomicInteger();
     private final AtomicReference<Optional<UUID>> seenSession = new AtomicReference<>();
     private final AtomicReference<String> seenUser = new AtomicReference<>();
-    private final MutableClock clock = new MutableClock();
+    private final MutableClock clock = new MutableClock(Instant.parse("2026-01-01T00:00:00Z"));
 
     private final AiTool writeTool = new FunctionTool("do_it", "does it", Map.of("type", "object", "required",
             List.of("hostId"), "additionalProperties", false,
@@ -179,26 +177,4 @@ class ConfirmationGateTest {
         assertThat(propose(ARGS).token()).isNotEqualTo(propose(ARGS).token());
     }
 
-    private static final class MutableClock extends Clock {
-        private Instant now = Instant.parse("2026-01-01T00:00:00Z");
-
-        void advance(Duration d) {
-            now = now.plus(d);
-        }
-
-        @Override
-        public java.time.ZoneId getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(java.time.ZoneId zone) {
-            return this;
-        }
-
-        @Override
-        public Instant instant() {
-            return now;
-        }
-    }
 }

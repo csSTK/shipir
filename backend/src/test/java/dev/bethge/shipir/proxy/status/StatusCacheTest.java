@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import dev.bethge.shipir.MutableClock;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,11 +26,11 @@ class StatusCacheTest {
     @Test
     void servesFromCacheWithinTheTtlAndReloadsAfterwards() {
         cache.get(host, false, this::load);
-        clock.now = clock.now.plusSeconds(29);
+        clock.advance(Duration.ofSeconds(29));
         cache.get(host, false, this::load);
         assertThat(loads).hasValue(1);
 
-        clock.now = clock.now.plusSeconds(2);
+        clock.advance(Duration.ofSeconds(2));
         cache.get(host, false, this::load);
         assertThat(loads).hasValue(2);
     }
@@ -37,11 +38,11 @@ class StatusCacheTest {
     @Test
     void refreshBypassesTheCacheButNotMoreOftenThanTheFloor() {
         cache.get(host, false, this::load);
-        clock.now = clock.now.plusSeconds(2);
+        clock.advance(Duration.ofSeconds(2));
         cache.get(host, true, this::load);
         assertThat(loads).as("within the floor").hasValue(1);
 
-        clock.now = clock.now.plusSeconds(4);
+        clock.advance(Duration.ofSeconds(4));
         cache.get(host, true, this::load);
         assertThat(loads).hasValue(2);
     }
@@ -63,11 +64,11 @@ class StatusCacheTest {
 
         for (int i = 0; i < 3; i++) {
             assertThat(cache.get(host, false, failing)).isSameAs(ProxyFacts.EMPTY);
-            clock.now = clock.now.plusSeconds(1);
+            clock.advance(Duration.ofSeconds(1));
         }
         assertThat(attempts).as("three requests within the floor").hasValue(1);
 
-        clock.now = clock.now.plusSeconds(5);
+        clock.advance(Duration.ofSeconds(5));
         cache.get(host, true, failing);
         assertThat(attempts).hasValue(2);
     }
@@ -75,7 +76,7 @@ class StatusCacheTest {
     @Test
     void lastGoodFactsAreServedWhenAReloadFails() {
         ProxyFacts good = cache.get(host, false, this::load);
-        clock.now = clock.now.plusSeconds(31);
+        clock.advance(Duration.ofSeconds(31));
 
         ProxyFacts afterFailure = cache.get(host, false, () -> { throw new IllegalStateException("docker down"); });
 
@@ -89,11 +90,11 @@ class StatusCacheTest {
             return new ProxyFacts(List.of(), List.of(), List.of(), List.of(), true);
         };
         cache.get(host, false, degraded);
-        clock.now = clock.now.plusSeconds(4);
+        clock.advance(Duration.ofSeconds(4));
         cache.get(host, false, degraded);
         assertThat(loads).hasValue(1);
 
-        clock.now = clock.now.plusSeconds(2);
+        clock.advance(Duration.ofSeconds(2));
         cache.get(host, false, degraded);
         assertThat(loads).hasValue(2);
     }
@@ -104,10 +105,10 @@ class StatusCacheTest {
         ProxyFacts good = capped.get(host, false, this::load);
         java.util.function.Supplier<ProxyFacts> failing = () -> { throw new IllegalStateException("docker down"); };
 
-        clock.now = clock.now.plusSeconds(120);
+        clock.advance(Duration.ofSeconds(120));
         assertThat(capped.get(host, false, failing)).as("still within the cap").isSameAs(good);
 
-        clock.now = clock.now.plusSeconds(200);
+        clock.advance(Duration.ofSeconds(200));
         assertThat(capped.get(host, false, failing)).as("older than the cap").isSameAs(ProxyFacts.EMPTY);
     }
 

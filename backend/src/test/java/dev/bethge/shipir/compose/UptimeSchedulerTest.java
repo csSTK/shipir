@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpServer;
 import dev.bethge.shipir.common.net.EgressHttpClient;
 import dev.bethge.shipir.common.net.EgressPolicy;
 import dev.bethge.shipir.common.net.EgressProperties;
+import dev.bethge.shipir.MutableClock;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,10 +18,8 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -38,14 +37,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @RecordApplicationEvents
 class UptimeSchedulerTest extends DeploymentTestBase {
 
-    static final class MutableClock extends Clock {
-        volatile Instant now = Instant.parse("2026-03-10T03:00:00Z");
-
-        @Override public ZoneId getZone() { return ZoneId.of("UTC"); }
-        @Override public Clock withZone(ZoneId zone) { return this; }
-        @Override public Instant instant() { return now; }
-    }
-
     @Autowired
     UptimeCheckRepository checks;
     @Autowired
@@ -53,7 +44,7 @@ class UptimeSchedulerTest extends DeploymentTestBase {
     @Autowired
     UptimeCheckService service;
 
-    private final MutableClock clock = new MutableClock();
+    private final MutableClock clock = new MutableClock(Instant.parse("2026-03-10T03:00:00Z"));
     private UptimeScheduler scheduler;
     private HttpServer stub;
     private volatile int status = 200;
@@ -97,7 +88,7 @@ class UptimeSchedulerTest extends DeploymentTestBase {
 
     private void tick() {
         scheduler.tick();
-        clock.now = clock.now.plusSeconds(31);
+        clock.advance(Duration.ofSeconds(31));
     }
 
     private int adminNotifications(String type) {
@@ -198,7 +189,7 @@ class UptimeSchedulerTest extends DeploymentTestBase {
         assertThat(hits).hasValue(1);
         scheduler.tick(); // same instant: interval (30s) not over
         assertThat(hits).hasValue(1);
-        assertThat(reload(on).getLastCheckedAt()).isEqualTo(clock.now);
+        assertThat(reload(on).getLastCheckedAt()).isEqualTo(clock.instant());
     }
 
     @Test
@@ -248,12 +239,12 @@ class UptimeSchedulerTest extends DeploymentTestBase {
     void resultsOlderThanTheRetentionArePurged() {
         UptimeCheck c = addCheck("home", base + "/", true);
         jdbc.update("INSERT INTO uptime_results (check_id, checked_at, ok, status_code) VALUES (?, ?::timestamptz, true, 200)",
-                c.getId(), clock.now.minus(Duration.ofDays(15)).toString());
+                c.getId(), clock.instant().minus(Duration.ofDays(15)).toString());
         jdbc.update("INSERT INTO uptime_results (check_id, checked_at, ok, status_code) VALUES (?, ?::timestamptz, true, 200)",
-                c.getId(), clock.now.minus(Duration.ofDays(1)).toString());
+                c.getId(), clock.instant().minus(Duration.ofDays(1)).toString());
         scheduler.tick();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM uptime_results WHERE checked_at < ?::timestamptz",
-                Integer.class, clock.now.minus(Duration.ofDays(14)).toString())).isZero();
+                Integer.class, clock.instant().minus(Duration.ofDays(14)).toString())).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM uptime_results", Integer.class)).isEqualTo(2); // 1 old-ish + new
     }
 }

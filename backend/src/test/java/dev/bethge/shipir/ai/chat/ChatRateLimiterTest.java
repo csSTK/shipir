@@ -2,26 +2,17 @@ package dev.bethge.shipir.ai.chat;
 
 import org.junit.jupiter.api.Test;
 
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.UUID;
+import dev.bethge.shipir.MutableClock;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ChatRateLimiterTest {
 
-    static class MutableClock extends Clock {
-        Instant now = Instant.parse("2026-10-25T10:00:00Z");
-
-        @Override public java.time.ZoneId getZone() { return ZoneOffset.UTC; }
-        @Override public Clock withZone(java.time.ZoneId zone) { return this; }
-        @Override public Instant instant() { return now; }
-    }
-
-    private final MutableClock clock = new MutableClock();
+    private final MutableClock clock = new MutableClock(Instant.parse("2026-10-25T10:00:00Z"));
     private final ChatRateLimiter limiter = new ChatRateLimiter(new ChatProperties(8, 2, java.time.Duration.ofSeconds(30), 2, 3, 3, 40, 60000), clock);
 
     @Test
@@ -42,7 +33,7 @@ class ChatRateLimiterTest {
         for (int i = 0; i < 3; i++) {
             limiter.checkMessage(user);
         }
-        clock.now = clock.now.plus(Duration.ofSeconds(61));
+        clock.advance(Duration.ofSeconds(61));
         limiter.checkMessage(user);
     }
 
@@ -62,7 +53,7 @@ class ChatRateLimiterTest {
             limiter.checkMessage(UUID.randomUUID());
         }
         assertThat(limiter.trackedUsers()).isEqualTo(50);
-        clock.now = clock.now.plus(Duration.ofSeconds(61));
+        clock.advance(Duration.ofSeconds(61));
         limiter.checkMessage(UUID.randomUUID());
         assertThat(limiter.trackedUsers()).isEqualTo(1);
     }
@@ -73,7 +64,7 @@ class ChatRateLimiterTest {
         for (int i = 0; i < 3; i++) {
             limiter.checkMessage(busy);
         }
-        clock.now = clock.now.plus(Duration.ofSeconds(30));
+        clock.advance(Duration.ofSeconds(30));
         for (int i = 0; i < 50; i++) {
             limiter.checkMessage(UUID.randomUUID());
         }

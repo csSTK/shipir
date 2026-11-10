@@ -1,6 +1,7 @@
 package dev.bethge.shipir.auth;
 
 import dev.bethge.shipir.PostgresTestConfiguration;
+import dev.bethge.shipir.MutableClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,10 +17,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.annotation.DirtiesContext;
 
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -55,29 +54,6 @@ class PasswordResetServiceTest {
         }
     }
 
-    static class MutableClock extends Clock {
-        private Instant now = Instant.parse("2026-01-01T12:00:00Z");
-
-        void advance(Duration d) {
-            now = now.plus(d);
-        }
-
-        @Override
-        public java.time.ZoneId getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(java.time.ZoneId zone) {
-            return this;
-        }
-
-        @Override
-        public Instant instant() {
-            return now;
-        }
-    }
-
     @TestConfiguration
     static class TestBeans {
         @Bean
@@ -89,7 +65,7 @@ class PasswordResetServiceTest {
         @Bean
         @Primary
         MutableClock mutableClock() {
-            return new MutableClock();
+            return new MutableClock(Instant.parse("2026-01-01T12:00:00Z"));
         }
     }
 

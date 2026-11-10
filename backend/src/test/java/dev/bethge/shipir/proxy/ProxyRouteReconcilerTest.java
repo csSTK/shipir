@@ -13,6 +13,7 @@ import dev.bethge.shipir.docker.dto.DockerEventDto;
 import dev.bethge.shipir.host.DockerHost;
 import dev.bethge.shipir.host.DockerHostRepository;
 import dev.bethge.shipir.host.HostEndpointResolver;
+import dev.bethge.shipir.MutableClock;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
@@ -21,10 +22,8 @@ import org.slf4j.LoggerFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -59,7 +58,7 @@ class ProxyRouteReconcilerTest {
     private final NetworkService networks = mock(NetworkService.class);
     private final ContainerService containers = mock(ContainerService.class);
 
-    private final MutableClock clock = new MutableClock();
+    private final MutableClock clock = new MutableClock(Instant.parse("2026-01-01T00:00:00Z"));
     private ProxyRouteReconciler reconciler;
     private final List<String> order = new ArrayList<>();
 
@@ -279,26 +278,4 @@ class ProxyRouteReconcilerTest {
         return (Map<UUID, Instant>) ReflectionTestUtils.getField(reconciler, "lastProxySync");
     }
 
-    private static final class MutableClock extends Clock {
-        private Instant now = Instant.parse("2026-01-01T00:00:00Z");
-
-        void advance(Duration d) {
-            now = now.plus(d);
-        }
-
-        @Override
-        public ZoneId getZone() {
-            return ZoneId.of("UTC");
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return this;
-        }
-
-        @Override
-        public Instant instant() {
-            return now;
-        }
-    }
 }
