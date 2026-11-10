@@ -122,6 +122,10 @@
   .shell__content {
     padding: var(--space-4) calc(var(--space-4) + var(--safe-right)) calc(var(--space-4) + var(--safe-bottom)) calc(var(--space-4) + var(--safe-left));
   }
+  /* The floating assistant button sits over the bottom right corner: keep the last controls clear of it. */
+  .shell__content[data-dock='true'] {
+    padding-bottom: calc(var(--space-4) + var(--safe-bottom) + var(--space-7) + var(--space-5));
+  }
   .shell__search-label,
   .shell__search kbd {
     display: none;
