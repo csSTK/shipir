@@ -27,6 +27,6 @@ Turn every acceptance criterion of the bead into at least one test that **fails 
 - the new tests compile
 - running them (`next-task-test`) shows them **failing for the expected reason**: an assertion or a missing behavior, not a typo or a setup error
 
-**Red before green:** capture that failing run before coding: per new/changed test the test name and the failing assertion line (or error message). Only exception: pure refactor, docs-only or config-only beads, where the report states the exception and why no test can fail first. No silent skipping.
+**Red before green:** capture that failing run before coding: per new/changed test the test name and the failing assertion line (or error message). Only exception: pure refactor, docs-only or config-only beads, where the report states the exception and why no test can fail first. No silent skipping. The orchestrator verifies this mechanically with `.claude/scripts/red-green-check.sh` (runs your tests against the pre-change code), so a test that is green before the change will be flagged.
 
 List the criterion → test mapping and the red evidence in your report.

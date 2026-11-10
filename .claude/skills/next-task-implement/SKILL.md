@@ -23,7 +23,7 @@ You implement exactly one child bead. You don't plan, redesign or widen the scop
    - the worktree check result (path and branch)
    - the files changed
    - the criterion → test mapping
-   - **Red before green:** the failing run captured in step 2 (test name + assertion line per test), or the stated exception (pure refactor, docs, config; with reason). A report without this section is incomplete
+   - **Red before green:** the failing run captured in step 2 (test name + assertion line per test), or the stated exception (pure refactor, docs, config; with reason). A report without this section is incomplete. The orchestrator re-checks it with `.claude/scripts/red-green-check.sh`; a test that passes on the old code must be justified here (e.g. deliberate regression guard)
    - the exact test commands and results
    - the e2e status
    - each acceptance criterion: met or not

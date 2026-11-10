@@ -10,6 +10,7 @@ Independent review of one child's work before it is committed. The reviewer is a
 ## Input
 
 - bead ID, worktree path `<WT>`, branch name
+- the output of `.claude/scripts/red-green-check.sh <WT>` (run by the orchestrator; for the branch review: `... <WT> origin/dev`)
 - diff range: the child's uncommitted changes (`git diff HEAD` plus untracked files from `git status --short`) in `<WT>`; if already committed, `<base>..HEAD`
 
 ## Reviewer prompt
@@ -20,7 +21,7 @@ Give the agent: the input above and these instructions.
 1. `bd show <id>` for the acceptance criteria. **Don't** claim or update the bead.
 2. Read the diff and the changed files. Check:
    - every acceptance criterion is met and covered by a meaningful test
-   - would it pass on the old code: for every new or changed test, would it also pass against the pre-change code? Judge from the diff, don't run it. Examples: asserting thread state after termination, or asserting only on mocks (`verify(...)` with no real outcome). Such a test is must-fix.
+   - would it pass on the old code: use the red-green script output (you can't run it read-only). Every `GREEN-ON-OLD` test is must-fix unless the bead is a stated exception (pure refactor/docs/config) or the implementer's report justifies it as a deliberate regression guard. `RED-COMPILE` is accepted. Exit code 2 or no output: ask the orchestrator for a rerun. `UNCHANGED` rows are untouched tests, ignore them. E2E specs are not covered; judge those from the diff (e.g. asserting only on mocks, `verify(...)` with no real outcome).
    - CLAUDE.md Working Rules, Security, Architecture and Testing rules (and `apple-design` + tokens for frontend UI)
    - Code Map entries in `docs/CODE_MAP.md` match the added, moved or removed files
    - no scope creep, no secrets in code, logs or tests
@@ -43,7 +44,7 @@ Out-of-scope:
 
 ## Branch review (always)
 
-Run by `next-task-finish` before the push, once per run. Same reviewer, but the input is the whole branch: diff `origin/dev..HEAD` in `<WT>`, checked against the epic's (or all given beads') description and acceptance criteria as a whole: gaps between children, inconsistent behaviour, missing wiring or `docs/CODE_MAP.md` lines. Same checklist (including the would-pass-on-old-code test check) and same output format. One fix round only, no 3-round loop (see `next-task-finish`).
+Run by `next-task-finish` before the push, once per run. Same reviewer, but the input is the whole branch: diff `origin/dev..HEAD` in `<WT>`, checked against the epic's (or all given beads') description and acceptance criteria as a whole: gaps between children, inconsistent behaviour, missing wiring or `docs/CODE_MAP.md` lines. Same checklist (including the red-green script output) and same output format. One fix round only, no 3-round loop (see `next-task-finish`).
 
 ## Loop (the orchestrator's side)
 

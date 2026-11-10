@@ -13,7 +13,7 @@ Docs and bead closing happen **before** the push, so they're included in it.
 
 1. **Rebase onto the latest dev.** `git fetch origin` then `git rebase origin/dev`. If there are conflicts, stop and report. Don't resolve them by guessing.
 2. **Full test gate.** Run `next-task-test full` on the rebased branch. If anything fails, **stop**: don't close beads, don't push, and report the failure.
-   **Branch review** (always): run the branch mode of `next-task-review` over `origin/dev..HEAD`.
+   **Branch review** (always): run the branch mode of `next-task-review` over `origin/dev..HEAD`, giving the reviewer the output of `.claude/scripts/red-green-check.sh <WT> origin/dev`.
    - PASS: continue. Out-of-scope items go to `next-task-findings` (step 3).
    - Must-fix: one fix round by an implementer (SendMessage, or a new one), verify and commit as `Fix branch review findings (<id>)`, rerun `next-task-test full`, then review once more.
    - Still Must-fix: **stop before the push**: no push, no bead closing, keep worktree and branch, report the open findings.
