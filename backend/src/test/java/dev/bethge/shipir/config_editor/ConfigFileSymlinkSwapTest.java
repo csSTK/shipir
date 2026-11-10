@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.util.Comparator;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -52,26 +53,32 @@ class ConfigFileSymlinkSwapTest {
         service = new ConfigFileService(deployments, new ConfigFileProperties(1024, 5), Clock.systemUTC());
     }
 
-    private void swapDirectoryForLink() {
-        service.beforeUse = () -> {
-            try {
-                deleteRecursively(root.resolve("conf"));
-                Files.createSymbolicLink(root.resolve("conf"), outside);
-            } catch (IOException e) {
-                throw new IllegalStateException(e);
+    /** Runs {@code action} once, when the service reaches {@code stage} (a point inside the handle walk). */
+    private void at(String stage, Runnable action) {
+        AtomicBoolean fired = new AtomicBoolean();
+        service.seam = s -> {
+            if (s.equals(stage) && fired.compareAndSet(false, true)) {
+                action.run();
             }
         };
     }
 
-    private void swapFileForLink() {
-        service.beforeUse = () -> {
-            try {
-                Files.delete(root.resolve("conf/app.txt"));
-                Files.createSymbolicLink(root.resolve("conf/app.txt"), outside.resolve("app.txt"));
-            } catch (IOException e) {
-                throw new IllegalStateException(e);
-            }
-        };
+    private void dirToLink() {
+        try {
+            Files.move(root.resolve("conf"), root.resolve("conf.orig"));
+            Files.createSymbolicLink(root.resolve("conf"), outside);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private void leafToLink() {
+        try {
+            Files.delete(root.resolve("conf/app.txt"));
+            Files.createSymbolicLink(root.resolve("conf/app.txt"), outside.resolve("app.txt"));
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private void assertOutsideUntouched() throws IOException {
@@ -81,73 +88,133 @@ class ConfigFileSymlinkSwapTest {
         }
     }
 
+    private void assertNoBackupHoldsSecret() throws IOException {
+        if (!Files.exists(root.resolve(".shipir-backups"))) {
+            return;
+        }
+        try (Stream<Path> s = Files.walk(root.resolve(".shipir-backups"))) {
+            for (Path p : s.filter(Files::isRegularFile).toList()) {
+                assertThat(Files.readString(p)).doesNotContain(SECRET);
+            }
+        }
+    }
+
     @Test
-    void readRefusesFileSwappedForLink() {
-        swapFileForLink();
+    void readRefusesDirectorySwappedBeforeItIsOpened() {
+        at("open:conf", this::dirToLink);
         assertThatThrownBy(() -> service.read(host, id, "conf/app.txt")).isInstanceOf(ConfigFileException.class);
     }
 
     @Test
-    void readRefusesDirectorySwappedForLink() {
-        swapDirectoryForLink();
+    void readNeverLeaksWhenDirectoryIsSwappedAfterItIsOpened() {
+        at("opened:conf", this::dirToLink);
+        assertThat(service.read(host, id, "conf/app.txt").content()).isEqualTo("inside");
+    }
+
+    @Test
+    void readRefusesLeafSwappedForLink() {
+        at("leaf:app.txt", this::leafToLink);
         assertThatThrownBy(() -> service.read(host, id, "conf/app.txt")).isInstanceOf(ConfigFileException.class);
     }
 
     @Test
-    void writeRefusesDirectorySwappedForLink() throws IOException {
-        swapDirectoryForLink();
+    void writeRefusesDirectorySwappedBeforeItIsOpened() throws IOException {
+        at("open:conf", this::dirToLink);
         assertThatThrownBy(() -> service.write(host, id, "conf/app.txt", "pwned")).isInstanceOf(ConfigFileException.class);
         assertOutsideUntouched();
     }
 
     @Test
-    void writeRefusesFileSwappedForLinkAndDoesNotBackUpTarget() throws IOException {
-        swapFileForLink();
+    void writeStaysInTheOpenedDirectoryWhenItIsSwappedAfterwards() throws IOException {
+        at("opened:conf", this::dirToLink);
+        service.write(host, id, "conf/app.txt", "v2");
+        assertOutsideUntouched();
+        assertThat(Files.readString(root.resolve("conf.orig/app.txt"))).isEqualTo("v2");
+    }
+
+    @Test
+    void writeStaysInTheOpenedDirectoryWhenItIsSwappedBeforeTheMove() throws IOException {
+        at("move:app.txt", this::dirToLink);
+        service.write(host, id, "conf/app.txt", "v2");
+        assertOutsideUntouched();
+        assertThat(Files.readString(root.resolve("conf.orig/app.txt"))).isEqualTo("v2");
+    }
+
+    @Test
+    void writeRefusesLeafSwappedForLinkAndLeaksNothingIntoBackups() throws IOException {
+        at("leaf:app.txt", this::leafToLink);
         assertThatThrownBy(() -> service.write(host, id, "conf/app.txt", "pwned")).isInstanceOf(ConfigFileException.class);
         assertOutsideUntouched();
-        assertThat(root.resolve(".shipir-backups")).doesNotExist();
+        assertNoBackupHoldsSecret();
     }
 
     @Test
-    void deleteRefusesDirectorySwappedForLink() throws IOException {
-        swapDirectoryForLink();
+    void deleteRefusesDirectorySwappedBeforeItIsOpened() throws IOException {
+        at("open:conf", this::dirToLink);
         assertThatThrownBy(() -> service.delete(host, id, "conf/app.txt")).isInstanceOf(ConfigFileException.class);
         assertOutsideUntouched();
     }
 
     @Test
-    void deleteRefusesFileSwappedForLink() throws IOException {
-        swapFileForLink();
-        assertThatThrownBy(() -> service.delete(host, id, "conf/app.txt")).isInstanceOf(ConfigFileException.class);
+    void deleteOnlyTouchesTheOpenedDirectoryWhenItIsSwappedBeforeTheUnlink() throws IOException {
+        at("delete:app.txt", this::dirToLink);
+        service.delete(host, id, "conf/app.txt");
         assertOutsideUntouched();
-        assertThat(root.resolve(".shipir-backups")).doesNotExist();
+        assertThat(root.resolve("conf.orig/app.txt")).doesNotExist();
     }
 
     @Test
-    void restoreRefusesDirectorySwappedForLink() throws IOException {
+    void deleteRefusesLeafSwappedForLink() throws IOException {
+        at("leaf:app.txt", this::leafToLink);
+        assertThatThrownBy(() -> service.delete(host, id, "conf/app.txt")).isInstanceOf(ConfigFileException.class);
+        assertOutsideUntouched();
+        assertNoBackupHoldsSecret();
+    }
+
+    @Test
+    void restoreRefusesDirectorySwappedBeforeItIsOpened() throws IOException {
         service.write(host, id, "conf/app.txt", "v2");
         String backupId = service.backups(host, id, "conf/app.txt").get(0).id();
-        swapDirectoryForLink();
+        at("open:conf", this::dirToLink);
         assertThatThrownBy(() -> service.restore(host, id, "conf/app.txt", backupId)).isInstanceOf(ConfigFileException.class);
         assertOutsideUntouched();
+    }
+
+    @Test
+    void restoreStaysInTheOpenedDirectoryWhenItIsSwappedBeforeTheMove() throws IOException {
+        service.write(host, id, "conf/app.txt", "v2");
+        String backupId = service.backups(host, id, "conf/app.txt").get(0).id();
+        at("move:app.txt", this::dirToLink);
+        service.restore(host, id, "conf/app.txt", backupId);
+        assertOutsideUntouched();
+        assertThat(Files.readString(root.resolve("conf.orig/app.txt"))).isEqualTo("inside");
     }
 
     @Test
     void restoreRefusesBackupSwappedForLink() throws IOException {
         service.write(host, id, "conf/app.txt", "v2");
         String backupId = service.backups(host, id, "conf/app.txt").get(0).id();
-        Path backup = Files.list(root.resolve(".shipir-backups")).findFirst().orElseThrow().resolve(backupId + ".bak");
-        service.beforeUse = () -> {
+        Path backup;
+        try (Stream<Path> s = Files.list(root.resolve(".shipir-backups"))) {
+            backup = s.findFirst().orElseThrow().resolve(backupId + ".bak");
+        }
+        at("leaf:" + backupId + ".bak", () -> {
             try {
                 Files.delete(backup);
                 Files.createSymbolicLink(backup, outside.resolve("app.txt"));
             } catch (IOException e) {
                 throw new IllegalStateException(e);
             }
-        };
+        });
         assertThatThrownBy(() -> service.restore(host, id, "conf/app.txt", backupId)).isInstanceOf(ConfigFileException.class);
         assertThat(Files.readString(root.resolve("conf/app.txt"))).isEqualTo("v2");
         assertOutsideUntouched();
+    }
+
+    @Test
+    void writeIntoMissingDirectoriesCreatesThemAndWorks() throws IOException {
+        service.write(host, id, "new/deep/file.txt", "hello");
+        assertThat(Files.readString(root.resolve("new/deep/file.txt"))).isEqualTo("hello");
     }
 
     @Test

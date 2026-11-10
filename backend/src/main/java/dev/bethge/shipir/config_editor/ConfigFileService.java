@@ -3,6 +3,7 @@ package dev.bethge.shipir.config_editor;
 import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.common.util.PathValidationException;
 import dev.bethge.shipir.common.util.PathValidationUtil;
+import dev.bethge.shipir.common.util.SecureFiles;
 import dev.bethge.shipir.compose.DeploymentException;
 import dev.bethge.shipir.compose.DeploymentService;
 import dev.bethge.shipir.compose.file.ComposeFileRepository;
@@ -26,6 +27,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.channels.SeekableByteChannel;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -45,6 +47,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -61,8 +64,6 @@ import java.util.stream.Stream;
 public class ConfigFileService {
 
     static final String BACKUP_DIR = ".shipir-backups";
-    /** Backups are read into memory through a no-follow channel, so they are capped (the editor cap is much lower). */
-    private static final long BACKUP_MAX_BYTES = 64L * 1024 * 1024;
     private static final int MAX_TREE_ENTRIES = 5000;
     private static final Pattern BACKUP_ID = Pattern.compile("\\d{17}-[0-9a-f]{8}");
     private static final DateTimeFormatter ID_TIME = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS").withZone(ZoneOffset.UTC);
@@ -74,9 +75,8 @@ public class ConfigFileService {
     private final DeploymentService deployments;
     private final ConfigFileProperties properties;
     private final Clock clock;
-    /** Test seam: runs in the gap between the up-front path check and the file operation (to inject a symlink swap). */
-    Runnable beforeUse = () -> {
-    };
+    /** Test seam: receives the stages of {@link SecureFiles} (where a symlink swap could strike); null = none. */
+    Consumer<String> seam;
 
     ConfigFileService(DeploymentService deployments, ConfigFileProperties properties, Clock clock) {
         this.deployments = deployments;
@@ -134,7 +134,6 @@ public class ConfigFileService {
         Target t = target(hostId, id, path, false);
         requireEnvReadAccess(hostId, id, t.rel());
         requireFile(t.file());
-        guard(t);
         return response(t);
     }
 
@@ -149,7 +148,6 @@ public class ConfigFileService {
                     "Environment and secret files cannot be read here");
         }
         requireFile(t.file());
-        guard(t);
         return response(t);
     }
 
@@ -161,12 +159,13 @@ public class ConfigFileService {
         if (Files.isDirectory(t.file(), LinkOption.NOFOLLOW_LINKS)) {
             throw new ConfigFileException(HttpStatus.BAD_REQUEST, "NOT_A_FILE", "Path is a directory");
         }
-        return deployments.whileNoRunInProgress(id, () -> {
-            guard(t);
-            backupIfExists(t);
-            writeAtomically(t, content);
-            return response(t);
-        });
+        return deployments.whileNoRunInProgress(id, () -> io("Could not write file", () -> {
+            try (SecureFiles.Parent p = open(t, true)) {
+                backupIfExists(t, p);
+                writeAtomically(p, content);
+                return response(t, p);
+            }
+        }));
     }
 
     @Auditable(action = "CONFIG_FILE_DELETE", targetType = "CONFIG_FILE",
@@ -174,32 +173,26 @@ public class ConfigFileService {
     public void delete(UUID hostId, UUID id, String path) {
         Target t = target(hostId, id, path, true);
         requireFile(t.file());
-        deployments.whileNoRunInProgress(id, () -> {
-            guard(t);
-            backupIfExists(t);
-            try {
-                verify(t.root(), t.file());
-                Files.delete(t.file());
-            } catch (IOException e) {
-                throw new UncheckedIOException("Could not delete file", e);
+        deployments.whileNoRunInProgress(id, () -> io("Could not delete file", () -> {
+            try (SecureFiles.Parent p = open(t, false)) {
+                backupIfExists(t, p);
+                p.dir().deleteFile(p.name());
+                return null;
             }
-            return null;
-        });
+        }));
     }
 
     public List<ConfigFileBackup> backups(UUID hostId, UUID id, String path) {
         Target t = target(hostId, id, path, false);
-        Path dir = backupDir(t);
-        if (!Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) {
-            return List.of();
-        }
-        verify(t.root(), dir);
-        try (Stream<Path> stream = Files.list(dir)) {
-            return stream.filter(p -> p.getFileName().toString().endsWith(".bak"))
-                    .filter(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS))
-                    .sorted(Comparator.comparing((Path p) -> p.getFileName().toString()).reversed())
-                    .map(this::backupOf)
+        try (SecureFiles.Parent b = openBackupParent(t, "x", false)) {
+            return b.dir().list().stream().filter(n -> n.endsWith(".bak") && b.dir().isRegularFile(n))
+                    .sorted(Comparator.reverseOrder())
+                    .map(n -> backupOf(b.dir(), n))
                     .toList();
+        } catch (NoSuchFileException e) {
+            return List.of();
+        } catch (PathValidationException e) {
+            throw symlinkRefused();
         } catch (IOException e) {
             throw new UncheckedIOException("Could not list backups", e);
         }
@@ -219,13 +212,15 @@ public class ConfigFileService {
         if (Files.isDirectory(t.file(), LinkOption.NOFOLLOW_LINKS)) {
             throw new ConfigFileException(HttpStatus.BAD_REQUEST, "NOT_A_FILE", "Path is a directory");
         }
-        return deployments.whileNoRunInProgress(id, () -> {
-            guard(t);
-            String content = decode(t.root(), backup);
-            backupIfExists(t);
-            writeAtomically(t, content);
-            return response(t);
-        });
+        return deployments.whileNoRunInProgress(id, () -> io("Could not restore file", () -> {
+            try (SecureFiles.Parent b = openBackupParent(t, backupId + ".bak", false);
+                 SecureFiles.Parent p = open(t, true)) {
+                String content = decode(b.dir().readAll(b.name(), properties.maxFileBytes()));
+                backupIfExists(t, p);
+                writeAtomically(p, content);
+                return response(t, p);
+            }
+        }));
     }
 
     // ---- path handling ----
@@ -324,18 +319,34 @@ public class ConfigFileService {
         }
     }
 
-    /** Runs the test seam, then re-verifies at use time that no symlink was swapped in since {@link #target}. */
-    private void guard(Target t) {
-        beforeUse.run();
-        verify(t.root(), t.file());
+    private interface Io<T> {
+        T run() throws IOException;
     }
 
-    private static void verify(Path root, Path path) {
+    /** Runs a handle-based file operation and maps its failures to the API errors (links refused, missing file). */
+    private static <T> T io(String message, Io<T> operation) {
         try {
-            PathValidationUtil.requireNoSymlinks(root, path);
+            return operation.run();
         } catch (PathValidationException e) {
-            throw new ConfigFileException(HttpStatus.BAD_REQUEST, "INVALID_PATH", "Symbolic links are not allowed");
+            throw symlinkRefused();
+        } catch (NoSuchFileException e) {
+            throw new ConfigFileException(HttpStatus.NOT_FOUND, "FILE_NOT_FOUND", "File not found");
+        } catch (IOException e) {
+            throw new UncheckedIOException(message, e);
         }
+    }
+
+    private static ConfigFileException symlinkRefused() {
+        return new ConfigFileException(HttpStatus.BAD_REQUEST, "INVALID_PATH", "Symbolic links are not allowed");
+    }
+
+    /** Parent directory handle of the target, walked from the deployment root without following any link. */
+    private SecureFiles.Parent open(Target t, boolean create) throws IOException {
+        return SecureFiles.openParent(t.root(), t.rel(), create, seam, DIR_PERMISSIONS);
+    }
+
+    private SecureFiles.Parent openBackupParent(Target t, String leaf, boolean create) throws IOException {
+        return SecureFiles.openParent(t.root(), BACKUP_DIR + "/" + backupHash(t) + "/" + leaf, create, seam, DIR_PERMISSIONS);
     }
 
     private static void requireFile(Path file) {
@@ -363,18 +374,12 @@ public class ConfigFileService {
                 "File is larger than " + properties.maxFileBytes() + " bytes");
     }
 
-    /** Reads a file as strict UTF-8 text within the size cap. */
-    private String decode(Path root, Path file) {
+    /** Strict UTF-8 text within the size cap ({@code bytes} may hold one byte past the cap, see {@code readAll}). */
+    private String decode(byte[] bytes) {
+        if (bytes.length > properties.maxFileBytes()) {
+            throw tooLarge();
+        }
         try {
-            byte[] bytes;
-            try {
-                bytes = PathValidationUtil.readNoFollow(root, file, properties.maxFileBytes());
-            } catch (PathValidationException e) {
-                throw new ConfigFileException(HttpStatus.BAD_REQUEST, "INVALID_PATH", "Symbolic links are not allowed");
-            }
-            if (bytes.length > properties.maxFileBytes()) {
-                throw tooLarge();
-            }
             String text = StandardCharsets.UTF_8.newDecoder()
                     .onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
                     .decode(ByteBuffer.wrap(bytes)).toString();
@@ -384,116 +389,88 @@ public class ConfigFileService {
             return text;
         } catch (CharacterCodingException e) {
             throw new ConfigFileException(HttpStatus.BAD_REQUEST, "NOT_TEXT", "Only UTF-8 text files are supported");
-        } catch (IOException e) {
-            throw new UncheckedIOException("Could not read file", e);
         }
     }
 
     private ConfigFileResponse response(Target t) {
-        String content = decode(t.root(), t.file());
-        try {
-            BasicFileAttributes attrs = Files.readAttributes(t.file(), BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-            return new ConfigFileResponse(t.rel(), content, attrs.size(), attrs.lastModifiedTime().toInstant(), readOnly(t.rel()));
-        } catch (IOException e) {
-            throw new UncheckedIOException("Could not read file", e);
-        }
+        return io("Could not read file", () -> {
+            try (SecureFiles.Parent p = open(t, false)) {
+                return response(t, p);
+            }
+        });
     }
 
-    /**
-     * Temp file in the target's directory, then rename over the target. The path is re-verified after every step that
-     * could have followed a swapped-in link; a rename replaces a link at the target instead of following it.
-     */
-    private static void writeAtomically(Target t, String content) {
-        Path target = t.file();
-        Path temp = null;
+    private ConfigFileResponse response(Target t, SecureFiles.Parent p) throws IOException {
+        byte[] bytes = p.dir().readAll(p.name(), properties.maxFileBytes());
+        String content = decode(bytes);
+        BasicFileAttributes attrs = p.dir().attributes(p.name());
+        return new ConfigFileResponse(t.rel(), content, bytes.length, attrs.lastModifiedTime().toInstant(), readOnly(t.rel()));
+    }
+
+    /** Temp file next to the target (created NOFOLLOW), then {@code renameat} over it; a link at the target is replaced, not followed. */
+    private static void writeAtomically(SecureFiles.Parent p, String content) throws IOException {
+        String temp = ".shipir-" + UUID.randomUUID() + ".tmp";
         try {
-            verify(t.root(), target);
-            Files.createDirectories(target.getParent(), DIR_PERMISSIONS);
-            verify(t.root(), target);
-            temp = Files.createTempFile(target.getParent(), ".shipir-", ".tmp", FILE_PERMISSIONS);
-            verify(t.root(), temp);
-            Files.writeString(temp, content, StandardCharsets.UTF_8);
-            verify(t.root(), target);
-            try {
-                Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException e) {
-                Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } catch (IOException | RuntimeException e) {
-            if (temp != null) {
-                try {
-                    Files.deleteIfExists(temp);
-                } catch (IOException ignored) {
-                    // best effort
+            try (SeekableByteChannel out = p.dir().createNew(temp, FILE_PERMISSIONS)) {
+                ByteBuffer bytes = ByteBuffer.wrap(content.getBytes(StandardCharsets.UTF_8));
+                while (bytes.hasRemaining()) {
+                    out.write(bytes);
                 }
             }
-            if (e instanceof IOException io) {
-                throw new UncheckedIOException("Could not write file", io);
+            p.dir().move(temp, p.name());
+        } catch (IOException | RuntimeException e) {
+            try {
+                p.dir().deleteFileIfExists(temp);
+            } catch (IOException ignored) {
+                // best effort
             }
-            throw (RuntimeException) e;
+            throw e;
         }
     }
 
     // ---- backups ----
 
-    private Path backupDir(Target t) {
+    private static String backupHash(Target t) {
         try {
             byte[] hash = MessageDigest.getInstance("SHA-256").digest(t.rel().getBytes(StandardCharsets.UTF_8));
-            return t.root().resolve(BACKUP_DIR).resolve(HexFormat.of().formatHex(hash));
+            return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
     }
 
-    private void backupIfExists(Target t) {
-        if (!Files.isRegularFile(t.file(), LinkOption.NOFOLLOW_LINKS)) {
+    /** Path form of the backup directory, only for the existence pre-checks; all real access goes through handles. */
+    private Path backupDir(Target t) {
+        return t.root().resolve(BACKUP_DIR).resolve(backupHash(t));
+    }
+
+    /** Streams the current content into a new .bak (handle to handle, no memory copy), then prunes to the newest N. */
+    private void backupIfExists(Target t, SecureFiles.Parent source) throws IOException {
+        if (!source.dir().isRegularFile(source.name())) {
             return;
         }
-        Path dir = backupDir(t);
         String backupId = ID_TIME.format(clock.instant()) + "-" + "%08x".formatted(ThreadLocalRandom.current().nextInt());
-        Path backup = dir.resolve(backupId + ".bak");
-        try {
-            // content is read through a no-follow channel (never Files.copy, which follows a link at the source)
-            byte[] bytes;
-            try {
-                bytes = PathValidationUtil.readNoFollow(t.root(), t.file(), BACKUP_MAX_BYTES);
-                if (bytes.length > BACKUP_MAX_BYTES) {
-                    throw tooLarge();
-                }
-            } catch (PathValidationException e) {
-                throw new ConfigFileException(HttpStatus.BAD_REQUEST, "INVALID_PATH", "Symbolic links are not allowed");
+        try (SecureFiles.Parent b = openBackupParent(t, backupId + ".bak", true)) {
+            try (SeekableByteChannel out = b.dir().createNew(b.name(), FILE_PERMISSIONS)) {
+                source.dir().copyTo(source.name(), out);
+            } catch (IOException | RuntimeException e) {
+                b.dir().deleteFileIfExists(b.name());
+                throw e;
             }
-            verify(t.root(), dir);
-            Files.createDirectories(dir.getParent(), DIR_PERMISSIONS);
-            Files.createDirectories(dir, DIR_PERMISSIONS);
-            verify(t.root(), backup);
-            try (SeekableByteChannel out = Files.newByteChannel(backup, Set.of(StandardOpenOption.CREATE_NEW,
-                    StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS), FILE_PERMISSIONS)) {
-                out.write(ByteBuffer.wrap(bytes));
+            // a directory listing taken after the create may not show the new entry, so add it explicitly
+            List<String> all = Stream.concat(b.dir().list().stream(), Stream.of(b.name())).distinct()
+                    .filter(n -> n.endsWith(".bak")).sorted(Comparator.reverseOrder()).toList();
+            for (int i = properties.backupsPerFile(); i < all.size(); i++) {
+                b.dir().deleteFileIfExists(all.get(i));
             }
-            verify(t.root(), backup);
-            prune(dir);
-        } catch (IOException e) {
-            throw new UncheckedIOException("Could not create backup", e);
         }
     }
 
-    private void prune(Path dir) throws IOException {
-        List<Path> all;
-        try (Stream<Path> stream = Files.list(dir)) {
-            all = stream.filter(p -> p.getFileName().toString().endsWith(".bak"))
-                    .sorted(Comparator.comparing((Path p) -> p.getFileName().toString()).reversed()).toList();
-        }
-        for (int i = properties.backupsPerFile(); i < all.size(); i++) {
-            Files.deleteIfExists(all.get(i));
-        }
-    }
-
-    private ConfigFileBackup backupOf(Path p) {
-        String name = p.getFileName().toString();
+    private ConfigFileBackup backupOf(SecureFiles.Dir dir, String name) {
         try {
+            BasicFileAttributes attrs = dir.attributes(name);
             return new ConfigFileBackup(name.substring(0, name.length() - ".bak".length()),
-                    Files.getLastModifiedTime(p).toInstant(), Files.size(p));
+                    attrs.lastModifiedTime().toInstant(), attrs.size());
         } catch (IOException e) {
             throw new UncheckedIOException("Could not read backup", e);
         }
