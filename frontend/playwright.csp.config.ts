@@ -1,11 +1,12 @@
 import { defineConfig, devices } from '@playwright/test'
 
-import { e2ePort } from './e2e-config/port'
+import { resolveRunPort } from './e2e-config/port'
+import { systemProbe } from './e2e-config/system-probe'
 
 // Runs e2e-csp/ against the production build (the dev server needs inline scripts, so it cannot run under the
 // real policy). `pnpm e2e:csp` = build + preview + this config. Separate from the main e2e run on purpose.
-// Per-checkout default port (see e2e-config/port.ts), so a preview server of another checkout is never reused.
-const port = e2ePort(`${process.cwd()}#csp`, process.env.E2E_CSP_PORT)
+// Each run takes its own free port (see e2e-config/port.ts).
+const port = resolveRunPort(`${process.cwd()}#csp`, process.env, 'E2E_CSP_PORT', systemProbe)
 
 export default defineConfig({
   testDir: './e2e-csp',

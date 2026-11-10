@@ -13,20 +13,6 @@ function hash(text: string): number {
   return h
 }
 
-// Ownership marker (shipr-k31n.36): two checkouts can still derive the same port (about 1 in 20000). Vite refuses to
-// serve files outside its workspace root (server.fs.strict), so this request is answered 200 only by a dev server
-// started from this checkout, 403 by a server of another checkout, and not answered (status 0) on a free port.
-export type PortOwner = 'free' | 'this-checkout' | 'other'
-
-export function ownershipProbePath(checkoutDir: string): string {
-  return `/@fs${encodeURI(checkoutDir)}/index.html`
-}
-
-export function ownerFromStatus(status: number): PortOwner {
-  if (status === 0) return 'free'
-  return status === 200 ? 'this-checkout' : 'other'
-}
-
 export function e2ePort(checkoutDir: string, override?: string): number {
   if (override !== undefined && override !== '') {
     const port = Number(override)
@@ -36,4 +22,28 @@ export function e2ePort(checkoutDir: string, override?: string): number {
     return port
   }
   return FIRST_PORT + (hash(checkoutDir) % PORT_COUNT)
+}
+
+// Concurrent runs (shipr-k31n.61): two runs in one checkout derive the same port. With reuseExistingServer the second
+// attached to the first run's dev server, and whichever finished first tore it down under the other. Probing the
+// derived port does not help either: both runs see it free while the first Vite is still starting. So without an
+// explicit override every run asks the OS for a free port, a few microseconds before Vite binds it, and never shares
+// a server. An explicit override is the user's choice and is used as is.
+export interface PortSource {
+  freePort: () => number
+}
+
+// Resolves the port once per run and pins it in `envName`: Playwright workers load the config again in child
+// processes that inherit the environment, and they must agree with the runner on the port.
+export function resolveRunPort(
+  checkoutDir: string,
+  env: Record<string, string | undefined>,
+  envName: string,
+  source: PortSource,
+): number {
+  const override = env[envName]
+  if (override !== undefined && override !== '') return e2ePort(checkoutDir, override)
+  const port = source.freePort()
+  env[envName] = String(port)
+  return port
 }

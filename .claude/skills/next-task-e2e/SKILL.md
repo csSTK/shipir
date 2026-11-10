@@ -23,6 +23,6 @@ From `frontend/`:
 - Focused: `pnpm e2e e2e/<feature>.spec.ts`
 - Full: `pnpm e2e`
 
-The dev server port is derived from the checkout directory (`frontend/e2e-config/port.ts`, 20000-39999), so a Vite server of another checkout or worktree is never reused and parallel worktrees do not collide. `E2E_PORT=<port>` overrides it (`E2E_CSP_PORT` for `pnpm e2e:csp`); no workaround is needed any more.
+Every Playwright run takes its own free dev-server port (`frontend/e2e-config/port.ts`), so parallel runs, in one checkout or several, never share a server. `E2E_PORT=<port>` overrides it (`E2E_CSP_PORT` for `pnpm e2e:csp`).
 
 Report the spec files added or changed and the pass/fail counts.

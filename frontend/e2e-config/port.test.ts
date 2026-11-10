@@ -1,16 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { e2ePort, ownerFromStatus, ownershipProbePath } from './port'
+import { e2ePort, resolveRunPort } from './port'
 
-describe('dev server ownership marker (shipr-k31n.36)', () => {
-  it('asks for this checkout\'s own index.html through the Vite /@fs/ route', () => {
-    expect(ownershipProbePath('/work/shipir-x/frontend')).toBe('/@fs/work/shipir-x/frontend/index.html')
+describe('resolveRunPort (shipr-k31n.61)', () => {
+  it('gives every run its own free port instead of a shared derived one', () => {
+    const ports = [31_000, 31_001]
+    const first = resolveRunPort('/work/a', {}, 'E2E_PORT', { freePort: () => ports[0] })
+    const second = resolveRunPort('/work/a', {}, 'E2E_PORT', { freePort: () => ports[1] })
+    expect(first).not.toBe(second)
   })
 
-  it('reads 200 as this checkout, no answer as a free port and any other status as another server', () => {
-    expect(ownerFromStatus(200)).toBe('this-checkout')
-    expect(ownerFromStatus(0)).toBe('free')
-    expect(ownerFromStatus(403)).toBe('other')
-    expect(ownerFromStatus(404)).toBe('other')
+  it('pins the chosen port in E2E_PORT so worker processes loading the config agree with the runner', () => {
+    const env: Record<string, string | undefined> = {}
+    expect(resolveRunPort('/work/a', env, 'E2E_PORT', { freePort: () => 31_002 })).toBe(31_002)
+    expect(env.E2E_PORT).toBe('31002')
+    const worker = resolveRunPort('/work/a', env, 'E2E_PORT', { freePort: () => 99 })
+    expect(worker).toBe(31_002)
+  })
+
+  it('honours an explicit override and validates it', () => {
+    const noPort = { freePort: () => { throw new Error('asked the OS') } }
+    expect(resolveRunPort('/work/a', { E2E_CSP_PORT: '5190' }, 'E2E_CSP_PORT', noPort)).toBe(5190)
+    expect(() => resolveRunPort('/work/a', { E2E_PORT: 'abc' }, 'E2E_PORT', noPort)).toThrow(/E2E_PORT/)
   })
 })
 

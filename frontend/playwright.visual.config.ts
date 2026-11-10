@@ -1,11 +1,12 @@
 import { defineConfig, devices } from '@playwright/test'
 
-import { e2ePort } from './e2e-config/port'
+import { resolveRunPort } from './e2e-config/port'
+import { systemProbe } from './e2e-config/system-probe'
 
 // Pixel screenshot regression tests (e2e/visual.spec.ts), kept out of the default `pnpm e2e` run.
 // Run them with `pnpm e2e:visual` (docker, see e2e/visual-docker.sh): baselines are only valid when rendered inside the
 // official Playwright image, because fonts and anti-aliasing differ between macOS and Linux.
-const port = e2ePort(`${process.cwd()}#visual`, process.env.E2E_PORT)
+const port = resolveRunPort(`${process.cwd()}#visual`, process.env, 'E2E_PORT', systemProbe)
 
 export default defineConfig({
   testDir: './e2e',
