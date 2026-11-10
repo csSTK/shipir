@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useId, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Check, Clock, Pencil, Send, Trash2, Wrench, X } from 'lucide-react'
 import { Button, ConfirmDialog, EmptyState, Skeleton, Switch } from '../../shared/ui/index.ts'
@@ -111,6 +111,7 @@ function Header({ session }: { session: ChatSession }) {
 
 /** One open chat: header, history, live stream and composer. Mount with `key={sessionId}`. `compact` (the dock) drops the header, its title and actions live on the full page. */
 export function ChatPane({ sessionId, isAdmin, compact = false }: { sessionId: string; isAdmin: boolean; compact?: boolean }) {
+  const inputId = useId()
   const { t } = useTranslation('ai-chat')
   const detail = useChatSession(sessionId)
   const refresh = useRefreshSession(sessionId)
@@ -235,18 +236,18 @@ export function ChatPane({ sessionId, isAdmin, compact = false }: { sessionId: s
       )}
       {showChip && viewing.label && <ViewContextChip label={viewing.label} onRemove={() => setDismissed(viewKey)} />}
       <form className="chat-composer" onSubmit={submit}>
-        <label className="visually-hidden" htmlFor="chat-input">
+        <label className="visually-hidden" htmlFor={inputId}>
           {t('ChatPane.message')}
         </label>
         <textarea
-          id="chat-input"
+          id={inputId}
           rows={2}
           value={draft}
           disabled={blocked}
           placeholder={hasPending ? t('ChatPane.confirmOrRejectTheAction') : t('ChatPane.askAboutYourEnvironmentsOr')}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
               e.preventDefault()
               e.currentTarget.form?.requestSubmit()
             }

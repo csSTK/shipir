@@ -96,6 +96,18 @@ describe('ChatPage', () => {
     expect(subscribe).toHaveBeenCalledWith('/topic/chat/s1', expect.anything())
   })
 
+  it('sends on plain Enter but not while an IME composition is active', async () => {
+    renderAt('/assistant/s1')
+    const input = await screen.findByLabelText('Message')
+    fireEvent.change(input, { target: { value: 'hello' } })
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true })
+    fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 })
+    await new Promise((r) => setTimeout(r, 20))
+    expect(calls('POST')).toHaveLength(0)
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() => expect(calls('POST')[0].body).toEqual({ content: 'hello' }))
+  })
+
   it('sends a message, shows streamed text and swaps to the stored answer on DONE', async () => {
     renderAt('/assistant/s1')
     fireEvent.change(await screen.findByLabelText('Message'), { target: { value: 'hello' } })
