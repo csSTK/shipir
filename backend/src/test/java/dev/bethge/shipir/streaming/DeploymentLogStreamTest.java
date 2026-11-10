@@ -578,6 +578,28 @@ class DeploymentLogStreamTest {
         s.disconnect();
     }
 
+    /** shipr-0qbh.92: unlike LogStreamHandler there is no stream-level "ended"; the worker keeps the stream alive. */
+    @Test
+    void viewerJoiningAfterAContainerEndedGetsLinesOnceItRestarted() throws Exception {
+        StompSession s1 = connect();
+        subscribe(s1, topic("shop"));
+        awaitFollowing("c-web", "c-db");
+        containers.set(List.of(container("c-web", "web", "shop", "exited"), container("c-db", "db", "shop", "running")));
+        endSinks.get("c-web").accept(null);
+        awaitRefreshRounds(2);
+
+        StompSession s2 = connect(); // late joiner while web is stopped
+        BlockingQueue<String> q2 = subscribe(s2, topic("shop"));
+        assertThat(q2.poll(5, TimeUnit.SECONDS)).contains("\"status\":\"ENDED\"").contains("\"service\":\"web\"");
+
+        containers.set(List.of(container("c-web", "web", "shop", "running"), container("c-db", "db", "shop", "running")));
+        await().atMost(5, TimeUnit.SECONDS).until(() -> followsOf("c-web") == 2);
+        lineSinks.get("c-web").accept(line("web is back"));
+        assertThat(drain(q2, 500)).anyMatch(f -> f.contains("web is back") && f.contains("\"service\":\"web\""));
+        s1.disconnect();
+        s2.disconnect();
+    }
+
     @Test
     void containersAboveTheLimitAreIgnoredAndReportedOnce() throws Exception {
         containers.set(List.of(container("c1", "a", "shop", "running"), container("c2", "b", "shop", "running"),
