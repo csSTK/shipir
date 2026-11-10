@@ -80,15 +80,60 @@ class ReconnectingEventStreamTest {
         assertThat(probe.disconnects).containsOnly("UNREACHABLE").hasSize(5);
     }
 
+    private ReconnectingEventStream startRecording(RecordingWaiter waiter, Duration initial, Duration max,
+                                                   java.util.function.LongSupplier clock) {
+        var stream = new ReconnectingEventStream(hostId, events, initial, max, probe, waiter, clock);
+        waiter.stream = stream;
+        threads.add(Thread.ofVirtual().start(stream::run));
+        return stream;
+    }
+
     @Test
-    void successfulConnectResetsTheDelayToInitial() throws Exception {
+    void immediateDropsKeepGrowingTheDelayInsteadOfResetting() throws Exception {
+        var waiter = new RecordingWaiter();
+        waiter.stopAfter = 4;
+        var clock = new java.util.concurrent.atomic.AtomicLong(); // time never advances: every connection is instant
+        startRecording(waiter, Duration.ofMillis(100), Duration.ofMillis(250), clock::get);
+        for (int i = 1; i <= 4; i++) {
+            int n = i;
+            await().atMost(10, TimeUnit.SECONDS).until(() -> events.ends.size() == n);
+            events.ends.get(n - 1).accept(null); // accepted and dropped right away
+        }
+        threads.get(0).join(5000);
+
+        assertThat(waiter.delays).containsExactly(Duration.ofMillis(100), Duration.ofMillis(200),
+                Duration.ofMillis(250), Duration.ofMillis(250));
+    }
+
+    @Test
+    void connectionThatStayedUpLongEnoughResetsTheDelay() throws Exception {
         events.failures.add(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "down", null));
         events.failures.add(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "down", null));
         var waiter = new RecordingWaiter();
         waiter.stopAfter = 3;
-        startRecording(waiter, Duration.ofMillis(100), Duration.ofSeconds(5));
+        var clock = new java.util.concurrent.atomic.AtomicLong();
+        startRecording(waiter, Duration.ofMillis(100), Duration.ofSeconds(5), clock::get);
         await().atMost(10, TimeUnit.SECONDS).until(() -> events.ends.size() == 1); // 3rd attempt connected
-        events.ends.get(0).accept(null); // daemon closed it
+        clock.addAndGet(Duration.ofSeconds(10).toNanos()); // stayed up for the minimum
+        events.ends.get(0).accept(null);
+        threads.get(0).join(5000);
+
+        assertThat(waiter.delays).containsExactly(Duration.ofMillis(100), Duration.ofMillis(200),
+                Duration.ofMillis(100));
+    }
+
+    @Test
+    void connectionThatDeliveredAnEventResetsTheDelay() throws Exception {
+        events.failures.add(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "down", null));
+        events.failures.add(new DockerConnectionException(DockerErrorCode.UNREACHABLE, "down", null));
+        var waiter = new RecordingWaiter();
+        waiter.stopAfter = 3;
+        var clock = new java.util.concurrent.atomic.AtomicLong();
+        startRecording(waiter, Duration.ofMillis(100), Duration.ofSeconds(5), clock::get);
+        await().atMost(10, TimeUnit.SECONDS).until(() -> events.ends.size() == 1);
+        events.sinks.get(0).accept(new DockerEventDto(DockerEventDto.Type.CONTAINER, "start", "c1", "web", null,
+                Instant.EPOCH, null, null));
+        events.ends.get(0).accept(null);
         threads.get(0).join(5000);
 
         assertThat(waiter.delays).containsExactly(Duration.ofMillis(100), Duration.ofMillis(200),

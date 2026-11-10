@@ -66,10 +66,11 @@ class StreamErrorCodeTest {
 
         handler.subscribe(target, options, "root", "s-root", "1");
         await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> assertThat(lastPayloadTo("s-root")).contains("TLS_ERROR"));
-        // late subscriber: gets the buffered frame, but not the raw code
+        // late subscriber: the stream already ended, so it gets a fresh follow, which fails the same way; the viewer
+        // sees the collapsed code, not the raw one
         handler.subscribe(target, options, "viewer", "s-viewer", "1");
-        // the stream already ended, so a viewer that joins now is replayed the (collapsed) error
-        assertThat(lastPayloadTo("s-viewer")).contains("UNREACHABLE").doesNotContain("TLS_ERROR");
+        await().atMost(5, TimeUnit.SECONDS).untilAsserted(() ->
+                assertThat(lastPayloadTo("s-viewer")).contains("UNREACHABLE").doesNotContain("TLS_ERROR"));
         assertThat(lastPayloadTo("s-root")).contains("TLS_ERROR");
     }
 

@@ -13,6 +13,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.LongSupplier;
 
 /**
  * Keeps one host's {@link DockerEventService} stream open: connect, wait for the stream to end, report, wait with
@@ -22,7 +23,8 @@ import java.util.concurrent.TimeUnit;
  * events and status changes is up to the {@link Listener} of the caller, so the retry and threading logic exists
  * once for every consumer of the event stream. One instance per host and worker thread: {@link #run()} blocks the
  * calling thread (a virtual thread) until the loop ends. The delay starts at {@code initial}, doubles after each
- * failed round up to {@code max} and resets once a connection was established. {@link #stop()} is cooperative
+ * failed round up to {@code max} and resets only once a connection proved stable: it delivered an event or stayed up for
+ * at least {@code max(initial, 10s)} (a daemon or proxy that accepts and drops at once must not cause a reconnect storm). {@link #stop()} is cooperative
  * (it wakes a wait on the monitor, the thread is never interrupted); an interrupt also ends the loop.
  * Listener callbacks never run under this object's monitor.
  */
@@ -58,12 +60,17 @@ public final class ReconnectingEventStream {
         void await(Duration delay) throws InterruptedException;
     }
 
+    /** A connection that lasted at least this long (or delivered an event) counts as stable. */
+    static final Duration MIN_STABLE = Duration.ofSeconds(10);
+
     private final UUID hostId;
     private final DockerEventService events;
     private final Duration initial;
     private final Duration max;
     private final Listener listener;
     private final Waiter waiter;
+    private final LongSupplier nanoClock;
+    private volatile boolean eventSeen;
     private final Object lock = new Object();
     private boolean stopped;
     private Closeable current;
@@ -76,6 +83,13 @@ public final class ReconnectingEventStream {
     /** Test seam: a non-null {@code waiter} replaces the real wait on the monitor. */
     ReconnectingEventStream(UUID hostId, DockerEventService events, Duration initial, Duration max,
                             Listener listener, Waiter waiter) {
+        this(hostId, events, initial, max, listener, waiter, System::nanoTime);
+    }
+
+    /** Test seam: additionally replaces the clock that measures how long a connection stayed up. */
+    ReconnectingEventStream(UUID hostId, DockerEventService events, Duration initial, Duration max,
+                            Listener listener, Waiter waiter, LongSupplier nanoClock) {
+        this.nanoClock = nanoClock;
         this.waiter = waiter != null ? waiter : this::awaitBackoff;
         this.hostId = hostId;
         this.events = events;
@@ -126,8 +140,9 @@ public final class ReconnectingEventStream {
                         }
                         current = handle;
                     }
+                    eventSeen = false;
+                    long connectedAt = nanoClock.getAsLong();
                     listener.onConnected();
-                    delay = initial;
                     ended.whenComplete((end, error) -> {
                         synchronized (lock) {
                             lock.notifyAll();
@@ -140,6 +155,10 @@ public final class ReconnectingEventStream {
                     }
                     if (isStopped()) {
                         return;
+                    }
+                    Duration stable = initial.compareTo(MIN_STABLE) > 0 ? initial : MIN_STABLE;
+                    if (eventSeen || nanoClock.getAsLong() - connectedAt >= stable.toNanos()) {
+                        delay = initial; // the connection proved itself, start the backoff over
                     }
                     failure = codeOf(ended.getNow(null));
                 } catch (DockerConnectionException e) {
@@ -170,6 +189,7 @@ public final class ReconnectingEventStream {
 
     /** Hands an event to the listener; a throwing listener must not break the Docker I/O thread. */
     private void deliver(DockerEventDto event) {
+        eventSeen = true;
         guarded("onEvent", () -> listener.onEvent(event));
     }
 
