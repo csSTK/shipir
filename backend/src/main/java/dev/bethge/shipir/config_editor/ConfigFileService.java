@@ -328,6 +328,8 @@ public class ConfigFileService {
             throw symlinkRefused();
         } catch (NoSuchFileException e) {
             throw new ConfigFileException(HttpStatus.NOT_FOUND, "FILE_NOT_FOUND", "File not found");
+        } catch (SecureFiles.NotRegularFileException e) {
+            throw new ConfigFileException(HttpStatus.BAD_REQUEST, "NOT_A_FILE", "Path is not a regular file");
         } catch (IOException e) {
             throw new UncheckedIOException(message, e);
         }

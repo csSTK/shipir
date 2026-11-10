@@ -162,4 +162,20 @@ class ComposeFileSymlinkSwapTest {
         repo.writeRollbackOverride(HOST, "web", "override");
         assertOutsideUntouched();
     }
+
+    @Test
+    void readOfALeafSwappedForAFifoIsAClientErrorNotAHangOrA500() {
+        at("leaf:compose.yaml", () -> {
+            try {
+                Files.delete(dir().resolve("compose.yaml"));
+                org.junit.jupiter.api.Assumptions.assumeTrue(
+                        new ProcessBuilder("mkfifo", dir().resolve("compose.yaml").toString()).start().waitFor() == 0);
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        assertThatThrownBy(() -> repo.readCompose(HOST, "web"))
+                .isInstanceOfSatisfying(dev.bethge.shipir.compose.DeploymentException.class,
+                        e -> assertThat(e.code()).isEqualTo("NOT_A_FILE"));
+    }
 }

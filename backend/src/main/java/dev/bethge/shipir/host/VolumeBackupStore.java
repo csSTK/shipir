@@ -125,7 +125,7 @@ class VolumeBackupStore {
             }
             // the directory handle is closed on leaving the block; the channel keeps its own descriptor
             return Optional.of(Channels.newInputStream(parent.dir().openRead(parent.name())));
-        } catch (NoSuchFileException | PathValidationException e) {
+        } catch (NoSuchFileException | PathValidationException | SecureFiles.NotRegularFileException e) {
             return Optional.empty(); // missing, or a symlink on the way: not this host's data
         }
     }

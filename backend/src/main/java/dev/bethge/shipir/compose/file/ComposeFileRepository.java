@@ -2,7 +2,9 @@ package dev.bethge.shipir.compose.file;
 
 import dev.bethge.shipir.common.util.PathValidationUtil;
 import dev.bethge.shipir.common.util.SecureFiles;
+import dev.bethge.shipir.compose.DeploymentException;
 import dev.bethge.shipir.compose.DeploymentProperties;
+import org.springframework.http.HttpStatus;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Repository;
 
@@ -203,6 +205,9 @@ public class ComposeFileRepository {
             return Optional.of(new String(parent.dir().readAll(name, Integer.MAX_VALUE - 8L), StandardCharsets.UTF_8));
         } catch (NoSuchFileException missing) {
             return Optional.empty();
+        } catch (SecureFiles.NotRegularFileException e) {
+            // swapped for a FIFO/device after the type check: a client-visible conflict, not a server error
+            throw new DeploymentException(HttpStatus.BAD_REQUEST, "NOT_A_FILE", "The deployment file is not a regular file");
         } catch (IOException e) {
             throw new UncheckedIOException("Could not read " + name, e);
         }

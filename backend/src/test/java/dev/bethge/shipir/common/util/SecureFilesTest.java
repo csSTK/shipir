@@ -182,4 +182,133 @@ class SecureFilesTest {
             assertThat(p.dir().isRegularFile("b")).isFalse();
         }
     }
+
+    // ---- FIFO / device leaf: must never block the caller (shipr-kqbc.75) ----
+
+    /** Runs {@code call} on a daemon thread and fails (instead of hanging the build) if it does not return in time. */
+    private static <T> T within(java.time.Duration limit, java.util.concurrent.Callable<T> call) throws Exception {
+        java.util.concurrent.CompletableFuture<T> result = new java.util.concurrent.CompletableFuture<>();
+        Thread t = new Thread(() -> {
+            try {
+                result.complete(call.call());
+            } catch (Throwable e) {
+                result.completeExceptionally(e);
+            }
+        });
+        t.setDaemon(true);
+        t.start();
+        try {
+            return result.get(limit.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException e) {
+            throw new AssertionError("call blocked for more than " + limit);
+        } catch (java.util.concurrent.ExecutionException e) {
+            if (e.getCause() instanceof Exception ex) {
+                throw ex;
+            }
+            throw e;
+        }
+    }
+
+    private Path fifo(String name) throws IOException, InterruptedException {
+        Path fifo = root.resolve(name);
+        Process p = new ProcessBuilder("mkfifo", fifo.toString()).start();
+        org.junit.jupiter.api.Assumptions.assumeTrue(p.waitFor() == 0, "mkfifo needed");
+        return fifo;
+    }
+
+    @Test
+    void openReadOfAFifoFailsInsteadOfBlocking() throws Exception {
+        fifo("pipe");
+        try (SecureFiles.Parent p = SecureFiles.openParent(root, "pipe", false, null)) {
+            assertThatThrownBy(() -> within(java.time.Duration.ofSeconds(5), () -> p.dir().openRead(p.name())))
+                    .isInstanceOf(SecureFiles.NotRegularFileException.class);
+        }
+    }
+
+    @Test
+    void openReadOfALeafSwappedForAFifoAfterTheTypeCheckFailsInsteadOfBlocking() throws Exception {
+        Path leaf = root.resolve("a/b/f.txt");
+        Path fifoPath = root.resolve("a/b/pipe-src");
+        Process mk = new ProcessBuilder("mkfifo", fifoPath.toString()).start();
+        org.junit.jupiter.api.Assumptions.assumeTrue(mk.waitFor() == 0, "mkfifo needed");
+        java.util.concurrent.atomic.AtomicBoolean swapped = new java.util.concurrent.atomic.AtomicBoolean();
+        java.util.function.Consumer<String> seam = stage -> {
+            if (stage.equals("leafopen:f.txt") && swapped.compareAndSet(false, true)) {
+                try {
+                    Files.move(fifoPath, leaf, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                } catch (IOException e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+        };
+        java.time.Duration before = SecureFiles.openTimeout;
+        SecureFiles.openTimeout = java.time.Duration.ofMillis(300);
+        try (SecureFiles.Parent p = SecureFiles.openParent(root, "a/b/f.txt", false, seam)) {
+            assertThatThrownBy(() -> within(java.time.Duration.ofSeconds(10), () -> p.dir().openRead(p.name())))
+                    .isInstanceOf(SecureFiles.NotRegularFileException.class);
+            assertThat(swapped).as("the race window (seam stage) was reached").isTrue();
+        } finally {
+            SecureFiles.openTimeout = before;
+        }
+    }
+
+    @Test
+    void aBlockedOpenThatCannotBeReleasedStillReturnsAndNeverBlocksCloseOrLaterWork() throws Exception {
+        Path leaf = root.resolve("a/b/f.txt");
+        Path fifoPath = root.resolve("a/b/pipe-src");
+        Process mk = new ProcessBuilder("mkfifo", fifoPath.toString()).start();
+        org.junit.jupiter.api.Assumptions.assumeTrue(mk.waitFor() == 0, "mkfifo needed");
+        java.util.concurrent.atomic.AtomicBoolean swapped = new java.util.concurrent.atomic.AtomicBoolean();
+        java.util.function.Consumer<String> seam = stage -> {
+            if (stage.equals("leafopen:f.txt") && swapped.compareAndSet(false, true)) {
+                try {
+                    Files.move(fifoPath, leaf, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                } catch (IOException e) {
+                    throw new IllegalStateException(e);
+                }
+                // while the open is blocked on the FIFO, the name is taken over by a regular file, so a path-based
+                // release of the blocked reader could never pair with it
+                Thread mover = new Thread(() -> {
+                    try {
+                        Thread.sleep(100);
+                        Files.move(leaf, root.resolve("a/b/elsewhere"));
+                        Files.writeString(leaf, "regular again");
+                    } catch (IOException | InterruptedException e) {
+                        throw new IllegalStateException(e);
+                    }
+                });
+                mover.setDaemon(true);
+                mover.start();
+            }
+        };
+        java.time.Duration before = SecureFiles.openTimeout;
+        SecureFiles.openTimeout = java.time.Duration.ofMillis(500);
+        try {
+            SecureFiles.Parent p = SecureFiles.openParent(root, "a/b/f.txt", false, seam);
+            assertThatThrownBy(() -> within(java.time.Duration.ofSeconds(5), () -> p.dir().openRead(p.name())))
+                    .isInstanceOf(SecureFiles.NotRegularFileException.class);
+            assertThat(swapped).as("the race window (seam stage) was reached").isTrue();
+            within(java.time.Duration.ofSeconds(5), () -> {
+                p.close();
+                return null;
+            });
+            // unrelated later work on the same tree is not blocked
+            try (SecureFiles.Parent q = SecureFiles.openParent(root, "a/b/other.txt", true, null)) {
+                within(java.time.Duration.ofSeconds(5), () -> {
+                    put(q, "other.txt", "x");
+                    return null;
+                });
+            }
+        } finally {
+            SecureFiles.openTimeout = before;
+        }
+    }
+
+    @Test
+    void openReadOfARegularFileStillWorksUnderTheDeadline() throws Exception {
+        try (SecureFiles.Parent p = SecureFiles.openParent(root, "a/b/f.txt", false, null);
+             SeekableByteChannel ch = p.dir().openRead(p.name())) {
+            assertThat(ch.size()).isEqualTo(6);
+        }
+    }
 }

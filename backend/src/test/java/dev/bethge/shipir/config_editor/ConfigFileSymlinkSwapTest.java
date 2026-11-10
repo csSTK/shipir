@@ -235,4 +235,43 @@ class ConfigFileSymlinkSwapTest {
             }
         }
     }
+
+    /** Runs {@code call} on a daemon thread and fails (instead of hanging the build) if it does not return in time. */
+    private static <T> T within(java.time.Duration limit, java.util.concurrent.Callable<T> call) throws Exception {
+        java.util.concurrent.CompletableFuture<T> result = new java.util.concurrent.CompletableFuture<>();
+        Thread t = new Thread(() -> {
+            try {
+                result.complete(call.call());
+            } catch (Throwable e) {
+                result.completeExceptionally(e);
+            }
+        });
+        t.setDaemon(true);
+        t.start();
+        try {
+            return result.get(limit.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException e) {
+            throw new AssertionError("call blocked for more than " + limit);
+        } catch (java.util.concurrent.ExecutionException e) {
+            if (e.getCause() instanceof Exception ex) {
+                throw ex;
+            }
+            throw e;
+        }
+    }
+
+    @Test
+    void readOfALeafSwappedForAFifoFailsInsteadOfHangingWithTheDeploymentLock() throws Exception {
+        Path leaf = root.resolve("conf/app.txt");
+        at("leaf:app.txt", () -> {
+            try {
+                Files.delete(leaf);
+                org.junit.jupiter.api.Assumptions.assumeTrue(new ProcessBuilder("mkfifo", leaf.toString()).start().waitFor() == 0);
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        assertThatThrownBy(() -> within(java.time.Duration.ofSeconds(10), () -> service.read(host, id, "conf/app.txt")))
+                .isInstanceOfSatisfying(ConfigFileException.class, e -> assertThat(e.code()).isEqualTo("NOT_A_FILE"));
+    }
 }

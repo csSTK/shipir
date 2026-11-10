@@ -14,9 +14,15 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributeView;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileAttribute;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
@@ -39,7 +45,21 @@ public final class SecureFiles {
     private static final Consumer<String> NO_SEAM = stage -> {
     };
 
+    /** How long opening a regular file for reading may take before it is treated as a blocked FIFO open. */
+    static volatile Duration openTimeout = Duration.ofSeconds(2);
+
     private SecureFiles() {
+    }
+
+    /** The leaf is not a regular file (FIFO, device, socket, directory) and is not opened. */
+    public static final class NotRegularFileException extends IOException {
+        public NotRegularFileException(String name) {
+            this(name, "is not a regular file");
+        }
+
+        NotRegularFileException(String name, String reason) {
+            super(name + " " + reason);
+        }
     }
 
     /** A directory handle plus the leaf name below it. */
@@ -125,6 +145,8 @@ public final class SecureFiles {
     public static final class Dir implements AutoCloseable {
         private final SecureDirectoryStream<Path> sds;
         private final Consumer<String> seam;
+        /** Set when a blocked open was given up on: the opener thread owns (and closes) the handle, see openReadWithDeadline. */
+        private volatile boolean abandoned;
 
         private Dir(SecureDirectoryStream<Path> sds, Consumer<String> seam) {
             this.sds = sds;
@@ -168,10 +190,107 @@ public final class SecureFiles {
             }
         }
 
+        /**
+         * Opens a regular file for reading. Anything else (FIFO, device, socket, directory) is refused with
+         * {@link NotRegularFileException}: opening a FIFO for reading blocks until a writer shows up, which would hold the
+         * calling request thread (and any lock it holds) forever. The type is checked without following links first;
+         * since Java cannot open non-blocking, the open itself also runs under a deadline, so a file swapped for a FIFO
+         * between the check and the open (the seam stage {@code leafopen:<name>}) still fails instead of hanging.
+         */
         public SeekableByteChannel openRead(String name) throws IOException {
             validateSegment(name);
             seam.accept("leaf:" + name);
-            return openLeaf(name, Set.of(StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS));
+            BasicFileAttributes attrs = attributes(name);
+            if (attrs.isSymbolicLink()) {
+                throw new PathValidationException("Symbolic links are not allowed");
+            }
+            if (!attrs.isRegularFile()) {
+                throw new NotRegularFileException(name);
+            }
+            seam.accept("leafopen:" + name);
+            return openReadWithDeadline(name);
+        }
+
+        private static final int PENDING = 0;
+        private static final int DELIVERED = 1;
+        private static final int ABANDONED = 2;
+
+        /**
+         * Runs the open on a daemon thread and waits for it at most {@code openTimeout}. The JDK's stream holds its read
+         * lock during the blocking {@code openat} and {@code close()} needs the write lock, so a caller that gave up
+         * could never close this handle. Instead, ownership is handed off: on timeout the caller marks this directory
+         * abandoned and returns at once without closing it ({@link #close()} then does nothing); the opener thread
+         * closes the handle, and any late channel, as soon as its {@code openat} returns (if ever).
+         */
+        private SeekableByteChannel openReadWithDeadline(String name) throws IOException {
+            CompletableFuture<SeekableByteChannel> opened = new CompletableFuture<>();
+            AtomicInteger state = new AtomicInteger(PENDING);
+            Thread opener = new Thread(() -> {
+                SeekableByteChannel channel = null;
+                Throwable failure = null;
+                try {
+                    channel = openLeaf(name, Set.of(StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS));
+                } catch (Throwable e) {
+                    failure = e;
+                }
+                if (state.compareAndSet(PENDING, DELIVERED)) {
+                    if (failure != null) {
+                        opened.completeExceptionally(failure);
+                    } else {
+                        opened.complete(channel);
+                    }
+                    return;
+                }
+                // the caller gave up: this thread owns the handle now
+                try {
+                    if (channel != null) {
+                        channel.close();
+                    }
+                    sds.close();
+                } catch (IOException | RuntimeException ignored) {
+                    // nobody is waiting for the result
+                }
+            }, "secure-open");
+            opener.setDaemon(true);
+            opener.start();
+            try {
+                return opened.get(openTimeout.toMillis(), TimeUnit.MILLISECONDS);
+            } catch (TimeoutException e) {
+                if (state.compareAndSet(PENDING, ABANDONED)) {
+                    abandoned = true;
+                    throw new NotRegularFileException(name, "was not opened in time (blocked, likely a FIFO)");
+                }
+                return deliveredResult(opened); // the opener finished just now
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                if (state.compareAndSet(PENDING, ABANDONED)) {
+                    abandoned = true;
+                }
+                throw new IOException("Interrupted while opening " + name, e);
+            } catch (ExecutionException e) {
+                throw unwrap(e);
+            }
+        }
+
+        private static SeekableByteChannel deliveredResult(CompletableFuture<SeekableByteChannel> opened) throws IOException {
+            try {
+                return opened.get();
+            } catch (ExecutionException e) {
+                throw unwrap(e);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted", e);
+            }
+        }
+
+        private static IOException unwrap(ExecutionException e) {
+            if (e.getCause() instanceof IOException io) {
+                return io;
+            }
+            if (e.getCause() instanceof RuntimeException re) {
+                throw re;
+            }
+            return new IOException(e.getCause());
         }
 
         /** Creates a new file (fails if the name exists, never follows a link). */
@@ -278,6 +397,9 @@ public final class SecureFiles {
 
         @Override
         public void close() throws IOException {
+            if (abandoned) {
+                return; // the opener thread closes it when its blocked openat returns
+            }
             sds.close();
         }
     }
