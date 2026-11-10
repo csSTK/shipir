@@ -243,6 +243,38 @@ describe('BackupSchedulesDialog', () => {
     expect(apiFetch.mock.calls.filter(([path]) => String(path).includes('/restore'))).toHaveLength(0)
   })
 
+  it('does not call a schedule volume missing while the volumes are still loading', async () => {
+    apiFetch.mockImplementation((path: string) => {
+      if (path === '/hosts/h1/volume-backup-schedules') return Promise.resolve([schedule()])
+      if (path === '/hosts/h1/volumes/pgdata/stored-backups')
+        return Promise.resolve([{ name: 'pgdata-20260101T000000Z.tar', sizeBytes: 12, createdAt: '2026-01-01T00:00:00Z' }])
+      return Promise.resolve([])
+    })
+    render(wrap(<BackupSchedulesDialog hostId="h1" volumes={undefined} onClose={() => {}} />))
+    fireEvent.click(await screen.findByRole('button', { name: 'Stored backups of pgdata' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Stored backups of pgdata' })
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Restore pgdata-20260101T000000Z.tar' }))
+    expect(within(dialog).queryByText('Create the volume first, then restore.')).toBeNull()
+  })
+
+  it('closes after a nested restore so the page notice is visible', async () => {
+    apiFetch.mockImplementation((path: string) => {
+      if (path === '/hosts/h1/volume-backup-schedules') return Promise.resolve([schedule({ volumeName: 'cache' })])
+      if (path === '/hosts/h1/volumes/cache/stored-backups')
+        return Promise.resolve([{ name: 'cache-20260101T000000Z.tar', sizeBytes: 12, createdAt: '2026-01-01T00:00:00Z' }])
+      return Promise.resolve(undefined)
+    })
+    const onClose = vi.fn()
+    const onDone = vi.fn()
+    render(wrap(<BackupSchedulesDialog hostId="h1" volumes={volumes} onClose={onClose} onDone={onDone} />))
+    fireEvent.click(await screen.findByRole('button', { name: 'Stored backups of cache' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Stored backups of cache' })
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Restore cache-20260101T000000Z.tar' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Restore' }))
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(onClose).toHaveBeenCalled()
+  })
+
   const deleteCalls = () => apiFetch.mock.calls.filter(([, init]) => init?.method === 'DELETE')
 
   it('asks before deleting a schedule and says its stored backups go too', async () => {

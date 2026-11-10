@@ -12,7 +12,8 @@ import './VolumeBackup.css'
 
 interface Props {
   hostId: string
-  volumes: Volume[]
+  /** Undefined while the volumes are still loading. */
+  volumes: Volume[] | undefined
   initialVolume?: string
   onClose: () => void
   onDone?: (message: string) => void
@@ -29,7 +30,9 @@ export function BackupSchedulesDialog({ hostId, volumes, initialVolume, onClose,
   const schedules = useBackupSchedules(hostId)
   const create = useCreateSchedule(hostId)
   const remove = useDeleteSchedule(hostId)
-  const [volume, setVolume] = useState(initialVolume ?? volumes[0]?.name ?? '')
+  const [pickedVolume, setVolume] = useState<string | null>(null)
+  const volumeList = volumes ?? []
+  const volume = pickedVolume ?? initialVolume ?? volumeList[0]?.name ?? ''
   const [interval, setIntervalHours] = useState('24')
   const [keep, setKeep] = useState('7')
   const [touched, setTouched] = useState(false)
@@ -39,7 +42,7 @@ export function BackupSchedulesDialog({ hostId, volumes, initialVolume, onClose,
 
   const intervalError = rangeError(interval, 8760)
   const keepError = Number.isInteger(Number(keep)) && Number(keep) >= 1 && Number(keep) <= 100 ? null : t('BackupSchedulesDialog.enter1To100Backups')
-  const selected = volumes.find((v) => v.name === volume)
+  const selected = volumeList.find((v) => v.name === volume)
 
   function submit(e: FormEvent) {
     e.preventDefault()
@@ -89,13 +92,13 @@ export function BackupSchedulesDialog({ hostId, volumes, initialVolume, onClose,
 
         <form className="ui-form" onSubmit={submit} noValidate>
           <Select label={t('BackupSchedulesDialog.volume')} value={volume} onChange={(e) => setVolume(e.target.value)}>
-            {volumes.map((v) => (
+            {volumeList.map((v) => (
               <option key={v.name} value={v.name}>
                 {v.name}
               </option>
             ))}
           </Select>
-          {volumes.length === 0 && <p className="ui-hint">{t('BackupSchedulesDialog.noVolumesYet')}</p>}
+          {volumes?.length === 0 && <p className="ui-hint">{t('BackupSchedulesDialog.noVolumesYet')}</p>}
           {selected?.inUse && <p className="ui-hint">{t('BackupSchedulesDialog.thisVolumeIsInUse')}</p>}
           <div className="vbackup__row">
             <TextField label={t('BackupSchedulesDialog.intervalHours')} type="number" min={1} max={8760} value={interval} onChange={(e) => setIntervalHours(e.target.value)} error={touched ? intervalError : null} />
@@ -110,7 +113,7 @@ export function BackupSchedulesDialog({ hostId, volumes, initialVolume, onClose,
             <Button variant="ghost" onClick={onClose}>
               {t('BackupSchedulesDialog.close')}
             </Button>
-            <Button variant="primary" type="submit" disabled={volumes.length === 0} loading={create.isPending}>
+            <Button variant="primary" type="submit" disabled={volumeList.length === 0} loading={create.isPending}>
               {t('BackupSchedulesDialog.addSchedule')}
             </Button>
           </div>
@@ -120,9 +123,12 @@ export function BackupSchedulesDialog({ hostId, volumes, initialVolume, onClose,
         <StoredBackupsDialog
           hostId={hostId}
           volume={storedFor}
-          inUse={volumes.find((v) => v.name === storedFor)?.inUse}
-          volumeMissing={!volumes.some((v) => v.name === storedFor)}
-          onDone={onDone}
+          inUse={volumeList.find((v) => v.name === storedFor)?.inUse}
+          volumeMissing={volumes !== undefined && !volumes.some((v) => v.name === storedFor)}
+          onDone={(message) => {
+            onDone?.(message)
+            onClose()
+          }}
           onClose={() => setStoredFor(null)}
         />
       )}

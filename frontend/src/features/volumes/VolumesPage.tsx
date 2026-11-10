@@ -145,7 +145,7 @@ export function VolumesPage() {
         }
       />
       {restoring && <RestoreVolumeDialog hostId={id} volume={restoring} onClose={() => setRestoring(null)} onDone={setNotice} />}
-      {scheduling && <BackupSchedulesDialog hostId={id} volumes={data ?? []} initialVolume={scheduling.volume} onDone={setNotice} onClose={() => setScheduling(null)} />}
+      {scheduling && <BackupSchedulesDialog hostId={id} volumes={data} initialVolume={scheduling.volume} onDone={setNotice} onClose={() => setScheduling(null)} />}
       {storedFor && (
         <StoredBackupsDialog
           hostId={id}
