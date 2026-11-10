@@ -65,6 +65,38 @@ class LogStreamEndedReplaceTest {
         List<String> lines = new ArrayList<>();
         payload.getAllValues().forEach(p -> lines.add(((LogStreamMessage) p).line()));
         assertThat(lines).contains("after restart");
+        assertThat(handler.subscriberCount(target)).isEqualTo(2); // alice moved to the fresh stream (shipr-0qbh.91)
+    }
+
+    /** shipr-0qbh.91: viewers of the replaced stream move to the fresh one, so revalidation and live lines reach them. */
+    @Test
+    void viewersOfTheReplacedStreamMoveToTheFreshOneAndAreRevalidated() throws Exception {
+        when(hosts.findById(any())).thenReturn(Optional.of(mock(DockerHost.class)));
+        when(logs.follow(any(), any(), any(), anyInt(), anyBoolean(), any(), any())).thenAnswer(inv -> {
+            lineSinks.add(inv.getArgument(5));
+            endSinks.add(inv.getArgument(6));
+            return mock(Closeable.class);
+        });
+        var target = new LogStreamHandler.Target(UUID.randomUUID(), "web");
+        var options = new LogStreamHandler.Options(100, false);
+
+        handler.subscribe(target, options, "alice", "s1", "a");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> endSinks.size() == 1);
+        endSinks.get(0).accept(null);
+        handler.subscribe(target, options, "bob", "s2", "b");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> lineSinks.size() == 2);
+
+        assertThat(handler.subscriberCount(target)).isEqualTo(2); // alice moved along
+        lineSinks.get(1).accept(new LogLine(LogLine.Stream.STDOUT, "after restart", null));
+        ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
+        verify(sender, atLeastOnce()).send(eq("s1"), eq("a"), any(), payload.capture());
+        List<LogStreamMessage> got = new ArrayList<>();
+        payload.getAllValues().forEach(p -> got.add((LogStreamMessage) p));
+        LogStreamMessage ended = got.stream().filter(m -> m.type() == LogStreamMessage.Type.STATUS).findFirst().orElseThrow();
+        LogStreamMessage fresh = got.stream().filter(m -> "after restart".equals(m.line())).findFirst().orElseThrow();
+        assertThat(fresh.seq()).isGreaterThan(ended.seq()); // seq goes on, a client that dedupes by seq still sees it
+
+        handler.revalidate("alice", t -> false); // access revoked: alice is reached
         assertThat(handler.subscriberCount(target)).isEqualTo(1);
     }
 }

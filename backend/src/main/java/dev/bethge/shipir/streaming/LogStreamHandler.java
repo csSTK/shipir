@@ -126,12 +126,21 @@ public class LogStreamHandler {
         while (true) {
             synchronized (streams) {
                 stream = streams.get(key);
-                if (stream != null && replaceIfEnded(stream)) {
+                Stream replaced = stream != null ? replaceIfEnded(stream) : null;
+                if (replaced != null) {
                     stream = null;
                 }
                 first = stream == null;
                 if (first) {
                     stream = new Stream(key);
+                    if (replaced != null) {
+                        // the old viewers stay with the container: they keep being revalidated and seq goes on
+                        synchronized (replaced) {
+                            stream.subscribers.addAll(replaced.subscribers);
+                            replaced.subscribers.clear();
+                            stream.nextSeq = replaced.nextSeq;
+                        }
+                    }
                     streams.put(key, stream);
                 }
             }
@@ -155,14 +164,15 @@ public class LogStreamHandler {
 
     /**
      * An ended stream (container stopped or follow failed) will never deliver again, but stays in the map while a
-     * viewer remains. A new subscriber must get a fresh follow, so the ended stream is closed and removed; its old
-     * viewers already received the final status. Caller holds the {@code streams} lock.
+     * viewer remains. A new subscriber must get a fresh follow, so the ended stream is closed and removed. Returns the
+     * closed stream (the caller moves its viewers to the fresh one) or null if it was not ended. Caller holds the
+     * {@code streams} lock.
      */
-    private boolean replaceIfEnded(Stream stream) {
+    private Stream replaceIfEnded(Stream stream) {
         Closeable follow;
         synchronized (stream) {
             if (!stream.ended || stream.closed) {
-                return false;
+                return null;
             }
             stream.closed = true;
             follow = stream.follow;
@@ -170,7 +180,7 @@ public class LogStreamHandler {
         }
         streams.remove(stream.key, stream);
         LogStreamSupport.closeQuietly(follow);
-        return true;
+        return stream;
     }
 
     /**
@@ -191,21 +201,20 @@ public class LogStreamHandler {
     }
 
     void unsubscribe(String sessionId, String subscriptionId) {
-        List<Stream> all;
+        List<Stream> empty = new ArrayList<>();
+        // under the streams lock, so a stream replaced meanwhile cannot take the subscription with it unseen
         synchronized (streams) {
-            all = new ArrayList<>(streams.values());
-        }
-        for (Stream stream : all) {
-            boolean empty;
-            synchronized (stream) {
-                stream.subscribers.removeIf(s -> s.sessionId.equals(sessionId)
-                        && (subscriptionId == null || s.subscriptionId.equals(subscriptionId)));
-                empty = stream.subscribers.isEmpty();
-            }
-            if (empty) {
-                release(stream);
+            for (Stream stream : streams.values()) {
+                synchronized (stream) {
+                    stream.subscribers.removeIf(s -> s.sessionId.equals(sessionId)
+                            && (subscriptionId == null || s.subscriptionId.equals(subscriptionId)));
+                    if (stream.subscribers.isEmpty()) {
+                        empty.add(stream);
+                    }
+                }
             }
         }
+        empty.forEach(this::release);
     }
 
     /**
