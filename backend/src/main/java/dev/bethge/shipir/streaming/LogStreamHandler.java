@@ -126,6 +126,9 @@ public class LogStreamHandler {
         while (true) {
             synchronized (streams) {
                 stream = streams.get(key);
+                if (stream != null && replaceIfEnded(stream)) {
+                    stream = null;
+                }
                 first = stream == null;
                 if (first) {
                     stream = new Stream(key);
@@ -148,6 +151,26 @@ public class LogStreamHandler {
             Stream started = stream;
             Thread.ofVirtual().name("log-follow-" + target.containerId()).start(() -> startFollow(started));
         }
+    }
+
+    /**
+     * An ended stream (container stopped or follow failed) will never deliver again, but stays in the map while a
+     * viewer remains. A new subscriber must get a fresh follow, so the ended stream is closed and removed; its old
+     * viewers already received the final status. Caller holds the {@code streams} lock.
+     */
+    private boolean replaceIfEnded(Stream stream) {
+        Closeable follow;
+        synchronized (stream) {
+            if (!stream.ended || stream.closed) {
+                return false;
+            }
+            stream.closed = true;
+            follow = stream.follow;
+            stream.follow = null;
+        }
+        streams.remove(stream.key, stream);
+        LogStreamSupport.closeQuietly(follow);
+        return true;
     }
 
     /**
