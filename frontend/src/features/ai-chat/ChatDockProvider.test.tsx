@@ -27,6 +27,7 @@ let byTopic: Record<string, { handlers: TopicHandlers; unsubscribe: ReturnType<t
 let unsubscribe: ReturnType<typeof vi.fn>
 let messages: object[]
 let serverRunning: boolean
+let sessionGate: Promise<void> | null
 let pendingTotal: number
 const userMsg = { id: 'm0', seq: 1, role: 'USER', content: 'hello', toolCalls: null, toolCallId: null, status: null, createdAt: '2026-10-23T10:00:00Z' }
 const answerMsg = { id: 'm1', seq: 2, role: 'ASSISTANT', content: 'Done!', toolCalls: null, toolCallId: null, status: null, createdAt: '2026-10-23T10:00:00Z' }
@@ -42,18 +43,25 @@ function Status() {
       <p data-testid="other-text">{dock.stream.text}</p>
       <p data-testid="elsewhere">{String(dock.runningElsewhere)}</p>
       <button type="button" onClick={() => dock.open('s2')}>switch</button>
+      <button type="button" onClick={() => dock.open('s1')}>open s1</button>
+      <p data-testid="running">{String(dock.stream.running)}</p>
       <Link to="/assistant/s1">back</Link>
     </div>
   )
 }
 
-function renderApp() {
+function renderApp(initialPath = '/assistant/s1') {
   vi.mocked(apiFetch).mockImplementation((p: string, options?: { method?: string }) => {
     const method = options?.method ?? 'GET'
     if (method === 'GET' && p.startsWith('/ai/sessions?')) return Promise.resolve({ items: [session] })
     if (method === 'GET' && p === '/ai/sessions/pending-count') return Promise.resolve({ count: pendingTotal })
     if (method === 'GET' && p === '/ai/sessions/s2') return Promise.resolve({ session: { ...session, id: 's2' }, messages: [], running: false })
-    if (method === 'GET' && p === '/ai/sessions/s1') return Promise.resolve({ session, messages, running: serverRunning })
+    if (method === 'GET' && p === '/ai/sessions/s1') {
+      const detail = { session, messages, running: serverRunning }
+      const gate = sessionGate
+      sessionGate = null // only the first answer is held back
+      return gate ? gate.then(() => detail) : Promise.resolve(detail)
+    }
     if (method === 'POST' && p === '/ai/sessions/s1/messages') return Promise.resolve({ runId: 'r' })
     if (method === 'DELETE' && p === '/ai/sessions/s1') return Promise.resolve(null)
     return Promise.reject(new Error(`unmocked ${method} ${p}`))
@@ -61,7 +69,7 @@ function renderApp() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={['/assistant/s1']}>
+      <MemoryRouter initialEntries={[initialPath]}>
         <ChatDockProvider>
           <Routes>
             <Route path="/assistant/:sessionId" element={<ChatPage role="OPERATOR" />} />
@@ -87,6 +95,7 @@ async function startRunAndLeave() {
 beforeEach(() => {
   messages = []
   serverRunning = false
+  sessionGate = null
   pendingTotal = 0
   byTopic = {}
   unsubscribe = vi.fn()
@@ -210,6 +219,25 @@ describe('ChatDockProvider', () => {
     expect(await screen.findByText('Thinking…')).toBeInTheDocument()
     frame({ type: 'DONE', outcome: 'COMPLETE' })
     await waitFor(() => expect(screen.queryByText('Thinking…')).not.toBeInTheDocument())
+  })
+
+  it('does not stay running when the DONE frame arrives between the session fetch and following the run', async () => {
+    // No chat view observes the session query here, so the DONE refresh cannot supersede the slow first response.
+    serverRunning = true
+    let release!: () => void
+    sessionGate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    renderApp('/other')
+    fireEvent.click(await screen.findByText('open s1'))
+    await waitFor(() => expect(byTopic['/topic/chat/s1']).toBeDefined())
+    // The server said "running"; the run then ended and its DONE frame overtook that response.
+    serverRunning = false
+    frame({ type: 'DONE', outcome: 'COMPLETE' })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    release()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(screen.getByTestId('running')).toHaveTextContent('false')
   })
 
   it('unsubscribes when the session is deleted', async () => {

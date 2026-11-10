@@ -82,7 +82,7 @@ export function ChatDockProvider({ children }: { children: ReactNode }) {
     return refresh()
     // `refresh` changes identity every render; useChatStream reads the latest onDone through doneRef.
   }, [sessionId, markUnread, refresh])
-  const { text, activity, running, rateLimitWait, connection, start, stop } = useChatStream(sessionId, onDone)
+  const { text, activity, running, rateLimitWait, connection, start, stop, doneCount } = useChatStream(sessionId, onDone)
   // `start` is a fresh closure each render (it only sets state), so the memo below keys on the data fields.
   const startRef = useRef(start)
   useEffect(() => {
@@ -94,9 +94,11 @@ export function ChatDockProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!sessionId) return
     let alive = true
+    const doneBefore = doneCount()
     fetchChatSession(client, sessionId)
       .then((detail) => {
-        if (alive && detail.running) startRef.current()
+        // A DONE frame since the request went out means the run has ended, whatever this (older) answer says.
+        if (alive && detail.running && doneCount() === doneBefore) startRef.current()
       })
       .catch(() => {
         // unreachable or deleted session: the chat view reports it
@@ -104,7 +106,7 @@ export function ChatDockProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false
     }
-  }, [sessionId, client])
+  }, [sessionId, client, doneCount])
 
   const runningRef = useRef(false)
   useEffect(() => {

@@ -37,6 +37,7 @@ export function useChatStream(sessionId: string | null, onDone: () => Promise<un
   const [waitFrames, setWaitFrames] = useState(0)
   const [connection, setConnection] = useState<ConnectionState>('connecting')
   const doneRef = useRef(onDone)
+  const doneCountRef = useRef(0)
   useEffect(() => {
     doneRef.current = onDone
   })
@@ -64,6 +65,7 @@ export function useChatStream(sessionId: string | null, onDone: () => Promise<un
         const frame = parseFrame(body)
         if (!frame) return
         if (frame.type === 'DONE') {
+          doneCountRef.current += 1
           void Promise.resolve(doneRef.current()).finally(clear)
           return
         }
@@ -93,5 +95,8 @@ export function useChatStream(sessionId: string | null, onDone: () => Promise<un
     }
   }, [sessionId, clear])
 
-  return { text, activity, running, rateLimitWait, connection, start: () => setRunning(true), stop: clear }
+  // Number of DONE frames seen so far: a caller that checks the server for a running run compares it before and after
+  // to tell that the run ended while its answer was still on the way.
+  const doneCount = useCallback(() => doneCountRef.current, [])
+  return { text, activity, running, rateLimitWait, connection, start: () => setRunning(true), stop: clear, doneCount }
 }
