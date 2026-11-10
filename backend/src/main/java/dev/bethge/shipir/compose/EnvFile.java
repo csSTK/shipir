@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-/** Renders env entries to .env text and parses that text back. Only understands what {@link #render} writes. */
+/** Renders env entries to .env text and parses that text back. Parses it back, see {@link #parse}. */
 public final class EnvFile {
 
     private static final Pattern KEY = Pattern.compile("[A-Za-z_][A-Za-z0-9_]{0,254}");
@@ -37,16 +37,47 @@ public final class EnvFile {
         return out.toString();
     }
 
+    /**
+     * Understands what {@link #render} writes plus the common forms of a hand-written or Git-supplied file: CRLF line
+     * ends, an {@code export} prefix, spaces around the key, and an inline {@code # comment} after a value. Not a full
+     * dotenv implementation (no multi-line values, no variable expansion).
+     */
     public static List<EnvEntry> parse(String text) {
         List<EnvEntry> entries = new ArrayList<>();
-        for (String line : text.split("\n")) {
+        for (String raw : text.split("\r?\n")) {
+            String line = raw.strip();
+            if (line.startsWith("export ") || line.startsWith("export\t")) {
+                line = line.substring("export".length()).stripLeading();
+            }
             int eq = line.indexOf('=');
             if (line.isBlank() || line.startsWith("#") || eq <= 0) {
                 continue;
             }
-            entries.add(new EnvEntry(line.substring(0, eq), unquote(line.substring(eq + 1))));
+            entries.add(new EnvEntry(line.substring(0, eq).strip(), unquote(stripInlineComment(line.substring(eq + 1).strip()))));
         }
         return entries;
+    }
+
+    /** Drops a trailing comment: after the closing quote of a quoted value, or from the first whitespace-then-# otherwise. */
+    private static String stripInlineComment(String value) {
+        if (value.startsWith("'") || value.startsWith("\"")) {
+            char quote = value.charAt(0);
+            for (int i = 1; i < value.length(); i++) {
+                char c = value.charAt(i);
+                if (c == '\\' && quote == '"') {
+                    i++;
+                } else if (c == quote) {
+                    return value.substring(0, i + 1);
+                }
+            }
+            return value;
+        }
+        for (int i = 1; i < value.length(); i++) {
+            if (value.charAt(i) == '#' && Character.isWhitespace(value.charAt(i - 1))) {
+                return value.substring(0, i).stripTrailing();
+            }
+        }
+        return value.startsWith("#") ? "" : value;
     }
 
     private static String quote(String value) {
