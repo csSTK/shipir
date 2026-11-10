@@ -1,4 +1,4 @@
-import { ApiError, CSRF_COOKIE, CSRF_HEADER, parseErrorBody, readCookie, retryAfterSeconds } from './client.ts'
+import { ApiError, apiErrorFromBody, CSRF_COOKIE, CSRF_HEADER, pathRelativeToApi, readCookie, retryAfterSeconds } from './client.ts'
 
 /** A file received from the backend: the bytes and the name the server suggested, if any. */
 export interface DownloadedFile {
@@ -49,14 +49,13 @@ export async function downloadFile(url: string, options: DownloadOptions = {}): 
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
-  if (!response.ok) throw await errorOf(response)
+  if (!response.ok) throw await errorOf(response, url)
   return { blob: await response.blob(), filename: filenameFromDisposition(response.headers.get('Content-Disposition')) }
 }
 
-async function errorOf(response: Response): Promise<ApiError> {
+async function errorOf(response: Response, url: string): Promise<ApiError> {
   const text = await response.text().catch(() => '') // an unreadable body still yields status-only error
-  const { code, violations, details } = parseErrorBody(text)
-  return new ApiError(response.status, response.statusText, code, violations, details, retryAfterSeconds(response))
+  return apiErrorFromBody(response.status, response.statusText, text, pathRelativeToApi(url), retryAfterSeconds(response))
 }
 
 async function sendForm(url: string, form: FormData): Promise<Response> {
@@ -67,7 +66,7 @@ async function sendForm(url: string, form: FormData): Promise<Response> {
     headers: { Accept: 'application/json', ...(csrf && { [CSRF_HEADER]: csrf }) },
     body: form,
   })
-  if (!response.ok) throw await errorOf(response)
+  if (!response.ok) throw await errorOf(response, url)
   return response
 }
 
@@ -108,8 +107,7 @@ export function uploadMultipart(
     }
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) return resolve()
-      const { code, violations, details } = parseErrorBody(xhr.responseText)
-      reject(new ApiError(xhr.status, xhr.responseText || xhr.statusText, code, violations, details))
+      reject(apiErrorFromBody(xhr.status, xhr.responseText || xhr.statusText, xhr.responseText, pathRelativeToApi(url)))
     }
     xhr.onerror = () => reject(new ApiError(0, messages.network))
     xhr.onabort = () => reject(new ApiError(0, messages.aborted, 'ABORTED'))

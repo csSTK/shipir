@@ -97,6 +97,32 @@ export function parseErrorBody(text: string): {
   }
 }
 
+/** The request path relative to /api, as `ApiError.path` carries it; other URLs are returned unchanged. */
+export function pathRelativeToApi(url: string): string {
+  return url.startsWith(`${API_BASE}/`) ? url.slice(API_BASE.length) : url;
+}
+
+/** Builds the `ApiError` for a failed answer from its raw body text; shared by every client that talks to the API. */
+export function apiErrorFromBody(
+  status: number,
+  message: string,
+  bodyText: string,
+  path: string,
+  retryAfterSeconds?: number,
+): ApiError {
+  const { code, violations, details, serverMessage } = parseErrorBody(bodyText);
+  return new ApiError(
+    status,
+    message,
+    code,
+    violations,
+    details,
+    retryAfterSeconds,
+    serverMessage,
+    path,
+  );
+}
+
 /** Typed JSON fetch wrapper for the backend REST API. `path` is relative to /api. */
 export async function apiFetch<T>(
   path: string,
@@ -118,16 +144,12 @@ export async function apiFetch<T>(
 
   if (!response.ok) {
     const text = await response.text();
-    const { code, violations, details, serverMessage } = parseErrorBody(text);
-    throw new ApiError(
+    throw apiErrorFromBody(
       response.status,
       text || response.statusText,
-      code,
-      violations,
-      details,
-      retryAfterSeconds(response),
-      serverMessage,
+      text,
       path,
+      retryAfterSeconds(response),
     );
   }
   if (response.status === 204) {

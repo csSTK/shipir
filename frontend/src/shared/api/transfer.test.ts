@@ -77,6 +77,12 @@ describe('downloadFile', () => {
     expect(error).toMatchObject({ status: 429, code: 'TOO_MANY', details: ['a'], retryAfterSeconds: 7, message: 'Too Many' })
   })
 
+  it('records the request path relative to /api and the server message', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: 'No such file' }), { status: 404, statusText: 'Not Found' })))
+    const error = await downloadFile('/api/auth/export?x=1').catch((e: unknown) => e)
+    expect(error).toMatchObject({ status: 404, path: '/auth/export?x=1', serverMessage: 'No such file' })
+  })
+
   it('keeps no code for a non-JSON error body', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<html>', { status: 502 })))
     await expect(downloadFile('/api/x')).rejects.toMatchObject({ status: 502, code: undefined })
@@ -127,6 +133,14 @@ describe('uploadMultipart', () => {
     FakeXhr.last.responseText = JSON.stringify({ code: 'SIZE_LIMIT_EXCEEDED' })
     FakeXhr.last.onload?.()
     await expect(promise).rejects.toMatchObject({ status: 413, code: 'SIZE_LIMIT_EXCEEDED' })
+  })
+
+  it('records the path relative to /api and the server message on failure', async () => {
+    const { promise } = uploadMultipart('/api/up/here', new FormData(), { messages })
+    FakeXhr.last.status = 400
+    FakeXhr.last.responseText = JSON.stringify({ message: 'Bad archive' })
+    FakeXhr.last.onload?.()
+    await expect(promise).rejects.toMatchObject({ path: '/up/here', serverMessage: 'Bad archive' })
   })
 
   it('rejects with status 0 on network error and ABORTED on abort', async () => {
