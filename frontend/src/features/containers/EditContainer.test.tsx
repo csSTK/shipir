@@ -183,8 +183,12 @@ describe('ContainerResourcesDialog', () => {
 
   it('rejects an empty change when the prefilled limits are untouched', () => {
     wrap(<ContainerResourcesDialog hostId="h1" container={{ ...sample, memoryBytes: 512 * 1024 * 1024, cpus: 1.5 }} onClose={() => {}} />)
+    // the form starts with the current limits; without them an untouched form would be empty for a different reason
+    expect(screen.getByLabelText('Memory limit (MiB)')).toHaveValue('512')
+    expect(screen.getByLabelText('CPUs')).toHaveValue('1.5')
     fireEvent.click(screen.getByRole('button', { name: 'Apply limits' }))
     expect(screen.getByText('Change at least one value.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Memory limit (MiB)')).toHaveValue('512')
     expect(call('PATCH')).toBeUndefined()
   })
 
