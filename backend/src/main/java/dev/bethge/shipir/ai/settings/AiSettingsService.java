@@ -8,6 +8,7 @@ import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.auth.User;
 import dev.bethge.shipir.auth.UserRepository;
 import dev.bethge.shipir.common.security.SecretCipher;
+import dev.bethge.shipir.common.util.EndpointUrls;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -49,13 +50,22 @@ public class AiSettingsService {
         return toResponse(load());
     }
 
-    @Auditable(action = "AI_SETTINGS_UPDATE", targetType = "AI_SETTINGS", targetId = "'1'")
+    @Auditable(action = "AI_SETTINGS_UPDATE", targetType = "AI_SETTINGS", targetId = "'1'",
+            before = "storedBaseUrl(#request)",
+            details = "{'provider': (#request.provider() != null ? #request.provider() : #request.activeProvider()).name(), "
+                    + "'oldBaseUrl': #before, 'newBaseUrl': #request.baseUrl().trim()}")
     @Transactional
     AiSettingsResponse update(AiSettingsRequest request, String username) {
         validateUrl(request.baseUrl());
         AiProvider target = request.provider() != null ? request.provider() : request.activeProvider();
         AiProviderConfig c = loadConfig(target);
-        if (request.apiKey() != null && !request.apiKey().isBlank()) {
+        boolean newKey = request.apiKey() != null && !request.apiKey().isBlank();
+        boolean clearsKey = request.apiKey() != null && request.apiKey().isEmpty();
+        if (c.hasKey() && !newKey && !clearsKey && !EndpointUrls.sameEndpoint(c.getBaseUrl(), request.baseUrl())) {
+            throw new AiSettingsException(HttpStatus.BAD_REQUEST, "SECRET_REQUIRED_FOR_NEW_ENDPOINT",
+                    "The stored API key is not sent to a different base URL: enter the key again");
+        }
+        if (newKey) {
             requireKey();
             c.replaceKey(cipher.encrypt(request.apiKey()), hint(request.apiKey()));
         } else if (request.apiKey() != null && request.apiKey().isEmpty()) {
@@ -68,6 +78,12 @@ public class AiSettingsService {
         s.update(request.activeProvider(), request.enabled(), clock.instant(), by);
         settings.saveAndFlush(s);
         return toResponse(s);
+    }
+
+    /** Base URL currently stored for the provider an update targets; audit "before" state. */
+    public String storedBaseUrl(AiSettingsRequest request) {
+        AiProvider target = request.provider() != null ? request.provider() : request.activeProvider();
+        return loadConfig(target).getBaseUrl();
     }
 
     /** Not transactional: the network call must not hold a database connection. */

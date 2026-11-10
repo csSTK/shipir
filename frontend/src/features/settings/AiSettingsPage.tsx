@@ -22,6 +22,8 @@ function errorMessage(error: unknown, fallback: string): string {
       return i18n.t('settings:AiSettingsPage.thisIsNotAValid');
     if (error.code === "ENCRYPTION_KEY_MISSING")
       return i18n.t('settings:AiSettingsPage.theServerHasNoEncryption');
+    if (error.code === "SECRET_REQUIRED_FOR_NEW_ENDPOINT")
+      return i18n.t('settings:AiSettingsPage.secretRequiredForNewEndpoint');
     if (error.code === "API_KEY_REQUIRED")
       return i18n.t('settings:AiSettingsPage.saveAnApiKeyFirst');
     if (error.status === 400 && error.details?.length)

@@ -89,6 +89,12 @@ describe('OidcSettingsPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/Local login can only be switched off/)
   })
 
+  it('shows SECRET_REQUIRED_FOR_NEW_ENDPOINT inline', async () => {
+    renderPage((_p, method) => (method === 'PUT' ? new ApiError(400, 'x', 'SECRET_REQUIRED_FOR_NEW_ENDPOINT') : undefined))
+    fireEvent.click(await screen.findByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/enter the client secret again/)
+  })
+
   it('reports the test result', async () => {
     renderPage((p) => (p === '/settings/oidc/test' ? { status: 'UNREACHABLE' } : undefined))
     fireEvent.click(await screen.findByRole('button', { name: 'Test connection' }))

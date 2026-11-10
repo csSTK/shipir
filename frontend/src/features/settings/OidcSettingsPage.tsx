@@ -24,6 +24,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   get INVALID_ROLE_MAPPING() { return i18n.t('settings:OidcSettingsPage.theRoleMappingIsNot') },
   get LOCAL_LOGIN_REQUIRED() { return i18n.t('settings:OidcSettingsPage.localLoginCanOnlyBe') },
   get OIDC_NOT_CONFIGURED() { return i18n.t('settings:OidcSettingsPage.saveTheIssuerClientId') },
+  get SECRET_REQUIRED_FOR_NEW_ENDPOINT() { return i18n.t('settings:OidcSettingsPage.secretRequiredForNewEndpoint') },
   get ENCRYPTION_KEY_MISSING() { return i18n.t('settings:OidcSettingsPage.theServerHasNoEncryption') },
 }
 

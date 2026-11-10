@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import dev.bethge.shipir.auth.oidc.dto.OidcTestResponse;
 import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
 import dev.bethge.shipir.common.security.SecretCipher;
+import dev.bethge.shipir.common.util.EndpointUrls;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -63,7 +64,9 @@ class OidcSettingsService implements LocalLoginPolicy {
         return toResponse(load(), request);
     }
 
-    @Auditable(action = "OIDC_SETTINGS_UPDATE", targetType = "OIDC_SETTINGS", targetId = "'1'")
+    @Auditable(action = "OIDC_SETTINGS_UPDATE", targetType = "OIDC_SETTINGS", targetId = "'1'",
+            before = "storedIssuer()",
+            details = "{'oldIssuerUrl': #before, 'newIssuerUrl': #request.issuerUrl()?.trim()}")
     @Transactional
     OidcSettingsResponse update(OidcSettingsRequest request, String username, HttpServletRequest http) {
         OidcSettings s = load();
@@ -80,6 +83,13 @@ class OidcSettingsService implements LocalLoginPolicy {
             throw new OidcException(HttpStatus.BAD_REQUEST, "INVALID_SCOPES", "The scopes must include openid");
         }
         Map<Role, List<String>> mapping = RoleMapping.validate(request.roleMapping());
+        boolean newSecret = request.clientSecret() != null && !request.clientSecret().isBlank();
+        boolean clearsSecret = request.clientSecret() != null && request.clientSecret().isEmpty();
+        if (s.getClientSecretCiphertext() != null && issuer != null && !newSecret && !clearsSecret
+                && !EndpointUrls.sameEndpoint(s.getIssuerUrl(), issuer)) {
+            throw new OidcException(HttpStatus.BAD_REQUEST, "SECRET_REQUIRED_FOR_NEW_ENDPOINT",
+                    "The stored client secret is not sent to a different issuer: enter the client secret again");
+        }
         if (request.clientSecret() != null && !request.clientSecret().isBlank()) {
             if (!cipher.isConfigured()) {
                 throw new OidcException(HttpStatus.CONFLICT, "ENCRYPTION_KEY_MISSING",
@@ -99,6 +109,11 @@ class OidcSettingsService implements LocalLoginPolicy {
         settings.saveAndFlush(s);
         discoveryCache.invalidate();
         return toResponse(s, http);
+    }
+
+    /** Issuer currently stored (null when none); audit "before" state. */
+    public String storedIssuer() {
+        return load().getIssuerUrl();
     }
 
     /** Not transactional: the network call must not hold a database connection. */

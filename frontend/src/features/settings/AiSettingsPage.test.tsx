@@ -124,6 +124,7 @@ describe('AiSettingsPage', () => {
   it.each([
     ['INVALID_BASE_URL', 400, 'not a valid'],
     ['ENCRYPTION_KEY_MISSING', 409, 'SHIPIR_ENCRYPTION_KEY'],
+    ['SECRET_REQUIRED_FOR_NEW_ENDPOINT', 400, 'enter the API key again'],
   ])('shows server error %s inline', async (code, status, text) => {
     renderPage(() => new ApiError(status, 'x', code))
     await screen.findByLabelText('Base URL')

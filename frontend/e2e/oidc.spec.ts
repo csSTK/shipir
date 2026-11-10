@@ -44,6 +44,15 @@ test('LOCAL_LOGIN_REQUIRED is shown inline', async ({ page, api }) => {
   await expect(page.getByRole('alert')).toContainText('Local login can only be switched off')
 })
 
+test('a changed issuer without the client secret shows the re-entry error inline', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', { body: user('ADMIN') })
+  api.mock('GET', '/api/settings/oidc', { body: settings })
+  api.mock('PUT', '/api/settings/oidc', { status: 400, body: { code: 'SECRET_REQUIRED_FOR_NEW_ENDPOINT', message: 'x' } })
+  await page.goto('/settings/oidc')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByRole('alert')).toContainText('enter the client secret again')
+})
+
 test('operator is not allowed', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: user('OPERATOR') })
   await page.goto('/settings/oidc')

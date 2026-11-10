@@ -77,6 +77,15 @@ test('server rejection of the base URL is shown inline', async ({ page, api }) =
   await expect(page.getByRole('alert')).toContainText('not a valid base URL')
 })
 
+test('a changed base URL without the key shows the re-entry error inline', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', { body: user('ADMIN') })
+  api.mock('GET', '/api/settings/ai', { body: settings })
+  api.mock('PUT', '/api/settings/ai', { status: 400, body: { code: 'SECRET_REQUIRED_FOR_NEW_ENDPOINT', message: 'x' } })
+  await page.goto('/settings/ai')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByRole('alert')).toContainText('enter the API key again')
+})
+
 test('operator cannot reach the page', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: user('OPERATOR') })
   await page.goto('/settings/ai')
