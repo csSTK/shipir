@@ -5,6 +5,8 @@
 # Linux dependencies live in docker volumes (node_modules, pnpm store), the host's node_modules is never touched.
 # The named volumes are shared by every checkout and worktree on this machine: two runs at the same time (e.g. from
 # two worktrees) can race on `pnpm install` into them. Run one at a time.
+# CI runs on x86_64 (ubuntu-latest), a Mac with Apple Silicon runs the image as arm64. `VISUAL_PLATFORM=linux/amd64`
+# forces the CI architecture (emulated, slow) with its own dependency volumes; use it to check baselines against CI.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -27,10 +29,18 @@ image="mcr.microsoft.com/playwright:v${version}-noble"
 args=""
 for a in "$@"; do args+=" $(printf '%q' "$a")"; done
 
-docker run --rm --ipc=host \
+# Dependencies are architecture specific (native modules): a forced platform gets its own volumes.
+platform_args=()
+volume_suffix=""
+if [ -n "${VISUAL_PLATFORM:-}" ]; then
+  platform_args=(--platform "$VISUAL_PLATFORM")
+  volume_suffix="-${VISUAL_PLATFORM//\//-}"
+fi
+
+docker run --rm --ipc=host ${platform_args[@]+"${platform_args[@]}"} \
   -v "$repo:/work" \
-  -v shipir-visual-node-modules:/work/frontend/node_modules \
-  -v shipir-visual-pnpm-store:/pnpm-store \
+  -v "shipir-visual-node-modules${volume_suffix}:/work/frontend/node_modules" \
+  -v "shipir-visual-pnpm-store${volume_suffix}:/pnpm-store" \
   -w /work/frontend \
   -e CI=1 -e E2E_PORT=4173 -e npm_config_store_dir=/pnpm-store \
   "$image" \

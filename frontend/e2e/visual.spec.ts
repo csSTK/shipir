@@ -93,6 +93,8 @@ for (const target of targets) {
     for (const scheme of target.dark ? (['light', 'dark'] as const) : (['light'] as const)) {
       const id = `${target.name}-${viewport.name}-${scheme}`
       test(id, async ({ page, api }) => {
+        // The account page prints the dev server's origin in a curl example; the port must not decide the baseline (shipr-k31n.66).
+        const mask = [page.locator('.otsecret-code')]
         await page.emulateMedia({ colorScheme: scheme })
         await page.setViewportSize({ width: viewport.width, height: viewport.height })
         target.setup?.(api)
@@ -105,7 +107,7 @@ for (const target of targets) {
         await page.evaluate(() => document.fonts.ready)
         // What a user sees: the viewport, shell included (sticky sidebar, assistant button).
         // soft: a failing viewport capture must not hide the content capture's result.
-        await expect.soft(page).toHaveScreenshot(`${id}.png`)
+        await expect.soft(page).toHaveScreenshot(`${id}.png`, { mask })
         // Content taller than the viewport: also capture the whole main region, so the lower part is covered.
         // Overlays (dialog, dock) are fixed to the viewport and have no extra content.
         const taller = await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight)
@@ -115,7 +117,7 @@ for (const target of targets) {
           await page.addStyleTag({
             content: '.assistant-dock__icon { visibility: hidden !important; } .shell__bar { position: static !important; }',
           })
-          await expect.soft(page.getByRole('main')).toHaveScreenshot(`${id}-content.png`)
+          await expect.soft(page.getByRole('main')).toHaveScreenshot(`${id}-content.png`, { mask })
         }
       })
     }
