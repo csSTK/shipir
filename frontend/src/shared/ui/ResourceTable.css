@@ -80,6 +80,17 @@
   padding: 0;
 }
 
+/* Width of the actions column: one control per action slot, gaps and cell padding */
+.rtable__table {
+  --rt-actions-width: calc(
+    var(--rt-action-slots, 1) * var(--control-height) + (var(--rt-action-slots, 1) - 1) * var(--space-1) + 2 * var(--space-3) +
+      var(--border-width)
+  );
+}
+.rtable__col-actions {
+  width: var(--rt-actions-width);
+}
+
 /* Pinned actions column: stays visible when the table scrolls sideways */
 .rtable__table th.rtable__actions-cell,
 .rtable__table td.rtable__actions-cell {

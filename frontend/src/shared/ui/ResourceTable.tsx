@@ -248,6 +248,13 @@ export function ResourceTable<T>({
   const hasActions = !!rowActions
   const flexIds = new Set(columns.filter((c) => c.flex && sizing[c.id] === undefined).map((c) => c.id))
   const hasFlex = visibleColumns.some((c) => flexIds.has(c.id))
+  // the actions column is sized to its widest row so content never spills into the neighbouring column
+  const actionSlots = hasActions
+    ? filtered.reduce((max, r) => {
+        const a = rowActions(r)
+        return Math.max(max, (a.primary?.length ?? 0) + (a.menu && a.menu.length > 0 ? 1 : 0))
+      }, 1)
+    : 0
   const sizeSum = visibleColumns.reduce((sum, c) => sum + c.getSize(), 0)
 
   let body: ReactNode
@@ -279,7 +286,7 @@ export function ResourceTable<T>({
   } else {
     body = (
       <div className="rtable__scroll">
-        <table ref={tableRef} className="rtable__table" aria-label={label} style={{ minWidth: sizeSum }}>
+        <table ref={tableRef} className="rtable__table" aria-label={label} style={{ ['--rt-action-slots' as string]: actionSlots, minWidth: `calc(${sizeSum}px + ${hasActions ? 'var(--rt-actions-width)' : '0px'})` }}>
           <colgroup>
             {visibleColumns.map((c) => (
               <col key={c.id} style={flexIds.has(c.id) ? undefined : { width: c.getSize() }} />

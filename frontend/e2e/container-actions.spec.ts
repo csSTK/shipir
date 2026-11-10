@@ -73,3 +73,42 @@ test('viewer has no action buttons', async ({ page, api }) => {
   await expect(page.getByRole('button', { name: 'Stop web' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Logs web' })).toBeVisible()
 })
+
+test.describe('table column layout at 1440px', () => {
+  test.use({ viewport: { width: 1440, height: 900 } })
+
+  test('port chips never overlap the pinned actions cell and the ports column keeps its width', async ({ page, api }) => {
+    api.mock('GET', '/api/auth/me', as('ADMIN'))
+    api.mock('GET', '/api/hosts/a/containers', { body: [{ ...base, id: 'c1', name: 'web', state: 'running', ports: ['8080:80/tcp'] }, ...containers.slice(1)] })
+    await page.goto('/environments/a/containers')
+    const chip = page.locator('.containers__ports li').first()
+    await expect(chip).toBeVisible()
+    const actions = page.locator('td.rtable__actions-cell').first()
+    const [c, a] = [await chip.boundingBox(), await actions.boundingBox()]
+    expect(c && a).toBeTruthy()
+    expect(c!.x + c!.width).toBeLessThanOrEqual(a!.x)
+    const ports = await page.locator('th[data-col="ports"]').boundingBox()
+    expect(ports!.width).toBeGreaterThanOrEqual(120)
+    // the buttons of every row sit inside their cell
+    for (const row of await page.locator('td.rtable__actions-cell').all()) {
+      const cell = await row.boundingBox()
+      for (const btn of await row.getByRole('button').all()) {
+        const b = await btn.boundingBox()
+        expect(b!.x).toBeGreaterThanOrEqual(cell!.x)
+        expect(b!.x + b!.width).toBeLessThanOrEqual(cell!.x + cell!.width)
+      }
+    }
+  })
+})
+
+test.describe('table column layout at 375px', () => {
+  test.use({ viewport: { width: 375, height: 800 } })
+
+  test('the name column keeps its width next to the pinned actions (the table scrolls sideways)', async ({ page, api }) => {
+    api.mock('GET', '/api/auth/me', as('ADMIN'))
+    await page.goto('/environments/a/containers')
+    await expect(page.getByRole('link', { name: 'Details of web' })).toBeVisible()
+    const name = await page.locator('th[data-col="name"]').boundingBox()
+    expect(name!.width).toBeGreaterThanOrEqual(200)
+  })
+})
