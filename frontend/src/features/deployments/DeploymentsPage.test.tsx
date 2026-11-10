@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../shared/api/client.ts'
@@ -170,7 +170,7 @@ describe('DeploymentsPage', () => {
       init?.method === 'POST' ? Promise.resolve({ id: 'new1' }) : Promise.resolve([]),
     )
     fireEvent.click(screen.getByRole('button', { name: 'Create deployment' }))
-    await vi.waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/environments/h1/deployments/new1'))
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/environments/h1/deployments/new1'))
     expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/managed-deployments', {
       method: 'POST',
       body: { name: 'web', yaml: 'services: {}', env: [{ key: 'A', value: 'b' }] },
@@ -313,7 +313,7 @@ describe('DeploymentsPage', () => {
       expect(within(dialog).getByLabelText('Also remove volumes')).not.toBeChecked()
       expect(remove).not.toHaveBeenCalled()
       fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
-      await vi.waitFor(() => expect(remove).toHaveBeenCalled())
+      await waitFor(() => expect(remove).toHaveBeenCalled())
       expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/deployments/blog?removeVolumes=false', { method: 'DELETE' })
       expect(await screen.findByRole('status')).toHaveTextContent('blog removed.')
     })
@@ -324,7 +324,7 @@ describe('DeploymentsPage', () => {
       const dialog = await openRemove('old')
       fireEvent.click(within(dialog).getByLabelText('Also remove volumes'))
       fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
-      await vi.waitFor(() => expect(remove).toHaveBeenCalled())
+      await waitFor(() => expect(remove).toHaveBeenCalled())
       expect(apiFetch).toHaveBeenCalledWith('/hosts/h1/deployments/old?removeVolumes=true', { method: 'DELETE' })
     })
 
