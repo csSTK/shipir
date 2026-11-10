@@ -53,9 +53,26 @@ test('container detail at 375px fits the screen, tabs scroll inside their row, c
   await page.getByRole('button', { name: 'Change container' }).click()
   await expect(page.getByRole('menuitem', { name: 'Resource limits' })).toBeVisible()
   await page.keyboard.press('Escape')
-  const tab = page.getByRole('tab', { name: 'Storage & network' })
-  const box = await tab.boundingBox()
-  expect(box?.height ?? 0, 'tab label stays on one line').toBeLessThan(60)
+  const list = page.getByRole('tablist')
+  const long = page.getByRole('tab', { name: 'Storage & network' })
+  const short = page.getByRole('tab', { name: 'Labels' })
+  expect((await long.boundingBox())!.height, 'long tab label stays on one line').toBe((await short.boundingBox())!.height)
+  // the row scrolls inside itself and its last tab can be reached
+  expect(await list.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true)
+  const last = page.getByRole('tab').last()
+  await last.scrollIntoViewIfNeeded()
+  const [lb, rb] = [(await last.boundingBox())!, (await list.boundingBox())!]
+  expect(lb.x + lb.width, 'last tab fully inside the list').toBeLessThanOrEqual(rb.x + rb.width + 1)
+  await noPageScroll(page)
+  // a focused tab's ring is not clipped by the list, and the list has no vertical scroll
+  await short.focus()
+  await page.keyboard.press('Shift+Tab')
+  await page.keyboard.press('Tab')
+  await expect(short).toBeFocused()
+  expect(await list.evaluate((el) => el.scrollHeight - el.clientHeight)).toBe(0)
+  const ring = await short.evaluate((el) => ({ w: getComputedStyle(el).outlineWidth, off: getComputedStyle(el).outlineOffset }))
+  expect(parseFloat(ring.w)).toBeGreaterThan(0)
+  expect(parseFloat(ring.off)).toBeLessThanOrEqual(0)
 })
 
 for (const path of ['/settings/ai', '/account']) {

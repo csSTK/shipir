@@ -2,9 +2,11 @@
   display: flex;
   /* a long tab row scrolls inside itself instead of widening the page */
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
   gap: var(--space-1);
-  border-bottom: var(--border-width) solid var(--color-border);
+  /* the divider is an inset shadow (the active tab's indicator paints over it), so no negative margins overflow the list */
+  box-shadow: inset 0 calc(var(--border-width) * -1) 0 var(--color-border);
 }
 .ui-tabs__tab {
   flex: none;
@@ -13,7 +15,6 @@
   padding: 0 var(--space-4);
   border: 0;
   border-bottom: var(--border-width-thick) solid transparent;
-  margin-bottom: calc(var(--border-width) * -1);
   background: transparent;
   color: var(--color-text-muted);
   font: inherit;
@@ -30,8 +31,9 @@
   border-bottom-color: var(--color-accent);
 }
 .ui-tabs__tab:focus-visible {
-  outline: none;
-  box-shadow: var(--shadow-focus);
+  /* drawn inside the tab: the scrolling list would clip a ring outside it */
+  outline: var(--border-width-thick) solid var(--color-focus);
+  outline-offset: calc(var(--border-width-thick) * -1);
   border-radius: var(--radius-sm);
 }
 .ui-tabs__panel {
