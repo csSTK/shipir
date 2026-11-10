@@ -1,5 +1,6 @@
 package dev.bethge.shipir.auth;
 
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -7,7 +8,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -40,6 +42,8 @@ public class LoginThrottle {
 
     private static final int ADDRESS_FACTOR = 4;
     private static final int PURGE_THRESHOLD = 1_000;
+    /** Hard cap on tracked keys; beyond it the oldest unlocked entries are evicted. Locked entries are kept until their lock expires. */
+    static final int MAX_ENTRIES = 10_000;
 
     private static final class Entry {
         final Deque<Instant> failures = new ArrayDeque<>();
@@ -50,11 +54,28 @@ public class LoginThrottle {
 
     private final Clock clock;
     private final AuthThrottleProperties.Login settings;
-    private final Map<String, Entry> entries = new HashMap<>();
+    private final int maxEntries;
+    private final Map<String, Entry> entries = new LinkedHashMap<>();
 
+    @org.springframework.beans.factory.annotation.Autowired
     LoginThrottle(Clock clock, AuthThrottleProperties properties) {
+        this(clock, properties, MAX_ENTRIES);
+    }
+
+    LoginThrottle(Clock clock, AuthThrottleProperties properties, int maxEntries) {
         this.clock = clock;
         this.settings = properties.login();
+        this.maxEntries = maxEntries;
+    }
+
+    synchronized int size() {
+        return entries.size();
+    }
+
+    /** Drops expired entries so keys of one-off sources do not stay in memory until the next burst of traffic. */
+    @Scheduled(fixedDelayString = "${shipir.security.login.purge-interval:5m}")
+    synchronized void purgeExpired() {
+        purge(clock.instant());
     }
 
     /** Remaining lock time if the username or the address is locked, else empty. */
@@ -145,7 +166,12 @@ public class LoginThrottle {
     }
 
     private boolean fail(String key, int limit, Instant now) {
-        Entry entry = entries.computeIfAbsent(key, k -> new Entry());
+        Entry entry = entries.get(key);
+        if (entry == null) {
+            entry = new Entry();
+            entries.put(key, entry);
+            enforceCap(key, now);
+        }
         if (entry.lockedUntil != null && entry.lockedUntil.isAfter(now)) {
             return false;
         }
@@ -162,6 +188,22 @@ public class LoginThrottle {
             return true;
         }
         return false;
+    }
+
+    /** Evicts the oldest entries that are not locked (and not {@code keep}) until the map is within its cap. */
+    private void enforceCap(String keep, Instant now) {
+        if (entries.size() <= maxEntries) {
+            return;
+        }
+        purge(now);
+        Iterator<Map.Entry<String, Entry>> it = entries.entrySet().iterator();
+        while (entries.size() > maxEntries && it.hasNext()) {
+            Map.Entry<String, Entry> e = it.next();
+            boolean locked = e.getValue().lockedUntil != null && e.getValue().lockedUntil.isAfter(now);
+            if (!locked && !e.getKey().equals(keep)) {
+                it.remove();
+            }
+        }
     }
 
     private void purge(Instant now) {

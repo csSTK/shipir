@@ -120,4 +120,55 @@ class LoginThrottleTest {
         assertThat(throttle.admitAddress(scope, "10.0.0.2").admitted()).isTrue();
         assertThat(throttle.admit(LoginThrottle.Scope.LOGIN, "alice", "10.0.0.1").admitted()).isTrue();
     }
+
+    @Test
+    void mapStaysWithinTheCapAfterManyDistinctUsernames() {
+        LoginThrottle capped = capped(50);
+        for (int i = 0; i < 500; i++) {
+            capped.recordFailure(SCOPE, "user" + i, "10.0.0.1");
+        }
+
+        assertThat(capped.size()).isLessThanOrEqualTo(50);
+    }
+
+    @Test
+    void lockedEntryIsNeverEvictedBeforeItsLockExpires() {
+        LoginThrottle capped = capped(50);
+        for (int i = 0; i < 5; i++) {
+            capped.admit(SCOPE, "victim", "10.9.9.9");
+        }
+        assertThat(capped.lockedFor(SCOPE, "victim", "10.9.9.9")).isPresent();
+
+        for (int i = 0; i < 500; i++) {
+            capped.recordFailure(SCOPE, "user" + i, "10.0.0.1");
+        }
+
+        assertThat(capped.lockedFor(SCOPE, "victim", "10.9.9.9")).isPresent();
+    }
+
+    @Test
+    void scheduledPurgeDropsExpiredEntries() {
+        java.util.concurrent.atomic.AtomicReference<Instant> now =
+                new java.util.concurrent.atomic.AtomicReference<>(Instant.parse("2030-01-01T10:00:00Z"));
+        Clock clock = new Clock() {
+            public java.time.ZoneId getZone() { return ZoneOffset.UTC; }
+            public Clock withZone(java.time.ZoneId z) { return this; }
+            public Instant instant() { return now.get(); }
+        };
+        LoginThrottle t = new LoginThrottle(clock, new AuthThrottleProperties(
+                new AuthThrottleProperties.Login(5, Duration.ofMinutes(15), Duration.ofMinutes(15)), null), 50);
+        t.recordFailure(SCOPE, "alice", "10.0.0.1");
+        assertThat(t.size()).isEqualTo(2);
+
+        now.set(now.get().plus(Duration.ofHours(1)));
+        t.purgeExpired();
+
+        assertThat(t.size()).isZero();
+    }
+
+    private static LoginThrottle capped(int max) {
+        return new LoginThrottle(Clock.fixed(Instant.parse("2030-01-01T10:00:00Z"), ZoneOffset.UTC),
+                new AuthThrottleProperties(
+                        new AuthThrottleProperties.Login(5, Duration.ofMinutes(15), Duration.ofMinutes(15)), null), max);
+    }
 }
