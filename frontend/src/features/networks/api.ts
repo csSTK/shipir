@@ -15,8 +15,9 @@ export interface Network {
   containerCount: number
 }
 
-export function useNetworks(hostId: string) {
+export function useNetworks(hostId: string, enabled = true) {
   return useQuery({
+    enabled,
     queryKey: ['hosts', hostId, 'networks'],
     queryFn: () => apiFetch<Network[]>(`/hosts/${hostId}/networks`),
   })

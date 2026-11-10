@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EnvironmentDashboard } from './EnvironmentDashboard.tsx'
@@ -54,6 +54,8 @@ function serve(overview: HostOverview[], role = 'VIEWER') {
   apiFetch.mockImplementation((path: string) => {
     if (path === '/auth/me') return Promise.resolve({ username: 'u', role, setupRequired: false })
     if (path.endsWith('/disk-usage')) return Promise.resolve(usage)
+    if (path.endsWith('/deployments')) return Promise.resolve([{ name: 'web' }, { name: 'db' }, { name: 'cache' }])
+    if (path.endsWith('/networks')) return Promise.resolve([{ id: 'n1' }, { id: 'n2' }])
     if (path.includes('/stats/history'))
       return Promise.resolve({ range: '24h', from: '', to: '', bucketSeconds: 60, seriesTotal: 0, truncated: false, series: [] })
     return Promise.resolve(overview)
@@ -84,6 +86,8 @@ describe('EnvironmentDashboard', () => {
     expect(containers).toHaveAttribute('href', '/environments/a/containers')
     expect(screen.getByRole('link', { name: /Images/ })).toHaveTextContent('12')
     expect(screen.getByRole('link', { name: /Volumes/ })).toHaveTextContent('4')
+    await waitFor(() => expect(screen.getByRole('link', { name: /Deployments/ })).toHaveTextContent('3'))
+    await waitFor(() => expect(screen.getByRole('link', { name: /Networks/ })).toHaveTextContent('2'))
     for (const name of ['Deployments', 'Networks']) {
       expect(screen.getByRole('link', { name: new RegExp(name) })).toHaveAttribute(
         'href',

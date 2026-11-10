@@ -10,12 +10,18 @@ import { ENV_RESOURCES, type EnvResourceSlug } from './resources.ts'
 import { EnvironmentActions } from './EnvironmentActions.tsx'
 import { PruneDialog } from './PruneDialog.tsx'
 import { DiskUsageCard } from './DiskUsageCard.tsx'
+import { useDeployments } from '../deployments/api.ts'
+import { useNetworks } from '../networks/api.ts'
 import { useTranslation } from 'react-i18next'
 import './EnvironmentsOverview.css'
 import './EnvironmentDashboard.css'
 
 /** Count shown on a resource tile; null when the overview does not provide it. */
-function countFor(env: HostOverview, slug: EnvResourceSlug): number | null {
+function countFor(
+  env: HostOverview,
+  slug: EnvResourceSlug,
+  listed: { deployments?: number; networks?: number },
+): number | null {
   switch (slug) {
     case 'containers':
       return env.containers ? env.containers.running + env.containers.stopped : null
@@ -23,6 +29,10 @@ function countFor(env: HostOverview, slug: EnvResourceSlug): number | null {
       return env.images
     case 'volumes':
       return env.volumes
+    case 'deployments':
+      return listed.deployments ?? null
+    case 'networks':
+      return listed.networks ?? null
     default:
       return null
   }
@@ -34,6 +44,33 @@ function Back() {
     <Link className="envs__back" to="/">
       <ChevronLeft size={16} strokeWidth={1.75} aria-hidden="true" /> {t('EnvironmentDashboard.environments')}
     </Link>
+  )
+}
+
+/** Resource tiles; deployments and networks are not in the overview, so they come from their own lists (running environments only). */
+function ResourceTiles({ env, up }: { env: HostOverview; up: boolean }) {
+  const deployments = useDeployments(env.id, up)
+  const networks = useNetworks(env.id, up)
+  const listed = { deployments: deployments.data?.length, networks: networks.data?.length }
+  return (
+      <ul className="dash__tiles">
+        {ENV_RESOURCES.map(({ slug, label, icon: Icon, tone }) => {
+          const count = up ? countFor(env, slug, listed) : null
+          return (
+            <li key={slug}>
+              <Link className="dash__tile" to={`/environments/${env.id}/${slug}`}>
+                <Card className="dash__card">
+                  <span className={`dash__icon dash__icon--${tone}`} aria-hidden="true">
+                    <Icon size={20} strokeWidth={1.75} />
+                  </span>
+                  <span className="dash__label">{label}</span>
+                  <span className="dash__count">{count ?? '–'}</span>
+                </Card>
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
   )
 }
 
@@ -114,24 +151,7 @@ export function EnvironmentDashboard() {
           {describeError(env.error)}
         </p>
       )}
-      <ul className="dash__tiles">
-        {ENV_RESOURCES.map(({ slug, label, icon: Icon, tone }) => {
-          const count = up ? countFor(env, slug) : null
-          return (
-            <li key={slug}>
-              <Link className="dash__tile" to={`/environments/${env.id}/${slug}`}>
-                <Card className="dash__card">
-                  <span className={`dash__icon dash__icon--${tone}`} aria-hidden="true">
-                    <Icon size={20} strokeWidth={1.75} />
-                  </span>
-                  <span className="dash__label">{label}</span>
-                  <span className="dash__count">{count ?? '–'}</span>
-                </Card>
-              </Link>
-            </li>
-          )
-        })}
-      </ul>
+      <ResourceTiles env={env} up={up} />
       {up && (
         <div className="dash__disk">
           <DiskUsageCard hostId={env.id} onCleanUp={canClean ? () => setPruning(true) : undefined} />

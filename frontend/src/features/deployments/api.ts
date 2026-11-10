@@ -20,8 +20,9 @@ export interface DeploymentSummary {
   systemManaged?: boolean
 }
 
-export function useDeployments(hostId: string) {
+export function useDeployments(hostId: string, enabled = true) {
   return useQuery({
+    enabled,
     queryKey: ['hosts', hostId, 'deployments'],
     queryFn: () => apiFetch<DeploymentSummary[]>(`/hosts/${hostId}/deployments`),
   })

@@ -68,6 +68,8 @@ function history(containers: string[], extra: Record<string, unknown> = {}) {
 test.beforeEach(({ api }) => {
   api.mock('GET', '/api/auth/me', { body: { username: 'u', role: 'VIEWER', setupRequired: false } })
   api.mock('GET', '/api/hosts/overview', { body: [host] })
+  api.mock('GET', '/api/hosts/a/deployments', { body: [] })
+  api.mock('GET', '/api/hosts/a/networks', { body: [] })
 })
 
 test('container details: charts, range selector and keyboard tooltip', async ({ page, api }) => {

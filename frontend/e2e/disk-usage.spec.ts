@@ -28,6 +28,8 @@ const as = (role: string) => ({ body: { username: 'u', role, setupRequired: fals
 
 test.beforeEach(({ api }) => {
   api.mock('GET', '/api/hosts/overview', { body: [local] })
+  api.mock('GET', '/api/hosts/a/deployments', { body: [] })
+  api.mock('GET', '/api/hosts/a/networks', { body: [] })
 })
 
 test('shows the breakdown with reclaimable amounts and unknown values', async ({ page, api }) => {
