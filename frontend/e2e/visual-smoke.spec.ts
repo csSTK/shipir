@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures/api.ts'
-import { mockCommon } from './fixtures/visual-data.ts'
+import { mockCommon, mockContainerDetails } from './fixtures/visual-data.ts'
 
 // Smoke check, no pixel baselines: each main page renders in light and dark at phone, laptop and wide
 // viewports without a page-level horizontal scrollbar. Screenshots are attached for manual review.
@@ -9,6 +9,7 @@ const pages: { name: string; path: string; ready?: string }[] = [
   // `ready`: accessible name of the page's h1 once its data has rendered (the dashboard shows a skeleton until then).
   { name: 'dashboard', path: '/environments/a', ready: 'Local' },
   { name: 'containers', path: '/environments/a/containers' },
+  { name: 'container-detail', path: '/environments/a/containers/1', ready: 'web-with-a-rather-long-container-name' },
   { name: 'deployments', path: '/environments/a/deployments' },
   { name: 'images', path: '/environments/a/images' },
   { name: 'networks', path: '/environments/a/networks' },
@@ -30,6 +31,7 @@ const schemes = ['light', 'dark'] as const
 
 test.beforeEach(({ api }) => {
   mockCommon(api)
+  mockContainerDetails(api)
 })
 
 for (const scheme of schemes) {

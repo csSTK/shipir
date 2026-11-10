@@ -1,9 +1,14 @@
 .ui-tabs__list {
   display: flex;
+  /* a long tab row scrolls inside itself instead of widening the page */
+  overflow-x: auto;
+  scrollbar-width: none;
   gap: var(--space-1);
   border-bottom: var(--border-width) solid var(--color-border);
 }
 .ui-tabs__tab {
+  flex: none;
+  white-space: nowrap;
   min-height: var(--control-height);
   padding: 0 var(--space-4);
   border: 0;

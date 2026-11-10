@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { useContainerStats, type StatSample } from '../../../shared/realtime/useContainerStats.ts'
-import { Badge, Button, Card, PageHeader, Sparkline, StatusDot, Tabs } from '../../../shared/ui/index.ts'
+import { Badge, Button, Card, Menu, PageHeader, Sparkline, StatusDot, Tabs } from '../../../shared/ui/index.ts'
 import { formatSize } from '../../hosts/format.ts'
 import { useCurrentUser } from '../../auth/index.ts'
 import { ContainerUsageHistory } from '../../usage-history/UsageHistory.tsx'
@@ -14,6 +14,7 @@ import { ContainerFilesPanel } from '../files/ContainerFilesPanel.tsx'
 import { describeDetailsError, isNotFound, useContainerDetails, type ContainerDetails, type ContainerPort } from './api.ts'
 import { useCanOpenConsole } from '../exec/api.ts'
 import { useTranslation } from 'react-i18next'
+import { useMediaQuery } from '../../../shared/lib/useMediaQuery.ts'
 import { dateTimeFormat, formatNumber, ONE_DECIMAL } from '../../../shared/i18n/format.ts'
 import './ContainerDetailsPage.css'
 
@@ -291,6 +292,8 @@ export function ContainerDetailsPage() {
   const { id: hostId = '', cid = '' } = useParams()
   const { data: user } = useCurrentUser()
   const canOpenConsole = useCanOpenConsole(hostId)
+  // On phones the four change buttons would not fit one row: they collapse into a menu.
+  const narrow = useMediaQuery('(max-width: 720px)')
   const { data: c, isPending, error, refetch } = useContainerDetails(hostId, cid)
   const navigate = useNavigate()
   const [dialog, setDialog] = useState<'edit' | 'duplicate' | 'limits' | 'publish' | null>(null)
@@ -377,18 +380,33 @@ export function ContainerDetailsPage() {
           />
           {canEdit && (
             <div className="cdetails__edit">
-              <div className="cdetails__nav" role="group" aria-label={t('ContainerDetailsPage.changeContainer')}>
-                <Button disabled={!!c.composeProject || needsAdmin} onClick={() => setDialog('edit')}>
-                  {t('ContainerDetailsPage.edit')}
-                </Button>
-                <Button disabled={!!c.composeProject || needsAdmin} onClick={() => setDialog('duplicate')}>
-                  {t('ContainerDetailsPage.duplicate')}
-                </Button>
-                <Button disabled={!!c.composeProject} onClick={() => setDialog('limits')}>
-                  {t('ContainerDetailsPage.resourceLimits')}
-                </Button>
-                <Button onClick={() => setDialog('publish')}>{t('ContainerDetailsPage.publish')}</Button>
-              </div>
+              {narrow ? (
+                <div className="cdetails__nav">
+                  <Menu
+                    align="start"
+                    trigger={<Button>{t('ContainerDetailsPage.changeContainer')}</Button>}
+                    items={[
+                      { label: t('ContainerDetailsPage.edit'), disabled: !!c.composeProject || needsAdmin, onSelect: () => setDialog('edit') },
+                      { label: t('ContainerDetailsPage.duplicate'), disabled: !!c.composeProject || needsAdmin, onSelect: () => setDialog('duplicate') },
+                      { label: t('ContainerDetailsPage.resourceLimits'), disabled: !!c.composeProject, onSelect: () => setDialog('limits') },
+                      { label: t('ContainerDetailsPage.publish'), onSelect: () => setDialog('publish') },
+                    ]}
+                  />
+                </div>
+              ) : (
+                <div className="cdetails__nav" role="group" aria-label={t('ContainerDetailsPage.changeContainer')}>
+                  <Button disabled={!!c.composeProject || needsAdmin} onClick={() => setDialog('edit')}>
+                    {t('ContainerDetailsPage.edit')}
+                  </Button>
+                  <Button disabled={!!c.composeProject || needsAdmin} onClick={() => setDialog('duplicate')}>
+                    {t('ContainerDetailsPage.duplicate')}
+                  </Button>
+                  <Button disabled={!!c.composeProject} onClick={() => setDialog('limits')}>
+                    {t('ContainerDetailsPage.resourceLimits')}
+                  </Button>
+                  <Button onClick={() => setDialog('publish')}>{t('ContainerDetailsPage.publish')}</Button>
+                </div>
+              )}
               {!c.composeProject && needsAdmin && (
                 <p className="cdetails__muted">{t('ContainerDetailsPage.thisContainerIsPrivilegedOr')}</p>
               )}
