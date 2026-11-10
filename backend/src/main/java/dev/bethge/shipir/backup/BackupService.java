@@ -146,6 +146,8 @@ public class BackupService {
             try (Connection c = dataSource.getConnection()) {
                 c.setReadOnly(true);
                 c.setAutoCommit(false);
+                // One snapshot for all tables, so rows committed during the export cannot leave dangling FKs.
+                c.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
                 try {
                     tables.addAll(tableNames(c));
                     for (String table : tables) {
