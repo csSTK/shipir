@@ -138,7 +138,12 @@ class ManagedProxyTemplatesTest {
     @Test
     void caddyReadsItsCaddyfileFromTheConfigVolume() {
         JsonNode service = service(parse(ProxyType.CADDY), "caddy");
-        assertThat(names(service.path("command"))).startsWith("caddy", "run").containsSubsequence("run", "--config", "/etc/shipir-proxy/Caddyfile");
+        List<String> command = names(service.path("command"));
+        assertThat(command).startsWith("sh", "-c");
+        // The shell script seeds a default Caddyfile only when missing, then replaces itself with caddy run on the config volume.
+        assertThat(command.get(command.size() - 1))
+                .contains("[ -f /etc/shipir-proxy/Caddyfile ] ||")
+                .contains("exec caddy run --config /etc/shipir-proxy/Caddyfile");
         assertThat(mounts(parse(ProxyType.CADDY))).anyMatch(mount -> mount.startsWith("shipir-proxy-config:/etc/shipir-proxy"));
         assertThat(mounts(parse(ProxyType.CADDY))).anyMatch(mount -> mount.endsWith(":/data"));
     }

@@ -251,10 +251,11 @@ test('a run finishing in a chat the dock switched away from still shows the answ
   await panel.getByRole('combobox', { name: 'Chat' }).selectOption('s1')
   await panel.getByLabel('Message').fill('slow question')
   await panel.getByRole('button', { name: 'Send' }).click()
-  // The backend stores the user message before the run starts, so a refetch now ends with it (the run is active).
+  // The backend stores the user message before the run starts and reports the active run via `running`.
   api.mock('GET', '/api/ai/sessions/s1', {
     body: {
       session: session('s1', 'Deploy help'),
+      running: true,
       messages: [{ id: 'm1', seq: 1, role: 'USER', content: 'slow question', toolCalls: null, toolCallId: null, status: null, createdAt: now }],
     },
   })
