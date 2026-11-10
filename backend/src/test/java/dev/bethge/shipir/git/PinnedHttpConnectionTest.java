@@ -148,13 +148,20 @@ class PinnedHttpConnectionTest {
     void sslVerificationCannotBeSwitchedOff(@TempDir java.nio.file.Path dir) throws Exception {
         // HTTPS stub with a self-signed certificate (valid for rebind.test, so only the missing trust can fail it)
         java.nio.file.Path keystore = dir.resolve("ks.p12");
+        // Output goes to a file, not a pipe: reading the pipe would block on a hung keytool before the timeout applies
         Process keytool = new ProcessBuilder(java.nio.file.Path.of(System.getProperty("java.home"), "bin", "keytool").toString(),
                 "-genkeypair", "-alias", "s", "-keyalg", "RSA", "-keysize", "2048", "-validity", "2",
                 "-dname", "CN=rebind.test", "-ext", "SAN=dns:rebind.test", "-storetype", "PKCS12",
-                "-keystore", keystore.toString(), "-storepass", "changeit").redirectErrorStream(true).start();
-        keytool.getInputStream().readAllBytes();
-        assertThat(keytool.waitFor(60, TimeUnit.SECONDS)).as("keytool finished in time").isTrue();
-        assertThat(keytool.exitValue()).isZero();
+                "-keystore", keystore.toString(), "-storepass", "changeit")
+                .redirectErrorStream(true)
+                .redirectOutput(dir.resolve("keytool.log").toFile())
+                .start();
+        boolean finished = keytool.waitFor(60, TimeUnit.SECONDS);
+        if (!finished) {
+            keytool.destroyForcibly();
+        }
+        assertThat(finished).as("keytool finished in time").isTrue();
+        assertThat(keytool.exitValue()).as("keytool exit code").isZero();
         java.security.KeyStore ks = java.security.KeyStore.getInstance("PKCS12");
         try (var in = java.nio.file.Files.newInputStream(keystore)) {
             ks.load(in, "changeit".toCharArray());
