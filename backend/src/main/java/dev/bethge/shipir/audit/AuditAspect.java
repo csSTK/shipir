@@ -97,7 +97,12 @@ class AuditAspect {
             String targetType = a.targetType().isEmpty() ? null : a.targetType();
             AuditRecord entry = new AuditRecord(userId, truncate(username, 50), a.action(), outcome,
                     targetType, eval(a.targetId(), ctx), details(a, ctx, outcome));
-            writeAfterTransaction(entry, a.action());
+            AuditRecord notCommitted = outcome == AuditLogEntry.Outcome.SUCCESS
+                    ? new AuditRecord(null, entry.username(), entry.action(), AuditLogEntry.Outcome.FAILURE,
+                            entry.targetType(), entry.targetId(),
+                            details(a, ctx, AuditLogEntry.Outcome.FAILURE))
+                    : entry;
+            writeAfterTransaction(entry, notCommitted, a.action());
         } catch (RuntimeException e) {
             log.warn("Could not write audit entry for {}: {}", a.action(), e.toString());
         }
@@ -111,7 +116,7 @@ class AuditAspect {
      * Trade-off: a success entry is written a moment after the commit instead of before it, so a crash in
      * between loses the entry; failure entries are kept because they are written after the rollback.
      */
-    private void writeAfterTransaction(AuditRecord entry, String action) {
+    private void writeAfterTransaction(AuditRecord entry, AuditRecord notCommitted, String action) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             auditService.record(entry);
             return;
@@ -120,7 +125,9 @@ class AuditAspect {
             @Override
             public void afterCompletion(int status) {
                 try {
-                    auditService.record(entry);
+                    // The method returned normally but the transaction did not commit (rollback-only, commit-time
+                    // failure): the action did not happen, so record a failed attempt (no user id, no success details).
+                    auditService.record(status == STATUS_COMMITTED ? entry : notCommitted);
                 } catch (RuntimeException e) {
                     log.warn("Could not write audit entry for {}: {}", action, e.toString());
                 }

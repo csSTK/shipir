@@ -17,6 +17,8 @@ import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
 
@@ -49,6 +51,16 @@ class AuditSelfRowLockTest {
             users.saveAndFlush(me);
         }
 
+        @Auditable(action = "TEST_ROLLBACK_ONLY", targetType = "USER", details = "{'k': 'v'}")
+        @Transactional
+        public void markRollbackOnlyAndReturn() {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+        }
+
+        @Auditable(action = "TEST_NO_TX", targetType = "USER")
+        public void withoutTransaction() {
+        }
+
         @Auditable(action = "TEST_SELF_UPDATE_FAILS", targetType = "USER")
         @Transactional
         public void updateOwnIdentityThenFail(String actor) {
@@ -69,10 +81,12 @@ class AuditSelfRowLockTest {
     SelfUpdatingService service;
     @Autowired
     JdbcTemplate jdbc;
+    @Autowired
+    TransactionTemplate tx;
 
     @BeforeEach
     void clearEntries() {
-        jdbc.update("DELETE FROM audit_log WHERE action LIKE 'TEST_SELF_UPDATE%'");
+        jdbc.update("DELETE FROM audit_log WHERE action LIKE 'TEST_%'");
     }
 
     /** The timeout runs the body on another thread, so the signed-in user is set there. */
@@ -112,5 +126,43 @@ class AuditSelfRowLockTest {
         assertThat(entries("TEST_SELF_UPDATE_FAILS", "FAILURE")).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT external_issuer FROM users WHERE username = 'admin'", String.class))
                 .isNull();
+    }
+
+    private Long entries(String action) {
+        return jdbc.queryForObject("SELECT count(*) FROM audit_log WHERE action = ?", Long.class, action);
+    }
+
+    @Test
+    void methodThatReturnsNormallyButLeavesTheTransactionRollbackOnlyIsAuditedAsFailure() {
+        assertTimeoutPreemptively(Duration.ofSeconds(20), () -> asAdmin(service::markRollbackOnlyAndReturn));
+
+        assertThat(entries("TEST_ROLLBACK_ONLY", "SUCCESS")).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_log WHERE action = 'TEST_ROLLBACK_ONLY' "
+                + "AND outcome = 'FAILURE' AND user_id IS NULL AND details IS NULL", Long.class)).isEqualTo(1);
+    }
+
+    @Test
+    void callWithoutTransactionIsWrittenDirectly() {
+        asAdmin(service::withoutTransaction);
+
+        assertThat(entries("TEST_NO_TX", "SUCCESS")).isEqualTo(1);
+    }
+
+    @Test
+    void methodJoinedIntoAnOuterTransactionIsWrittenWithTheOuterOutcome() {
+        asAdmin(() -> tx.executeWithoutResult(status -> {
+            service.updateOwnIdentity("admin");
+            assertThat(entries("TEST_SELF_UPDATE")).as("not before the outer transaction ends").isZero();
+        }));
+        assertThat(entries("TEST_SELF_UPDATE", "SUCCESS")).isEqualTo(1);
+
+        jdbc.update("DELETE FROM audit_log WHERE action LIKE 'TEST_%'");
+        asAdmin(() -> tx.executeWithoutResult(status -> {
+            service.updateOwnIdentity("admin");
+            status.setRollbackOnly();
+        }));
+        assertThat(entries("TEST_SELF_UPDATE", "SUCCESS")).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_log WHERE action = 'TEST_SELF_UPDATE' "
+                + "AND outcome = 'FAILURE'", Long.class)).isEqualTo(1);
     }
 }
