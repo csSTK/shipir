@@ -40,7 +40,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -329,7 +331,7 @@ class ReadToolsTest {
     @SuppressWarnings("unchecked")
     private String argsFor(AiTool tool) {
         Map<String, Object> props = (Map<String, Object>) tool.parameters().getOrDefault("properties", Map.of());
-        Map<String, Object> args = new java.util.LinkedHashMap<>();
+        Map<String, Object> args = new LinkedHashMap<>();
         for (String name : props.keySet()) {
             args.put(name, switch (name) {
                 case "hostId" -> hostId.toString();
@@ -568,7 +570,7 @@ class ReadToolsTest {
         assertThat(control.error()).as(control.content()).isFalse();
         assertThat(control.content()).contains("\"content\":\"ok\"");
 
-        Map<String, String> expectedCodes = new java.util.LinkedHashMap<>();
+        Map<String, String> expectedCodes = new LinkedHashMap<>();
         expectedCodes.put("compose.yaml", "EXCLUDED_PATH");
         expectedCodes.put(".env", "EXCLUDED_PATH");
         expectedCodes.put(".shipir-backups/x", "EXCLUDED_PATH");
@@ -635,7 +637,7 @@ class ReadToolsTest {
         assertThat(result.error()).as(result.content()).isFalse();
         JsonNode grants = mapper.readTree(result.content()).get("grants");
         assertThat(grants).hasSize(3);
-        List<String> rows = new java.util.ArrayList<>();
+        List<String> rows = new ArrayList<>();
         for (JsonNode g : grants) {
             assertThat(g.propertyNames()).containsExactlyInAnyOrder("subjectType", "subjectId", "subjectName", "level");
             rows.add(g.get("subjectType").asString() + ":" + g.get("subjectName").asString() + ":" + g.get("level").asString());

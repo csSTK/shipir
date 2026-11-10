@@ -23,6 +23,9 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Clock;
+import java.util.AbstractCollection;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -243,8 +246,8 @@ class AiToolRegistryTest {
 
     @Test
     void failsClosedWhenRedactionFailsForAnyOtherReason() {
-        java.util.AbstractCollection<String> broken = new java.util.AbstractCollection<>() {
-            @Override public java.util.Iterator<String> iterator() { throw new IllegalStateException("boom"); }
+        AbstractCollection<String> broken = new AbstractCollection<>() {
+            @Override public Iterator<String> iterator() { throw new IllegalStateException("boom"); }
             @Override public int size() { return 1; }
         };
         AiToolRegistry registry = new AiToolRegistry(List.of(invalidCompose("parsing hunter2: invalid syntax")), MAPPER,
@@ -359,7 +362,7 @@ class AiToolRegistryTest {
 
     @Test
     void oversizedListResultsStayValidJsonAndSayHowManyItemsWereOmitted() throws Exception {
-        List<Map<String, String>> containers = new java.util.ArrayList<>();
+        List<Map<String, String>> containers = new ArrayList<>();
         for (int i = 0; i < 30; i++) {
             containers.add(Map.of("id", "c" + i, "name", "container-" + i, "image", "x".repeat(100)));
         }
@@ -379,7 +382,7 @@ class AiToolRegistryTest {
 
     @Test
     void oversizedPageObjectKeepsItsFieldsAndShortensTheItemsArray() throws Exception {
-        List<Map<String, String>> entries = new java.util.ArrayList<>();
+        List<Map<String, String>> entries = new ArrayList<>();
         for (int i = 0; i < 30; i++) {
             entries.add(Map.of("action", "A" + i, "details", "d".repeat(100)));
         }
@@ -402,11 +405,11 @@ class AiToolRegistryTest {
 
     @Test
     void shortensTheArrayWithTheLargestSerializedSizeNotTheMostElements() throws Exception {
-        List<Map<String, Object>> few = new java.util.ArrayList<>();
+        List<Map<String, Object>> few = new ArrayList<>();
         for (int i = 0; i < 2; i++) {
             few.add(Map.of("id", "f" + i, "blob", "x".repeat(400)));
         }
-        List<Integer> many = new java.util.ArrayList<>();
+        List<Integer> many = new ArrayList<>();
         for (int i = 0; i < 40; i++) {
             many.add(i);
         }
@@ -436,7 +439,7 @@ class AiToolRegistryTest {
 
     @Test
     void nestedArrayItemsAreDroppedWholeAndTheOutputStaysValidJson() throws Exception {
-        List<List<String>> rows = new java.util.ArrayList<>();
+        List<List<String>> rows = new ArrayList<>();
         for (int i = 0; i < 30; i++) {
             rows.add(List.of("r" + i, "y".repeat(100)));
         }
@@ -453,7 +456,7 @@ class AiToolRegistryTest {
 
     @Test
     void unicodeItemsAreDroppedWholeAndTheOutputStaysValidJson() throws Exception {
-        List<Map<String, String>> items = new java.util.ArrayList<>();
+        List<Map<String, String>> items = new ArrayList<>();
         for (int i = 0; i < 30; i++) {
             items.add(Map.of("name", "Zürich 東京 😀 " + i, "pad", "ü€".repeat(40)));
         }
@@ -469,7 +472,7 @@ class AiToolRegistryTest {
 
     @Test
     void manyItemsAreShortenedToTheCapWithoutLosingTrackOfTheCount() throws Exception {
-        List<Map<String, Integer>> items = new java.util.ArrayList<>();
+        List<Map<String, Integer>> items = new ArrayList<>();
         for (int i = 0; i < 3000; i++) {
             items.add(Map.of("id", i));
         }
@@ -494,7 +497,7 @@ class AiToolRegistryTest {
 
     @Test
     void existingNoteFieldIsNotOverwrittenByTheTruncationNote() throws Exception {
-        List<Map<String, String>> rows = new java.util.ArrayList<>();
+        List<Map<String, String>> rows = new ArrayList<>();
         for (int i = 0; i < 30; i++) {
             rows.add(Map.of("id", "r" + i, "blob", "y".repeat(100)));
         }
@@ -507,7 +510,7 @@ class AiToolRegistryTest {
 
     @Test
     void existingOmittedItemsFieldIsNotOverwrittenByTheCount() throws Exception {
-        List<Map<String, String>> rows = new java.util.ArrayList<>();
+        List<Map<String, String>> rows = new ArrayList<>();
         for (int i = 0; i < 30; i++) {
             rows.add(Map.of("id", "r" + i, "blob", "y".repeat(100)));
         }
