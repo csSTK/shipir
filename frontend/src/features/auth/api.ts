@@ -1,37 +1,56 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ApiError, apiFetch } from '../../shared/api/client.ts'
-import { applyLanguage, resolveLanguage } from '../../shared/i18n/index.ts'
+import {
+  type QueryClient,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { ApiError, apiFetch } from "../../shared/api/client.ts";
+import { applyLanguage, resolveLanguage } from "../../shared/i18n/index.ts";
 
-export type SetupStep = 'PASSWORD' | 'TWO_FACTOR' | 'ENVIRONMENT'
+export type SetupStep = "PASSWORD" | "TWO_FACTOR" | "ENVIRONMENT";
 
 export interface CurrentUser {
-  username: string
-  role: 'ADMIN' | 'OPERATOR' | 'VIEWER'
-  setupRequired: boolean
+  username: string;
+  role: "ADMIN" | "OPERATOR" | "VIEWER";
+  setupRequired: boolean;
   /** Which first-start step is pending; `null` once setup is complete. */
-  setupStep?: SetupStep | null
-  twoFactorEnabled?: boolean
+  setupStep?: SetupStep | null;
+  twoFactorEnabled?: boolean;
   /** Issuer of the linked single sign-on identity; null/absent for local accounts. */
-  externalIssuer?: string | null
+  externalIssuer?: string | null;
   /** Chosen UI language (`en`/`de`); null/absent while none is chosen (the browser language applies). */
-  locale?: string | null
+  locale?: string | null;
 }
 
 /** Login answer for a user with 2FA: no session yet, a code is needed. */
 export interface MfaRequired {
-  mfaRequired: true
+  mfaRequired: true;
 }
 
-export function isMfaRequired(result: CurrentUser | MfaRequired | undefined): result is MfaRequired {
-  return !!result && 'mfaRequired' in result
+export function isMfaRequired(
+  result: CurrentUser | MfaRequired | undefined,
+): result is MfaRequired {
+  return !!result && "mfaRequired" in result;
 }
 
 export interface LoginRequest {
-  username: string
-  password: string
+  username: string;
+  password: string;
 }
 
-export const CURRENT_USER_KEY = ['auth', 'me'] as const
+export const CURRENT_USER_KEY = ["auth", "me"] as const;
+
+/**
+ * Removes every cached query except the current-user one, so a new sign-in never shows the previous user's data.
+ * `clear()` would also drop the observed current-user query and detach AuthGate from it.
+ */
+function dropCachedData(queryClient: QueryClient) {
+  queryClient.removeQueries({
+    predicate: (query) =>
+      query.queryKey[0] !== CURRENT_USER_KEY[0] ||
+      query.queryKey[1] !== CURRENT_USER_KEY[1],
+  });
+}
 
 /** Resolves to the session user, or `null` when not signed in (401). */
 export function useCurrentUser() {
@@ -39,54 +58,69 @@ export function useCurrentUser() {
     queryKey: CURRENT_USER_KEY,
     queryFn: async () => {
       try {
-        return await apiFetch<CurrentUser>('/auth/me')
+        return await apiFetch<CurrentUser>("/auth/me");
       } catch (error) {
-        if (error instanceof ApiError && error.status === 401) return null
-        throw error
+        if (error instanceof ApiError && error.status === 401) return null;
+        throw error;
       }
     },
     retry: false,
     staleTime: Infinity,
-  })
+  });
 }
 
 /** Stores the user's UI language (null = follow the browser) and switches the UI once the server has it. */
 export function useChangeLocale() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (locale: string | null) => apiFetch<void>('/auth/me/locale', { method: 'PUT', body: { locale } }),
+    mutationFn: (locale: string | null) =>
+      apiFetch<void>("/auth/me/locale", { method: "PUT", body: { locale } }),
     onSuccess: (_, locale) => {
-      applyLanguage(resolveLanguage(locale))
-      queryClient.setQueryData<CurrentUser | null>(CURRENT_USER_KEY, (user) => (user ? { ...user, locale } : user))
+      applyLanguage(resolveLanguage(locale));
+      queryClient.setQueryData<CurrentUser | null>(CURRENT_USER_KEY, (user) =>
+        user ? { ...user, locale } : user,
+      );
     },
-  })
+  });
 }
 
 export function useLogin() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (request: LoginRequest) =>
-      apiFetch<CurrentUser | MfaRequired>('/auth/login', { method: 'POST', body: request }),
+      apiFetch<CurrentUser | MfaRequired>("/auth/login", {
+        method: "POST",
+        body: request,
+      }),
     // With 2FA there is no session yet: the second step finishes the sign-in.
     onSuccess: (result) => {
-      if (!isMfaRequired(result)) queryClient.setQueryData(CURRENT_USER_KEY, result)
+      if (isMfaRequired(result)) return;
+      // Drop whatever the previous user on this tab had cached before the new user is set.
+      dropCachedData(queryClient);
+      queryClient.setQueryData(CURRENT_USER_KEY, result);
     },
-  })
+  });
 }
 
 /** Second sign-in step: TOTP code (6 digits) or recovery code (XXXXX-XXXXX). */
 export function useVerifyTwoFactor() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (code: string) =>
-      apiFetch<CurrentUser>('/auth/2fa/verify', { method: 'POST', body: { code } }),
-    onSuccess: (user) => queryClient.setQueryData(CURRENT_USER_KEY, user),
-  })
+      apiFetch<CurrentUser>("/auth/2fa/verify", {
+        method: "POST",
+        body: { code },
+      }),
+    onSuccess: (user) => {
+      dropCachedData(queryClient);
+      queryClient.setQueryData(CURRENT_USER_KEY, user);
+    },
+  });
 }
 
 export interface TwoFactorSetup {
-  secret: string
-  otpauthUri: string
+  secret: string;
+  otpauthUri: string;
 }
 
 /**
@@ -95,102 +129,119 @@ export interface TwoFactorSetup {
  */
 export function useTwoFactorSetup() {
   return useMutation({
-    mutationFn: () => apiFetch<TwoFactorSetup>('/auth/2fa/setup', { method: 'POST' }),
+    mutationFn: () =>
+      apiFetch<TwoFactorSetup>("/auth/2fa/setup", { method: "POST" }),
     gcTime: 0,
-  })
+  });
 }
 
 /** `gcTime: 0` for the same reason as `useTwoFactorSetup`: the recovery codes are not kept in the cache. */
 export function useConfirmTwoFactor() {
   return useMutation({
     mutationFn: (code: string) =>
-      apiFetch<{ recoveryCodes: string[] }>('/auth/2fa/confirm', { method: 'POST', body: { code } }),
+      apiFetch<{ recoveryCodes: string[] }>("/auth/2fa/confirm", {
+        method: "POST",
+        body: { code },
+      }),
     gcTime: 0,
-  })
+  });
 }
 
 export function useDisableTwoFactor() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (request: { password: string; code: string }) =>
-      apiFetch<void>('/auth/2fa/disable', { method: 'POST', body: request }),
+      apiFetch<void>("/auth/2fa/disable", { method: "POST", body: request }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: CURRENT_USER_KEY })
+      void queryClient.invalidateQueries({ queryKey: CURRENT_USER_KEY });
     },
-  })
+  });
 }
 
 export function useLogout() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => apiFetch<void>('/auth/logout', { method: 'POST' }),
+    mutationFn: () => apiFetch<void>("/auth/logout", { method: "POST" }),
     onSuccess: () => {
-      queryClient.clear()
-      queryClient.setQueryData(CURRENT_USER_KEY, null)
+      queryClient.clear();
+      queryClient.setQueryData(CURRENT_USER_KEY, null);
     },
-  })
+  });
 }
 
 export interface ChangePasswordRequest {
-  currentPassword: string
-  newPassword: string
+  currentPassword: string;
+  newPassword: string;
 }
 
 /** Replaces the initial password; on success `/auth/me` is refetched so the gate drops the setup step. */
 export function useChangePassword() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (request: ChangePasswordRequest) =>
-      apiFetch<void>('/auth/password', { method: 'POST', body: request }),
+      apiFetch<void>("/auth/password", { method: "POST", body: request }),
     // Not awaited: the mutation reports success right away, the gate swaps pages once /me refetched.
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: CURRENT_USER_KEY })
+      void queryClient.invalidateQueries({ queryKey: CURRENT_USER_KEY });
     },
-  })
+  });
 }
 
 /** Always 202 for any username, so the response never reveals whether the account exists. */
 export function useRequestPasswordReset() {
   return useMutation({
     mutationFn: (request: { username: string }) =>
-      apiFetch<void>('/auth/password-reset/request', { method: 'POST', body: request }),
-  })
+      apiFetch<void>("/auth/password-reset/request", {
+        method: "POST",
+        body: request,
+      }),
+  });
 }
 
 export interface ConfirmPasswordResetRequest {
-  username: string
-  code: string
-  newPassword: string
+  username: string;
+  code: string;
+  newPassword: string;
 }
 
 /** 204 on success; 400 INVALID_RESET_CODE or PASSWORD_POLICY otherwise. */
 export function useConfirmPasswordReset() {
   return useMutation({
     mutationFn: (request: ConfirmPasswordResetRequest) =>
-      apiFetch<void>('/auth/password-reset/confirm', { method: 'POST', body: request }),
-  })
+      apiFetch<void>("/auth/password-reset/confirm", {
+        method: "POST",
+        body: request,
+      }),
+  });
 }
 
 export interface OidcPublicConfig {
-  enabled: boolean
+  enabled: boolean;
   /** Provider host shown on the button; null while single sign-on is off. */
-  displayName: string | null
-  localLoginEnabled: boolean
+  displayName: string | null;
+  localLoginEnabled: boolean;
 }
 
-const OIDC_DEFAULT: OidcPublicConfig = { enabled: false, displayName: null, localLoginEnabled: true }
+const OIDC_DEFAULT: OidcPublicConfig = {
+  enabled: false,
+  displayName: null,
+  localLoginEnabled: true,
+};
 
 /** Public. Any failure falls back to plain local login so the login page never breaks. */
 export function useOidcConfig() {
   return useQuery({
-    queryKey: ['auth', 'oidc-config'],
+    queryKey: ["auth", "oidc-config"],
     queryFn: async () => {
       try {
-        return (await apiFetch<OidcPublicConfig>('/auth/oidc/config')) ?? OIDC_DEFAULT
+        return (
+          (await apiFetch<OidcPublicConfig>("/auth/oidc/config")) ??
+          OIDC_DEFAULT
+        );
       } catch {
-        return OIDC_DEFAULT
+        return OIDC_DEFAULT;
       }
     },
     retry: false,
-  })
+  });
 }
