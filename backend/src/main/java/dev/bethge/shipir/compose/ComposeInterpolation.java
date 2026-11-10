@@ -6,55 +6,93 @@ import java.util.regex.Pattern;
 
 /**
  * Best-effort Compose variable interpolation ({@code $VAR}, {@code ${VAR}}, {@code ${VAR:-d}}, {@code ${VAR-d}},
- * {@code ${VAR:+alt}}, {@code ${VAR+alt}}, {@code $$}) of a stored compose text against a plain variable map (the
- * deployment's {@code .env}). Used only to learn which image and network names a stored file refers to, never to run it.
- * Single pass: a substituted value is not expanded again. A reference that cannot be resolved (unset variable without
- * default, {@code ${VAR:?msg}}) stays as written, so the caller still sees an unresolved token instead of a guess.
+ * {@code ${VAR:+alt}}, {@code ${VAR+alt}}, {@code $$}, nested defaults like {@code ${A:-${B}}}) of a stored compose text
+ * against a plain variable map (the deployment's {@code .env}). Used only to learn which image and network names a
+ * stored file refers to, never to run it. Only the operand text of a default is expanded recursively (it is template
+ * source); a substituted variable value is never expanded again. A reference that cannot be resolved (unset variable
+ * without default, {@code ${VAR:?msg}}) stays as written, so the caller still sees an unresolved token.
  */
 final class ComposeInterpolation {
 
-    private static final Pattern REF = Pattern.compile(
-            "\\$(?:(\\$)|\\{([A-Za-z_][A-Za-z0-9_]*)(?:(:?[-+?])([^}]*))?\\}|([A-Za-z_][A-Za-z0-9_]*))");
+    private static final Pattern NAME = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+    private static final Pattern BRACED = Pattern.compile("([A-Za-z_][A-Za-z0-9_]*)(?:(:?[-+?])(.*))?", Pattern.DOTALL);
+    private static final int MAX_DEPTH = 16;
 
     private ComposeInterpolation() {
     }
 
     static String apply(String text, Map<String, String> env) {
-        if (text == null) {
-            return "";
-        }
-        Map<String, String> vars = env == null ? Map.of() : env;
-        Matcher m = REF.matcher(text);
+        return text == null ? "" : expand(text, env == null ? Map.of() : env, 0);
+    }
+
+    private static String expand(String text, Map<String, String> vars, int depth) {
         StringBuilder out = new StringBuilder();
-        while (m.find()) {
-            String replacement;
-            if (m.group(1) != null) {
-                replacement = "$";
-            } else if (m.group(5) != null) {
-                String value = vars.get(m.group(5));
-                replacement = value == null ? m.group(0) : value;
-            } else {
-                replacement = braced(m, vars);
+        int i = 0;
+        while (i < text.length()) {
+            char c = text.charAt(i);
+            if (c != '$' || i + 1 >= text.length()) {
+                out.append(c);
+                i++;
+                continue;
             }
-            m.appendReplacement(out, Matcher.quoteReplacement(replacement));
+            char next = text.charAt(i + 1);
+            if (next == '$') {
+                out.append('$');
+                i += 2;
+            } else if (next == '{') {
+                int end = closingBrace(text, i + 1);
+                if (end < 0 || depth >= MAX_DEPTH) {
+                    out.append(c);
+                    i++;
+                    continue;
+                }
+                out.append(braced(text.substring(i, end + 1), text.substring(i + 2, end), vars, depth));
+                i = end + 1;
+            } else {
+                Matcher m = NAME.matcher(text).region(i + 1, text.length());
+                if (m.lookingAt()) {
+                    String value = vars.get(m.group());
+                    out.append(value == null ? text.substring(i, m.end()) : value);
+                    i = m.end();
+                } else {
+                    out.append(c);
+                    i++;
+                }
+            }
         }
-        m.appendTail(out);
         return out.toString();
     }
 
-    private static String braced(Matcher m, Map<String, String> vars) {
-        String value = vars.get(m.group(2));
-        String op = m.group(3);
-        String operand = m.group(4);
-        if (op == null) {
-            return value == null ? m.group(0) : value;
+    /** Index of the brace closing the one at {@code open}, counting nested {@code ${...}}; -1 when unbalanced. */
+    private static int closingBrace(String text, int open) {
+        int depth = 0;
+        for (int i = open; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '{') {
+                depth++;
+            } else if (c == '}' && --depth == 0) {
+                return i;
+            }
         }
-        boolean strict = op.startsWith(":"); // ":" also treats an empty value as unset
-        boolean present = value != null && !(strict && value.isEmpty());
+        return -1;
+    }
+
+    private static String braced(String original, String inner, Map<String, String> vars, int depth) {
+        Matcher m = BRACED.matcher(inner);
+        if (!m.matches()) {
+            return original;
+        }
+        String value = vars.get(m.group(1));
+        String op = m.group(2);
+        if (op == null) {
+            return value == null ? original : value;
+        }
+        boolean present = value != null && !(op.startsWith(":") && value.isEmpty());
+        String operand = m.group(3);
         return switch (op.substring(op.length() - 1)) {
-            case "-" -> present ? value : operand;
-            case "+" -> present ? operand : "";
-            default -> present ? value : m.group(0);
+            case "-" -> present ? value : expand(operand, vars, depth + 1);
+            case "+" -> present ? expand(operand, vars, depth + 1) : "";
+            default -> present ? value : original;
         };
     }
 }

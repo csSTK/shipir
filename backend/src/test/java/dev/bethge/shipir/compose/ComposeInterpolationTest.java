@@ -47,6 +47,22 @@ class ComposeInterpolationTest {
     }
 
     @Test
+    void nestedDefaultsAreResolved() {
+        Map<String, String> aSet = Map.of("A", "a-img", "B", "b-img");
+        assertThat(ComposeInterpolation.apply("${A:-${B}}", aSet)).isEqualTo("a-img");
+        assertThat(ComposeInterpolation.apply("${A:-${B}}", Map.of("B", "b-img"))).isEqualTo("b-img");
+        assertThat(ComposeInterpolation.apply("${A:-${B}}", Map.of())).isEqualTo("${B}");
+        assertThat(ComposeInterpolation.apply("x/${A:-${B:-deep}}:1", Map.of())).isEqualTo("x/deep:1");
+    }
+
+    @Test
+    void unbalancedBracesDoNotHangOrThrow() {
+        assertThat(ComposeInterpolation.apply("${A:-${B}", Map.of("B", "b"))).isEqualTo("${A:-b");
+        assertThat(ComposeInterpolation.apply("${", Map.of())).isEqualTo("${");
+        assertThat(ComposeInterpolation.apply("$", Map.of())).isEqualTo("$");
+    }
+
+    @Test
     void nullTextAndEnvAreTolerated() {
         assertThat(ComposeInterpolation.apply("x: 1", null)).isEqualTo("x: 1");
         assertThat(ComposeInterpolation.apply(null, ENV)).isEmpty();

@@ -86,6 +86,12 @@ class HostSystemManagedStoredProxyVariantsTest extends HostApiTestBase {
     }
 
     @Test
+    void imageFromANestedDefaultVariableIsProtected() throws Exception {
+        storeCompose("services:\n  proxy:\n    image: ${IMG:-${DEFAULT_IMG}}\n", "DEFAULT_IMG=my-traefik:9.9\n");
+        operatorCanNotRemove("my-traefik:9.9");
+    }
+
+    @Test
     void bareDollarVariableAndPartialInterpolationAreResolved() throws Exception {
         storeCompose("services:\n  proxy:\n    image: my-traefik:$TAG\n", "TAG=9.9\n");
         operatorCanNotRemove("my-traefik:9.9");
