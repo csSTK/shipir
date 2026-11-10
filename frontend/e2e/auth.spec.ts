@@ -31,3 +31,17 @@ test('shows a generic error for a wrong password and keeps the username', async 
   await expect(page.getByRole('alert')).toHaveText('Invalid username or password.')
   await expect(page.getByLabel('Username')).toHaveValue('admin')
 })
+
+test('shows the login page when the session expires while the app is open', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', { body: admin })
+  api.mock('GET', '/api/hosts/overview', { body: [] })
+  await page.goto('/')
+  await expect(page.getByRole('link', { name: 'Shipir' })).toBeVisible()
+
+  // The server session is gone: the next data request answers 401.
+  api.mock('GET', '/api/settings/security', { status: 401 })
+  api.mock('GET', '/api/users', { status: 401 })
+  await page.getByRole('link', { name: 'Users' }).click()
+
+  await expect(page.getByLabel('Username')).toBeVisible()
+})
