@@ -140,7 +140,7 @@ public class VolumeBackupService {
             // NOFOLLOW: a symlink swapped in after resolve() must not be followed
             return new VolumeBackupDownload(Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS), fileName);
         } catch (IOException e) {
-            throw new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found");
+            throw unreadableOrMissing(file);
         }
     }
 
@@ -183,6 +183,19 @@ public class VolumeBackupService {
     }
 
     /**
+     * The error for a stored archive that could not be opened or read. Only a file that is missing or a symbolic link
+     * is 404; any other I/O failure (permissions, disk) is a server problem, 500 STORED_BACKUP_UNREADABLE. Opening a
+     * symlink with NOFOLLOW fails with an I/O error, so it is judged by its link status.
+     */
+    private static HostException unreadableOrMissing(Path file) {
+        if (Files.isSymbolicLink(file) || !Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
+            return new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found");
+        }
+        return new HostException(HttpStatus.INTERNAL_SERVER_ERROR, "STORED_BACKUP_UNREADABLE",
+                "The stored backup could not be read");
+    }
+
+    /**
      * Copies the stored archive into an owner-only temp file through one NOFOLLOW open, reading at most {@code max}
      * bytes (413 when the file is larger).
      * <p>
@@ -211,12 +224,7 @@ public class VolumeBackupService {
             return copy;
         } catch (IOException e) {
             deleteQuietly(copy);
-            // opening a symlink with NOFOLLOW fails with an I/O error, so it is judged by its link status
-            if (Files.isSymbolicLink(file) || !Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
-                throw new HostException(HttpStatus.NOT_FOUND, "STORED_BACKUP_NOT_FOUND", "Stored backup not found");
-            }
-            throw new HostException(HttpStatus.INTERNAL_SERVER_ERROR, "STORED_BACKUP_UNREADABLE",
-                    "The stored backup could not be read");
+            throw unreadableOrMissing(file);
         } catch (RuntimeException e) {
             deleteQuietly(copy);
             throw e;

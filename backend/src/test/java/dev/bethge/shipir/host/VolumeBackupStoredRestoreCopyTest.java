@@ -281,6 +281,18 @@ class VolumeBackupStoredRestoreCopyTest {
                 .isInstanceOfSatisfying(HostException.class, e -> assertThat(e.status().value()).isEqualTo(413));
     }
 
+    @Test
+    void downloadOfAFileWithoutReadPermissionIsAServerErrorNotNotFound() throws Exception {
+        Files.setPosixFilePermissions(file, java.nio.file.attribute.PosixFilePermissions.fromString("---------"));
+        org.junit.jupiter.api.Assumptions.assumeFalse(Files.isReadable(file), "needs a non-root user to deny reads");
+
+        assertThatThrownBy(() -> service.downloadStored(hostId, VOLUME, NAME))
+                .isInstanceOfSatisfying(HostException.class, e -> {
+                    assertThat(e.status().value()).isEqualTo(500);
+                    assertThat(e.code()).isEqualTo("STORED_BACKUP_UNREADABLE");
+                });
+    }
+
     private static java.util.List<Path> listDirectory(Path dir) throws IOException {
         try (var files = Files.list(dir)) {
             return files.toList();
