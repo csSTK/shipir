@@ -12,8 +12,8 @@ import {
   useStopDeployment,
   type ManagedDeployment,
   type DeploymentStatus,
-  type DeploymentSummary,
 } from './api.ts'
+import { joinRows, type Row } from './joinRows.ts'
 import { AdoptDeploymentDialog } from './AdoptDeploymentDialog.tsx'
 import { AddDeploymentDialog } from './AddDeploymentDialog.tsx'
 import { describeDeploymentError } from './deploymentErrors.ts'
@@ -26,27 +26,6 @@ const STATUS: Record<DeploymentStatus, { label: string; tone: 'ok' | 'warn' | 'm
   RUNNING: { get label() { return i18n.t('deployments:DeploymentsPage.running') }, tone: 'ok' },
   PARTIAL: { get label() { return i18n.t('deployments:DeploymentsPage.partial') }, tone: 'warn' },
   STOPPED: { get label() { return i18n.t('deployments:DeploymentsPage.stopped') }, tone: 'muted' },
-}
-
-/** A live Compose project, a Shipir-managed deployment, or both (joined by name or `managedDeploymentId`). */
-interface Row {
-  name: string
-  live: DeploymentSummary | null
-  managed: ManagedDeployment | null
-}
-
-function joinRows(live: DeploymentSummary[], managed: ManagedDeployment[]): Row[] {
-  const byId = new Map(managed.map((m) => [m.id, m]))
-  const byName = new Map(managed.map((m) => [m.name, m]))
-  const used = new Set<string>()
-  const rows: Row[] = live.map((s) => {
-    const m = (s.managedDeploymentId ? byId.get(s.managedDeploymentId) : undefined) ?? byName.get(s.name) ?? null
-    if (m) used.add(m.id)
-    return { name: s.name, live: s, managed: m }
-  })
-  // Managed deployments never deployed have no containers, so the live list does not show them.
-  for (const m of managed) if (!used.has(m.id)) rows.push({ name: m.name, live: null, managed: m })
-  return rows
 }
 
 const isSystem = (r: Row) => !!(r.managed?.systemManaged || r.live?.systemManaged)

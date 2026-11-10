@@ -132,8 +132,8 @@ export interface CreateGitDeploymentInput {
 const managedBase = (hostId: string) => `/hosts/${hostId}/managed-deployments`
 const managedKey = (hostId: string) => ['hosts', hostId, 'managed-deployments'] as const
 
-export function useManagedDeployments(hostId: string) {
-  return useQuery({ queryKey: managedKey(hostId), queryFn: () => apiFetch<ManagedDeployment[]>(managedBase(hostId)) })
+export function useManagedDeployments(hostId: string, enabled = true) {
+  return useQuery({ enabled, queryKey: managedKey(hostId), queryFn: () => apiFetch<ManagedDeployment[]>(managedBase(hostId)) })
 }
 
 export function useManagedDeployment(hostId: string, deploymentId: string) {

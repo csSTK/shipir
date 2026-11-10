@@ -54,6 +54,7 @@ function serve(overview: HostOverview[], role = 'VIEWER') {
   apiFetch.mockImplementation((path: string) => {
     if (path === '/auth/me') return Promise.resolve({ username: 'u', role, setupRequired: false })
     if (path.endsWith('/disk-usage')) return Promise.resolve(usage)
+    if (path.endsWith('/managed-deployments')) return Promise.resolve([{ id: 'm1', name: 'web' }, { id: 'm2', name: 'draft' }])
     if (path.endsWith('/deployments')) return Promise.resolve([{ name: 'web' }, { name: 'db' }, { name: 'cache' }])
     if (path.endsWith('/networks')) return Promise.resolve([{ id: 'n1' }, { id: 'n2' }])
     if (path.includes('/stats/history'))
@@ -86,7 +87,7 @@ describe('EnvironmentDashboard', () => {
     expect(containers).toHaveAttribute('href', '/environments/a/containers')
     expect(screen.getByRole('link', { name: /Images/ })).toHaveTextContent('12')
     expect(screen.getByRole('link', { name: /Volumes/ })).toHaveTextContent('4')
-    await waitFor(() => expect(screen.getByRole('link', { name: /Deployments/ })).toHaveTextContent('3'))
+    await waitFor(() => expect(screen.getByRole('link', { name: /Deployments/ })).toHaveTextContent('4'))
     await waitFor(() => expect(screen.getByRole('link', { name: /Networks/ })).toHaveTextContent('2'))
     for (const name of ['Deployments', 'Networks']) {
       expect(screen.getByRole('link', { name: new RegExp(name) })).toHaveAttribute(

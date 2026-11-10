@@ -10,7 +10,8 @@ import { ENV_RESOURCES, type EnvResourceSlug } from './resources.ts'
 import { EnvironmentActions } from './EnvironmentActions.tsx'
 import { PruneDialog } from './PruneDialog.tsx'
 import { DiskUsageCard } from './DiskUsageCard.tsx'
-import { useDeployments } from '../deployments/api.ts'
+import { joinRows } from '../deployments/joinRows.ts'
+import { useDeployments, useManagedDeployments } from '../deployments/api.ts'
 import { useNetworks } from '../networks/api.ts'
 import { useTranslation } from 'react-i18next'
 import './EnvironmentsOverview.css'
@@ -50,8 +51,10 @@ function Back() {
 /** Resource tiles; deployments and networks are not in the overview, so they come from their own lists (running environments only). */
 function ResourceTiles({ env, up }: { env: HostOverview; up: boolean }) {
   const deployments = useDeployments(env.id, up)
+  const managed = useManagedDeployments(env.id, up)
   const networks = useNetworks(env.id, up)
-  const listed = { deployments: deployments.data?.length, networks: networks.data?.length }
+  const listed = { // Same union as the Deployments page: live projects plus managed ones that were never deployed.
+    deployments: deployments.data ? joinRows(deployments.data, managed.data ?? []).length : undefined, networks: networks.data?.length }
   return (
       <ul className="dash__tiles">
         {ENV_RESOURCES.map(({ slug, label, icon: Icon, tone }) => {
