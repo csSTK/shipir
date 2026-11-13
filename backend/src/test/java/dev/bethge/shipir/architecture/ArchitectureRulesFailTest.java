@@ -3,8 +3,10 @@ package dev.bethge.shipir.architecture;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.ArchRule;
+import dev.bethge.shipir.architecture.fixture.compose.execution.GoodProcessBuilderUser;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Proves each rule fails on a deliberate violation in {@code architecture.fixture}. */
@@ -82,8 +84,11 @@ class ArchitectureRulesFailTest {
 
     @Test
     void processBuilderInsideComposeExecutionIsAllowed() {
-        assertThatThrownBy(() -> ArchitectureRules.noProcessBuilderOutsideComposeExecution(ROOT).check(FIXTURE))
-                .hasMessageNotContaining("GoodProcessBuilderUser");
+        // Only the allowed class is imported. It lives inside compose.execution, so the rule's
+        // "outside compose.execution" filter matches nothing; allowEmptyShould is needed here only.
+        JavaClasses allowed = new ClassFileImporter().importClasses(GoodProcessBuilderUser.class);
+        ArchRule rule = ArchitectureRules.noProcessBuilderOutsideComposeExecution(ROOT).allowEmptyShould(true);
+        assertThatCode(() -> rule.check(allowed)).doesNotThrowAnyException();
     }
 
     @Test
