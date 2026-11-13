@@ -18,9 +18,9 @@
 
     <properties>
         <java.version>25</java.version>
-        <bouncycastle.version>1.86</bouncycastle.version>
+        <bouncycastle.version>1.87</bouncycastle.version>
         <docker-java.version>3.7.1</docker-java.version>
-        <jgit.version>7.8.0.202609011348-r</jgit.version>
+        <jgit.version>7.8.1.202611041320-r</jgit.version>
     </properties>
 
     <dependencies>
