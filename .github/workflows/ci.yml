@@ -6,6 +6,7 @@ on:
   push:
     branches: [dev]
   pull_request:
+    paths-ignore: ['**/*.md', 'renovate.json', 'LICENSE*', 'LICENCE', '.vscode/**', '.claude/**']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -19,6 +20,7 @@ permissions:
 jobs:
   changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
@@ -59,6 +61,7 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.scripts == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
