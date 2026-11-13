@@ -246,6 +246,7 @@
   "deploymentErrors.theServerHasNoEncryption": "The server has no encryption key configured, so environment variables cannot be stored.",
   "deploymentErrors.useLowercaseLettersDigitsHyphens": "Use lowercase letters, digits, hyphens and underscores, starting with a letter or digit.",
   "deploymentErrors.theComposeFileIsNot": "The Compose file is not valid.",
+  "deploymentErrors.variableValuesNeedOperateAccess": "Variable values can only be shown with operate access to this deployment.",
   "deploymentErrors.anEnvironmentVariableIsInvalid": "An environment variable is invalid. Check names and values.",
   "deploymentErrors.theComposeFileOfA": "The Compose file of a Git deployment comes from the repository and cannot be edited here.",
   "deploymentErrors.theRepositoryRejectedTheCredentials": "The repository rejected the credentials. Check the credential or choose another one.",

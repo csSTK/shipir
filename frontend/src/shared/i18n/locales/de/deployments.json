@@ -246,6 +246,7 @@
   "deploymentErrors.theServerHasNoEncryption": "Auf dem Server ist kein Verschlüsselungsschlüssel konfiguriert, daher können Umgebungsvariablen nicht gespeichert werden.",
   "deploymentErrors.useLowercaseLettersDigitsHyphens": "Verwende Kleinbuchstaben, Ziffern, Bindestriche und Unterstriche und beginne mit einem Buchstaben oder einer Ziffer.",
   "deploymentErrors.theComposeFileIsNot": "Die Compose-Datei ist ungültig.",
+  "deploymentErrors.variableValuesNeedOperateAccess": "Variablenwerte können nur mit Bedienzugriff auf dieses Deployment angezeigt werden.",
   "deploymentErrors.anEnvironmentVariableIsInvalid": "Eine Umgebungsvariable ist ungültig. Prüfe Namen und Werte.",
   "deploymentErrors.theComposeFileOfA": "Die Compose-Datei eines Git-Deployments stammt aus dem Repository und kann hier nicht bearbeitet werden.",
   "deploymentErrors.theRepositoryRejectedTheCredentials": "Das Repository hat die Zugangsdaten abgelehnt. Prüfe die Zugangsdaten oder wähle andere.",

@@ -15,6 +15,8 @@ export function describeDeploymentError(error: unknown, fallback: string): strin
         return i18n.t('deployments:deploymentErrors.useLowercaseLettersDigitsHyphens')
       case 'INVALID_COMPOSE':
         return [i18n.t('deployments:deploymentErrors.theComposeFileIsNot'), ...(error.details ?? [])].join(' ')
+      case 'ENV_VALUES_RESTRICTED':
+        return i18n.t('deployments:deploymentErrors.variableValuesNeedOperateAccess')
       case 'INVALID_ENV':
         return i18n.t('deployments:deploymentErrors.anEnvironmentVariableIsInvalid')
       case 'GIT_MANAGED':

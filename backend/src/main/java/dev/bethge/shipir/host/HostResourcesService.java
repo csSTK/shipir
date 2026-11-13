@@ -194,7 +194,11 @@ public class HostResourcesService {
                 throw new HostException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Resource not found");
             }
         }
-        boolean mayReadValues = access.subject().map(s -> s.role() != Role.VIEWER).orElse(true);
+        // values need OPERATE on the host or the container's deployment, not only a non-VIEWER role (see HANDOFF.md)
+        UUID managedId = details.composeProject() == null ? null
+                : managedDeployments.managedDeploymentIds(hostId).get(details.composeProject());
+        boolean mayReadValues = access.subject().map(s -> s.role() != Role.VIEWER).orElse(true)
+                && (access.canOperate(hostId) || managedId != null && access.canOperate(hostId, managedId));
         if (details.composeProject() != null && !access.isAdmin()
                 && managedDeployments.systemManagedNames(hostId).contains(details.composeProject())) {
             mayReadValues = false; // the managed proxy loads ADMIN-only DNS credentials via env_file

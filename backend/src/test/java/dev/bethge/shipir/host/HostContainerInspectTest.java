@@ -60,8 +60,8 @@ class HostContainerInspectTest extends HostApiTestBase {
     }
 
     @Test
-    void adminAndOperatorSeeEnvValues() throws Exception {
-        grantHost("operator", host, "VIEW");
+    void adminAndOperatorWithOperateSeeEnvValues() throws Exception {
+        grantHost("operator", host, "OPERATE");
         for (String user : new String[]{"admin", "operator"}) {
             mvc.perform(get("/api/hosts/{h}/containers/web1", host).session(login(user).session()))
                     .andExpect(status().isOk())
@@ -70,6 +70,39 @@ class HostContainerInspectTest extends HostApiTestBase {
                     .andExpect(jsonPath("$.restartPolicy.name").value("always"))
                     .andExpect(jsonPath("$.health.failingStreak").value(3));
         }
+    }
+
+    @Test
+    void operatorWithViewOnlyGrantGetsEnvKeysWithoutValues() throws Exception {
+        grantHost("operator", host, "VIEW");
+        mvc.perform(get("/api/hosts/{h}/containers/web1", host).session(login("operator").session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.env.length()").value(2))
+                .andExpect(jsonPath("$.env[0].key").value("SECRET"))
+                .andExpect(jsonPath("$.env[0].value").doesNotExist());
+    }
+
+    @Test
+    void operatorWithViewOnlyDeploymentGrantGetsEnvKeysWithoutValues() throws Exception {
+        UUID dep = jdbc.queryForObject("INSERT INTO deployments (name, host_id, compose_file_path, created_by) "
+                + "SELECT 'shop', ?, 'x', id FROM users WHERE username = 'admin' RETURNING id", UUID.class, host);
+        jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) SELECT id, ?, 'VIEW' "
+                + "FROM users WHERE username = 'operator'", dep);
+        mvc.perform(get("/api/hosts/{h}/containers/web1", host).session(login("operator").session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.env[0].key").value("SECRET"))
+                .andExpect(jsonPath("$.env[0].value").doesNotExist());
+    }
+
+    @Test
+    void operatorWithOperateDeploymentGrantSeesEnvValues() throws Exception {
+        UUID dep = jdbc.queryForObject("INSERT INTO deployments (name, host_id, compose_file_path, created_by) "
+                + "SELECT 'shop', ?, 'x', id FROM users WHERE username = 'admin' RETURNING id", UUID.class, host);
+        jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) SELECT id, ?, 'OPERATE' "
+                + "FROM users WHERE username = 'operator'", dep);
+        mvc.perform(get("/api/hosts/{h}/containers/web1", host).session(login("operator").session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.env[0].value").value("hunter2"));
     }
 
     @Test

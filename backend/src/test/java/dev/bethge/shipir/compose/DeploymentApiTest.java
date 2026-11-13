@@ -90,6 +90,30 @@ class DeploymentApiTest extends DeploymentTestBase {
     }
 
     @Test
+    void operatorWithViewOnlyGrantGetsNoEnvValuesButSeesKeys() throws Exception {
+        String id = create(login("admin"), "web", ENV);
+        jdbc.update("UPDATE permissions SET level = 'VIEW' WHERE user_id = (SELECT id FROM users WHERE username = 'operator')");
+        mvc.perform(get(url() + "/" + id + "/env").session(login("operator").session()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ENV_VALUES_RESTRICTED"))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("prod"))));
+        mvc.perform(get(url() + "/" + id).session(login("operator").session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.envKeys[0]").value("DB_PASSWORD"));
+    }
+
+    @Test
+    void operatorWithOperateDeploymentGrantOnlyGetsEnvValues() throws Exception {
+        String id = create(login("admin"), "web", ENV);
+        jdbc.update("DELETE FROM permissions WHERE user_id = (SELECT id FROM users WHERE username = 'operator')");
+        jdbc.update("INSERT INTO permissions (user_id, deployment_id, level) SELECT id, ?::uuid, 'OPERATE' "
+                + "FROM users WHERE username = 'operator'", id);
+        mvc.perform(get(url() + "/" + id + "/env").session(login("operator").session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.entries[0].value").value(SECRET));
+    }
+
+    @Test
     void envIsEncryptedAtRestAndYamlStoredInVersion() throws Exception {
         create(login("admin"), "web", ENV);
         byte[] cipher = jdbc.queryForObject("SELECT env_ciphertext FROM deployment_versions", byte[].class);

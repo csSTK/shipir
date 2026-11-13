@@ -131,9 +131,16 @@ public class DeploymentService {
         return toDetail(deployment, yaml, keys);
     }
 
-    /** Unmasked env values from the encrypted store; the caller must restrict this to ADMIN and OPERATOR. */
+    /**
+     * Unmasked env values from the encrypted store. Needs OPERATE on the deployment (ADMIN always); a VIEW-only grant
+     * gets 403 ENV_VALUES_RESTRICTED and sees the names via {@link #get} only, like the config editor's env-like files.
+     */
     public DeploymentEnvResponse env(UUID hostId, UUID id) {
         requireView(hostId, id);
+        if (!access.canOperate(hostId, id)) {
+            throw new DeploymentException(HttpStatus.FORBIDDEN, "ENV_VALUES_RESTRICTED",
+                    "Environment variable values can only be read with operate access");
+        }
         requireHost(hostId);
         Deployment deployment = requireDeployment(hostId, id);
         requireAdminIfSystemManaged(deployment);
