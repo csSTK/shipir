@@ -802,7 +802,7 @@ class ExecSessionTest {
 
         var r = owner.call(HttpRequest.newBuilder(URI.create(base() + "/api/hosts/" + hostId))
                 .header("X-XSRF-TOKEN", owner.jar.get("XSRF-TOKEN")).DELETE());
-        assertThat(r.statusCode()).as(r.body()).isEqualTo(204);
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
 
         assertThat(q.poll(5, TimeUnit.SECONDS)).contains("\"status\":\"ENDED\"").contains("ACCESS_REVOKED");
         verify(handle, org.mockito.Mockito.timeout(5000)).close();
