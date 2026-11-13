@@ -54,11 +54,29 @@ The `agent` events come from the SubagentStop hook (`hooks/subagent-stop.mjs`, r
 
 `node --test tools/pipeline-dashboard/test/`
 
+## SessionStart hook
+
+`hooks/session-start.mjs` is registered in `.claude/settings.json` beside `bd prime`. At session start it checks `GET /api/health` on `PIPELINE_DASHBOARD_PORT` (300 ms timeout):
+
+- Health answers `{"ok":true, "root":"<dir>"}` and `root` exists: prints nothing.
+- Health answers but its `root` (the checkout `server.mjs` runs from) no longer exists, e.g. a deleted worktree: stops that server via `<store>/server.pid` and starts a fresh one. The pid file is `{"pid","port","root"}`. The hook kills the recorded pid only when port and root match the answering server and `lsof` lists that pid as the single listener on the port while `ps` shows `pipeline-dashboard/server.mjs` (a recorded pid alone is not proof, pids get reused). If the record does not match or either check cannot run, it prints one warning and kills nothing.
+- Nothing listens: starts `server.mjs` detached (`stdio` to `<store>/server.log`, pid file `<store>/server.pid`) and prints `{"systemMessage":"Pipeline dashboard: http://127.0.0.1:<port>"}` once it answers. The server runs from the main checkout's `tools/pipeline-dashboard/server.mjs` (main checkout = parent of `git rev-parse --path-format=absolute --git-common-dir`) when that exists, else from the copy the hook belongs to. So the long-lived server does not depend on a worktree that `/next-task-finish` later deletes.
+- Another process holds the port: prints one `systemMessage` warning and starts nothing.
+- Nothing answers within the start wait (600 ms) after the spawn: prints `{"systemMessage":"Pipeline dashboard: could not start, see <store>/server.log"}`. The spawned pid is recorded at spawn, so a server that is still starting stays stoppable.
+
+`PIPELINE_DASHBOARD_START_WAIT_MS` overrides the start wait. It is a test-only knob (tests set it near zero to force the "gave up waiting" path); do not set it in normal use.
+
+A pid record is not overwritten while it names a live server on the same port, and a spawned child clears the record only if it exits without ever answering health.
+
+Two sessions starting together start one server: an exclusive `<store>/server.starting` lock lets only one hook spawn; the other waits for the server. A lock older than 5 s (crashed hook) is taken over by renaming it to a unique name first (rename is atomic, so only one hook moves a given lock); a fresh lock moved by mistake is linked back.
+
+Timing: the hook always exits 0 and has a worst case of about 1.5 s on the stale-server replace path (probe 300 ms, `lsof`/`ps` checks with a 500 ms timeout each, stop wait 250 ms, start wait 600 ms, probes of 150 ms, plus node start-up). Output format: `systemMessage` on stdout JSON, per the Claude Code hooks docs. The 5 s `timeout` in `.claude/settings.json` is only a hard kill.
+
 ## Server/API
 
 `node tools/pipeline-dashboard/server.mjs` (Node built-ins only) binds `127.0.0.1` only, port `PIPELINE_DASHBOARD_PORT` (default 4690), reads the store via `resolveStoreDir`. `createServer({storeDir, port, publicDir, tokensPath, ghRunner, ciRefreshMs, watch, pollMs})` is the factory used by tests (`port: 0`, stubbed `ghRunner`; `await server.listen()`, `server.port`, `await server.close()`).
 
-- `GET /api/health`: `{ok:true}`.
+- `GET /api/health`: `{ok:true, root}`; `root` is the directory `server.mjs` runs from (the SessionStart hook uses it to spot a server whose checkout is gone).
 - `GET /api/runs`: run summaries (`run.json` fields + `totals`), newest `started` first; batch members (runs whose `parent` is another run) are nested in the batch's `children`.
 - `GET /api/runs/:id`: `{run, events, timeline, ci}`. `timeline` = `steps` (paired step-start/end with `durationMs`, `sha` on push), `children` (per bead: model, wave, result, `redBeforeGreen`, `durationMs`, `agents` summed from `agent` events by `bead`, else by the child's time window), `reviews`, `tests`, `totals` (tokens, `cost`, `agents`, `durationMs`; `cost` is null when there are no agents or any agent has no cost, never 0 or a partial sum), `sha`. Invalid id (not the run-id pattern, `../`, encoded `%2e%2e%2f`, `%2F`, NUL) is 400, unknown id 404.
 - A batch that is still `running` but whose members have all ended is reported as ended (`blocked` if any member is blocked/failed, else `done`, `ended` = latest member end) in both endpoints.

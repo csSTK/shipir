@@ -75,7 +75,7 @@ test('health answers and server binds 127.0.0.1 only', async () => {
   try {
     const r = await fetch(`${s.base}/api/health`);
     assert.equal(r.status, 200);
-    assert.deepEqual(await r.json(), { ok: true });
+    assert.deepEqual(await r.json(), { ok: true, root: path.resolve(HERE, '..') });
     assert.equal(s.server.address().address, '127.0.0.1');
   } finally { await s.close(); }
 });

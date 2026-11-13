@@ -20,6 +20,11 @@
           {
             "command": "bd prime --hook-json",
             "type": "command"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/tools/pipeline-dashboard/hooks/session-start.mjs\"",
+            "timeout": 5
           }
         ],
         "matcher": ""

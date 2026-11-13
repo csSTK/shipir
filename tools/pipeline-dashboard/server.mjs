@@ -169,7 +169,8 @@ export function createServer({
     // Raw path on purpose: new URL() would normalize %2e%2e/.. segments before we can reject them.
     const rawPath = (req.url ?? '/').split('?')[0].split('#')[0];
 
-    if (rawPath === '/api/health') return sendJson(res, 200, { ok: true });
+    // root: the checkout this server runs from, so the SessionStart hook can replace a server whose worktree was deleted.
+    if (rawPath === '/api/health') return sendJson(res, 200, { ok: true, root: HERE });
     if (rawPath === '/api/runs') return sendJson(res, 200, listSummaries());
     if (rawPath === '/api/events') {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
