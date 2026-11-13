@@ -265,6 +265,7 @@
   "deploymentErrors.dockerCouldNotStopThe": "Docker konnte das Deployment nicht stoppen, daher wurde es nicht gelöscht. Versuche es erneut.",
   "deploymentErrors.thisDeploymentIsManagedBy": "Dieses Deployment wird von Shipir verwaltet; lösche es auf seiner Detailseite.",
   "deploymentErrors.thisProjectNoLongerExists": "Dieses Projekt existiert in der Umgebung nicht mehr.",
+  "deploymentErrors.remoteBindMountDenied": "Bind-Mounts sind auf einer entfernten Umgebung ohne die Rolle ADMIN nicht erlaubt. Verwende stattdessen ein benanntes Volume.",
   "deploymentErrors.theComposeFileOfThis": "Die Compose-Datei dieses Projekts liegt in einem Verzeichnis, das Shipir nicht lesen darf. Füge stattdessen das YAML ein.",
   "deploymentErrors.thisProjectUsesPathsRelative": "Dieses Projekt verwendet Pfade relativ zu seinem ursprünglichen Verzeichnis, die Shipir nicht beibehalten kann. Mache sie absolut und übernimm es erneut:",
   "deploymentErrors.thisEnvironmentNoLongerExists": "Diese Umgebung existiert nicht mehr.",

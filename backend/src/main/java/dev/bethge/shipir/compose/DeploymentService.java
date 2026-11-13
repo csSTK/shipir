@@ -561,6 +561,10 @@ public class DeploymentService {
         } catch (ComposeExecutionException e) {
             throw new DeploymentException(HttpStatus.BAD_GATEWAY, "COMPOSE_UNAVAILABLE", "docker compose could not run");
         }
+        if (violations.stream().anyMatch(v -> v.contains(ComposeSecurityPolicy.REMOTE_BIND_MARKER))) {
+            throw new DeploymentException(HttpStatus.FORBIDDEN, "REMOTE_BIND_MOUNT_DENIED",
+                    "Bind mounts are not allowed on a remote host without the ADMIN role; use a named volume", violations);
+        }
         if (!violations.isEmpty()) {
             throw new DeploymentException(HttpStatus.FORBIDDEN, "ADMIN_REQUIRED",
                     "Privileged mode, host namespaces, devices, security options and host bind mounts need the ADMIN role",

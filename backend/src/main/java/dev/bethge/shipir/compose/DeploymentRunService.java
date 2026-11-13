@@ -604,7 +604,7 @@ public class DeploymentRunService {
             deploymentService.enforcePolicy(deployment.getHostId(), deployment.getName(), endpoint,
                     deploymentService.composeFileOf(deployment), unrestricted);
         } catch (DeploymentException e) {
-            if (SYSTEM_USER.equals(username) && "ADMIN_REQUIRED".equals(e.code())) {
+            if (SYSTEM_USER.equals(username) && ("ADMIN_REQUIRED".equals(e.code()) || "REMOTE_BIND_MOUNT_DENIED".equals(e.code()))) {
                 throw new DeploymentException(e.status(), e.code(), e.getMessage()
                         + ". Automatic runs keep ADMIN privileges only while the compose files are unchanged since an ADMIN "
                         + "deployed them; an ADMIN must deploy again to approve the current files", e.details());

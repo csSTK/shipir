@@ -70,7 +70,9 @@ public class ComposeSecurityPolicy {
             throw new ComposeExecutionException("docker compose config failed", null);
         }
         Path allowedDir = files.deploymentDir(hostId, deploymentName);
-        List<String> violations = new ArrayList<>(violationsOf(parse(result.output()), allowedDir));
+        // fail closed: anything but the Shipir machine's own socket is a remote filesystem (e.g. a future agent connection)
+        boolean remote = !(endpoint instanceof DockerEndpoint.Local);
+        List<String> violations = new ArrayList<>(violationsOf(parse(result.output()), allowedDir, remote));
         violations.addAll(volumeOwnershipViolations(hostId, deploymentName, endpoint, namedVolumes(parse(result.output()))));
         violations.addAll(ComposeFilePolicy.violations(composeFileOf(allowedDir, composeFile), allowedDir, true));
         return violations;
@@ -212,8 +214,24 @@ public class ComposeSecurityPolicy {
         }
     }
 
-    /** Pure evaluation of a resolved compose configuration; {@code allowedDir} is where bind mounts may point. */
+    /**
+     * Part of the violation text for a bind mount on a remote (TCP) host. Its paths refer to the remote filesystem, which
+     * Shipir cannot check against the deployment directory, so every bind mount (short or long syntax, relative or absolute,
+     * also via volume {@code driver_opts}) is denied there for non-ADMIN runs (decided shipr-kqbc.61). Callers map it to
+     * the error code {@code REMOTE_BIND_MOUNT_DENIED}.
+     */
+    public static final String REMOTE_BIND_MARKER = "bind mount not allowed on remote hosts";
+
+    /** Evaluation for a LOCAL host. */
     static List<String> violationsOf(JsonNode config, Path allowedDir) {
+        return violationsOf(config, allowedDir, false);
+    }
+
+    /**
+     * Pure evaluation of a resolved compose configuration; {@code allowedDir} is where bind mounts may point on a LOCAL
+     * host, {@code remote} (TCP host) denies every bind mount instead.
+     */
+    static List<String> violationsOf(JsonNode config, Path allowedDir, boolean remote) {
         List<String> violations = new ArrayList<>();
         Path allowed = real(allowedDir);
         if (allowed == null) {
@@ -265,7 +283,9 @@ public class ComposeSecurityPolicy {
                     continue;
                 }
                 String source = volume.path("source").asString("");
-                if (source.contains("docker.sock")) {
+                if (remote) {
+                    violations.add(service + ": " + REMOTE_BIND_MARKER + " " + source);
+                } else if (source.contains("docker.sock")) {
                     violations.add(service + ": docker.sock mount");
                 } else if (!insideOf(allowed, source)) {
                     violations.add(service + ": bind mount " + source);
@@ -284,7 +304,7 @@ public class ComposeSecurityPolicy {
                 composeLabelViolations("network " + entry.getKey(), "labels", entry.getValue().path("labels"), violations));
         config.path("volumes").propertyStream().forEach(entry -> {
             composeLabelViolations("volume " + entry.getKey(), "labels", entry.getValue().path("labels"), violations);
-            volumeViolations(entry.getKey(), entry.getValue(), allowed, violations);
+            volumeViolations(entry.getKey(), entry.getValue(), allowed, remote, violations);
         });
         return violations;
     }
@@ -320,7 +340,7 @@ public class ComposeSecurityPolicy {
      * or type {@code tmpfs}, or a bind ({@code none}/{@code bind}, option {@code bind}/{@code rbind}) whose device is inside
      * the deployment directory. Every other driver or filesystem type (nfs, cifs, fuse.*, ceph, ...) is denied.
      */
-    private static void volumeViolations(String name, JsonNode volume, Path allowed, List<String> violations) {
+    private static void volumeViolations(String name, JsonNode volume, Path allowed, boolean remote, List<String> violations) {
         String prefix = "volume " + name + ": ";
         String driver = volume.path("driver").asString("");
         if (!driver.isEmpty() && !"local".equals(driver)) {
@@ -332,6 +352,10 @@ public class ComposeSecurityPolicy {
         boolean bindOption = Arrays.stream(opts.path("o").asString("").toLowerCase(Locale.ROOT).split(","))
                 .map(String::strip).anyMatch(o -> o.equals("bind") || o.equals("rbind"));
         if (type.isEmpty() && !bindOption || "tmpfs".equals(type) && !bindOption) {
+            return;
+        }
+        if (remote && ("none".equals(type) || "bind".equals(type)) && bindOption) {
+            violations.add(prefix + REMOTE_BIND_MARKER + " via driver_opts");
             return;
         }
         if (!("none".equals(type) || "bind".equals(type)) || !bindOption || !insideOf(allowed, opts.path("device").asString(""))) {
