@@ -33,7 +33,7 @@ class LogStreamDropHostTest {
     private final UUID hostA = UUID.randomUUID();
     private final UUID hostB = UUID.randomUUID();
     private final LogStreamHandler handler = new LogStreamHandler(logs, hosts, endpoints,
-            mock(StompFrameSender.class), new LogStreamProperties(200, 500, 8192, 1000), Clock.systemUTC(),
+            mock(StompFrameSender.class), new LogStreamProperties(200, 500, 8192, 1000, java.time.Duration.ofSeconds(5)), Clock.systemUTC(),
             mock(StreamViewers.class));
 
     @Test

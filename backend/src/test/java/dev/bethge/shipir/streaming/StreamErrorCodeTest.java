@@ -60,7 +60,7 @@ class StreamErrorCodeTest {
         when(logs.follow(any(), any(), any(), anyInt(), anyBoolean(), any(), any()))
                 .thenThrow(new DockerConnectionException(DockerErrorCode.TLS_ERROR, "x", null));
         var handler = new LogStreamHandler(logs, hosts, endpoints, sender,
-                new LogStreamProperties(200, 500, 8192, 1000), Clock.systemUTC(), viewers);
+                new LogStreamProperties(200, 500, 8192, 1000, java.time.Duration.ofSeconds(5)), Clock.systemUTC(), viewers);
         var target = new LogStreamHandler.Target(host, "web");
         var options = new LogStreamHandler.Options(100, false);
 
@@ -81,7 +81,7 @@ class StreamErrorCodeTest {
             when(logs.follow(any(), any(), any(), anyInt(), anyBoolean(), any(), any()))
                     .thenThrow(new DockerConnectionException(kept, "x", null));
             var handler = new LogStreamHandler(logs, hosts, endpoints, sender,
-                    new LogStreamProperties(200, 500, 8192, 1000), Clock.systemUTC(), viewers);
+                    new LogStreamProperties(200, 500, 8192, 1000, java.time.Duration.ofSeconds(5)), Clock.systemUTC(), viewers);
             String session = "s-" + kept;
             handler.subscribe(new LogStreamHandler.Target(host, "web"), new LogStreamHandler.Options(100, false),
                     "viewer", session, "1");
@@ -149,7 +149,7 @@ class StreamErrorCodeTest {
         when(logs.follow(any(), any(), any(), anyInt(), anyBoolean(), any(), onEnd.capture()))
                 .thenReturn(mock(java.io.Closeable.class));
         var handler = new LogStreamHandler(logs, hosts, endpoints, sender,
-                new LogStreamProperties(200, 500, 8192, 1000), Clock.systemUTC(), viewers);
+                new LogStreamProperties(200, 500, 8192, 1000, java.time.Duration.ofSeconds(5)), Clock.systemUTC(), viewers);
         handler.subscribe(new LogStreamHandler.Target(host, "web"), new LogStreamHandler.Options(100, false),
                 "root", "s-root", "1");
         await().atMost(5, TimeUnit.SECONDS).until(() -> !onEnd.getAllValues().isEmpty());

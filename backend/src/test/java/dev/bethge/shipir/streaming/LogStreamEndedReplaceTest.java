@@ -10,6 +10,8 @@ import org.mockito.ArgumentCaptor;
 
 import java.io.Closeable;
 import java.time.Clock;
+import java.time.Duration;
+import java.time.ZoneOffset;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,7 +39,7 @@ class LogStreamEndedReplaceTest {
     private final DockerHostRepository hosts = mock(DockerHostRepository.class);
     private final StompFrameSender sender = mock(StompFrameSender.class);
     private final LogStreamHandler handler = new LogStreamHandler(logs, hosts, mock(HostEndpointResolver.class), sender,
-            new LogStreamProperties(200, 500, 8192, 1000), Clock.systemUTC(), mock(StreamViewers.class));
+            new LogStreamProperties(200, 500, 8192, 1000, Duration.ofSeconds(5)), Clock.systemUTC(), mock(StreamViewers.class));
 
     private final List<Consumer<LogLine>> lineSinks = new CopyOnWriteArrayList<>();
     private final List<Consumer<Throwable>> endSinks = new CopyOnWriteArrayList<>();
@@ -150,7 +152,7 @@ class LogStreamEndedReplaceTest {
 
         assertThat(tails).containsExactly(100, -1);
         assertThat(sinces.get(0)).isNull();
-        assertThat(sinces.get(1)).isBetween(before, Instant.now()); // since = end of the old stream
+        assertThat(sinces.get(1)).isBetween(before.minusSeconds(5), Instant.now()); // since = end of the old stream minus the safety margin
         // lines logged after the old stream ended (e.g. restart output) come with the since-follow
         lineSinks.get(1).accept(new LogLine(LogLine.Stream.STDOUT, "restart", null));
 
@@ -176,5 +178,100 @@ class LogStreamEndedReplaceTest {
 
         assertThat(tails).containsExactly(500, 500);
         assertThat(sinces).containsOnlyNulls();
+    }
+
+    /**
+     * shipr-0qbh.98: Docker evaluates {@code since} against the daemon clock. With a daemon clock behind Shipir's, a
+     * since taken from the Shipir clock skips lines written right after the end; the safety margin must cover it.
+     */
+    @Test
+    void sinceIsBackedOffByTheSafetyMarginSoABehindDaemonClockLosesNoLines() throws Exception {
+        Instant shipirNow = Instant.parse("2026-11-13T12:00:00Z");
+        Duration skew = Duration.ofSeconds(3); // daemon clock is 3s behind Shipir
+        var skewed = new LogStreamHandler(logs, hosts, mock(HostEndpointResolver.class), sender,
+                new LogStreamProperties(200, 500, 8192, 1000, Duration.ofSeconds(5)), Clock.fixed(shipirNow, ZoneOffset.UTC),
+                mock(StreamViewers.class));
+        // the daemon log: a line written 1s after the old stream ended, stamped by the daemon clock
+        Instant daemonStamp = shipirNow.plusSeconds(1).minus(skew);
+        when(hosts.findById(any())).thenReturn(Optional.of(mock(DockerHost.class)));
+        when(logs.follow(any(), any(), any(), anyInt(), anyBoolean(), any(), any())).thenAnswer(inv -> {
+            lineSinks.add(inv.getArgument(5));
+            endSinks.add(inv.getArgument(6));
+            return mock(Closeable.class);
+        });
+        when(logs.follow(any(), any(), any(), anyInt(), any(Instant.class), anyBoolean(), any(), any())).thenAnswer(inv -> {
+            Instant since = inv.getArgument(4);
+            Consumer<LogLine> sink = inv.getArgument(6);
+            lineSinks.add(sink);
+            endSinks.add(inv.getArgument(7));
+            if (!daemonStamp.isBefore(since)) { // what the daemon would replay
+                sink.accept(new LogLine(LogLine.Stream.STDOUT, "after end", null));
+            }
+            return mock(Closeable.class);
+        });
+        var target = new LogStreamHandler.Target(UUID.randomUUID(), "web");
+        var options = new LogStreamHandler.Options(100, false);
+
+        skewed.subscribe(target, options, "alice", "s1", "a");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> endSinks.size() == 1);
+        lineSinks.get(0).accept(new LogLine(LogLine.Stream.STDOUT, "old", null));
+        endSinks.get(0).accept(null);
+        skewed.subscribe(target, options, "bob", "s2", "b");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> lineSinks.size() == 2);
+
+        await().atMost(5, TimeUnit.SECONDS).untilAsserted(
+                () -> assertThat(linesTo("s1", "a")).contains("after end"));
+    }
+
+    /** With timestamps on, since is the last delivered line's Docker timestamp: no Shipir clock involved at all. */
+    @Test
+    void sinceIsTheLastDeliveredDockerTimestampWhenTimestampsAreOn() throws Exception {
+        Instant shipirNow = Instant.parse("2026-11-13T12:00:00Z");
+        Instant daemonStamp = shipirNow.minus(Duration.ofHours(2)); // daemon clock hopelessly off
+        var skewed = new LogStreamHandler(logs, hosts, mock(HostEndpointResolver.class), sender,
+                new LogStreamProperties(200, 500, 8192, 1000, Duration.ofSeconds(5)), Clock.fixed(shipirNow, ZoneOffset.UTC),
+                mock(StreamViewers.class));
+        List<Integer> tails = new CopyOnWriteArrayList<>();
+        List<Instant> sinces = new CopyOnWriteArrayList<>();
+        mockFollows(tails, sinces);
+        var target = new LogStreamHandler.Target(UUID.randomUUID(), "web");
+        var options = new LogStreamHandler.Options(100, true);
+
+        skewed.subscribe(target, options, "alice", "s1", "a");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> endSinks.size() == 1);
+        lineSinks.get(0).accept(new LogLine(LogLine.Stream.STDOUT, "old", daemonStamp));
+        endSinks.get(0).accept(null);
+        skewed.subscribe(target, options, "bob", "s2", "b");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> lineSinks.size() == 2);
+
+        assertThat(sinces.get(1)).isEqualTo(daemonStamp);
+    }
+
+    /** Flapping container: the second stream ends before any line, the third still starts from the daemon timestamp. */
+    @Test
+    void sinceStaysTheDaemonTimestampWhenTheCarriedOverStreamEndsWithoutALine() throws Exception {
+        Instant shipirNow = Instant.parse("2026-11-13T12:00:00Z");
+        Instant daemonStamp = shipirNow.minus(Duration.ofHours(2));
+        var skewed = new LogStreamHandler(logs, hosts, mock(HostEndpointResolver.class), sender,
+                new LogStreamProperties(200, 500, 8192, 1000, Duration.ofSeconds(5)), Clock.fixed(shipirNow, ZoneOffset.UTC),
+                mock(StreamViewers.class));
+        List<Integer> tails = new CopyOnWriteArrayList<>();
+        List<Instant> sinces = new CopyOnWriteArrayList<>();
+        mockFollows(tails, sinces);
+        var target = new LogStreamHandler.Target(UUID.randomUUID(), "web");
+        var options = new LogStreamHandler.Options(100, true);
+
+        skewed.subscribe(target, options, "alice", "s1", "a");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> endSinks.size() == 1);
+        lineSinks.get(0).accept(new LogLine(LogLine.Stream.STDOUT, "old", daemonStamp));
+        endSinks.get(0).accept(null);
+        skewed.subscribe(target, options, "bob", "s2", "b");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> endSinks.size() == 2);
+        endSinks.get(1).accept(null); // ends again, no line delivered
+        skewed.subscribe(target, options, "carol", "s3", "c");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> endSinks.size() == 3);
+
+        assertThat(sinces.get(1)).isEqualTo(daemonStamp);
+        assertThat(sinces.get(2)).isEqualTo(daemonStamp);
     }
 }

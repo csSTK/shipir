@@ -72,6 +72,8 @@ public class LogStreamHandler {
         Instant followSince;
         /** When the stream ended (set by finish). */
         Instant endedAt;
+        /** Docker (daemon-clock) timestamp of the last delivered line; only known with timestamps=true. */
+        Instant lastDaemonTimestamp;
         Closeable follow;
         final LogStreamSupport.RateWindow rate = new LogStreamSupport.RateWindow();
 
@@ -148,16 +150,21 @@ public class LogStreamHandler {
                             replaced.subscribers.clear();
                             stream.nextSeq = replaced.nextSeq;
                             // Carried-over viewers saw the old lines, so a tail replay would show them again with
-                            // new seqs. Follow with since = end of the old stream instead (all lines of that window,
-                            // so output between the end and now, e.g. a restart, is not lost) and carry the old LINE
-                            // buffer over, so a joiner still gets recent lines. Docker's since has second
-                            // precision: lines of the end second may arrive twice (accepted, not deduped). If the
+                            // new seqs. Follow with since instead (all lines of that window, so output between the
+                            // end and now, e.g. a restart, is not lost) and carry the old LINE buffer over, so a
+                            // joiner still gets recent lines. Docker evaluates since on the DAEMON clock, so it is
+                            // the last delivered line's Docker timestamp when known (timestamps on), else the
+                            // Shipir end time minus the configured safety margin (LogStreamSupport.followSince).
+                            // Docker's since has second precision: some lines may arrive twice (accepted, not
+                            // deduped). If the
                             // old stream never delivered a line (it failed to start) the requested tail stays.
                             List<LogStreamMessage> oldLines = replaced.buffer.stream()
                                     .filter(m -> m.type() == LogStreamMessage.Type.LINE).toList();
                             if (!oldLines.isEmpty() && replaced.endedAt != null) {
                                 stream.followTail = -1;
-                                stream.followSince = replaced.endedAt;
+                                stream.lastDaemonTimestamp = replaced.lastDaemonTimestamp; // flapping: stay on the daemon clock
+                                stream.followSince = LogStreamSupport.followSince(replaced.lastDaemonTimestamp,
+                                        replaced.endedAt, properties.sinceSafetyMargin());
                                 oldLines.forEach(stream.buffer::addLast);
                             }
                         }
@@ -403,6 +410,9 @@ public class LogStreamHandler {
                 return;
             }
             stream.rate.take();
+            if (line.timestamp() != null) {
+                stream.lastDaemonTimestamp = line.timestamp();
+            }
             String text = LogStreamSupport.capLength(line.text(), properties.maxLineLength());
             String timestamp = LogStreamSupport.timestampOf(line, stream.key.options().timestamps());
             publish(stream, LogStreamMessage.Type.LINE, line.stream().name(), text, null, timestamp);

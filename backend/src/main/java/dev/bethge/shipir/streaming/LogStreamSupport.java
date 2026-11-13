@@ -3,6 +3,8 @@ package dev.bethge.shipir.streaming;
 import dev.bethge.shipir.docker.dto.LogLine;
 
 import java.io.Closeable;
+import java.time.Duration;
+import java.time.Instant;
 
 /**
  * Logic shared by {@link LogStreamHandler} (one container) and {@link DeploymentLogStreamService} (one Compose
@@ -63,6 +65,16 @@ final class LogStreamSupport {
         } catch (Exception e) {
             // closing is best effort, the stream is gone either way
         }
+    }
+
+    /**
+     * Lower bound for re-following an ended stream. Docker compares {@code since} with the daemon clock, which may
+     * differ from Shipir's on a remote host: prefer the daemon's own timestamp of the last delivered line
+     * ({@code lastDaemonTimestamp}, null when timestamps were off), else Shipir's end time backed off by {@code margin}
+     * (covers a daemon clock behind by up to the margin; a clock ahead only produces repeated lines).
+     */
+    static Instant followSince(Instant lastDaemonTimestamp, Instant endedAt, Duration margin) {
+        return lastDaemonTimestamp != null ? lastDaemonTimestamp : endedAt.minus(margin);
     }
 
     /** Lines per wall-clock second with a counter of what was dropped. Not thread safe; callers hold the stream lock. */
