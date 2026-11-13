@@ -93,7 +93,7 @@ class ApiTokenApiTest extends DeploymentTestBase {
                         .content("{\"name\":\"a\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}"))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(header().exists(HttpHeaders.RETRY_AFTER))
-                .andExpect(jsonPath("$.code").value("TOO_MANY_ATTEMPTS"));
+                .andExpect(jsonPath("$.code").value("STEP_UP_THROTTLED"));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM api_tokens", Integer.class)).isZero();
     }
 

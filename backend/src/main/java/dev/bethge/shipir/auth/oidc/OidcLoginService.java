@@ -83,8 +83,23 @@ class OidcLoginService {
     private static final String DEFAULT_GROUPS_CLAIM = "groups";
     private static final String REAUTH_ATTRIBUTE = "shipir.oidc.reauth";
     private static final String RETURN_ATTRIBUTE = "shipir.oidc.return";
-    /** A same-origin path only (no scheme, host, backslash or "//"), so the return target cannot become an open redirect. */
-    private static final Pattern LOCAL_PATH = Pattern.compile("/(?!/)[A-Za-z0-9/_.~%-]*");
+    /**
+     * A same-origin path only, so the return target cannot become an open redirect: it must start with a single "/"
+     * (no "//", scheme or host), contains no backslash, control character or whitespace, and may carry one optional
+     * query ("?") and one optional fragment ("#") from a small safe character set, at most 2048 characters in all. Both only follow the path, so they
+     * cannot move the target to another origin.
+     */
+    private static final Pattern LOCAL_PATH = Pattern.compile(
+            "/(?!/)[A-Za-z0-9/_.~%-]*+(\\?[A-Za-z0-9/_.~%=&+-]*+)?+(#[A-Za-z0-9/_.~%=&+-]*+)?+");
+    /** A "%" that does not start a two-digit hex escape; checked in a separate linear pass (no recursive regex). */
+    private static final Pattern BAD_PERCENT = Pattern.compile("%(?![0-9A-Fa-f]{2})");
+    /** Longer return paths are dropped (login lands on "/"); keeps matching cheap and the Location header small. */
+    private static final int MAX_RETURN_PATH_LENGTH = 2048;
+
+    private static boolean isLocalPath(String path) {
+        return path != null && path.length() <= MAX_RETURN_PATH_LENGTH
+                && LOCAL_PATH.matcher(path).matches() && !BAD_PERCENT.matcher(path).find();
+    }
 
     private record RegistrationKey(OidcConfig config, OidcDiscoveryClient.Metadata metadata, String redirectUri) {
     }
@@ -145,7 +160,7 @@ class OidcLoginService {
      * where the callback sends the browser afterwards; anything but a same-origin path is dropped.
      */
     String beginReauth(HttpServletRequest request, String returnPath) {
-        return begin(request, true, returnPath != null && LOCAL_PATH.matcher(returnPath).matches() ? returnPath : null);
+        return begin(request, true, isLocalPath(returnPath) ? returnPath : null);
     }
 
     private String begin(HttpServletRequest request, boolean reauth, String returnPath) {

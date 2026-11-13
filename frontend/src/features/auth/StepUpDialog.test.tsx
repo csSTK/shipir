@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../shared/api/client.ts'
 import { StepUpDialog } from './StepUpDialog.tsx'
-import type { StepUpStatus } from './stepUp.ts'
+import { startSsoReauth, type StepUpStatus } from './stepUp.ts'
 
 const apiFetch = vi.fn()
 vi.mock('../../shared/api/client.ts', async (importActual) => ({
@@ -65,11 +65,28 @@ describe('StepUpDialog', () => {
   })
 
   it('names the wait after a lockout (429)', async () => {
-    const err = new ApiError(429, 'x', 'TOO_MANY_ATTEMPTS', undefined, undefined, 90)
+    const err = new ApiError(429, 'x', 'STEP_UP_THROTTLED', undefined, undefined, 90)
     renderDialog(password, vi.fn().mockRejectedValue(err))
     fireEvent.change(await screen.findByLabelText('Current password'), { target: { value: 'pw-pw-pw' } })
     fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('90 seconds')
+  })
+
+  it('hands a 429 that is not a step-up lockout to the caller', async () => {
+    const err = new ApiError(429, 'x', 'TOO_MANY_ATTEMPTS', undefined, undefined, 90)
+    const { onFailure } = renderDialog(password, vi.fn().mockRejectedValue(err))
+    fireEvent.change(await screen.findByLabelText('Current password'), { target: { value: 'pw-pw-pw' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    await waitFor(() => expect(onFailure).toHaveBeenCalledWith(err))
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('keeps query and hash in the SSO return path', () => {
+    vi.stubGlobal('location', { pathname: '/deployments/a', search: '?tab=logs', hash: '#env', assign })
+    startSsoReauth()
+    expect(assign).toHaveBeenCalledWith(
+      `/api/auth/oidc/reauthorize?return=${encodeURIComponent('/deployments/a?tab=logs#env')}`,
+    )
   })
 
   it('hands any other error to the caller', async () => {

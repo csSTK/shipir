@@ -29,9 +29,9 @@ export function useStepUpStatus() {
   })
 }
 
-/** True for any refusal that comes from the step-up check (wrong or missing credentials, stale SSO, token caller, lockout). */
+/** True for any refusal that comes from the step-up check (wrong or missing credentials, stale SSO, token caller, lockout `STEP_UP_THROTTLED`); other 429s are not. */
 export function isStepUpError(error: unknown): error is ApiError {
-  return error instanceof ApiError && ((error.code?.startsWith('STEP_UP_') ?? false) || error.status === 429)
+  return error instanceof ApiError && (error.code?.startsWith('STEP_UP_') ?? false)
 }
 
 export function isSsoStepUpRequired(error: unknown): boolean {
@@ -40,7 +40,7 @@ export function isSsoStepUpRequired(error: unknown): boolean {
 
 /** User-facing text for a step-up refusal; `null` if the error is not one. Lockouts (429) use the shared throttle wording. */
 export function stepUpErrorMessage(error: unknown): string | null {
-  if (!(error instanceof ApiError)) return null
+  if (!isStepUpError(error)) return null
   const throttled = throttleMessage(error)
   if (throttled !== null) return throttled
   switch (error.code) {
@@ -59,6 +59,7 @@ export function stepUpErrorMessage(error: unknown): string | null {
 
 /** Sends the browser to the identity provider to log in again; it returns to the current page afterwards. */
 export function startSsoReauth(): void {
-  const here = window.location.pathname
+  const { pathname, search, hash } = window.location
+  const here = pathname + search + hash
   window.location.assign(`/api/auth/oidc/reauthorize?return=${encodeURIComponent(here)}`)
 }

@@ -47,7 +47,12 @@ class OidcStepUpTest extends OidcTestBase {
 
     /** Starts re-authentication and lets the stub return {@code claims}; returns the callback result. */
     private MvcResult reauth(Login l, String returnPath, Map<String, Object> claims) throws Exception {
-        var request = get("/api/auth/oidc/reauthorize").session(l.session());
+        // own client address per flow: many flows in one test must not trip the per-address authorize throttle
+        String address = "10.88." + (int) (Math.random() * 250) + "." + (1 + (int) (Math.random() * 250));
+        var request = get("/api/auth/oidc/reauthorize").session(l.session()).with(req -> {
+            req.setRemoteAddr(address);
+            return req;
+        });
         if (returnPath != null) {
             request.param("return", returnPath);
         }
@@ -127,11 +132,36 @@ class OidcStepUpTest extends OidcTestBase {
 
     @Test
     void theReturnPathMustBeALocalPath() throws Exception {
-        for (String bad : new String[]{"//evil.example", "https://evil.example", "/\\evil", "relative"}) {
+        for (String bad : new String[]{"//evil.example", "https://evil.example", "/\\evil", "relative",
+                "/?x=1\r\nSet-Cookie:a=b", "/a\nb", "/?next=//evil.example/\\x", "/?a=b\\c", "/#\\evil",
+                "/a?b c", "/a?b#c#d", "/a?b?c", "/a b", "/?a=<script>", "/\t/evil", "/?a=%", "/a%zz", "/a?#b#",
+                "/\u2215evil", "/?\u0000", "javascript:alert(1)", "/a;jsessionid=1", "/?a=b@evil.example/", "/?a=b,c"}) {
             Login l = ssoLogin(signInWithAuthTime("s9", Instant.now().minusSeconds(600)));
             MvcResult cb = reauth(l, bad, withAuthTime(claims("s9", "sso-s9", "admins"), Instant.now()));
             assertThat(cb.getResponse().getHeader(HttpHeaders.LOCATION)).as(bad).isEqualTo("/");
         }
+    }
+
+    @Test
+    void theReturnPathMayKeepQueryAndHashAndStaysSameOrigin() throws Exception {
+        for (String good : new String[]{"/deployments/abc?tab=logs&filter=a%20b", "/containers#row-3",
+                "/deployments/abc?tab=logs#env", "/?q=x", "/a/b.c~d_e-f"}) {
+            Login l = ssoLogin(signInWithAuthTime("s10", Instant.now().minusSeconds(600)));
+            MvcResult cb = reauth(l, good, withAuthTime(claims("s10", "sso-s10", "admins"), Instant.now()));
+            assertThat(cb.getResponse().getHeader(HttpHeaders.LOCATION)).as(good).isEqualTo(good);
+        }
+    }
+
+    @Test
+    void anOverlongReturnPathIsDroppedWithoutAnError() throws Exception {
+        Login l = ssoLogin(signInWithAuthTime("s11", Instant.now().minusSeconds(600)));
+        MvcResult cb = reauth(l, "/" + "a".repeat(10_000), withAuthTime(claims("s11", "sso-s11", "admins"), Instant.now()));
+        assertThat(cb.getResponse().getHeader(HttpHeaders.LOCATION)).isEqualTo("/");
+        Login l2 = ssoLogin(signInWithAuthTime("s12", Instant.now().minusSeconds(600)));
+        String atCap = "/?q=" + "a%20".repeat(510) + "abcd";
+        assertThat(atCap).hasSize(2048);
+        MvcResult ok = reauth(l2, atCap, withAuthTime(claims("s12", "sso-s12", "admins"), Instant.now()));
+        assertThat(ok.getResponse().getHeader(HttpHeaders.LOCATION)).isEqualTo(atCap);
     }
 
     @Test
