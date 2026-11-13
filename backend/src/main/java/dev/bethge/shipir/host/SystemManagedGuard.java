@@ -1,5 +1,6 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.common.exception.CodedException;
 import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
 import dev.bethge.shipir.docker.DockerConnectionException;
@@ -253,7 +254,17 @@ class SystemManagedGuard {
     private ManagedProxyTemplateResources.Resources storedProxyResources(UUID hostId) {
         Set<String> imageRefs = new HashSet<>();
         Set<String> networkNames = new HashSet<>();
-        for (String compose : managed.systemManagedComposeFiles(hostId)) {
+        List<String> composeFiles;
+        try {
+            composeFiles = managed.systemManagedComposeFiles(hostId);
+        } catch (RuntimeException e) {
+            // e.g. a stored proxy compose over the size cap: the protected set is unknown, so fail closed (409)
+            String reason = e instanceof CodedException coded ? coded.code() : e.getClass().getSimpleName();
+            log.warn("Guarded operation on host {} blocked: a managed proxy compose file cannot be read ({})", hostId, reason);
+            throw new HostException(HttpStatus.CONFLICT, "PROXY_COMPOSE_UNREADABLE",
+                    "The proxy's compose file cannot be read, so this action is blocked for now. Ask an admin.");
+        }
+        for (String compose : composeFiles) {
             ManagedProxyTemplateResources.Resources r = ManagedProxyTemplateResources.parse(compose);
             imageRefs.addAll(r.images());
             networkNames.addAll(r.networks());

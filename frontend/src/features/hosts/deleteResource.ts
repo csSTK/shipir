@@ -39,6 +39,8 @@ export function describeDeleteError(error: unknown): string {
         return i18n.t('hosts:deleteResource.managedByCompose')
       case 'PROXY_IMAGE_UNRESOLVED':
         return i18n.t('hosts:deleteResource.proxyImageUnresolved')
+      case 'PROXY_COMPOSE_UNREADABLE':
+        return i18n.t('hosts:deleteResource.proxyComposeUnreadable')
       case 'MANAGED_DEPLOYMENT':
         return describeDeploymentError(error, i18n.t('hosts:deleteResource.thisResourceBelongsToA'))
       default:

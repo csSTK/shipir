@@ -17,6 +17,11 @@ describe('describeDeleteError', () => {
     expect(describeDeleteError(error)).toContain('proxy')
   })
 
+  it('translates PROXY_COMPOSE_UNREADABLE (shipr-0qbh.99)', async () => {
+    const error = new ApiError(409, JSON.stringify({ message: 'x' }), 'PROXY_COMPOSE_UNREADABLE')
+    expect(describeDeleteError(error)).toContain('compose')
+  })
+
   it('falls back to a translated generic text for unknown errors', async () => {
     await i18n.changeLanguage('de')
     expect(describeDeleteError(new ApiError(500, 'raw english body'))).not.toContain('raw english')
