@@ -30,6 +30,8 @@ function renderPage(handler?: (path: string, method: string, body: unknown) => u
   apiFetchMock.mockImplementation((path: string, options?: { method?: string; body?: unknown }) => {
     const method = options?.method ?? 'GET'
     if (method === 'GET' && path === '/users') return Promise.resolve(list)
+    if (method === 'GET' && path === '/auth/step-up')
+      return Promise.resolve({ method: 'PASSWORD', totpRequired: false, fresh: false, windowSeconds: 300 })
     if (method === 'GET' && path === '/settings/security') return Promise.resolve({ require2faForAdmins: false, updatedAt: null })
     const result = handler?.(path, method, options?.body)
     return result instanceof Error ? Promise.reject(result) : Promise.resolve(result)
@@ -170,6 +172,32 @@ describe('UsersSettingsPage', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Link' }))
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/already linked to another user/i))
     expect(calls('PUT')[0]).toEqual(['/users/u2/external-identity', { method: 'PUT', body: { issuer: 'https://idp.example.com', subject: 'sub-1' } }])
+  })
+
+  it('lets an ADMIN link their own identity only after confirming their password', async () => {
+    renderPage()
+    await screen.findByText('anna')
+    fireEvent.click(screen.getByRole('button', { name: 'Link your own SSO identity for root' }))
+    const form = screen.getByRole('dialog')
+    fireEvent.change(within(form).getByLabelText('Issuer URL'), { target: { value: 'https://idp.example.com' } })
+    fireEvent.change(within(form).getByLabelText('Subject (sub)'), { target: { value: 'sub-root' } })
+    fireEvent.click(within(form).getByRole('button', { name: 'Link' }))
+    const confirm = await screen.findByRole('dialog', { name: "Confirm it's you" })
+    expect(calls('PUT')).toHaveLength(0)
+    fireEvent.change(await within(confirm).findByLabelText('Current password'), { target: { value: 'my-password' } })
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Confirm' }))
+    await waitFor(() => expect(calls('PUT')).toHaveLength(1))
+    expect(calls('PUT')[0]).toEqual([
+      '/users/u1/external-identity',
+      { method: 'PUT', body: { issuer: 'https://idp.example.com', subject: 'sub-root', stepUp: { password: 'my-password' } } },
+    ])
+  })
+
+  it('offers no self-link for an ADMIN who already signs in via SSO, and none of the other self-actions', async () => {
+    renderPage(undefined, [{ ...me, externalIdentity: true }, anna])
+    await screen.findByText('anna')
+    expect(screen.queryByRole('button', { name: 'Link your own SSO identity for root' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Delete root' })).toBeNull()
   })
 
   it('unlinks an SSO identity after confirmation and offers no link for SSO users', async () => {

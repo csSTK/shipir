@@ -1,8 +1,17 @@
 package dev.bethge.shipir.auth.oidc;
 
+import dev.bethge.shipir.auth.LoginThrottle;
+import dev.bethge.shipir.auth.totp.Totp;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.test.web.servlet.MvcResult;
+import java.time.Instant;
+import java.util.Map;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.util.UUID;
@@ -11,6 +20,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -18,11 +29,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /** ADMIN pre-link of a local user to an OIDC identity: validation, uniqueness, audit, and the sign-in it enables. */
 class ExternalIdentityLinkTest extends OidcTestBase {
 
+    @Autowired LoginThrottle throttle;
+
+    @BeforeEach
+    void clearThrottle() {
+        ((Map<?, ?>) ReflectionTestUtils.getField(throttle, "entries")).clear();
+    }
+
     @AfterEach
     void unlinkSeededUsers() {
         // resetState() of the next test deletes every user that still has an identity: keep the seeded ones local
         jdbc.update("UPDATE users SET external_issuer = NULL, external_subject = NULL "
                 + "WHERE username IN ('admin', 'operator', 'viewer')");
+        jdbc.update("UPDATE users SET totp_secret_ciphertext = NULL, totp_enabled_at = NULL, totp_last_used_step = NULL");
     }
 
     private UUID id(String username) {
@@ -135,15 +154,115 @@ class ExternalIdentityLinkTest extends OidcTestBase {
                 .andExpect(status().isNotFound());
     }
 
+    private ResultActions selfLink(Login who, String stepUpJson) throws Exception {
+        return selfLink(who, stepUpJson, "https://idp.example.com");
+    }
+
+    private ResultActions selfLink(Login who, String stepUpJson, String issuer) throws Exception {
+        return mvc.perform(who.write(put("/api/users/" + id("admin") + "/external-identity"))
+                .contentType(APPLICATION_JSON)
+                .content("{\"issuer\":\"" + issuer + "\",\"subject\":\"sub-admin\""
+                        + (stepUpJson == null ? "" : ",\"stepUp\":" + stepUpJson) + "}"));
+    }
+
+    private String adminIssuer() {
+        return jdbc.queryForObject("SELECT external_issuer FROM users WHERE username = 'admin'", String.class);
+    }
+
     @Test
-    void adminCannotLinkOrUnlinkOwnIdentity() throws Exception {
+    void adminCannotUnlinkOwnIdentity() throws Exception {
         Login admin = login("admin");
-        link(admin, "admin", "https://idp.example.com", "sub-admin").andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("SELF_LINK"));
         mvc.perform(admin.write(delete("/api/users/" + id("admin") + "/external-identity")))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("SELF_UNLINK"));
-        assertThat(jdbc.queryForObject("SELECT external_issuer FROM users WHERE username = 'admin'", String.class))
-                .isNull();
+    }
+
+    @Test
+    void selfLinkWithTheCorrectPasswordSucceedsAndIsAudited() throws Exception {
+        Login admin = login("admin");
+        selfLink(admin, "{\"password\":\"" + PASSWORD + "\"}").andExpect(status().isOk())
+                .andExpect(jsonPath("$.externalIdentity").value(true));
+        assertThat(adminIssuer()).isEqualTo("https://idp.example.com");
+        assertThat(audit("USER_IDENTITY_LINK", "SUCCESS")).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT details::text FROM audit_log WHERE action = 'USER_IDENTITY_LINK'",
+                String.class)).doesNotContain(PASSWORD);
+    }
+
+    @Test
+    void selfLinkWithoutStepUpIsRefused() throws Exception {
+        Login admin = login("admin");
+        selfLink(admin, null).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("STEP_UP_REQUIRED"));
+        selfLink(admin, "{}").andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("STEP_UP_REQUIRED"));
+        assertThat(adminIssuer()).isNull();
+        assertThat(audit("USER_IDENTITY_LINK", "SUCCESS")).isZero();
+    }
+
+    @Test
+    void selfLinkWithAWrongPasswordIsRefusedAndThrottled() throws Exception {
+        Login admin = login("admin");
+        for (int i = 0; i < 5; i++) {
+            selfLink(admin, "{\"password\":\"not-the-password\"}").andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("STEP_UP_INVALID"));
+        }
+        selfLink(admin, "{\"password\":\"" + PASSWORD + "\"}").andExpect(status().isTooManyRequests())
+                .andExpect(header().exists(HttpHeaders.RETRY_AFTER));
+        assertThat(adminIssuer()).isNull();
+    }
+
+    @Test
+    void selfLinkWithTwoFactorNeedsTheCodeToo() throws Exception {
+        Login admin = login("admin");
+        String setup = mvc.perform(admin.write(post("/api/auth/2fa/setup"))).andReturn().getResponse()
+                .getContentAsString();
+        byte[] secret = Totp.fromBase32(com.jayway.jsonpath.JsonPath.read(setup, "$.secret"));
+        mvc.perform(admin.write(post("/api/auth/2fa/confirm")).contentType(APPLICATION_JSON)
+                .content("{\"code\":\"" + Totp.code(secret, Totp.stepAt(Instant.now())) + "\"}"))
+                .andExpect(status().isOk());
+        selfLink(admin, "{\"password\":\"" + PASSWORD + "\"}").andExpect(status().isForbidden());
+        assertThat(adminIssuer()).isNull();
+        String code = Totp.code(secret, Totp.stepAt(Instant.now()) + 1);
+        selfLink(admin, "{\"password\":\"" + PASSWORD + "\",\"code\":\"" + code + "\"}")
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void linkingAnotherUserNeedsNoStepUp() throws Exception {
+        link(login("admin"), "viewer", "https://idp.example.com", "sub-other").andExpect(status().isOk());
+    }
+
+    private Login ssoThenLocalLoginOnTheSameSession() throws Exception {
+        configure(true, true);
+        Map<String, Object> c = claims("sa", "sso-sa", "admins");
+        c.put("auth_time", Instant.now().getEpochSecond());
+        Flow a = signIn(c);
+        MockHttpSession session = (MockHttpSession) a.callback().getRequest().getSession(false);
+        jakarta.servlet.http.Cookie csrf = a.callback().getResponse().getCookie("XSRF-TOKEN");
+        MvcResult r = mvc.perform(post("/api/auth/login").session(session).cookie(csrf)
+                .header("X-XSRF-TOKEN", csrf.getValue()).contentType(APPLICATION_JSON)
+                .content("{\"username\":\"admin\",\"password\":\"%s\"}".formatted(PASSWORD))).andReturn();
+        assertThat(r.getResponse().getStatus()).isEqualTo(200);
+        return new Login((MockHttpSession) r.getRequest().getSession(false), csrf);
+    }
+
+    @Test
+    void aLocalLoginOnASessionWithAnEarlierSsoUsersFreshnessDropsIt() throws Exception {
+        Login l = ssoThenLocalLoginOnTheSameSession();
+        // the admin becomes an SSO user by other means (say another admin links them)
+        jdbc.update("UPDATE users SET external_issuer = 'https://idp.example.com', external_subject = 'sub-direct' "
+                + "WHERE username = 'admin'");
+        mvc.perform(get("/api/auth/step-up").session(l.session()))
+                .andExpect(jsonPath("$.method").value("SSO")).andExpect(jsonPath("$.fresh").value(false));
+    }
+
+    @Test
+    void aSelfLinkedAdminDoesNotInheritAnEarlierSsoUsersFreshness() throws Exception {
+        Login l = ssoThenLocalLoginOnTheSameSession();
+        selfLink(l, "{\"password\":\"" + PASSWORD + "\"}", provider.issuer()).andExpect(status().isOk());
+        mvc.perform(get("/api/auth/step-up").session(l.session()))
+                .andExpect(jsonPath("$.method").value("SSO")).andExpect(jsonPath("$.fresh").value(false));
+        mvc.perform(l.write(post("/api/account/tokens")).contentType(APPLICATION_JSON).content("{\"name\":\"ci\"}"))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("STEP_UP_SSO_REQUIRED"));
     }
 
     @Test

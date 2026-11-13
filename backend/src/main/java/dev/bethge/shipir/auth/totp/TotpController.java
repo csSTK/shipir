@@ -2,6 +2,7 @@ package dev.bethge.shipir.auth.totp;
 
 import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.auth.User;
+import dev.bethge.shipir.auth.stepup.StepUpSession;
 import dev.bethge.shipir.auth.dto.CurrentUserResponse;
 import dev.bethge.shipir.auth.totp.dto.CodeRequest;
 import dev.bethge.shipir.auth.totp.dto.DisableRequest;
@@ -97,6 +98,8 @@ class TotpController {
         // Same as the password-only login: rotate session id + CSRF token, then store the security context.
         sessionAuthenticationStrategy.onAuthentication(authentication, request, response);
         totp.clearPending(request);
+        // The id rotation keeps session attributes: an earlier SSO user's auth_time must not count for this user
+        StepUpSession.clear(request.getSession(true));
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);

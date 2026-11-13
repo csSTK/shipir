@@ -19,6 +19,7 @@ import {
   type OneTimePassword,
   type UserRole,
 } from './api.ts'
+import { StepUpDialog } from '../auth/index.ts'
 import { SettingsPage } from './SettingsPage.tsx'
 import { UserAccessDialog } from './UserAccessDialog.tsx'
 import { useTranslation } from 'react-i18next'
@@ -62,8 +63,6 @@ function errorMessage(error: unknown, fallback: string): string {
         return i18n.t('settings:UsersSettingsPage.invalidIssuer')
       case 'INVALID_SUBJECT':
         return i18n.t('settings:UsersSettingsPage.invalidSubject')
-      case 'SELF_LINK':
-        return i18n.t('settings:UsersSettingsPage.cannotLinkYourself')
       case 'SELF_UNLINK':
         return i18n.t('settings:UsersSettingsPage.cannotUnlinkYourself')
       case 'EXTERNAL_IDENTITY':
@@ -170,22 +169,41 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
 }
 
 /** ADMIN pre-link: issuer + subject of the identity this existing account may sign in with. */
-function LinkIdentityDialog({ user, onClose }: { user: ManagedUser; onClose: () => void }) {
+function LinkIdentityDialog({ user, self, onClose }: { user: ManagedUser; self: boolean; onClose: () => void }) {
   const { t } = useTranslation('settings')
   const configured = useOidcSettings().data?.issuerUrl ?? ''
   const [typedIssuer, setIssuer] = useState<string | null>(null)
   const issuer = typedIssuer ?? configured
   const [subject, setSubject] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
+  // Linking yourself changes how you sign in: the form is valid, the link waits for the user to confirm their identity.
+  const [confirming, setConfirming] = useState(false)
   const link = useLinkUserIdentity()
 
   function submit(e: FormEvent) {
     e.preventDefault()
     if (!issuer.trim() || !subject.trim()) return setProblem(t('UsersSettingsPage.enterIssuerAndSubject'))
     setProblem(null)
+    if (self) return setConfirming(true)
     link.mutate(
       { id: user.id, issuer: issuer.trim(), subject: subject.trim() },
       { onSuccess: onClose, onError: (err) => setProblem(errorMessage(err, t('UsersSettingsPage.couldNotLinkTheIdentity'))) },
+    )
+  }
+
+  if (confirming) {
+    return (
+      <StepUpDialog
+        onCancel={() => setConfirming(false)}
+        onConfirm={async (stepUp) => {
+          await link.mutateAsync({ id: user.id, issuer: issuer.trim(), subject: subject.trim(), stepUp })
+          onClose()
+        }}
+        onFailure={(err) => {
+          setConfirming(false)
+          setProblem(errorMessage(err, t('UsersSettingsPage.couldNotLinkTheIdentity')))
+        }}
+      />
     )
   }
 
@@ -382,7 +400,9 @@ export function UsersSettingsPage({ currentUsername }: { currentUsername: string
                 : { label: t('UsersSettingsPage.linkSsoIdentityFor'), icon: Link2, onSelect: () => open({ kind: 'link', user: u }) },
               { label: t('UsersSettingsPage.delete'), icon: Trash2, danger: true, onSelect: () => open({ kind: 'delete', user: u }) },
             ]
-          : []),
+          : u.externalIdentity
+            ? []
+            : [{ label: t('UsersSettingsPage.linkYourSsoIdentity'), icon: Link2, onSelect: () => open({ kind: 'link', user: u }) }]),
       ],
     }
   }
@@ -470,7 +490,7 @@ export function UsersSettingsPage({ currentUsername }: { currentUsername: string
           )}
         </ConfirmDialog>
       )}
-      {dialog?.kind === 'link' && <LinkIdentityDialog user={dialog.user} onClose={close} />}
+      {dialog?.kind === 'link' && <LinkIdentityDialog user={dialog.user} self={dialog.user.username === currentUsername} onClose={close} />}
       {dialog?.kind === 'unlink' && (
         <ConfirmDialog
           open

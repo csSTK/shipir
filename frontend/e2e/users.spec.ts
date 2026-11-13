@@ -63,6 +63,23 @@ test('admin links an SSO identity to a user, then a taken identity shows an inli
   await expect(dialog.getByRole('alert')).toContainText('already linked to another user')
 })
 
+test('admin links their own SSO identity after confirming their password', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', { body: me('ADMIN') })
+  api.mock('GET', '/api/users', { body: users })
+  api.mock('GET', '/api/settings/security', { body: { require2faForAdmins: false, updatedAt: null } })
+  api.mock('GET', '/api/settings/oidc', { body: { issuerUrl: 'https://idp.example.com', clientId: 'c', clientSecretConfigured: true, scopes: 'openid', groupsClaim: 'groups', roleMapping: {}, autoProvision: false, localLoginEnabled: true } })
+  api.mock('GET', '/api/auth/step-up', { body: { method: 'PASSWORD', totpRequired: false, fresh: false, windowSeconds: 300 } })
+  api.mock('PUT', '/api/users/u1/external-identity', { body: { ...users[0], externalIdentity: true } })
+  await page.goto('/settings/users')
+  await page.getByRole('button', { name: 'Link your own SSO identity for u' }).click()
+  await page.getByRole('dialog').getByLabel('Subject (sub)').fill('sub-me')
+  await page.getByRole('dialog').getByRole('button', { name: 'Link', exact: true }).click()
+  const confirm = page.getByRole('dialog', { name: "Confirm it's you" })
+  await confirm.getByLabel('Current password').fill('my-current-password')
+  await confirm.getByRole('button', { name: 'Confirm' }).click()
+  await expect(confirm).toHaveCount(0)
+})
+
 test('operator cannot reach the page', async ({ page, api }) => {
   api.mock('GET', '/api/auth/me', { body: me('OPERATOR') })
   await page.goto('/settings/users')

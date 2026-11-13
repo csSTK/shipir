@@ -617,8 +617,11 @@ export function useResetUserTwoFactor() {
 export function useLinkUserIdentity() {
   const invalidate = useInvalidateUsers()
   return useMutation({
-    mutationFn: ({ id, issuer, subject }: { id: string; issuer: string; subject: string }) =>
-      apiFetch<ManagedUser>(`${USERS_BASE}/${id}/external-identity`, { method: 'PUT', body: { issuer, subject } }),
+    mutationFn: ({ id, issuer, subject, stepUp }: { id: string; issuer: string; subject: string; stepUp?: StepUpCredentials }) =>
+      apiFetch<ManagedUser>(`${USERS_BASE}/${id}/external-identity`, {
+        method: 'PUT',
+        body: { issuer, subject, ...(stepUp ? { stepUp } : {}) },
+      }),
     onSuccess: () => void invalidate(),
   })
 }

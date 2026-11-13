@@ -462,7 +462,7 @@
   "UsersSettingsPage.cannotUnlinkYourself": "Du kannst deine eigene Identität nicht trennen.",
   "UsersSettingsPage.unlinkSsoIdentity": "SSO-Identität trennen",
   "UsersSettingsPage.unlinkSsoIdentityText": "Die Single-Sign-on-Identität von <strong>{{username}}</strong> trennen? Der Benutzer wird abgemeldet und kann sich nicht mehr über den Identity-Provider anmelden.",
-  "UsersSettingsPage.cannotLinkYourself": "Du kannst deine eigene Identität nicht verknüpfen.",
+  "UsersSettingsPage.linkYourSsoIdentity": "Eigene SSO-Identität verknüpfen für",
   "UsersSettingsPage.linkSsoPasswordNote": "Das lokale Passwort eines verknüpften Benutzers kann nicht mehr geändert oder zurückgesetzt werden, bis die Identität getrennt wird.",
   "UsersSettingsPage.issuerMismatch": "Der Issuer passt nicht zum konfigurierten Provider."
 }

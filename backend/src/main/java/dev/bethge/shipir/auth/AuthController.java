@@ -8,6 +8,7 @@ import dev.bethge.shipir.auth.dto.PasswordChangeRequest;
 import dev.bethge.shipir.auth.dto.PasswordPolicyErrorResponse;
 import dev.bethge.shipir.auth.dto.PasswordResetConfirmRequest;
 import dev.bethge.shipir.auth.dto.PasswordResetRequest;
+import dev.bethge.shipir.auth.stepup.StepUpSession;
 import dev.bethge.shipir.auth.token.ApiTokenAuthentication;
 import dev.bethge.shipir.auth.totp.TotpService;
 import dev.bethge.shipir.auth.totp.dto.MfaRequiredResponse;
@@ -132,6 +133,8 @@ class AuthController {
         }
         // Rotate the session id (fixation protection) and the CSRF token before the context is stored.
         sessionAuthenticationStrategy.onAuthentication(authentication, request, response);
+        // The id rotation keeps session attributes: an earlier SSO user's auth_time must not count for this user
+        StepUpSession.clear(request.getSession(true));
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);

@@ -3,6 +3,7 @@ package dev.bethge.shipir.auth.oidc;
 import dev.bethge.shipir.auth.dto.UserResponse;
 import dev.bethge.shipir.auth.oidc.dto.LinkExternalIdentityRequest;
 import dev.bethge.shipir.common.exception.ErrorResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -29,8 +30,8 @@ class ExternalIdentityController {
 
     @PutMapping
     UserResponse link(@PathVariable UUID id, @Valid @RequestBody LinkExternalIdentityRequest body,
-                      Authentication authentication) {
-        return service.link(id, body.issuer(), body.subject(), authentication.getName());
+                      Authentication authentication, HttpServletRequest request) {
+        return service.link(id, body.issuer(), body.subject(), authentication, request, body.stepUp());
     }
 
     @DeleteMapping
