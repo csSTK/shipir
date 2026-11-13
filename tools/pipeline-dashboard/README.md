@@ -34,11 +34,17 @@ Every event has `ts` (ISO), `type` and `run`, plus:
 | `review` | `verdict`, `mustFix` (count), `round` |
 | `tests` | `scope`, `passed`, `failed`, `duration` |
 | `finding` | `bead` (id of the finding bead) |
-| `agent` | `agentId`, `model`, `durationMs`, `tokensIn`, `tokensOut`, `tokensCacheRead`, `tokensCacheWrite`, `cost` (estimate); written by the SubagentStop hook |
+| `agent` | `agentId`, `agentType`, `bead` (from the first user prompt, after the word "bead"; absent if none), `model`, `durationMs`, `tokensIn`, `tokensOut`, `tokensCacheRead`, `tokensCacheWrite`, `cost` (estimate); written by the SubagentStop hook |
 
 Other keys passed on the command line are stored as given, except `ts`, `type` and `run`, which are always set by the recorder.
 
 `run-start` for an existing id rewrites `run.json` from scratch (status back to `running`); events stay appended. `run-end` without a prior `run-start` creates a minimal `run.json` (`started` null).
+
+## Agent events and pricing
+
+The `agent` events come from the SubagentStop hook (`hooks/subagent-stop.mjs`, registered in `.claude/settings.json`). Claude Code passes `cwd`, `agent_id`, `agent_type` and `agent_transcript_path` on stdin. The hook reads the sub-agent transcript: usage is taken from assistant messages (`message.usage`, `message.model`), deduplicated by message id (streamed content blocks repeat the id; the max per field wins), duration is last minus first timestamp. The run is found by cwd (falling back to the cwd recorded in the transcript); no running run means nothing is written. The hook always exits 0 and prints nothing to stdout.
+
+`pricing.json` holds USD per million tokens (`input`, `output`, `cacheRead`, `cacheWrite`) per model id. The cost is the sum over messages, each priced with its own model. If any message's model is missing from the table, the event has no `cost` field (never 0). Prices are estimates: cache write is the 5-minute rate (1.25x input), and Haiku uses the rate card for prompts up to 100K tokens.
 
 ## Importing
 
