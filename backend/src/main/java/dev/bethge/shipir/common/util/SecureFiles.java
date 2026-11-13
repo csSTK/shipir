@@ -41,12 +41,15 @@ import java.util.function.Consumer;
  * {@code move:<name>}, {@code delete:<name>}) at the points where a race could strike; tests use it to swap links.
  */
 public final class SecureFiles {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SecureFiles.class);
 
     private static final Consumer<String> NO_SEAM = stage -> {
     };
 
     /** How long opening a regular file for reading may take before it is treated as a blocked FIFO open. */
     static volatile Duration openTimeout = Duration.ofSeconds(2);
+    /** Test observation only: the channel most recently handed over by a deadline open. */
+    static volatile SeekableByteChannel lastDeliveredChannel;
 
     private SecureFiles() {
     }
@@ -243,6 +246,8 @@ public final class SecureFiles {
                     failure = e;
                 }
                 if (state.compareAndSet(PENDING, DELIVERED)) {
+                    lastDeliveredChannel = channel;
+                    seam.accept("leafdelivered:" + name);
                     if (failure != null) {
                         opened.completeExceptionally(failure);
                     } else {
@@ -267,6 +272,8 @@ public final class SecureFiles {
             } catch (TimeoutException e) {
                 if (state.compareAndSet(PENDING, ABANDONED)) {
                     abandoned = true;
+                    log.warn("Abandoned a blocked open of {} after {} ms (likely a FIFO); one daemon thread and file "
+                            + "descriptor stay parked until it returns", name, openTimeout.toMillis());
                     throw new NotRegularFileException(name, "was not opened in time (blocked, likely a FIFO)");
                 }
                 return deliveredResult(opened); // the opener finished just now
@@ -274,10 +281,26 @@ public final class SecureFiles {
                 Thread.currentThread().interrupt();
                 if (state.compareAndSet(PENDING, ABANDONED)) {
                     abandoned = true;
+                    log.warn("Abandoned a blocked open of {} (caller interrupted); one daemon thread and file "
+                            + "descriptor stay parked until it returns", name);
+                } else {
+                    closeDelivered(opened); // delivered just before the interrupt: nobody else will close it
                 }
                 throw new IOException("Interrupted while opening " + name, e);
             } catch (ExecutionException e) {
                 throw unwrap(e);
+            }
+        }
+
+        /** Waits (uninterruptibly, the opener already finished) for a delivered result and closes it. */
+        private static void closeDelivered(CompletableFuture<SeekableByteChannel> opened) {
+            try {
+                SeekableByteChannel channel = opened.join();
+                if (channel != null) {
+                    channel.close();
+                }
+            } catch (IOException | RuntimeException ignored) {
+                // failed open or failed close: nothing left to release
             }
         }
 

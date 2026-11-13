@@ -305,6 +305,68 @@ class SecureFilesTest {
     }
 
     @Test
+    void anInterruptAfterTheOpenWasDeliveredClosesTheDeliveredChannel() throws Exception {
+        Thread caller = Thread.currentThread();
+        java.util.concurrent.atomic.AtomicReference<SeekableByteChannel> delivered = new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.function.Consumer<String> seam = stage -> {
+            if (stage.equals("leafdelivered:f.txt")) {
+                // runs on the opener thread between handing the result over and completing the future
+                caller.interrupt();
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+        };
+        try (SecureFiles.Parent p = SecureFiles.openParent(root, "a/b/f.txt", false, seam)) {
+            assertThatThrownBy(() -> p.dir().openRead(p.name())).isInstanceOf(IOException.class)
+                    .hasMessageContaining("Interrupted");
+            assertThat(Thread.interrupted()).as("interrupt flag restored").isTrue();
+            assertThat(SecureFiles.lastDeliveredChannel).as("the delivered channel was closed").isNotNull();
+            assertThat(SecureFiles.lastDeliveredChannel.isOpen()).isFalse();
+        } finally {
+            SecureFiles.lastDeliveredChannel = null;
+        }
+    }
+
+    @Test
+    void abandoningABlockedOpenLogsOneWarnNamingTheFileButNoContent() throws Exception {
+        Path leaf = root.resolve("a/b/f.txt");
+        Path fifoPath = root.resolve("a/b/pipe-src");
+        Process mk = new ProcessBuilder("mkfifo", fifoPath.toString()).start();
+        org.junit.jupiter.api.Assumptions.assumeTrue(mk.waitFor() == 0, "mkfifo needed");
+        java.util.function.Consumer<String> seam = stage -> {
+            if (stage.equals("leafopen:f.txt")) {
+                try {
+                    Files.move(fifoPath, leaf, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                } catch (IOException e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+        };
+        ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger)
+                org.slf4j.LoggerFactory.getLogger(SecureFiles.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                new ch.qos.logback.core.read.ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        java.time.Duration before = SecureFiles.openTimeout;
+        SecureFiles.openTimeout = java.time.Duration.ofMillis(300);
+        try (SecureFiles.Parent p = SecureFiles.openParent(root, "a/b/f.txt", false, seam)) {
+            assertThatThrownBy(() -> within(java.time.Duration.ofSeconds(10), () -> p.dir().openRead(p.name())))
+                    .isInstanceOf(SecureFiles.NotRegularFileException.class);
+        } finally {
+            SecureFiles.openTimeout = before;
+            logger.detachAppender(appender);
+        }
+        List<ch.qos.logback.classic.spi.ILoggingEvent> warns = appender.list.stream()
+                .filter(e -> e.getLevel() == ch.qos.logback.classic.Level.WARN).toList();
+        assertThat(warns).hasSize(1);
+        assertThat(warns.get(0).getFormattedMessage()).contains("f.txt").doesNotContain("SECRET");
+    }
+
+    @Test
     void openReadOfARegularFileStillWorksUnderTheDeadline() throws Exception {
         try (SecureFiles.Parent p = SecureFiles.openParent(root, "a/b/f.txt", false, null);
              SeekableByteChannel ch = p.dir().openRead(p.name())) {
