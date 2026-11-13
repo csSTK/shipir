@@ -35,6 +35,8 @@ export function describeDeleteError(error: unknown): string {
         return i18n.t('hosts:deleteResource.thisResourceNoLongerExists')
       case 'INVALID_RESOURCE_ID':
         return i18n.t('hosts:deleteResource.thisResourceCannotBeDeleted')
+      case 'PROXY_IMAGE_UNRESOLVED':
+        return i18n.t('hosts:deleteResource.proxyImageUnresolved')
       case 'MANAGED_DEPLOYMENT':
         return describeDeploymentError(error, i18n.t('hosts:deleteResource.thisResourceBelongsToA'))
       default:

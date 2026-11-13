@@ -17,6 +17,8 @@ import dev.bethge.shipir.docker.dto.NetworkDto;
 import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import dev.bethge.shipir.docker.dto.VolumeDto;
 import dev.bethge.shipir.permission.CurrentAccess;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -35,6 +37,8 @@ import java.util.function.BiFunction;
  */
 @Component
 class SystemManagedGuard {
+
+    private static final Logger log = LoggerFactory.getLogger(SystemManagedGuard.class);
 
     /** External network the managed proxy template attaches to ({@code managed-*.yaml}); routed containers join it too. */
     static final String PROXY_NETWORK = "shipir-proxy";
@@ -156,8 +160,17 @@ class SystemManagedGuard {
         return restricted.isEmpty() ? candidates : candidates.stream().filter(c -> !restricted.contains(c.name())).toList();
     }
 
-    /** 403 when the image (id, id prefix or tag) is the image of a container of a system-managed project. */
+    /**
+     * 403 when the image (id, id prefix or tag) is the image of a container of a system-managed project. 409
+     * PROXY_IMAGE_UNRESOLVED when a proxy compose image reference cannot be resolved: the guard cannot tell which image
+     * is protected, so it fails closed for every image of the host (ADMIN is never checked). Logs a WARN without values.
+     */
     void requireNotSystemManagedImage(UUID hostId, String image) {
+        if (!restrictedProjects(hostId).isEmpty() && hasUnresolvedProxyImage(hostId)) {
+            log.warn("Image delete on host {} blocked: a managed proxy compose image reference is unresolved", hostId);
+            throw new HostException(HttpStatus.CONFLICT, "PROXY_IMAGE_UNRESOLVED",
+                    "The proxy's image reference cannot be resolved, so image deletes are blocked for now. Ask an admin.");
+        }
         Set<String> used = restrictedImageRefs(hostId);
         if (used.isEmpty()) {
             return;
@@ -229,6 +242,11 @@ class SystemManagedGuard {
             }
         }
         return refs;
+    }
+
+    /** True when a stored proxy compose image still holds an interpolation token after resolving what is known. */
+    private boolean hasUnresolvedProxyImage(UUID hostId) {
+        return storedProxyResources(hostId).images().stream().anyMatch(i -> i.indexOf('$') >= 0);
     }
 
     /** Images and networks the system-managed deployments' stored compose files declare. */
