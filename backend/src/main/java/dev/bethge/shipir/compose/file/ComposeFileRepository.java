@@ -14,18 +14,15 @@ import java.nio.charset.StandardCharsets;
 import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
-import java.util.Comparator;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
-import java.util.stream.Stream;
 
 /**
  * Stores {@code <base>/<hostId>/<deploymentName>/{compose.yaml,.env}} on disk. Every path is resolved through
@@ -98,14 +95,17 @@ public class ComposeFileRepository {
         return read(hostId, deploymentName, ENV_FILE);
     }
 
-    /** Removes the whole deployment directory including a Git checkout in {@code repo/}. Symlinks are removed, never followed. */
+    /**
+     * Removes the whole deployment directory including a Git checkout in {@code repo/}. The tree is walked and deleted
+     * through held no-follow directory handles ({@link SecureFiles.Dir#deleteTree}): symlinks are unlinked, never
+     * followed, and a directory swapped for a link while deleting is refused.
+     */
     public void delete(UUID hostId, String deploymentName) {
-        Path dir = deploymentDir(hostId, deploymentName);
-        if (!Files.exists(dir, LinkOption.NOFOLLOW_LINKS)) {
-            return;
-        }
-        try (Stream<Path> walk = Files.walk(dir)) {
-            walk.sorted(Comparator.reverseOrder()).forEach(ComposeFileRepository::deleteOrThrow);
+        deploymentDir(hostId, deploymentName); // up-front validation (traversal, existing symlinks)
+        try (SecureFiles.Parent parent = SecureFiles.openParent(existingBaseDir(), segment(hostId, deploymentName), false, seam)) {
+            parent.dir().deleteTree(parent.name());
+        } catch (NoSuchFileException missing) {
+            // no host directory, nothing to delete
         } catch (IOException e) {
             throw new UncheckedIOException("Could not delete deployment directory", e);
         }
@@ -218,14 +218,6 @@ public class ComposeFileRepository {
             dir.deleteFileIfExists(name);
         } catch (IOException ignored) {
             // best effort
-        }
-    }
-
-    private static void deleteOrThrow(Path path) {
-        try {
-            Files.delete(path);
-        } catch (IOException e) {
-            throw new UncheckedIOException("Could not delete " + path.getFileName(), e);
         }
     }
 }

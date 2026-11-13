@@ -100,7 +100,7 @@ class VolumeBackupStoreWriteSymlinkTest {
         Files.createDirectories(base.resolve(host.toString()));
         Files.createSymbolicLink(base.resolve(host.toString()).resolve("data"), otherVolume);
 
-        assertThatThrownBy(() -> store.write(host, "data", content(), Instant.now(), 3)).isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> store.write(host, "data", content(), Instant.now(), 3)).isInstanceOfAny(IOException.class, PathValidationException.class);
 
         assertThat(fileCount(otherVolume)).isZero();
     }

@@ -38,7 +38,7 @@ import java.util.function.Consumer;
  * the created entry is re-opened with NOFOLLOW from the held handle and the walk fails if it is not that directory.
  * <p>
  * The {@code seam} receives stage names ({@code open:<segment>}, {@code opened:<segment>}, {@code leaf:<name>},
- * {@code move:<name>}, {@code delete:<name>}) at the points where a race could strike; tests use it to swap links.
+ * {@code move:<name>}, {@code delete:<name>}, {@code opensub:<name>}) at the points where a race could strike; tests use it to swap links.
  */
 public final class SecureFiles {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SecureFiles.class);
@@ -406,6 +406,48 @@ public final class SecureFiles {
             }
         }
 
+        /** Removes an empty directory entry without following it; {@link java.nio.file.DirectoryNotEmptyException} otherwise. */
+        public void deleteDirectory(String name) throws IOException {
+            validateSegment(name);
+            seam.accept("deletedir:" + name);
+            sds.deleteDirectory(Path.of(name));
+        }
+
+        /**
+         * Removes the entry {@code name} below this handle: a directory with everything in it, anything else (a symlink
+         * included) as a single unlink. Every directory is opened relative to its held parent with NOFOLLOW, so a link
+         * swapped in for a directory is refused ({@link PathValidationException}), never followed. A missing entry is a
+         * no-op.
+         */
+        public void deleteTree(String name) throws IOException {
+            validateSegment(name);
+            BasicFileAttributes attrs;
+            try {
+                attrs = attributes(name);
+            } catch (NoSuchFileException gone) {
+                return;
+            }
+            if (!attrs.isDirectory()) {
+                deleteFileIfExists(name);
+                return;
+            }
+            try (Dir sub = openSubdirectory(name)) {
+                for (String child : sub.list()) {
+                    sub.deleteTree(child);
+                }
+            }
+            try {
+                deleteDirectory(name);
+            } catch (NoSuchFileException ignored) {
+                // already gone
+            }
+        }
+
+        /** Last modification time of the entry itself (a symlink is not followed). */
+        public java.nio.file.attribute.FileTime lastModified(String name) throws IOException {
+            return attributes(name).lastModifiedTime();
+        }
+
         /** Entry names of this directory (can be called once per handle). */
         public List<String> list() throws IOException {
             List<String> names = new ArrayList<>();
@@ -418,6 +460,7 @@ public final class SecureFiles {
         /** Opens a sub-directory of this one as a separate handle; this handle stays open. */
         public Dir openSubdirectory(String name) throws IOException {
             validateSegment(name);
+            seam.accept("opensub:" + name);
             try {
                 return new Dir(sds.newDirectoryStream(Path.of(name), LinkOption.NOFOLLOW_LINKS), seam);
             } catch (NoSuchFileException e) {

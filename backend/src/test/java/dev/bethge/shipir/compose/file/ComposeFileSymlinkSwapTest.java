@@ -44,8 +44,9 @@ class ComposeFileSymlinkSwapTest {
         repo.write(HOST, "web", "inside", "A=1");
     }
 
+    private final AtomicBoolean fired = new AtomicBoolean();
+
     private void at(String stage, Runnable action) {
-        AtomicBoolean fired = new AtomicBoolean();
         repo.seam = s -> {
             if (s.equals(stage) && fired.compareAndSet(false, true)) {
                 action.run();
@@ -177,5 +178,44 @@ class ComposeFileSymlinkSwapTest {
         assertThatThrownBy(() -> repo.readCompose(HOST, "web"))
                 .isInstanceOfSatisfying(dev.bethge.shipir.compose.DeploymentException.class,
                         e -> assertThat(e.code()).isEqualTo("NOT_A_FILE"));
+    }
+
+    @Test
+    void deleteRefusesDeploymentDirectorySwappedForALinkBeforeItIsOpened() throws IOException {
+        at("opensub:web", this::dirToLink);
+        assertThatThrownBy(() -> repo.delete(HOST, "web")).isInstanceOf(PathValidationException.class);
+        assertThat(fired).as("the race window (seam stage) was reached").isTrue();
+        assertOutsideUntouched();
+    }
+
+    @Test
+    void deleteRefusesANestedDirectorySwappedForALinkBeforeItIsOpened() throws IOException {
+        Files.createDirectories(dir().resolve("repo/sub"));
+        Files.writeString(dir().resolve("repo/sub/x"), "x");
+        Files.writeString(outside.resolve("x"), SECRET);
+        at("opensub:sub", () -> {
+            try {
+                Files.move(dir().resolve("repo/sub"), dir().resolve("repo/sub.orig"));
+                Files.createSymbolicLink(dir().resolve("repo/sub"), outside);
+            } catch (IOException e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        assertThatThrownBy(() -> repo.delete(HOST, "web")).isInstanceOf(PathValidationException.class);
+        assertThat(fired).as("the race window (seam stage) was reached").isTrue();
+        assertThat(outside.resolve("x")).hasContent(SECRET);
+        assertThat(outside.resolve("compose.yaml")).hasContent(SECRET);
+    }
+
+    @Test
+    void deleteStaysInTheOpenedDirectoryWhenItIsSwappedForALinkMidWalk() throws IOException {
+        at("delete:compose.yaml", this::dirToLink);
+        try {
+            repo.delete(HOST, "web");
+        } catch (RuntimeException refused) {
+            // acceptable: refusing is fine, following is not
+        }
+        assertThat(fired).as("the race window (seam stage) was reached").isTrue();
+        assertOutsideUntouched();
     }
 }

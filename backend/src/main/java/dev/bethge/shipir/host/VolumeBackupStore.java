@@ -9,28 +9,32 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.channels.Channels;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Clock;
 import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 /**
  * Archives of scheduled backups: {@code <dir>/<hostId>/<volume>/<volume>-<yyyyMMdd'T'HHmmss'Z'>.tar}. Written to a
@@ -45,6 +49,11 @@ class VolumeBackupStore {
 
     private static final Pattern PARTIAL = Pattern.compile("\\.backup-.*\\.part");
 
+    private static final FileAttribute<Set<PosixFilePermission>> DIR_PERMISSIONS =
+            PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------"));
+    private static final FileAttribute<Set<PosixFilePermission>> FILE_PERMISSIONS =
+            PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"));
+
     private final VolumeBackupProperties properties;
     private final Clock clock;
 
@@ -53,55 +62,70 @@ class VolumeBackupStore {
         this.clock = clock;
     }
 
-    /** Stores the stream, then deletes all but the newest {@code keep} archives of the volume. Returns the new file. */
+    /**
+     * Stores the stream, then deletes all but the newest {@code keep} archives of the volume. Returns the new file.
+     * Host and volume directories are walked (and created when absent) through held no-follow handles and every file
+     * operation happens relative to the volume handle, so a link swapped in for a directory is refused or ignored,
+     * never followed.
+     */
     Path write(UUID hostId, String volume, InputStream content, Instant now, int keep) throws IOException {
         Path base = properties.dir().toAbsolutePath().normalize();
         Files.createDirectories(base);
         Path dir = PathValidationUtil.resolve(base, hostId + "/" + volume);
-        // One level at a time, each only created when absent and never through a symlink, so a planted host or
-        // volume symlink cannot make us create directories outside the store.
-        Path hostDir = ensureRealDirectory(base.resolve(hostId.toString()));
-        ensureRealDirectory(hostDir.resolve(dir.getFileName()));
-        if (!isRealVolumeDir(base, hostId, volume, dir)) {
-            throw new IOException("Backup directory of the volume is a symlink or leaves the store");
+        String targetName = volume + "-" + STAMP.format(now) + ".tar";
+        String partialName = ".backup-" + UUID.randomUUID() + ".part";
+        try (SecureFiles.Parent parent = SecureFiles.openParent(base, hostId + "/" + volume + "/" + targetName, true, seam,
+                DIR_PERMISSIONS)) {
+            SecureFiles.Dir volumeDir = parent.dir();
+            try {
+                try (SeekableByteChannel out = volumeDir.createNew(partialName, FILE_PERMISSIONS);
+                     OutputStream stream = Channels.newOutputStream(out)) {
+                    content.transferTo(stream);
+                }
+                volumeDir.move(partialName, targetName);
+            } finally {
+                volumeDir.deleteFileIfExists(partialName);
+            }
         }
-        Path target = dir.resolve(volume + "-" + STAMP.format(now) + ".tar");
-        Path partial = Files.createTempFile(dir, ".backup-", ".part");
-        try {
-            Files.copy(content, partial, StandardCopyOption.REPLACE_EXISTING);
-            Files.move(partial, target, StandardCopyOption.ATOMIC_MOVE);
-        } finally {
-            Files.deleteIfExists(partial);
+        // A directory stream only sees the entries present when it was opened (at least on macOS), so retention walks
+        // the volume directory again with a fresh no-follow handle to see the archive just moved into place.
+        try (SecureFiles.Parent fresh = SecureFiles.openParent(base, hostId + "/" + volume + "/" + targetName, false, seam)) {
+            prune(fresh.dir(), volume, keep);
+        } catch (PathValidationException swapped) {
+            // the directory became a link after the archive was stored: retention is skipped (next run), never followed
         }
-        prune(dir, volume, keep);
-        return target;
-    }
-
-    /** Creates {@code dir} when absent; refuses (IOException) anything present that is not a real directory. */
-    private static Path ensureRealDirectory(Path dir) throws IOException {
-        if (!Files.exists(dir, LinkOption.NOFOLLOW_LINKS)) {
-            Files.createDirectory(dir);
-        }
-        if (!Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("Backup directory is a symlink or not a directory");
-        }
-        return dir;
+        return dir.resolve(targetName);
     }
 
     /** The stored archives of one volume on one host, newest first. Empty when nothing was stored yet. */
     List<StoredVolumeBackup> list(UUID hostId, String volume) {
-        Path dir = volumeDir(hostId, volume);
-        if (dir == null || !isRealVolumeDir(properties.dir().toAbsolutePath().normalize(), hostId, volume, dir)) {
-            return List.of(); // missing, or a symlinked host/volume directory: not this host's data
+        Path base = properties.dir().toAbsolutePath().normalize();
+        if (!Files.isDirectory(base)) {
+            return List.of();
         }
+        PathValidationUtil.resolve(base, hostId + "/" + volume); // up-front validation (traversal)
         Pattern name = namePattern(volume);
-        try (Stream<Path> files = Files.list(dir)) {
-            return files.filter(p -> name.matcher(p.getFileName().toString()).matches())
-                    .filter(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS))
-                    .map(p -> toBackup(p, volume))
-                    .filter(Objects::nonNull)
-                    .sorted(Comparator.comparing(StoredVolumeBackup::name).reversed())
-                    .toList();
+        try (SecureFiles.Parent parent = SecureFiles.openParent(base, hostId + "/" + volume + "/x", false, seam)) {
+            List<StoredVolumeBackup> result = new ArrayList<>();
+            for (String file : parent.dir().list()) {
+                if (!name.matcher(file).matches()) {
+                    continue;
+                }
+                BasicFileAttributes attrs;
+                try {
+                    attrs = parent.dir().attributes(file);
+                } catch (NoSuchFileException gone) {
+                    continue;
+                }
+                StoredVolumeBackup backup = attrs.isRegularFile() ? toBackup(file, attrs.size(), volume) : null;
+                if (backup != null) {
+                    result.add(backup);
+                }
+            }
+            result.sort(Comparator.comparing(StoredVolumeBackup::name).reversed());
+            return List.copyOf(result);
+        } catch (NoSuchFileException | PathValidationException e) {
+            return List.of(); // missing, or a symlinked host/volume directory: not this host's data
         } catch (IOException e) {
             throw new HostException(HttpStatus.INTERNAL_SERVER_ERROR, "BACKUP_STORE_FAILED", "The stored backups could not be read");
         }
@@ -133,46 +157,24 @@ class VolumeBackupStore {
     /** Test seam: receives the stages of {@link SecureFiles} (where a symlink swap could strike); null = none. */
     Consumer<String> seam;
 
-    /** {@code <dir>/<hostId>/<volume>}, or null when the store directory or that subtree does not exist. */
-    private Path volumeDir(UUID hostId, String volume) {
-        Path base = properties.dir().toAbsolutePath().normalize();
-        if (!Files.isDirectory(base)) {
-            return null;
-        }
-        Path dir = PathValidationUtil.resolve(base, hostId + "/" + volume);
-        return Files.isDirectory(dir) ? dir : null;
-    }
-
-    /** True when {@code dir} is a real directory whose real path is exactly {@code <realBase>/<host>/<volume>}. */
-    private static boolean isRealVolumeDir(Path base, UUID hostId, String volume, Path dir) {
-        try {
-            return Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)
-                    && dir.toRealPath().equals(base.toRealPath().resolve(hostId.toString()).resolve(volume));
-        } catch (IOException e) {
-            return false;
-        }
-    }
-
     private static Pattern namePattern(String volume) {
         return Pattern.compile(Pattern.quote(volume) + "-(\\d{8}T\\d{6}Z)\\.tar");
     }
 
-    private static StoredVolumeBackup toBackup(Path file, String volume) {
-        String name = file.getFileName().toString();
+    private static StoredVolumeBackup toBackup(String name, long size, String volume) {
         String stamp = name.substring(volume.length() + 1, name.length() - ".tar".length());
         try {
-            return new StoredVolumeBackup(name, Files.size(file), Instant.from(STAMP.parse(stamp)));
+            return new StoredVolumeBackup(name, size, Instant.from(STAMP.parse(stamp)));
         } catch (DateTimeException e) {
             return null; // right shape, impossible date: not one of ours
-        } catch (IOException e) {
-            throw new HostException(HttpStatus.INTERNAL_SERVER_ERROR, "BACKUP_STORE_FAILED", "The stored backups could not be read");
         }
     }
 
     /**
      * Deletes every stored archive of the volume (exact name pattern only) and then the volume directory if it is
-     * empty. Symlinks are never followed: a symlinked host/volume directory or a symlinked archive is left alone.
-     * Returns the number of deleted archives; 0 when nothing was stored.
+     * empty. The host directory is held open and the volume directory is opened from it without following links, so a
+     * symlinked host/volume directory or a symlinked archive is left alone, and a directory swapped for a link while
+     * deleting is never followed. Returns the number of deleted archives; 0 when nothing was stored.
      */
     int deleteAll(UUID hostId, String volume) {
         try {
@@ -180,29 +182,31 @@ class VolumeBackupStore {
             if (!Files.isDirectory(base)) {
                 return 0;
             }
-            Path dir = PathValidationUtil.resolve(base, hostId + "/" + volume);
-            if (!Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)
-                    || !dir.toRealPath().equals(base.toRealPath().resolve(hostId.toString()).resolve(volume))) {
-                return 0; // missing, or a symlink somewhere on the way: not ours to touch
-            }
+            PathValidationUtil.resolve(base, hostId + "/" + volume); // up-front validation (traversal)
             Pattern name = namePattern(volume);
             int deleted = 0;
-            try (Stream<Path> files = Files.list(dir)) {
-                for (Path file : files.filter(p -> name.matcher(p.getFileName().toString()).matches())
-                        .filter(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS)).toList()) {
-                    if (Files.deleteIfExists(file)) {
-                        deleted++;
+            try (SecureFiles.Parent parent = SecureFiles.openParent(base, hostId + "/" + volume, false, seam)) {
+                try (SecureFiles.Dir volumeDir = parent.dir().openSubdirectory(parent.name())) {
+                    for (String file : volumeDir.list()) {
+                        if (name.matcher(file).matches() && volumeDir.isRegularFile(file)) {
+                            try {
+                                volumeDir.deleteFile(file);
+                                deleted++;
+                            } catch (NoSuchFileException gone) {
+                                // removed concurrently
+                            }
+                        }
                     }
                 }
-            }
-            try {
-                Files.delete(dir); // only succeeds when empty
-            } catch (DirectoryNotEmptyException e) {
-                // other files stay, so does the directory
+                try {
+                    parent.dir().deleteDirectory(parent.name()); // only succeeds when empty
+                } catch (DirectoryNotEmptyException e) {
+                    // other files stay, so does the directory
+                }
             }
             return deleted;
-        } catch (PathValidationException e) {
-            return 0;
+        } catch (NoSuchFileException | PathValidationException e) {
+            return 0; // missing, or a symlink on the way: not ours to touch
         } catch (IOException e) {
             throw new HostException(HttpStatus.INTERNAL_SERVER_ERROR, "BACKUP_STORE_FAILED", "The stored backups could not be deleted");
         }
@@ -211,54 +215,76 @@ class VolumeBackupStore {
     /**
      * Deletes leftover {@code .backup-*.part} files (a crash between the temp file and the atomic move in
      * {@link #write}) at depth {@code <dir>/<hostId>/<volume>/} that were last modified at least {@code minAge} ago.
-     * Symlinked host/volume directories and symlinked files are never followed or touched. Returns the number of
-     * deleted files; 0 when the store directory does not exist.
+     * Host and volume directories are opened from held handles without following links: symlinked directories and
+     * symlinked files are never followed or touched. Returns the number of deleted files; 0 when the store directory
+     * does not exist (or is itself a symlink).
      */
     int pruneStalePartials(Duration minAge) {
         Path base = properties.dir().toAbsolutePath().normalize();
-        if (!Files.isDirectory(base, LinkOption.NOFOLLOW_LINKS)) {
-            return 0;
-        }
         FileTime cutoff = FileTime.from(clock.instant().minus(minAge));
         int deleted = 0;
-        try {
-            for (Path hostDir : realDirectories(base)) {
-                for (Path volumeDir : realDirectories(hostDir)) {
-                    try (Stream<Path> files = Files.list(volumeDir)) {
-                        for (Path file : files.filter(p -> PARTIAL.matcher(p.getFileName().toString()).matches())
-                                .filter(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS)).toList()) {
-                            if (Files.getLastModifiedTime(file, LinkOption.NOFOLLOW_LINKS).compareTo(cutoff) <= 0
-                                    && Files.deleteIfExists(file)) {
-                                deleted++;
+        try (SecureFiles.Parent root = SecureFiles.openParent(base, "x", false, seam)) {
+            for (String host : root.dir().list()) {
+                try (SecureFiles.Dir hostDir = openRealDirectory(root.dir(), host)) {
+                    if (hostDir == null) {
+                        continue;
+                    }
+                    for (String volume : hostDir.list()) {
+                        try (SecureFiles.Dir volumeDir = openRealDirectory(hostDir, volume)) {
+                            if (volumeDir != null) {
+                                deleted += prunePartials(volumeDir, cutoff);
                             }
                         }
                     }
                 }
             }
+        } catch (NoSuchFileException | PathValidationException e) {
+            return deleted; // no store directory (or it is a symlink): nothing to clean
         } catch (IOException e) {
             throw new HostException(HttpStatus.INTERNAL_SERVER_ERROR, "BACKUP_STORE_FAILED", "The stored backups could not be cleaned up");
         }
         return deleted;
     }
 
-    /** Direct subdirectories of {@code parent} that are real directories, not symlinks. */
-    private static List<Path> realDirectories(Path parent) throws IOException {
-        try (Stream<Path> children = Files.list(parent)) {
-            return children.filter(p -> Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS)).toList();
+    private static int prunePartials(SecureFiles.Dir volumeDir, FileTime cutoff) throws IOException {
+        int deleted = 0;
+        for (String file : volumeDir.list()) {
+            if (!PARTIAL.matcher(file).matches() || !volumeDir.isRegularFile(file)) {
+                continue;
+            }
+            try {
+                if (volumeDir.lastModified(file).compareTo(cutoff) <= 0) {
+                    volumeDir.deleteFile(file);
+                    deleted++;
+                }
+            } catch (NoSuchFileException gone) {
+                // removed concurrently
+            }
+        }
+        return deleted;
+    }
+
+    /** The real (non-symlink) subdirectory {@code name} of {@code parent}, or null for a file, a link or a vanished entry. */
+    private static SecureFiles.Dir openRealDirectory(SecureFiles.Dir parent, String name) throws IOException {
+        if (!parent.isDirectory(name)) {
+            return null;
+        }
+        try {
+            return parent.openSubdirectory(name);
+        } catch (NoSuchFileException | PathValidationException swapped) {
+            return null;
         }
     }
 
-    private static void prune(Path dir, String volume, int keep) throws IOException {
-        Pattern name = Pattern.compile(Pattern.quote(volume) + "-\\d{8}T\\d{6}Z\\.tar");
-        List<Path> archives;
-        try (Stream<Path> files = Files.list(dir)) {
-            archives = files.filter(p -> name.matcher(p.getFileName().toString()).matches())
-                    .filter(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS))
-                    .sorted((a, b) -> b.getFileName().toString().compareTo(a.getFileName().toString()))
-                    .toList();
-        }
-        for (Path old : archives.stream().skip(keep).toList()) {
-            Files.deleteIfExists(old);
+    private static void prune(SecureFiles.Dir volumeDir, String volume, int keep) throws IOException {
+        Pattern name = namePattern(volume);
+        List<String> archives = volumeDir.list().stream()
+                .filter(n -> name.matcher(n).matches())
+                .filter(volumeDir::isRegularFile)
+                .sorted(Comparator.reverseOrder())
+                .toList();
+        for (String old : archives.stream().skip(keep).toList()) {
+            volumeDir.deleteFileIfExists(old);
         }
     }
 }

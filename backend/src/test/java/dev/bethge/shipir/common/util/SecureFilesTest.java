@@ -373,4 +373,69 @@ class SecureFilesTest {
             assertThat(ch.size()).isEqualTo(6);
         }
     }
+
+    // ---- deleteTree / deleteDirectory / lastModified (shipr-kqbc.78) ----
+
+    @Test
+    void deleteTreeRemovesNestedContentAndUnlinksSymlinksWithoutFollowing() throws IOException {
+        Files.createSymbolicLink(root.resolve("a/b/link-file"), outside.resolve("f.txt"));
+        Files.createSymbolicLink(root.resolve("a/link-dir"), outside);
+        try (SecureFiles.Parent p = SecureFiles.openParent(root, "a", false, null)) {
+            p.dir().deleteTree("a");
+        }
+        assertThat(root.resolve("a")).doesNotExist();
+        assertThat(outside.resolve("f.txt")).hasContent("SECRET");
+    }
+
+    @Test
+    void deleteTreeUnlinksASymlinkAtTheRootOfTheTree() throws IOException {
+        Files.createSymbolicLink(root.resolve("lnk"), outside);
+        try (SecureFiles.Parent p = SecureFiles.openParent(root, "lnk", false, null)) {
+            p.dir().deleteTree("lnk");
+        }
+        assertThat(Files.exists(root.resolve("lnk"), java.nio.file.LinkOption.NOFOLLOW_LINKS)).isFalse();
+        assertThat(outside.resolve("f.txt")).hasContent("SECRET");
+    }
+
+    @Test
+    void deleteTreeOfAMissingEntryIsANoOp() throws IOException {
+        try (SecureFiles.Parent p = SecureFiles.openParent(root, "nothing", false, null)) {
+            p.dir().deleteTree("nothing");
+        }
+    }
+
+    @Test
+    void deleteTreeNeverFollowsADirectorySwappedForALinkBeforeItIsOpened() throws IOException {
+        try (SecureFiles.Parent p = SecureFiles.openParent(root, "a", false, stage -> {
+            if (stage.equals("opensub:b")) {
+                try {
+                    Files.move(root.resolve("a/b"), root.resolve("a/b.orig"));
+                    Files.createSymbolicLink(root.resolve("a/b"), outside);
+                } catch (IOException e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+        })) {
+            try (SecureFiles.Dir a = p.dir().openSubdirectory("a")) {
+                assertThatThrownBy(() -> a.deleteTree("b")).isInstanceOf(PathValidationException.class);
+            }
+        }
+        assertThat(outside.resolve("f.txt")).hasContent("SECRET");
+    }
+
+    @Test
+    void deleteDirectoryOnlyRemovesAnEmptyDirectory() throws IOException {
+        try (SecureFiles.Parent p = SecureFiles.openParent(root, "a", false, null)) {
+            assertThatThrownBy(() -> p.dir().deleteDirectory("a")).isInstanceOf(java.nio.file.DirectoryNotEmptyException.class);
+        }
+    }
+
+    @Test
+    void lastModifiedDoesNotFollowALink() throws IOException {
+        Files.createSymbolicLink(root.resolve("l"), outside.resolve("f.txt"));
+        Files.setLastModifiedTime(outside.resolve("f.txt"), java.nio.file.attribute.FileTime.fromMillis(1000));
+        try (SecureFiles.Parent p = SecureFiles.openParent(root, "x", false, null)) {
+            assertThat(p.dir().lastModified("l").toMillis()).isNotEqualTo(1000);
+        }
+    }
 }
