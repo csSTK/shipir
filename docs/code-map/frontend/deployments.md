@@ -1,1 +1,28 @@
 # Code map: frontend deployments
+
+- frontend/src/features/deployments/{api.ts,index.ts,deploymentErrors.ts,deploymentErrors.test.ts,joinRows.ts}: deployment hooks (list, versions, create, deploy, stop, rollback, adopt, remove), error texts, live and managed row join
+- frontend/src/features/deployments/{DeploymentsPage.tsx,DeploymentsPage.css,DeploymentsPage.test.tsx}: `/environments/:id/deployments` table with row actions by role and add or adopt
+- frontend/src/features/deployments/{DeploymentDetailPage.tsx,DeploymentDetailPage.css,DeploymentDetailPage.test.tsx}: deployment detail: status, Deploy/Stop/Delete, versions timeline with rollback, cards
+- frontend/src/features/deployments/{AddDeploymentDialog.tsx,NewFileCreate.test.tsx}: add dialog: YAML, wizard, template, Git, import file and Portainer sources; new file creation test
+- frontend/src/features/deployments/{DeploymentContentPanel.tsx,DeploymentRunPanel.tsx}: deployment YAML and env keys with draft edit; deploy run wrapper around the live output
+- frontend/src/features/deployments/{DeployFilesReview.tsx,DeployFilesReview.css}: extra files listed in the ADMIN deploy confirm dialog before the directory is approved
+- frontend/src/features/deployments/{AdoptDeploymentDialog.tsx,AdoptDeployment.test.tsx}: Adopt dialog for unmanaged deployments, asks for pasted YAML when needed
+- frontend/src/features/deployments/{GitSourceFields.tsx,GitSourcePanel.tsx,GitSourcePanel.test.tsx,GitDeployments.test.tsx}: Git source fields in the add dialog and the detail panel with auto-update
+- frontend/src/features/deployments/{ImageAutoUpdatePanel.tsx,ImageAutoUpdatePanel.css,ImageAutoUpdatePanel.test.tsx}: automatic image updates card with optional daily UTC window
+- frontend/src/features/deployments/{ImportFileFields.tsx,ImportFileFields.css,ImportFile.test.tsx}: Import file source: local compose and env file, read in the browser and sent on Create
+- frontend/src/features/deployments/portainer/{api.ts,PortainerImportFields.tsx,portainer.css,PortainerImport.test.tsx}: Import from Portainer; API token stays in component state only
+- frontend/src/features/deployments/config-files/{api.ts,index.ts,ConfigFilesPanel.tsx,ConfigFilesPanel.css,ConfigFilesPanel.test.tsx}: config files panel: tree, edit with backup, restore, read-only for viewers
+- frontend/src/features/deployments/deploy-output/{DeployOutput.tsx,DeployOutput.css,DeployOutput.test.tsx,useRunStream.ts}: live deploy log over STOMP with success or failed badge
+- frontend/src/features/deployments/diff/{VersionDiff.tsx,VersionDiff.css,index.ts}: Monaco diff of a version against its baseline plus env keys added and removed
+- frontend/src/features/deployments/editor/{YamlEditor.tsx,YamlEditor.test.tsx,EnvEditor.tsx,EnvEditor.test.tsx,editor.css,index.ts}: YAML editor with Compose schema validation and `.env` editor
+- frontend/src/features/deployments/editor/{MonacoYamlEditor.tsx,MonacoDiffEditor.tsx,YamlDiffEditor.tsx,YamlDiffEditor.test.tsx,monacoEnvironment.ts,yaml.worker.ts}: lazy Monaco editors, shared worker setup
+- frontend/src/features/deployments/editor/{compose-spec.json,composeFileMatch.ts,composeFileMatch.test.ts,editorFontSize.ts,editorFontSize.test.ts,envFile.ts,envFile.test.ts}: Compose JSON schema, file matching, font size, env parsing
+- frontend/src/features/deployments/logs/{DeploymentLogsPanel.tsx,DeploymentLogsPanel.css,DeploymentLogsPanel.test.tsx}: Logs card on the deployment detail page with service filter
+- frontend/src/features/deployments/services/{api.ts,index.ts,ServicesCard.tsx,services.css,ServicesCard.test.tsx}: services card: per-service restart, pull, up and profiles
+- frontend/src/features/deployments/uptime/{api.ts,index.ts,UptimeCard.tsx,UptimeCheckDialog.tsx,uptime.css,UptimeCard.test.tsx}: uptime checks card: results, create and edit dialog
+- frontend/src/features/deployments/webhook/{api.ts,index.ts,WebhookCard.tsx,webhook.css,WebhookCard.test.tsx}: redeploy webhook card: enable, rotate, disable with one-time URL
+- frontend/src/features/deployments/wizard/{model.ts,model.test.ts,fromYaml.ts,fromYaml.test.ts}: wizard form state, validation, payload build, and YAML to wizard state reader
+- frontend/src/features/deployments/wizard/{ComposeWizard.tsx,wizard.css,index.ts,Domain.test.tsx}: Compose form wizard with service, network, volume and domain sections
+- frontend/src/features/deployments/templates/{api.ts,index.ts,TemplatePicker.tsx,templates.css,Templates.test.tsx}: searchable template catalog grid with Install and Customize
+- frontend/src/features/deployments/templates/{InstallTemplateDialog.tsx,InstallTemplateDialog.test.tsx,install.ts,install.test.ts}: one-click catalog install: parameters, deploy and progress
+- frontend/src/features/deployments/templates/{InstallPublishStep.tsx,InstallPublishStep.test.tsx}: optional last install step: publish the new app through the managed proxy

@@ -1,1 +1,25 @@
 # Code map: frontend build
+
+- frontend/package.json: scripts (dev, build, test, lint, e2e, e2e:visual) and dependencies
+- frontend/pnpm-lock.yaml: pnpm lockfile
+- frontend/{vite.config.ts,tsconfig.json,tsconfig.app.json,tsconfig.node.json,tsconfig.e2e.json,.oxlintrc.json}: Vite dev proxy and Vitest config, TypeScript projects, oxlint rules
+- frontend/{index.html,public/favicon.svg,.gitignore,.dockerignore}: HTML entry, favicon, ignore files
+- frontend/Dockerfile: multi-stage image: pnpm build, then nginx-unprivileged on :8080
+- frontend/nginx/{default.conf.template,security-headers.inc.template,check-headers.sh}: nginx config: SPA fallback, `/api` and `/ws` proxy, security headers and their check
+- frontend/{playwright.config.ts,playwright.visual.config.ts,playwright.csp.config.ts}: Playwright configs: e2e, pixel regression, CSP run; each takes its own free port
+- frontend/e2e-config/{port.ts,port.test.ts,system-probe.ts,warm-up.ts}: free-port resolution per Playwright run and warm-up of the dev server
+- frontend/e2e-csp/csp.spec.ts: browser check that the production CSP blocks inline script and allows the app
+- frontend/e2e/fixtures/{api.ts,api.spec.ts,stomp.ts}: Playwright `api` fixture mocking `/api/**` and failing on unmocked calls; minimal STOMP broker mock
+- frontend/e2e/fixtures/visual-data.ts: shared mock data for the visual and smoke specs
+- frontend/e2e/{visual.spec.ts,visual-docker.sh,visual-baselines/}: pixel screenshot regression of the main pages (375 and 1440px), run in a pinned Playwright image
+- frontend/e2e/{visual-smoke.spec.ts,mobile-layout.spec.ts,safe-area.spec.ts}: no-horizontal-scroll smoke, 375px layout checks and safe-area checks
+- frontend/e2e/screenshots/capture.ts: README screenshots and deploy-flow GIF capture (not a spec)
+- frontend/e2e/{app,auth,setup,password-reset,shell,command-palette,language,two-factor,status-badge}.spec.ts: e2e: shell, sign-in, setup, reset, search, language, 2FA
+- frontend/e2e/{account,api-tokens,notifications,oidc,teams,users,webhooks,retention,audit-log,backup,shared-chat-sessions,ai-settings,git-credentials,registries}.spec.ts: e2e: account and settings pages
+- frontend/e2e/{ai-chat,assistant-dock}.spec.ts: e2e: assistant page and floating dock with STOMP mock
+- frontend/e2e/{environments,environment-dashboard,environment-tags,disk-usage,prune,usage-history,host-events,resources,resource-deletion}.spec.ts: e2e: environments, dashboard, tags, clean up
+- frontend/e2e/{container-actions,container-console,container-details,container-edit,container-files,container-logs,container-stats,create-resources}.spec.ts: e2e: containers
+- frontend/e2e/{images-networks-volumes,image-auto-update,image-build,image-updates,volume-backup}.spec.ts: e2e: images, networks, volumes and volume backup
+- frontend/e2e/{deployment-detail,deployment-logs,deployment-system-managed,deployment-version-diff,deployments-remove,deploy-output,adopt,config-files,services,uptime}.spec.ts: e2e: deployment pages
+- frontend/e2e/{compose-wizard,wizard-domain,git-deployments,import-file,portainer-import,templates,templates-install,templates-publish}.spec.ts: e2e: deployment creation sources and templates
+- frontend/e2e/{domains,domains-advanced,domains-certificates,domains-config,domains-routes}.spec.ts: e2e: domains pages

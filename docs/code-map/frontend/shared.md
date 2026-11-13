@@ -1,1 +1,22 @@
 # Code map: frontend shared
+
+- frontend/src/shared/api/{client.ts,client.test.ts,index.ts}: `apiFetch<T>` and `ApiError` (status, code, violations, details, Retry-After), same-origin JSON against `/api` with CSRF header
+- frontend/src/shared/api/{transfer.ts,transfer.test.ts}: file transfer helpers: download, blob save, multipart POST and upload with progress
+- frontend/src/shared/ui/{Button,IconButton,Menu,Dialog,Badge,Card,PageHeader,EmptyState,Skeleton,Tabs,Tooltip,SearchField}.{tsx,css}: design-system components on tokens (Radix primitives)
+- frontend/src/shared/ui/{FormField,Select,Switch,Checkbox}.{tsx,css}, frontend/src/shared/ui/TextField.tsx: form controls with label, help and error wiring
+- frontend/src/shared/ui/{ResourceTable.tsx,ResourceTable.css,ResourceTable.test.tsx}: list table on TanStack Table: sort, resize, hide columns, row actions, phone layout
+- frontend/src/shared/ui/{Sparkline.tsx,Sparkline.css,Sparkline.test.tsx}: dependency-free SVG sparkline
+- frontend/src/shared/ui/{FormLayout.css,Page.css}: shared form and dialog layout classes; shared page container
+- frontend/src/shared/ui/{index.ts,motion.ts,motion.test.ts}: exports of the shared components; spring motion helpers with reduced-motion handling
+- frontend/src/shared/ui/{Components.test.tsx,FormControls.test.tsx,PageHeader.test.ts,noHandRolledFields.test.ts}: shared component tests and the guard against hand-rolled form fields
+- frontend/src/shared/styles/{tokens.css,base.css,utilities.css}: design tokens (colour light and dark, type, space, radii, shadows, motion), global defaults, utility classes
+- frontend/src/shared/styles/{tokenUsage.test.ts,gridTracks.test.ts,visuallyHidden.test.ts}: CSS guards: tokens only, no bare `fr` grid tracks, one visually-hidden utility
+- frontend/src/shared/lib/{breakpoints.ts,breakpoints.test.ts,useMediaQuery.ts}: the one phone breakpoint (720px) and `useMediaQuery`
+- frontend/src/shared/realtime/{stomp.ts,stomp.test.ts}: STOMP client over `/ws`: `subscribeToTopic`, `openTopicChannel`, CSRF on CONNECT, auto reconnect
+- frontend/src/shared/realtime/{useHostEvents.ts,useHostEvents.test.tsx}: host event subscription that invalidates matching host queries (throttled)
+- frontend/src/shared/realtime/{useContainerStats.ts,useContainerStats.test.tsx}: live container stats subscription (last 60 samples per container)
+- frontend/src/shared/charts/{series.ts,series.test.ts,TimeSeriesChart.tsx,TimeSeriesChart.css,TimeSeriesChart.test.tsx}: chart data helpers and dependency-free SVG time series chart
+- frontend/src/shared/i18n/{index.ts,language.ts,language.test.ts,format.ts,Trans.tsx,i18n.test.tsx}: i18next init (en, de), language detection, date and number formatting, escaping `Trans`
+- frontend/src/shared/i18n/{literalStrings.ts,literalStrings.test.ts,locales.test.ts,formalAddress.ts}: i18n guards: no literal UI strings, en and de keys in sync, informal address
+- frontend/src/shared/i18n/locales/{en,de}/*.json: UI texts, one JSON namespace per feature, German in informal du
+- frontend/src/test/{setup.ts,deploymentCards.ts}: Vitest setup (jest-dom, English locale, timeouts) and deployment card API answers for tests

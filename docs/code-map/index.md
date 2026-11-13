@@ -8,7 +8,7 @@ Checked by `node tools/code-map/check.mjs` (CI runs it).
 - One line per file or folder: `- <repo-relative path>: <description>`. Several paths may share a line: `- a, b: ...`. `{A,B}` and `*`/`**` globs are allowed.
 - Description at most 160 characters: what the file is, not its history. No bead IDs, no test-case lists, no error-code catalogues.
 - Every listed path must exist. A path appears in exactly one map file.
-- Tests are listed in the map file of the module they test.
+- Tests are listed in the map file of the module they test. Exception: browser e2e specs (`frontend/e2e/`) all go in `frontend/build.md`, grouped by feature.
 - Add, move or remove a file: update its line in the module file in the same change.
 - A new map file must be linked from this index.
 
@@ -18,7 +18,7 @@ Checked by `node tools/code-map/check.mjs` (CI runs it).
 |---|---|
 | repo root files, `scripts/`, `docs/` | [root.md](root.md) |
 | `.github/` | [ci.md](ci.md) |
-| `tools/`, `.claude/`, root `package.json` | [tooling.md](tooling.md) |
+| `tools/`, `.claude/`, `.agents/`, `.codex/`, `.cursor/`, root `package.json` | [tooling.md](tooling.md) |
 | `backend/pom.xml`, `backend/src/main/resources/`, `ShipirApplication`, `package-info`, shared test support | [backend/build.md](backend/build.md) |
 | `backend/src/{main,test}/java/dev/bethge/shipir/ai/` | [backend/ai.md](backend/ai.md) |
 | `backend/src/{main,test}/java/dev/bethge/shipir/audit/` | [backend/audit.md](backend/audit.md) |
@@ -36,9 +36,9 @@ Checked by `node tools/code-map/check.mjs` (CI runs it).
 | `backend/src/{main,test}/java/dev/bethge/shipir/registry/` | [backend/registry.md](backend/registry.md) |
 | `backend/src/{main,test}/java/dev/bethge/shipir/retention/` | [backend/retention.md](backend/retention.md) |
 | `backend/src/{main,test}/java/dev/bethge/shipir/streaming/` | [backend/streaming.md](backend/streaming.md) |
-| `frontend/package.json`, vite/ts/lint config, `frontend/e2e/` | [frontend/build.md](frontend/build.md) |
-| `frontend/src/app/` | [frontend/app.md](frontend/app.md) |
-| `frontend/src/shared/` | [frontend/shared.md](frontend/shared.md) |
+| `frontend/package.json`, vite/ts/lint config, `frontend/{Dockerfile,index.html,public/,nginx/,e2e-config/,e2e-csp/}`, `frontend/playwright*.config.ts`, `frontend/e2e/` | [frontend/build.md](frontend/build.md) |
+| `frontend/src/app/`, `frontend/src/{main.tsx,index.css}` | [frontend/app.md](frontend/app.md) |
+| `frontend/src/shared/`, `frontend/src/test/` | [frontend/shared.md](frontend/shared.md) |
 | `frontend/src/features/account/` | [frontend/account.md](frontend/account.md) |
 | `frontend/src/features/ai-chat/` | [frontend/ai-chat.md](frontend/ai-chat.md) |
 | `frontend/src/features/auth/` | [frontend/auth.md](frontend/auth.md) |
