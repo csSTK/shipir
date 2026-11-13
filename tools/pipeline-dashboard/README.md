@@ -29,7 +29,7 @@ Every event has `ts` (ISO), `type` and `run`, plus:
 | --- | --- |
 | `run-start` | `kind`, `units`, `parent`, `branch`, `worktree` (creates `run.json`) |
 | `run-end` | `status` (`done` default, `blocked`, `failed`; updates `run.json`) |
-| `step-start`, `step-end` | `step` (`deps`, `plan`, `wave`, `review`, `test`, `finish`, `push`) |
+| `step-start`, `step-end` | `step` (`deps`, `plan`, `wave`, `review`, `finish`, `push`), `wave` (on `wave` steps; start and end are paired by step + wave), `sha` (on `step-end --step push`) |
 | `child-start`, `child-end` | `bead`, `model`, `wave`, `result`, `redBeforeGreen` (evidence) |
 | `review` | `verdict`, `mustFix` (count), `round` |
 | `tests` | `scope`, `passed`, `failed`, `duration` |
@@ -48,8 +48,22 @@ The `agent` events come from the SubagentStop hook (`hooks/subagent-stop.mjs`, r
 
 ## Importing
 
-`record.mjs` exports `resolveStoreDir`, `findRunByCwd`, `recordEvent`, `readRun`, `listRuns`, `parseArgs`, `main`, `EVENT_TYPES`, so the server and hooks reuse store resolution and lookup.
+`record.mjs` exports `resolveStoreDir`, `findRunByCwd`, `recordEvent`, `readRun`, `listRuns`, `parseArgs`, `main`, `EVENT_TYPES`, `RUN_ID`, so the server and hooks reuse store resolution and lookup.
 
 ## Tests
 
 `node --test tools/pipeline-dashboard/test/`
+
+## Server/API
+
+`node tools/pipeline-dashboard/server.mjs` (Node built-ins only) binds `127.0.0.1` only, port `PIPELINE_DASHBOARD_PORT` (default 4690), reads the store via `resolveStoreDir`. `createServer({storeDir, port, publicDir, tokensPath, ghRunner, ciRefreshMs, watch, pollMs})` is the factory used by tests (`port: 0`, stubbed `ghRunner`; `await server.listen()`, `server.port`, `await server.close()`).
+
+- `GET /api/health`: `{ok:true}`.
+- `GET /api/runs`: run summaries (`run.json` fields + `totals`), newest `started` first; batch members (runs whose `parent` is another run) are nested in the batch's `children`.
+- `GET /api/runs/:id`: `{run, events, timeline, ci}`. `timeline` = `steps` (paired step-start/end with `durationMs`, `sha` on push), `children` (per bead: model, wave, result, `redBeforeGreen`, `durationMs`, `agents` summed from `agent` events by `bead`, else by the child's time window), `reviews`, `tests`, `totals` (tokens, `cost`, `agents`, `durationMs`; `cost` is null when there are no agents or any agent has no cost, never 0 or a partial sum), `sha`. Invalid id (not the run-id pattern, `../`, encoded `%2e%2e%2f`, `%2F`, NUL) is 400, unknown id 404.
+- A batch that is still `running` but whose members have all ended is reported as ended (`blocked` if any member is blocked/failed, else `done`, `ended` = latest member end) in both endpoints.
+- Requests need a `Host` of `127.0.0.1:<port>` or `localhost:<port>`, else 403 (DNS-rebinding guard).
+- `GET /api/events`: Server-Sent Events, `event: run-changed` with `data: {"id": "<run id>"}` when a store file changes (`fs.watch` recursive as trigger, polling fallback, also if the store does not exist yet).
+- `/tokens.css` is `frontend/src/shared/styles/tokens.css`; everything else is served from `public/` only (resolved, symlinks and traversal refused).
+
+**CI status:** the pushed SHA is the `sha` field of the last `step-end` event with `step=push` (the skill emits `record.mjs step-end --step push --sha <sha>`). For such runs, `ci` is `{sha, state, runs[]}` from `gh run list --commit <sha> --json status,conclusion,url,name` (execFile with an argument list, SHA must be 7-40 hex chars). `state` is `success|failure|pending|none|unknown`; missing/failing `gh` gives `unknown`. Results are cached per SHA; only `success` is cached for good, everything else (pending, failure because CI may be re-run, none, unknown) is refreshed after `ciRefreshMs` (15 s). `ci` is null without a pushed SHA.

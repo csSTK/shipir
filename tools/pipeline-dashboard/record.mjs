@@ -22,7 +22,7 @@ const NUMERIC = new Set([
   'tokensIn', 'tokensOut', 'tokensCacheRead', 'tokensCacheWrite', 'cost',
 ]);
 const LIST = new Set(['units']);
-const RUN_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+export const RUN_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 /** Store directory: $SHIPIR_PIPELINE_STORE, else <git common dir>/pipeline-runs. Throws if neither works. */
 export function resolveStoreDir({ cwd = process.cwd(), env = process.env } = {}) {
