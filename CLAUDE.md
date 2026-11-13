@@ -161,6 +161,8 @@ pnpm e2e:ui                        # Run e2e tests in Playwright UI mode
 
 Local dev database: `docker compose -f docker-compose.dev.yml up -d` (`postgres:16-alpine`, named volume, `DB_NAME`/`DB_USER`/`DB_PORT`/`DB_PASSWORD` from `.env`, defaults `shipir`/`shipir`/`5432`). The app reads the same `DB_*` variables from its environment (export `.env` first, the app does not read `.env`); use `DB_PORT=5433` if a native Postgres occupies 5432.
 
+Pipeline dashboard (dev tooling, not part of the product): `tools/pipeline-dashboard/`, Node built-ins only. Tests: `node --test tools/pipeline-dashboard/test/` and `node tools/pipeline-dashboard/test/e2e/ui.e2e.mjs`. A SessionStart hook starts it at `http://127.0.0.1:4690` (`PIPELINE_DASHBOARD_PORT`); details in its README.
+
 Hosting: `docker compose -f docker-compose.yml build` builds both images locally; `up` needs an external database and runs Flyway against it (DB write, ask first). Images are published to GHCR by `.github/workflows/release.yml` on pushes to `prd`; details in the README.
 
 ## Architecture
