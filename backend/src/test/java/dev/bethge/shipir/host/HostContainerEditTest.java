@@ -31,6 +31,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -189,6 +190,20 @@ class HostContainerEditTest extends HostApiTestBase {
         verify(containers, never()).recreateContainer(any(), any(), any(), any());
         verify(containers, never()).createContainer(any(), any(), any());
         verify(containers, never()).updateResources(any(), any(), any(), any());
+    }
+
+    @Test
+    void composeManagedContainerCannotBeRemovedButAPlainOneCan() throws Exception {
+        Login op = login("operator");
+        mvc.perform(op.write(delete("/api/hosts/{h}/containers/{c}", host, "composed")))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MANAGED_BY_COMPOSE"));
+        mvc.perform(login("admin").write(delete("/api/hosts/{h}/containers/{c}?force=true", host, "composed")))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MANAGED_BY_COMPOSE"));
+        verify(containers, never()).removeContainer(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+        assertThat(audit("CONTAINER_DELETE")).containsExactly("FAILURE:composed", "FAILURE:composed");
+
+        mvc.perform(op.write(delete("/api/hosts/{h}/containers/{c}", host, "web1"))).andExpect(status().isNoContent());
+        verify(containers).removeContainer(any(), any(), eq("web1"), eq(false));
     }
 
     @Test

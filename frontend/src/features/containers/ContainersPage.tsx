@@ -197,18 +197,13 @@ const MENU_ICONS: Record<ContainerAction, ReactNode> = {
 const TOGGLE_ICONS = { start: Play, stop: Square, unpause: Play } as const
 const isToggle = (a: ContainerAction): a is keyof typeof TOGGLE_ICONS => a in TOGGLE_ICONS
 
-/** Looks up the managed deployment only once a delete is requested, so plain browsing costs no extra request. */
 function DeleteContainerDialog({ hostId, container, onClose }: { hostId: string; container: Container; onClose: () => void }) {
-  const { t } = useTranslation('containers')
-  const deployments = useDeployments(hostId)
   const del = useDeleteContainer(hostId)
-  const managed = deployments.data?.some((d) => d.name === container.composeProject && d.managedDeploymentId)
   return (
     <DeleteResourceDialog
       kind="container"
       name={container.name}
       forceOption={container.state === 'running'}
-      warning={managed ? t('ContainersPage.belongsToDeploymentComposeprojectAnd', { composeProject: container.composeProject }) : null}
       onDelete={(force) => del.mutateAsync({ id: container.id, force })}
       onClose={onClose}
     />
@@ -262,6 +257,11 @@ export function ContainersPage() {
     () => new Set((Array.isArray(deployments.data) ? deployments.data : []).filter((d) => d.systemManaged).map((d) => d.name)),
     [deployments.data],
   )
+  // projects with a Shipir deployment page; other Compose projects (started by hand) are removed with Compose itself
+  const managedProjects = useMemo(
+    () => new Set((Array.isArray(deployments.data) ? deployments.data : []).filter((d) => d.managedDeploymentId).map((d) => d.name)),
+    [deployments.data],
+  )
   const baseColumns = useMemo(() => baseColumnsFor(updates, pending, systemProjects), [updates, pending, systemProjects])
   const columns = useMemo(
     () => [...baseColumns.slice(0, 3), ...statsColumns(series), ...baseColumns.slice(3)],
@@ -299,7 +299,12 @@ export function ContainersPage() {
       if (available.includes('kill')) {
         menu.push({ label: t('ContainersPage.kill'), icon: MENU_ICONS.kill, danger: true, disabled: busy, onSelect: () => setKillTarget(c) })
       }
-      menu.push({ label: t('ContainersPage.delete'), icon: <Trash2 {...ICON_PROPS} />, danger: true, onSelect: () => setTarget(c) })
+      // Compose owns its containers: removing one is refused (409 MANAGED_BY_COMPOSE), so point to the deployment instead
+      menu.push(
+        c.composeProject
+          ? { label: managedProjects.has(c.composeProject) ? t('ContainersPage.deleteManaged', { composeProject: c.composeProject }) : t('ContainersPage.deleteCompose', { composeProject: c.composeProject }), icon: <Trash2 {...ICON_PROPS} />, disabled: true, onSelect: () => {} }
+          : { label: t('ContainersPage.delete'), icon: <Trash2 {...ICON_PROPS} />, danger: true, onSelect: () => setTarget(c) },
+      )
     }
     return { primary, menu }
   }

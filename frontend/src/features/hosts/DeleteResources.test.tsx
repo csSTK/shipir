@@ -38,6 +38,8 @@ const data: Record<string, unknown> = {
   '/hosts/h1/containers': [
     { ...cbase, id: 'c1', name: 'web', state: 'running', composeProject: 'shop' },
     { ...cbase, id: 'c2', name: 'old', state: 'exited', composeProject: null },
+    { ...cbase, id: 'c3', name: 'cache', state: 'running', composeProject: null },
+    { ...cbase, id: 'c4', name: 'manual', state: 'running', composeProject: 'handmade' },
   ],
   '/hosts/h1/images': [{ id: 'sha256:aaaaaaaaaaaaaaaa', repoTags: ['nginx:1'], size: 1, created: '2026-10-01T10:00:00Z', inUse: false }],
   '/hosts/h1/volumes': [{ name: 'pgdata', driver: 'local', mountpoint: '/v', created: null, inUse: false }],
@@ -87,22 +89,45 @@ describe('resource deletion', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
-  it('offers force for a running container and warns about a managed deployment', async () => {
+  it('offers force for a running plain container', async () => {
     serve('ADMIN')
     renderPage('containers', <ContainersPage />)
-    await openDelete('web')
+    await openDelete('cache')
     const dialog = await screen.findByRole('dialog')
-    await waitFor(() => expect(within(dialog).getByRole('note')).toHaveTextContent('Belongs to deployment shop and may come back on the next deploy.'))
+    expect(within(dialog).queryByRole('note')).not.toBeInTheDocument()
     fireEvent.click(within(dialog).getByLabelText('Force (stop and remove)'))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
-    await waitFor(() => expect(deleteCalls()).toEqual(['/hosts/h1/containers/c1?force=true']))
+    await waitFor(() => expect(deleteCalls()).toEqual(['/hosts/h1/containers/c3?force=true']))
   })
 
-  it('shows no managed warning for an unmanaged container', async () => {
+  it('does not offer Delete for a Compose-managed container and points to the deployment', async () => {
     serve('ADMIN')
     renderPage('containers', <ContainersPage />)
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions for web' }), { button: 0, ctrlKey: false })
+    expect(screen.queryByRole('menuitem', { name: 'Delete' })).not.toBeInTheDocument()
+    const hint = await screen.findByRole('menuitem', { name: 'Delete (managed by deployment shop)' })
+    expect(hint).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(hint)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(deleteCalls()).toEqual([])
+  })
+
+  it('says to remove a container of an unmanaged Compose project with Compose', async () => {
+    serve('ADMIN')
+    renderPage('containers', <ContainersPage />)
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions for manual' }), { button: 0, ctrlKey: false })
+    const hint = await screen.findByRole('menuitem', { name: 'Delete (part of Compose project handmade, remove it with Compose)' })
+    expect(hint).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.queryByRole('menuitem', { name: /managed by deployment/ })).not.toBeInTheDocument()
+  })
+
+  it('translates MANAGED_BY_COMPOSE if the server still refuses the delete', async () => {
+    serve('ADMIN', () => Promise.reject(new ApiError(409, JSON.stringify({ code: 'MANAGED_BY_COMPOSE', message: 'x' }), 'MANAGED_BY_COMPOSE')))
+    renderPage('containers', <ContainersPage />)
     await openDelete('old')
-    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('belongs to a Compose project')
   })
 
   it('keeps the dialog open and shows a translated message on RESOURCE_IN_USE', async () => {

@@ -401,11 +401,15 @@ public class HostResourcesService {
         return new PruneResponse.Result(removed, skipped, bytes);
     }
 
+    /**
+     * Removes a plain container. Containers of a Compose project (including the system-managed proxy) are refused for
+     * every role with 409 MANAGED_BY_COMPOSE; the system-managed check (403) runs first, inside the same inspect.
+     */
     @Auditable(action = "CONTAINER_DELETE", targetType = "CONTAINER", targetId = "#containerId")
     void removeContainer(UUID hostId, String containerId, boolean force) {
         requireOperate(hostId);
         validateResourceId(containerId);
-        systemManaged.requireNotSystemManagedContainer(hostId, containerId);
+        requireNotComposeManaged(hostId, containerId);
         call(hostId, (id, endpoint) -> {
             containers.removeContainer(id, endpoint, containerId, force);
             return null;

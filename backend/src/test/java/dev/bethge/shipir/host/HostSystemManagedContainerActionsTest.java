@@ -106,17 +106,21 @@ class HostSystemManagedContainerActionsTest extends HostApiTestBase {
         var admin = login("admin");
         mvc.perform(admin.write(post("/api/hosts/{h}/containers/proxy1/restart", host))).andExpect(status().isNoContent());
         mvc.perform(admin.write(post("/api/hosts/{h}/containers/proxy1/kill", host))).andExpect(status().isNoContent());
-        mvc.perform(admin.write(delete("/api/hosts/{h}/containers/proxy1", host))).andExpect(status().isNoContent());
+        // the proxy is a Compose project: even ADMIN cannot remove its container behind Compose's back
+        mvc.perform(admin.write(delete("/api/hosts/{h}/containers/proxy1", host)))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MANAGED_BY_COMPOSE"));
         verify(containers).killContainer(any(), any(), eq("proxy1"));
-        verify(containers).removeContainer(any(), any(), eq("proxy1"), anyBoolean());
+        verify(containers, never()).removeContainer(any(), any(), any(), anyBoolean());
     }
 
     @Test
     void operatorStillActsOnOrdinaryContainers() throws Exception {
         var op = login("operator");
         mvc.perform(op.write(post("/api/hosts/{h}/containers/shop1/kill", host))).andExpect(status().isNoContent());
-        mvc.perform(op.write(delete("/api/hosts/{h}/containers/shop1", host))).andExpect(status().isNoContent());
         verify(containers).killContainer(any(), any(), eq("shop1"));
+        // shop1 belongs to a Compose project, so removing it is refused (shipr-0qbh.67)
+        mvc.perform(op.write(delete("/api/hosts/{h}/containers/shop1", host)))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MANAGED_BY_COMPOSE"));
     }
 
     @Test

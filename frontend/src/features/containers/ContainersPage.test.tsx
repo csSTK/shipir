@@ -213,11 +213,11 @@ describe('ContainersPage', () => {
       expect(rowButtons('api')).toEqual(['Start api', 'Logs api', 'More actions for api'])
       expect(rowButtons('frozen')).toEqual(['Unpause frozen', 'Logs frozen', 'More actions for frozen'])
       await openMenu('web')
-      expect(menuItems()).toEqual(['Restart', 'Pause', 'Details', 'Publish with a domain', 'Kill', 'Delete'])
+      expect(menuItems()).toEqual(['Restart', 'Pause', 'Details', 'Publish with a domain', 'Kill', 'Delete (part of Compose project shop, remove it with Compose)'])
       fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
       await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
       await openMenu('api')
-      expect(menuItems()).toEqual(['Details', 'Publish with a domain', 'Delete'])
+      expect(menuItems()).toEqual(['Details', 'Publish with a domain', 'Delete (part of Compose project shop, remove it with Compose)'])
     })
 
     describe('console action', () => {
@@ -314,7 +314,7 @@ describe('ContainersPage', () => {
       mockApi()
       renderAt('/environments/h1/containers')
       await screen.findByRole('button', { name: 'Stop web' })
-      await openMenu('web')
+      await openMenu('cache')
       fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }))
       const dialog = await screen.findByRole('dialog')
       expect(within(dialog).getByText(/This cannot be undone/)).toBeInTheDocument()

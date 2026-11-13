@@ -11,14 +11,12 @@ interface Props {
   name: string
   /** Offers the "Force (stop and remove)" checkbox (running containers). */
   forceOption?: boolean
-  /** Shown when the resource belongs to a managed deployment. */
-  warning?: string | null
   onDelete: (force: boolean) => Promise<unknown>
   onClose: () => void
 }
 
 /** Confirmation for deleting a container, image, volume or network. Errors stay inline. */
-export function DeleteResourceDialog({ kind, name, forceOption = false, warning = null, onDelete, onClose }: Props) {
+export function DeleteResourceDialog({ kind, name, forceOption = false, onDelete, onClose }: Props) {
   const { t } = useTranslation('hosts')
   const noun = resourceNoun(kind)
   const [force, setForce] = useState(false)
@@ -40,11 +38,6 @@ export function DeleteResourceDialog({ kind, name, forceOption = false, warning 
   return (
     <ConfirmDialog title={t('DeleteResourceDialog.deleteKind', { kind: noun })} confirmLabel={t('DeleteResourceDialog.delete')} danger loading={pending} error={error} onConfirm={() => void confirm()} open onOpenChange={(open) => !open && onClose()}>
       <Trans t={t} i18nKey="DeleteResourceDialog.deleteKindNameThisCannot" values={{ kind: noun, name }} components={{ strong: <strong /> }} />
-      {warning && (
-        <span className="delres__warning" role="note">
-          {warning}
-        </span>
-      )}
       {forceOption && (
         <Checkbox className="delres__check" label={t('DeleteResourceDialog.forceStopAndRemove')} checked={force} onChange={(e) => setForce(e.target.checked)} />
       )}

@@ -136,6 +136,7 @@
   "deleteResource.thisResourceCannotBeDeleted": "Diese Ressource kann nicht gelöscht werden, weil ihre ID ungültig ist.",
   "deleteResource.proxyImageUnresolved": "Das Löschen von Images ist in dieser Umgebung gesperrt, weil die Image-Angabe des Proxys nicht aufgelöst werden kann. Bitte einen Admin fragen.",
   "deleteResource.thisResourceBelongsToA": "Diese Ressource gehört zu einem verwalteten Deployment.",
+  "deleteResource.managedByCompose": "Dieser Container gehört zu einem Compose-Projekt. Entferne ihn über sein Deployment oder mit Compose.",
   "deleteResource.youAreNotAllowedTo": "Das darfst du nicht.",
   "deleteResource.theResourceCouldNotBe": "Die Ressource konnte nicht gelöscht werden. Versuche es erneut.",
   "deleteRowActions.delete": "Löschen",

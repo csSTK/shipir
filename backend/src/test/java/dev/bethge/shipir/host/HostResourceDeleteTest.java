@@ -7,6 +7,7 @@ import dev.bethge.shipir.docker.client.ContainerService;
 import dev.bethge.shipir.docker.client.ImageService;
 import dev.bethge.shipir.docker.client.NetworkService;
 import dev.bethge.shipir.docker.client.VolumeService;
+import dev.bethge.shipir.docker.dto.ContainerDetailsDto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -14,6 +15,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,6 +24,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -41,6 +44,14 @@ class HostResourceDeleteTest extends HostApiTestBase {
     @BeforeEach
     void cleanAudit() {
         jdbc.update("DELETE FROM audit_log");
+        // removeContainer inspects first (Compose-managed containers are refused): every container here is a plain one
+        when(containers.inspect(any(), any(), any())).thenReturn(plainContainer());
+    }
+
+    private static ContainerDetailsDto plainContainer() {
+        return new ContainerDetailsDto("id1", "web", "nginx:1", "running", null, null, 0,
+                new ContainerDetailsDto.RestartPolicy("no", 0), List.of("nginx"), List.of(), false, false, List.of(), List.of(),
+                Map.of(), List.of(), List.of(), null, null, null);
     }
 
     private String localHostId() {
