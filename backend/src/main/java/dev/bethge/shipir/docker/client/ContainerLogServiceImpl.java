@@ -49,12 +49,21 @@ public class ContainerLogServiceImpl implements ContainerLogService {
     @Override
     public Closeable follow(UUID hostId, DockerEndpoint endpoint, String containerId, int tail, boolean timestamps,
                             Consumer<LogLine> onLine, Consumer<Throwable> onEnd) {
+        return follow(hostId, endpoint, containerId, tail, null, timestamps, onLine, onEnd);
+    }
+
+    @Override
+    public Closeable follow(UUID hostId, DockerEndpoint endpoint, String containerId, int tail, Instant since,
+                            boolean timestamps, Consumer<LogLine> onLine, Consumer<Throwable> onEnd) {
         // the log call itself is asynchronous and would hide an unknown id, so check it first
         calls.call(hostId, endpoint, client -> client.inspectContainerCmd(containerId).exec());
         LineCallback callback = new LineCallback(timestamps, onLine, onEnd, maxLineLength);
         return calls.call(hostId, endpoint, client -> {
             var cmd = client.logContainerCmd(containerId).withStdOut(true).withStdErr(true)
                     .withFollowStream(true).withTimestamps(timestamps);
+            if (since != null) {
+                cmd = cmd.withSince((int) Math.min(Integer.MAX_VALUE, Math.max(0, since.getEpochSecond())));
+            }
             return (tail < 0 ? cmd.withTailAll() : cmd.withTail(tail)).exec(callback);
         });
     }

@@ -10,6 +10,7 @@ import org.mockito.ArgumentCaptor;
 
 import java.io.Closeable;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -98,5 +99,82 @@ class LogStreamEndedReplaceTest {
 
         handler.revalidate("alice", t -> false); // access revoked: alice is reached
         assertThat(handler.subscriberCount(target)).isEqualTo(1);
+    }
+
+    /** The 8-arg follow (with since); records tail and since, collects sinks like the 7-arg one. */
+    private void mockFollows(List<Integer> tails, List<Instant> sinces) {
+        when(hosts.findById(any())).thenReturn(Optional.of(mock(DockerHost.class)));
+        when(logs.follow(any(), any(), any(), anyInt(), anyBoolean(), any(), any())).thenAnswer(inv -> {
+            tails.add(inv.getArgument(3));
+            sinces.add(null);
+            lineSinks.add(inv.getArgument(5));
+            endSinks.add(inv.getArgument(6));
+            return mock(Closeable.class);
+        });
+        when(logs.follow(any(), any(), any(), anyInt(), any(Instant.class), anyBoolean(), any(), any())).thenAnswer(inv -> {
+            tails.add(inv.getArgument(3));
+            sinces.add(inv.getArgument(4));
+            lineSinks.add(inv.getArgument(6));
+            endSinks.add(inv.getArgument(7));
+            return mock(Closeable.class);
+        });
+    }
+
+    private List<String> linesTo(String session, String sub) {
+        ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
+        verify(sender, atLeastOnce()).send(eq(session), eq(sub), any(), payload.capture());
+        return payload.getAllValues().stream().map(p -> ((LogStreamMessage) p).line()).filter(l -> l != null).toList();
+    }
+
+    /**
+     * shipr-0qbh.93: carried-over viewers must not get the tail replayed again and must not lose lines written
+     * after the old stream ended; a joiner still sees recent lines.
+     */
+    @Test
+    void freshFollowForCarriedOverViewersUsesSinceInsteadOfTailAndJoinerGetsBufferedLines() throws Exception {
+        List<Integer> tails = new CopyOnWriteArrayList<>();
+        List<Instant> sinces = new CopyOnWriteArrayList<>();
+        mockFollows(tails, sinces);
+        var target = new LogStreamHandler.Target(UUID.randomUUID(), "web");
+        var options = new LogStreamHandler.Options(100, false);
+
+        Instant before = Instant.now();
+        handler.subscribe(target, options, "alice", "s1", "a");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> endSinks.size() == 1);
+        lineSinks.get(0).accept(new LogLine(LogLine.Stream.STDOUT, "old1", null));
+        lineSinks.get(0).accept(new LogLine(LogLine.Stream.STDOUT, "old2", null));
+        endSinks.get(0).accept(null);
+
+        handler.subscribe(target, options, "bob", "s2", "b");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> lineSinks.size() == 2);
+
+        assertThat(tails).containsExactly(100, -1);
+        assertThat(sinces.get(0)).isNull();
+        assertThat(sinces.get(1)).isBetween(before, Instant.now()); // since = end of the old stream
+        // lines logged after the old stream ended (e.g. restart output) come with the since-follow
+        lineSinks.get(1).accept(new LogLine(LogLine.Stream.STDOUT, "restart", null));
+
+        assertThat(linesTo("s1", "a")).containsExactly("old1", "old2", "restart"); // each exactly once
+        assertThat(linesTo("s2", "b")).containsExactly("old1", "old2", "restart");
+    }
+
+    /** A stream that ended without ever delivering a line (follow failed): the requested tail stays. */
+    @Test
+    void endedStreamWithoutLinesKeepsTheRequestedTail() throws Exception {
+        List<Integer> tails = new CopyOnWriteArrayList<>();
+        List<Instant> sinces = new CopyOnWriteArrayList<>();
+        mockFollows(tails, sinces);
+        var target = new LogStreamHandler.Target(UUID.randomUUID(), "web");
+        var options = new LogStreamHandler.Options(500, false);
+
+        handler.subscribe(target, options, "alice", "s1", "a");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> endSinks.size() == 1);
+        endSinks.get(0).accept(new RuntimeException("boom")); // ERROR, no line delivered
+
+        handler.subscribe(target, options, "bob", "s2", "b");
+        await().atMost(5, TimeUnit.SECONDS).until(() -> lineSinks.size() == 2);
+
+        assertThat(tails).containsExactly(500, 500);
+        assertThat(sinces).containsOnlyNulls();
     }
 }

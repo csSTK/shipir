@@ -27,6 +27,14 @@ public interface ContainerLogService {
                      Consumer<LogLine> onLine, Consumer<Throwable> onEnd);
 
     /**
+     * Like {@link #follow(UUID, DockerEndpoint, String, int, boolean, Consumer, Consumer)} but only output since
+     * {@code since} (null = no lower bound; Docker has second precision, so lines of the boundary second may be
+     * delivered again by a caller that saw them before). {@code tail} still limits the lines of that window.
+     */
+    Closeable follow(UUID hostId, DockerEndpoint endpoint, String containerId, int tail, Instant since,
+                     boolean timestamps, Consumer<LogLine> onLine, Consumer<Throwable> onEnd);
+
+    /**
      * A finite read, no follow: the last {@code tail} lines (negative = all) of the output since {@code since}
      * (null = from the start; second precision), then the end. Same callbacks and failure codes as
      * {@link #follow(UUID, DockerEndpoint, String, int, boolean, Consumer, Consumer)}; {@code onEnd} is called once

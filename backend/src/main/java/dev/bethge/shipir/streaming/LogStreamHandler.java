@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.Closeable;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -65,12 +66,19 @@ public class LogStreamHandler {
         long nextSeq = 1;
         boolean ended;
         boolean closed;
+        /** Lines the Docker follow replays at start (negative = all, used with followSince). */
+        int followTail;
+        /** Lower bound for the Docker follow (carried-over viewers); null = no bound. */
+        Instant followSince;
+        /** When the stream ended (set by finish). */
+        Instant endedAt;
         Closeable follow;
         final LogStreamSupport.RateWindow rate = new LogStreamSupport.RateWindow();
 
         Stream(Key key) {
             this.key = key;
             this.target = key.target();
+            this.followTail = key.options().tail();
         }
     }
 
@@ -139,6 +147,19 @@ public class LogStreamHandler {
                             stream.subscribers.addAll(replaced.subscribers);
                             replaced.subscribers.clear();
                             stream.nextSeq = replaced.nextSeq;
+                            // Carried-over viewers saw the old lines, so a tail replay would show them again with
+                            // new seqs. Follow with since = end of the old stream instead (all lines of that window,
+                            // so output between the end and now, e.g. a restart, is not lost) and carry the old LINE
+                            // buffer over, so a joiner still gets recent lines. Docker's since has second
+                            // precision: lines of the end second may arrive twice (accepted, not deduped). If the
+                            // old stream never delivered a line (it failed to start) the requested tail stays.
+                            List<LogStreamMessage> oldLines = replaced.buffer.stream()
+                                    .filter(m -> m.type() == LogStreamMessage.Type.LINE).toList();
+                            if (!oldLines.isEmpty() && replaced.endedAt != null) {
+                                stream.followTail = -1;
+                                stream.followSince = replaced.endedAt;
+                                oldLines.forEach(stream.buffer::addLast);
+                            }
                         }
                     }
                     streams.put(key, stream);
@@ -343,9 +364,12 @@ public class LogStreamHandler {
                     .orElseThrow(() -> new DockerConnectionException(
                             dev.bethge.shipir.docker.DockerErrorCode.NOT_FOUND, "Host not found", null));
             var endpoint = endpoints.endpointOf(host);
-            Closeable follow = logs.follow(target.hostId(), endpoint, target.containerId(),
-                    stream.key.options().tail(), stream.key.options().timestamps(),
-                    line -> onLine(stream, line), failure -> onEnd(stream, failure));
+            Closeable follow = stream.followSince == null
+                    ? logs.follow(target.hostId(), endpoint, target.containerId(), stream.followTail,
+                            stream.key.options().timestamps(), line -> onLine(stream, line), failure -> onEnd(stream, failure))
+                    : logs.follow(target.hostId(), endpoint, target.containerId(), stream.followTail,
+                            stream.followSince, stream.key.options().timestamps(),
+                            line -> onLine(stream, line), failure -> onEnd(stream, failure));
             boolean stop;
             synchronized (stream) {
                 stop = stream.closed;
@@ -408,6 +432,7 @@ public class LogStreamHandler {
             return;
         }
         stream.ended = true;
+        stream.endedAt = clock.instant();
         publish(stream, LogStreamMessage.Type.STATUS, null, code, status, null);
     }
 

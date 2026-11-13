@@ -114,6 +114,40 @@ class ContainerLogServiceTest {
     }
 
     @Test
+    void followPassesSinceAndAllTailToDocker() {
+        DockerHostConnectionManager manager = mock(DockerHostConnectionManager.class);
+        DockerClient client = mock(DockerClient.class, Answers.RETURNS_DEEP_STUBS);
+        when(manager.readTimeout()).thenReturn(Duration.ofSeconds(1));
+        when(manager.client(any(), any())).thenReturn(client);
+        var cmd = mock(com.github.dockerjava.api.command.LogContainerCmd.class, Answers.RETURNS_SELF);
+        when(client.logContainerCmd("web")).thenReturn(cmd);
+        var service = new ContainerLogServiceImpl(manager);
+
+        service.follow(UUID.randomUUID(), new DockerEndpoint.Local("unix:///x.sock"), "web", -1,
+                Instant.ofEpochSecond(1_700_000_000L), false, l -> { }, e -> { });
+
+        org.mockito.Mockito.verify(cmd).withFollowStream(true);
+        org.mockito.Mockito.verify(cmd).withSince(1_700_000_000);
+        org.mockito.Mockito.verify(cmd).withTailAll();
+    }
+
+    @Test
+    void followWithoutSinceDoesNotSetSince() {
+        DockerHostConnectionManager manager = mock(DockerHostConnectionManager.class);
+        DockerClient client = mock(DockerClient.class, Answers.RETURNS_DEEP_STUBS);
+        when(manager.readTimeout()).thenReturn(Duration.ofSeconds(1));
+        when(manager.client(any(), any())).thenReturn(client);
+        var cmd = mock(com.github.dockerjava.api.command.LogContainerCmd.class, Answers.RETURNS_SELF);
+        when(client.logContainerCmd("web")).thenReturn(cmd);
+        var service = new ContainerLogServiceImpl(manager);
+
+        service.follow(UUID.randomUUID(), new DockerEndpoint.Local("unix:///x.sock"), "web", 10, false, l -> { }, e -> { });
+
+        org.mockito.Mockito.verify(cmd, org.mockito.Mockito.never()).withSince(org.mockito.ArgumentMatchers.anyInt());
+        org.mockito.Mockito.verify(cmd).withTail(10);
+    }
+
+    @Test
     void newlineFreeStreamIsSplitAtTheCapWithBoundedBufferAndNoContentLost() {
         List<LogLine> lines = new ArrayList<>();
         var cb = new ContainerLogServiceImpl.LineCallback(false, lines::add, e -> { }, 100);
