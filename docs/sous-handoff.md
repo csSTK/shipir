@@ -39,6 +39,25 @@ Notification list ignores deployment-only grants. Pushed to `dev` as `1278ae0`, 
 - Gap: tests were never run against the old code. Checked by hand afterwards in a throwaway worktree: `deploymentOnlyGrantHidesOtherDeploymentsAndUnscopedContainers` fails on `1278ae0^` (expected 1, was 4), so the test is valid.
 - Reviewer noted `markAllRead` also marks hidden notifications; filed as `shipr-km9`.
 
+## Run 3: `shipr-kipv.2` via Sous 0.8.0 (2026-11-13)
+
+Upgrade first: `try/sous` merged with `origin/dev` (no reset, history kept), 0.8.0 starter taken over and the project settings re-applied (base branch `try/sous`, `lifecycle: steps`, beads, Sonnet agents, Maven/pnpm `CHECKS`); `sous validate` ok. ArchUnit rules for `ProcessBuilder`/`Runtime.exec` (`sous run task shipr-kipv.2`), all agents Sonnet 5.5.
+
+| Step | Time | Cost |
+|---|---|---|
+| check-issue (new in 0.8.0) | 27s | $0.45 |
+| plan | 31s | $0.24 |
+| implement | 26m08s (agent 53s, checks 25m15s) | $0.27 |
+| review | 18s | $0.22 |
+| sync (x2) | 0s (agent skipped, up to date) | - |
+| review-full | 15s, 1 round | $0.19 |
+| merge | 2s | - |
+
+- Wall clock ~28 min (Run 1: ~36), agent time ~2.5 min, cost $1.37 (now reported by Sous per step).
+- Result good: both rules, six fail-test fixtures incl. `::new`/`::exec` references, Code Map line. Weak spot: the allowed-case test passed only because other fixtures made the rule throw; tightened by hand on `dev`. `spec.md` committed again, left out on `dev`.
+- check-issue answered `holds` on a bead created minutes earlier and was the most expensive step (33% of the run).
+- Brought to `dev` by cherry-pick without `spec.md`, like Run 1.
+
 ## Comparison
 
 | | next-task (`shipr-8qd`) | Sous (`shipr-hae`) |
@@ -60,13 +79,14 @@ Stay on `/next-task*`. Take over Sous's one real advantage instead of the tool:
 
 ## Open
 
-- `shipr-hae`: decided to bring `e85ca2e` to `dev` (cherry-picked without `spec.md`, Code Map entry in `docs/CODE_MAP.md`, together with this file).
+- `shipr-hae`: brought to `dev` (cherry-picked without `spec.md`).
+- `shipr-kipv.2`: brought to `dev` (Run 3).
 - `try/sous` / `../shipir-sous`: keep as reference or remove (`git worktree remove ../shipir-sous`, `git branch -D try/sous`). Sous worktree leftovers under `.sandcastle/` and `.sous/test/.steps-*`.
 - Global CLI: `npm uninstall -g sous-factory` if the trial is dropped.
 
 ## Upstream improvement ideas for Sous
 
-From what the trial actually hit. Not yet checked against the Sous repo for existing issues. Anything posted there is public under the user's account: draft first, submit only with explicit OK.
+From what the trial actually hit. Status 2026-11-13: 1 is fixed upstream (`ctx.baseBranch`, 0.7.0) and 3 too (cost per step, 0.8.0); sync no longer re-runs checks when up to date, so 2 shrank. Run 3 added: the starter tests fail once `CHECKS` is filled in (and leak `.sous/test/.steps-*`), `code-review` is still flagged as missing, check-issue cost on fresh issues, and a `sous upgrade` for customised starters. A full draft for upstream is kept outside the repo until the user reviews it. Not yet checked against the Sous repo for existing issues. Anything posted there is public under the user's account: draft first, submit only with explicit OK.
 
 1. **One source for the base branch (bug, small PR, do first).** `sous.yaml` has `baseBranch`, but the starter flows hard-code `main` (`baseBranch: main`, `diffRange: main...HEAD`) and so does `steps/verify/eval.ts` (`BASE_BRANCH`). Our first run stopped at sync on that while `sous validate` said ok. Fix: read it from config (e.g. `${{ config.baseBranch }}`), or at least have `validate` warn on a mismatch.
 2. **Skip checks on unchanged code (biggest time lever, open an issue first).** ~30 of 36 min were full `verify` runs after implement, sync and every fix round; sync ran them even with nothing to merge. Cache a passed check per tree hash and skip it for an unchanged tree; optionally focused checks per step and the full gate only before merge. No token saving, but much less wall clock and agent idle time.
@@ -74,4 +94,4 @@ From what the trial actually hit. Not yet checked against the Sous repo for exis
 4. **Red-before-green as an agent-free module step.** Review-full found the test that proved nothing only through the model, in 3 rounds. A module step can run the new tests against the base branch code and require them to fail (what was checked by hand for `shipr-8qd`). Offer it as an optional starter step.
 5. **Smaller:** empty `CHECKS` passes with only a warning (`validate` should fail unless explicitly opted out); the starter references the `code-review` skill without listing it; README could mention npm skipping esbuild's install script.
 
-Next step: check the Sous repo for existing issues, then draft 1 (PR) and 2 (issue).
+Next step: user reviews the draft, then check the Sous repo for existing issues and post only with explicit OK.
