@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { ApiError } from '../../../shared/api/client.ts'
 import { KeyRound } from 'lucide-react'
 import { Button, Card, Dialog, EmptyState, Select, Skeleton, TextField } from '../../../shared/ui/index.ts'
+import { isStepUpError, StepUpDialog, type StepUpCredentials } from '../../auth/index.ts'
 import { OneTimeSecret } from '../../one-time-secret/index.ts'
 import { useApiTokens, useCreateApiToken, useRevokeApiToken, type ApiToken, type CreatedApiToken } from './api.ts'
 import { useTranslation } from 'react-i18next'
@@ -33,12 +34,20 @@ function CreateTokenDialog({ onClose }: { onClose: () => void }) {
   const [days, setDays] = useState('')
   // Only held in this component; closing the dialog unmounts it and the plaintext is gone.
   const [created, setCreated] = useState<CreatedApiToken | null>(null)
+  // The form is complete; creating the token waits for the user to confirm their identity.
+  const [confirming, setConfirming] = useState(false)
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault()
     if (!name.trim() || create.isPending) return
+    setConfirming(true)
+  }
+
+  const createToken = async (stepUp: StepUpCredentials) => {
     const expiresAt = days ? new Date(Date.now() + Number(days) * DAY_MS).toISOString() : undefined
-    create.mutate({ name: name.trim(), ...(expiresAt ? { expiresAt } : {}) }, { onSuccess: setCreated })
+    const token = await create.mutateAsync({ name: name.trim(), ...(expiresAt ? { expiresAt } : {}), stepUp })
+    setConfirming(false)
+    setCreated(token)
   }
 
   if (created) {
@@ -62,38 +71,43 @@ function CreateTokenDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Dialog
-      size="lg"
-      open
-      onOpenChange={(open) => !open && onClose()}
-      title={tr('TokensSection.createApiToken')}
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose}>
-            {tr('TokensSection.cancel')}
-          </Button>
-          <Button variant="primary" type="submit" form="create-token-form" disabled={!name.trim()} loading={create.isPending}>
-            {tr('TokensSection.create')}
-          </Button>
-        </>
-      }
-    >
-      <form id="create-token-form" className="ui-form" onSubmit={onSubmit}>
-        <TextField label={tr('TokensSection.name')} value={name} maxLength={100} onChange={(e) => setName(e.target.value)} help={tr('TokensSection.forExampleTheScriptOr')} />
-        <Select label={tr('TokensSection.expires')} value={days} onChange={(e) => setDays(e.target.value)} help={tr('TokensSection.theTokenStopsWorkingAfter')}>
-          {EXPIRY_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </Select>
-        {create.isError && (
-          <p role="alert" className="ui-error">
-            {createError(create.error)}
-          </p>
-        )}
-      </form>
-    </Dialog>
+    <>
+      <Dialog
+        size="lg"
+        open
+        onOpenChange={(open) => !open && onClose()}
+        title={tr('TokensSection.createApiToken')}
+        footer={
+          <>
+            <Button variant="ghost" onClick={onClose}>
+              {tr('TokensSection.cancel')}
+            </Button>
+            <Button variant="primary" type="submit" form="create-token-form" disabled={!name.trim()} loading={create.isPending}>
+              {tr('TokensSection.create')}
+            </Button>
+          </>
+        }
+      >
+        <form id="create-token-form" className="ui-form" onSubmit={onSubmit}>
+          <TextField label={tr('TokensSection.name')} value={name} maxLength={100} onChange={(e) => setName(e.target.value)} help={tr('TokensSection.forExampleTheScriptOr')} />
+          <Select label={tr('TokensSection.expires')} value={days} onChange={(e) => setDays(e.target.value)} help={tr('TokensSection.theTokenStopsWorkingAfter')}>
+            {EXPIRY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+          {create.isError && !isStepUpError(create.error) && (
+            <p role="alert" className="ui-error">
+              {createError(create.error)}
+            </p>
+          )}
+        </form>
+      </Dialog>
+      {confirming && (
+        <StepUpDialog onCancel={() => setConfirming(false)} onConfirm={createToken} onFailure={() => setConfirming(false)} />
+      )}
+    </>
   )
 }
 

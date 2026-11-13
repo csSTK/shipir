@@ -494,7 +494,7 @@ class ExecSessionTest {
         containerOf("web", null);
         var created = op.call(HttpRequest.newBuilder(URI.create(base() + "/api/account/tokens"))
                 .header("Content-Type", "application/json").header("X-XSRF-TOKEN", op.jar.get("XSRF-TOKEN"))
-                .POST(HttpRequest.BodyPublishers.ofString("{\"name\":\"ci\"}")));
+                .POST(HttpRequest.BodyPublishers.ofString("{\"name\":\"ci\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}")));
         assertThat(created.statusCode()).as(created.body()).isEqualTo(201);
         String token = json(created.body(), "token");
         // the session works (asserted at the end), so the 403 is caused by the bearer token alone

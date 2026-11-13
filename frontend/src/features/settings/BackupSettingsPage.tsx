@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Button, Card, TextField } from '../../shared/ui/index.ts'
 import { ApiError } from '../../shared/api/client.ts'
+import { StepUpDialog } from '../auth/index.ts'
 import { useCreateBackup } from './api.ts'
 import { SettingsPage } from './SettingsPage.tsx'
 import { useTranslation } from 'react-i18next'
@@ -33,6 +34,8 @@ function BackupForm() {
   const [confirm, setConfirm] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
   const [done, setDone] = useState(false)
+  // The passphrase is valid; the export waits for the user to confirm their identity.
+  const [confirming, setConfirming] = useState(false)
   const backup = useCreateBackup()
 
   function submit(e: FormEvent) {
@@ -45,18 +48,27 @@ function BackupForm() {
       return
     }
     setProblem(null)
-    backup.mutate(passphrase, {
-      onSuccess: () => {
-        setPassphrase('')
-        setConfirm('')
-        setDone(true)
-      },
-      onError: (err) => setProblem(errorMessage(err)),
-    })
+    setConfirming(true)
   }
 
   return (
     <Card>
+      {confirming && (
+        <StepUpDialog
+          onCancel={() => setConfirming(false)}
+          onConfirm={async (stepUp) => {
+            await backup.mutateAsync({ passphrase, stepUp })
+            setConfirming(false)
+            setPassphrase('')
+            setConfirm('')
+            setDone(true)
+          }}
+          onFailure={(err) => {
+            setConfirming(false)
+            setProblem(errorMessage(err))
+          }}
+        />
+      )}
       <form className="settings__form" onSubmit={submit} noValidate>
         <TextField
           label={t('BackupSettingsPage.passphrase')}

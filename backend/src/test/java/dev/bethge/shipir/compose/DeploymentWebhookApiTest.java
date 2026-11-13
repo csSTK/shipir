@@ -169,7 +169,7 @@ class DeploymentWebhookApiTest extends DeploymentTestBase {
         Login op = login("operator");
         String id = create(op, "web");
         String body = mvc.perform(op.write(post("/api/account/tokens")).contentType(APPLICATION_JSON)
-                .content("{\"name\":\"ci\"}")).andReturn().getResponse().getContentAsString();
+                .content("{\"name\":\"ci\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}")).andReturn().getResponse().getContentAsString();
         String apiToken = JsonPath.read(body, "$.token");
 
         String webhookBody = mvc.perform(put(url() + "/" + id + "/webhook")

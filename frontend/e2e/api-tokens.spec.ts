@@ -37,6 +37,7 @@ test('creates an API token, reveals it once, and revokes it', async ({ page, con
   api.mock('GET', '/api/account/tokens', {
     body: [{ id: 't1', name: 'CI', prefix: 'shp_wxyz', createdAt: '2026-10-01T10:00:00Z', expiresAt: '2027-10-01T10:00:00Z', lastUsedAt: null }],
   })
+  api.mock('GET', '/api/auth/step-up', { body: { method: 'PASSWORD', totpRequired: true, fresh: false, windowSeconds: 300 } })
   api.mock('POST', '/api/account/tokens', {
     status: 201,
     body: { id: 't2', name: 'Script', prefix: 'shp_abcd', createdAt: '2026-10-25T10:00:00Z', expiresAt: '2027-10-25T10:00:00Z', token: SECRET },
@@ -53,9 +54,21 @@ test('creates an API token, reveals it once, and revokes it', async ({ page, con
   const create = page.getByRole('dialog')
   await create.getByLabel('Name').fill('Script')
   await create.getByLabel('Expires').selectOption('30')
+  const request = page.waitForRequest((r) => r.url().endsWith('/api/account/tokens') && r.method() === 'POST')
   await create.getByRole('button', { name: 'Create' }).click()
 
-  const reveal = page.getByRole('dialog')
+  // Creating a token needs the password and, with two-factor on, a code.
+  const confirm = page.getByRole('dialog', { name: "Confirm it's you" })
+  await confirm.getByLabel('Current password').fill('My-current-Passw0rd!')
+  await expect(confirm.getByRole('button', { name: 'Confirm' })).toBeDisabled()
+  await confirm.getByLabel('Authentication code').fill('123456')
+  await confirm.getByRole('button', { name: 'Confirm' }).click()
+  expect((await request).postDataJSON()).toMatchObject({
+    name: 'Script',
+    stepUp: { password: 'My-current-Passw0rd!', code: '123456' },
+  })
+
+  const reveal = page.getByRole('dialog', { name: 'Token created' })
   await expect(reveal.getByLabel('Token')).toHaveValue(SECRET)
   await expect(reveal.getByText(/shown only once/i)).toBeVisible()
   await reveal.getByRole('button', { name: 'Copy' }).click()

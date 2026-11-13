@@ -14,3 +14,6 @@ export {
 export type { CurrentUser, SetupStep } from './api.ts'
 export { TwoFactorEnrollment } from './TwoFactorEnrollment.tsx'
 export { twoFactorErrorMessage } from './twoFactorErrors.ts'
+export { StepUpDialog } from './StepUpDialog.tsx'
+export { isStepUpError } from './stepUp.ts'
+export type { StepUpCredentials } from './stepUp.ts'

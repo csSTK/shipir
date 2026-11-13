@@ -24,6 +24,7 @@ function serve(overrides: Record<string, Handler> = {}) {
       return r instanceof Error ? Promise.reject(r) : Promise.resolve(r)
     }
     if (key === 'GET /account/tokens') return Promise.resolve(tokens)
+    if (key === 'GET /auth/step-up') return Promise.resolve({ method: 'PASSWORD', totpRequired: false, fresh: false, windowSeconds: 300 })
     return Promise.resolve(undefined)
   })
 }
@@ -51,6 +52,13 @@ const created = { id: 't2', name: 'Deploy script', prefix: 'shp_abcd', createdAt
 async function openCreate() {
   fireEvent.click(await screen.findByRole('button', { name: 'Create token' }))
   return screen.findByRole('dialog')
+}
+
+/** Answers the "Confirm it's you" dialog that follows Create. */
+async function confirmStepUp(password = 'my-current-password') {
+  const dialog = await screen.findByRole('dialog', { name: "Confirm it's you" })
+  fireEvent.change(await within(dialog).findByLabelText('Current password'), { target: { value: password } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }))
 }
 
 describe('TokensSection', () => {
@@ -92,7 +100,8 @@ describe('TokensSection', () => {
     let dialog = await openCreate()
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Deploy script' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
-    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/account/tokens', { method: 'POST', body: { name: 'Deploy script' } }))
+    await confirmStepUp()
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/account/tokens', { method: 'POST', body: { name: 'Deploy script', stepUp: { password: 'my-current-password' } } }))
     cleanup()
 
     serve({ 'POST /account/tokens': () => created })
@@ -101,6 +110,7 @@ describe('TokensSection', () => {
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Short' } })
     fireEvent.change(within(dialog).getByLabelText('Expires'), { target: { value: '30' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
+    await confirmStepUp()
     await waitFor(() => {
       const call = apiFetch.mock.calls.find(([p, i]) => p === '/account/tokens' && i?.method === 'POST' && i.body.name === 'Short')
       expect(call).toBeDefined()
@@ -116,8 +126,9 @@ describe('TokensSection', () => {
     const dialog = await openCreate()
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Deploy script' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
+    await confirmStepUp()
 
-    const reveal = await screen.findByRole('dialog')
+    const reveal = await screen.findByRole('dialog', { name: 'Token created' })
     expect(within(reveal).getByLabelText('Token')).toHaveValue(SECRET)
     expect(within(reveal).getByText(/shown only once/i)).toBeInTheDocument()
     expect(within(reveal).getByText(/your permissions/i)).toBeInTheDocument()
@@ -129,12 +140,36 @@ describe('TokensSection', () => {
     expect(document.body.textContent).not.toContain(SECRET)
   })
 
+  it('asks for the password first and sends nothing until it is given', async () => {
+    serve({ 'POST /account/tokens': () => created })
+    renderSection()
+    const dialog = await openCreate()
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Deploy script' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
+    const confirm = await screen.findByRole('dialog', { name: "Confirm it's you" })
+    expect(await within(confirm).findByRole('button', { name: 'Confirm' })).toBeDisabled()
+    expect(apiFetch).not.toHaveBeenCalledWith('/account/tokens', expect.objectContaining({ method: 'POST' }))
+  })
+
+  it('keeps the confirmation open with a message when the password is wrong', async () => {
+    serve({ 'POST /account/tokens': () => new ApiError(403, 'x', 'STEP_UP_INVALID') })
+    renderSection()
+    const dialog = await openCreate()
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Deploy script' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
+    await confirmStepUp('wrong')
+    const confirm = await screen.findByRole('dialog', { name: "Confirm it's you" })
+    expect(await within(confirm).findByRole('alert')).toHaveTextContent('password or code is not correct')
+    expect(within(confirm).getByLabelText('Current password')).toHaveValue('')
+  })
+
   it('shows an invalid expiry inline and keeps the dialog open', async () => {
     serve({ 'POST /account/tokens': () => new ApiError(400, 'x', 'INVALID_EXPIRY') })
     renderSection()
     const dialog = await openCreate()
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'x' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
+    await confirmStepUp()
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(/expiry/i)
   })
 

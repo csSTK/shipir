@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../shared/api/client.ts'
 import { downloadFile, saveBlob } from '../../shared/api/transfer.ts'
 import type { ChatSession, ChatSessionDetail } from '../ai-chat/api.ts'
+import type { StepUpCredentials } from '../auth/stepUp.ts'
 import { NOTIFICATION_TYPE_LABELS, type NotificationType } from '../notifications/api.ts'
 import i18n from 'i18next'
 
@@ -733,11 +734,11 @@ export interface BackupFile {
 const BACKUP_PATH = '/api/backup'
 const BACKUP_FILENAME_FALLBACK = 'shipir-backup.tar.gz.enc'
 
-/** POST /api/backup. The answer is the encrypted file, not JSON; errors carry code and details only. */
-export async function requestBackup(passphrase: string): Promise<BackupFile> {
+/** POST /api/backup. The answer is the encrypted file, not JSON; errors carry code and details only. `stepUp` re-authenticates the user (password, code); SSO users send none. */
+export async function requestBackup(passphrase: string, stepUp?: StepUpCredentials): Promise<BackupFile> {
   const { blob, filename } = await downloadFile(BACKUP_PATH, {
     method: 'POST',
-    body: { passphrase },
+    body: { passphrase, ...(stepUp ? { stepUp } : {}) },
     accept: 'application/octet-stream, application/json',
   })
   return { blob, filename: filename ?? BACKUP_FILENAME_FALLBACK }
@@ -745,7 +746,8 @@ export async function requestBackup(passphrase: string): Promise<BackupFile> {
 
 export function useCreateBackup() {
   return useMutation({
-    mutationFn: (passphrase: string) => requestBackup(passphrase),
+    mutationFn: ({ passphrase, stepUp }: { passphrase: string; stepUp?: StepUpCredentials }) =>
+      requestBackup(passphrase, stepUp),
     onSuccess: (file) => saveBlob(file),
   })
 }

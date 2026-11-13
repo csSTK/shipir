@@ -1,6 +1,8 @@
 package dev.bethge.shipir.auth.token;
 
+import dev.bethge.shipir.auth.stepup.StepUpService;
 import dev.bethge.shipir.auth.token.dto.ApiTokenResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import dev.bethge.shipir.auth.token.dto.CreateApiTokenRequest;
 import dev.bethge.shipir.auth.token.dto.CreatedApiTokenResponse;
 import dev.bethge.shipir.common.exception.ErrorResponse;
@@ -30,9 +32,11 @@ import java.util.UUID;
 class ApiTokenController {
 
     private final ApiTokenService service;
+    private final StepUpService stepUp;
 
-    ApiTokenController(ApiTokenService service) {
+    ApiTokenController(ApiTokenService service, StepUpService stepUp) {
         this.service = service;
+        this.stepUp = stepUp;
     }
 
     @GetMapping
@@ -43,8 +47,11 @@ class ApiTokenController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    CreatedApiTokenResponse create(@Valid @RequestBody CreateApiTokenRequest request, Authentication authentication) {
+    CreatedApiTokenResponse create(@Valid @RequestBody CreateApiTokenRequest request, Authentication authentication,
+                                    HttpServletRequest http) {
         requireSession(authentication);
+        // A token outlives the session and skips two-factor, so minting one needs a fresh proof of identity.
+        stepUp.require(authentication, http, request.stepUp());
         return service.create(authentication.getName(), request);
     }
 

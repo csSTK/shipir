@@ -104,7 +104,7 @@ abstract class BackupTestBase {
     /** POST /api/backup and return the fully streamed response bytes. */
     byte[] download(Login l, String passphrase) throws Exception {
         MvcResult started = mvc.perform(l.write(post("/api/backup")).contentType(APPLICATION_JSON)
-                .content("{\"passphrase\":\"%s\"}".formatted(passphrase))).andReturn();
+                .content("{\"passphrase\":\"%s\",\"stepUp\":{\"password\":\"%s\"}}".formatted(passphrase, PASSWORD))).andReturn();
         assertThat(started.getResponse().getStatus()).isEqualTo(200);
         MvcResult done = mvc.perform(asyncDispatch(started)).andReturn();
         return done.getResponse().getContentAsByteArray();

@@ -20,7 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class BackupApiTest extends BackupTestBase {
 
-    private static final String BODY = "{\"passphrase\":\"" + PASSPHRASE + "\"}";
+    private static final String BODY = "{\"passphrase\":\"" + PASSPHRASE + "\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}";
 
     @Test
     void anonymousIsRejected() throws Exception {
@@ -204,7 +204,9 @@ class BackupApiTest extends BackupTestBase {
 
     @Test
     void requestToStringHidesPassphrase() {
-        assertThat(new dev.bethge.shipir.backup.dto.BackupRequest(PASSPHRASE).toString()).doesNotContain(PASSPHRASE);
+        assertThat(new dev.bethge.shipir.backup.dto.BackupRequest(PASSPHRASE,
+                new dev.bethge.shipir.auth.stepup.StepUpCredentials(PASSWORD, "123456")).toString())
+                .doesNotContain(PASSPHRASE).doesNotContain(PASSWORD).doesNotContain("123456");
     }
 
     private static boolean exists(String cmd) {

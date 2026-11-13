@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../../shared/api/client.ts'
+import type { StepUpCredentials } from '../../auth/stepUp.ts'
 
 /** One token as listed by `GET /api/account/tokens`: metadata and the non-secret prefix, never the token. */
 export interface ApiToken {
@@ -25,7 +26,7 @@ export function useApiTokens() {
 export function useCreateApiToken() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (input: { name: string; expiresAt?: string }) =>
+    mutationFn: (input: { name: string; expiresAt?: string; stepUp?: StepUpCredentials }) =>
       apiFetch<CreatedApiToken>('/account/tokens', { method: 'POST', body: input }),
     // The plaintext token must not linger in the mutation cache.
     gcTime: 0,

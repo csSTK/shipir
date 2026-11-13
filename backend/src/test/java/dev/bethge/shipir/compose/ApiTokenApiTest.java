@@ -21,6 +21,7 @@ import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -53,7 +54,7 @@ class ApiTokenApiTest extends DeploymentTestBase {
 
     private String createToken(Login l, String username) throws Exception {
         String body = mvc.perform(l.write(post(TOKENS)).contentType(APPLICATION_JSON)
-                        .content("{\"name\":\"ci-" + username + "\"}"))
+                        .content("{\"name\":\"ci-" + username + "\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}"))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         return JsonPath.read(body, "$.token");
     }
@@ -70,10 +71,46 @@ class ApiTokenApiTest extends DeploymentTestBase {
     }
 
     @Test
+    void createWithoutStepUpIsRefusedAndCreatesNothing() throws Exception {
+        Login admin = login("admin");
+        mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"a\"}"))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("STEP_UP_REQUIRED"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM api_tokens", Integer.class)).isZero();
+    }
+
+    @Test
+    void createWithWrongPasswordIsRefusedAndLockoutAnswers429EvenForTheRightPassword() throws Exception {
+        Login admin = login("admin");
+        String wrong = "{\"name\":\"a\",\"stepUp\":{\"password\":\"not-the-password\"}}";
+        for (int i = 0; i < 4; i++) {
+            mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content(wrong))
+                    .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("STEP_UP_INVALID"));
+        }
+        // the 5th wrong attempt starts the lockout; it is still answered as a failure
+        mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content(wrong))
+                .andExpect(status().isForbidden());
+        mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON)
+                        .content("{\"name\":\"a\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists(HttpHeaders.RETRY_AFTER))
+                .andExpect(jsonPath("$.code").value("TOO_MANY_ATTEMPTS"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM api_tokens", Integer.class)).isZero();
+    }
+
+    @Test
+    void theStepUpPasswordIsNeverEchoedOrAudited() throws Exception {
+        Login admin = login("admin");
+        mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON)
+                .content("{\"name\":\"a\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}")).andExpect(status().isCreated());
+        assertThat(jdbc.queryForList("SELECT coalesce(details::text, '') FROM audit_log", String.class))
+                .noneMatch(d -> d.contains(PASSWORD));
+    }
+
+    @Test
     void createReturnsPlaintextOnceAndStoresOnlyTheSha256() throws Exception {
         Login admin = login("admin");
         String body = mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON)
-                        .content("{\"name\":\"deploy bot\"}"))
+                        .content("{\"name\":\"deploy bot\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value("deploy bot"))
                 .andExpect(jsonPath("$.token").exists())
@@ -115,9 +152,9 @@ class ApiTokenApiTest extends DeploymentTestBase {
     @Test
     void createValidatesNameAndExpiry() throws Exception {
         Login admin = login("admin");
-        for (String json : List.of("{}", "{\"name\":\"  \"}", "{\"name\":\"" + "x".repeat(101) + "\"}",
-                "{\"name\":\"a\",\"expiresAt\":\"2000-01-01T00:00:00Z\"}",
-                "{\"name\":\"a\",\"expiresAt\":\"" + Instant.now().plus(Duration.ofDays(400)) + "\"}")) {
+        for (String json : List.of("{}", "{\"name\":\"  \",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}", "{\"name\":\"" + "x".repeat(101) + "\"}",
+                "{\"name\":\"a\",\"expiresAt\":\"2000-01-01T00:00:00Z\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}",
+                "{\"name\":\"a\",\"expiresAt\":\"" + Instant.now().plus(Duration.ofDays(400)) + "\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}")) {
             mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content(json))
                     .andExpect(status().isBadRequest());
         }
@@ -129,9 +166,9 @@ class ApiTokenApiTest extends DeploymentTestBase {
         Login admin = login("admin");
         Instant explicit = Instant.now().plus(Duration.ofDays(30));
         mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON)
-                .content("{\"name\":\"a\",\"expiresAt\":\"" + explicit + "\"}")).andExpect(status().isCreated());
+                .content("{\"name\":\"a\",\"expiresAt\":\"" + explicit + "\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}")).andExpect(status().isCreated());
         mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON)
-                .content("{\"name\":\"b\"}")).andExpect(status().isCreated());
+                .content("{\"name\":\"b\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}")).andExpect(status().isCreated());
 
         Instant a = jdbc.queryForObject("SELECT expires_at FROM api_tokens WHERE name = 'a'", Timestamp.class).toInstant();
         Instant b = jdbc.queryForObject("SELECT expires_at FROM api_tokens WHERE name = 'b'", Timestamp.class).toInstant();
@@ -142,7 +179,7 @@ class ApiTokenApiTest extends DeploymentTestBase {
     @Test
     void creatingRequiresTheCsrfToken() throws Exception {
         Login admin = login("admin");
-        mvc.perform(post(TOKENS).session(admin.session()).contentType(APPLICATION_JSON).content("{\"name\":\"a\"}"))
+        mvc.perform(post(TOKENS).session(admin.session()).contentType(APPLICATION_JSON).content("{\"name\":\"a\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}"))
                 .andExpect(status().isForbidden());
         mvc.perform(get(TOKENS)).andExpect(status().isUnauthorized());
     }
@@ -230,7 +267,7 @@ class ApiTokenApiTest extends DeploymentTestBase {
     @Test
     void revokedTokenIs401AndOnlyTheOwnerMayRevoke() throws Exception {
         Login admin = login("admin");
-        String body = mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"a\"}"))
+        String body = mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"a\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}"))
                 .andReturn().getResponse().getContentAsString();
         String token = JsonPath.read(body, "$.token");
         String id = JsonPath.read(body, "$.id");
@@ -271,13 +308,13 @@ class ApiTokenApiTest extends DeploymentTestBase {
     @Test
     void aTokenCannotManageTokens() throws Exception {
         Login admin = login("admin");
-        String body = mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"a\"}"))
+        String body = mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"a\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}"))
                 .andReturn().getResponse().getContentAsString();
         String token = JsonPath.read(body, "$.token");
         String id = JsonPath.read(body, "$.id");
 
         mvc.perform(bearer(get(TOKENS), token)).andExpect(status().isForbidden());
-        mvc.perform(bearer(post(TOKENS), token).contentType(APPLICATION_JSON).content("{\"name\":\"b\"}"))
+        mvc.perform(bearer(post(TOKENS), token).contentType(APPLICATION_JSON).content("{\"name\":\"b\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}"))
                 .andExpect(status().isForbidden());
         mvc.perform(bearer(delete(TOKENS + "/" + id), token)).andExpect(status().isForbidden());
 
@@ -337,7 +374,7 @@ class ApiTokenApiTest extends DeploymentTestBase {
     @Test
     void createAndRevokeAreAuditedWithThePrefixButNeverTheToken() throws Exception {
         Login admin = login("admin");
-        String body = mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"a\"}"))
+        String body = mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"a\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}"))
                 .andReturn().getResponse().getContentAsString();
         String token = JsonPath.read(body, "$.token");
         String id = JsonPath.read(body, "$.id");
@@ -465,19 +502,19 @@ class ApiTokenApiTest extends DeploymentTestBase {
     void theTokenCountPerUserIsCapped() throws Exception {
         Login admin = login("admin");
         for (int i = 0; i < 3; i++) {
-            mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"t" + i + "\"}"))
+            mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"t" + i + "\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}"))
                     .andExpect(status().isCreated());
         }
 
-        mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"one-too-many\"}"))
+        mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"one-too-many\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("TOKEN_LIMIT_REACHED"));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM api_tokens", Integer.class)).isEqualTo(3);
         // the cap is per user, and revoking frees a slot
-        mvc.perform(login("operator").write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"x\"}"))
+        mvc.perform(login("operator").write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"x\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}"))
                 .andExpect(status().isCreated());
         String id = jdbc.queryForObject("SELECT id FROM api_tokens WHERE name = 't0'", UUID.class).toString();
         mvc.perform(admin.write(delete(TOKENS + "/" + id))).andExpect(status().isNoContent());
-        mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"fits-again\"}"))
+        mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON).content("{\"name\":\"fits-again\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}"))
                 .andExpect(status().isCreated());
     }
 
@@ -490,7 +527,7 @@ class ApiTokenApiTest extends DeploymentTestBase {
             for (int i = 0; i < 8; i++) {
                 String name = "p" + i;
                 results.add(pool.submit(() -> mvc.perform(admin.write(post(TOKENS)).contentType(APPLICATION_JSON)
-                        .content("{\"name\":\"" + name + "\"}")).andReturn().getResponse().getStatus()));
+                        .content("{\"name\":\"" + name + "\",\"stepUp\":{\"password\":\"" + PASSWORD + "\"}}")).andReturn().getResponse().getStatus()));
             }
             for (var r : results) {
                 r.get();

@@ -4,6 +4,8 @@ import dev.bethge.shipir.auth.ClientAddressResolver;
 import dev.bethge.shipir.auth.LoginThrottle;
 import dev.bethge.shipir.auth.ThrottleLockoutAuditor;
 import dev.bethge.shipir.auth.oidc.dto.OidcPublicConfigResponse;
+import dev.bethge.shipir.auth.token.ApiTokenAuthentication;
+import org.springframework.security.core.Authentication;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
+import java.util.Optional;
 
 /**
  * Public single sign-on endpoints (GET, so no CSRF token; permitted in {@code SecurityConfig}). These are browser
@@ -67,12 +70,43 @@ class OidcController {
         }
     }
 
+    /**
+     * Step-up: a signed-in SSO user is sent back to the provider to log in again ({@code prompt=login}); the callback
+     * then records the fresh {@code auth_time}. Not public: needs a session (token callers are refused).
+     */
+    @GetMapping("/reauthorize")
+    ResponseEntity<Void> reauthorize(@RequestParam(name = "return", required = false) String returnPath,
+                                     Authentication authentication, HttpServletRequest request) {
+        if (authentication instanceof ApiTokenAuthentication) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        // creates a session attribute per call: same per-address limit as the public authorize
+        String address = clientAddress.resolve(request);
+        LoginThrottle.Admission admission = throttle.admitAddress(LoginThrottle.Scope.OIDC_AUTHORIZE, address);
+        if (admission.lockoutStarted()) {
+            lockoutAuditor.lockoutStarted(LoginThrottle.Scope.OIDC_AUTHORIZE, address, address);
+        }
+        if (!admission.admitted()) {
+            return redirect(errorLocation("TOO_MANY_ATTEMPTS"));
+        }
+        try {
+            return redirect(login.beginReauth(request, returnPath));
+        } catch (OidcException e) {
+            return redirect(errorLocation(e.code()));
+        }
+    }
+
     @GetMapping("/callback")
     ResponseEntity<Void> callback(@RequestParam(required = false) String code,
                                   @RequestParam(required = false) String state,
                                   @RequestParam(required = false) String error,
                                   HttpServletRequest request, HttpServletResponse response) {
         try {
+            Optional<String> reauthReturn = login.pendingReauthReturn(request);
+            if (reauthReturn.isPresent()) {
+                login.completeReauth(request, code, state, error);
+                return redirect(reauthReturn.get());
+            }
             login.complete(request, response, code, state, error);
             return redirect("/");
         } catch (OidcException e) {
