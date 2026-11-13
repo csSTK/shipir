@@ -16,6 +16,8 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
  */
 final class ArchitectureRules {
 
+    private static final String CONSTRUCTOR_NAME = "<init>";
+
     private ArchitectureRules() {
     }
 
@@ -91,5 +93,31 @@ final class ArchitectureRules {
                 .orShould().accessTargetWhere(unpinnedReference)
                 .as("main code must not call or reference the unpinned DockerHostConnectionManager(DockerProperties) "
                         + "constructor");
+    }
+
+    /**
+     * Subprocesses are spawned centrally in compose.execution (CLAUDE.md, Security). Covers constructor calls and
+     * constructor references ({@code ProcessBuilder::new}), which bypass a call-only check. Docker exec through the
+     * Docker API is not a subprocess and unaffected.
+     */
+    static ArchRule noProcessBuilderOutsideComposeExecution(String root) {
+        DescribedPredicate<JavaAccess<?>> processBuilderConstructor = describe(
+                "is a ProcessBuilder constructor call or reference",
+                (JavaAccess<?> access) -> access.getTargetOwner().isEquivalentTo(ProcessBuilder.class)
+                        && access.getTarget().getName().equals(CONSTRUCTOR_NAME));
+        return noClasses().that().resideOutsideOfPackage(root + ".compose.execution..")
+                .should().accessTargetWhere(processBuilderConstructor)
+                .as("ProcessBuilder must only be constructed in compose.execution");
+    }
+
+    /** Every overload of {@code Runtime.exec}, called or referenced ({@code Runtime::exec}), in any package. */
+    static ArchRule noRuntimeExec(String root) {
+        DescribedPredicate<JavaAccess<?>> runtimeExec = describe(
+                "is a Runtime.exec call or reference",
+                (JavaAccess<?> access) -> access.getTargetOwner().isEquivalentTo(Runtime.class)
+                        && access.getTarget().getName().equals("exec"));
+        return noClasses().that().resideInAPackage(root + "..")
+                .should().accessTargetWhere(runtimeExec)
+                .as("Runtime.exec must not be used");
     }
 }

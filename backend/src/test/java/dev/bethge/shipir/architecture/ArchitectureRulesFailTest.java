@@ -69,4 +69,35 @@ class ArchitectureRulesFailTest {
         assertThatThrownBy(() -> ArchitectureRules.noUnpinnedConnectionManager(ROOT).check(FIXTURE))
                 .hasMessageNotContaining("GoodPinnedDockerUser");
     }
+
+    @Test
+    void processBuilderOutsideComposeExecutionFails() {
+        fails(ArchitectureRules.noProcessBuilderOutsideComposeExecution(ROOT), "BadProcessBuilderUser");
+    }
+
+    @Test
+    void processBuilderConstructorReferenceOutsideComposeExecutionFails() {
+        fails(ArchitectureRules.noProcessBuilderOutsideComposeExecution(ROOT), "BadProcessBuilderReferenceUser");
+    }
+
+    @Test
+    void processBuilderInsideComposeExecutionIsAllowed() {
+        assertThatThrownBy(() -> ArchitectureRules.noProcessBuilderOutsideComposeExecution(ROOT).check(FIXTURE))
+                .hasMessageNotContaining("GoodProcessBuilderUser");
+    }
+
+    @Test
+    void runtimeExecFails() {
+        fails(ArchitectureRules.noRuntimeExec(ROOT), "BadRuntimeExecUser");
+    }
+
+    @Test
+    void runtimeExecInsideComposeExecutionFails() {
+        fails(ArchitectureRules.noRuntimeExec(ROOT), "BadRuntimeExecInExecutionUser");
+    }
+
+    @Test
+    void runtimeExecMethodReferenceFails() {
+        fails(ArchitectureRules.noRuntimeExec(ROOT), "BadRuntimeExecReferenceUser");
+    }
 }

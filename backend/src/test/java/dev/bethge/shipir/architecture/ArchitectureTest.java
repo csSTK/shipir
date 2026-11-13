@@ -33,4 +33,11 @@ class ArchitectureTest {
 
     @ArchTest
     static final ArchRule noUnpinnedConnectionManager = ArchitectureRules.noUnpinnedConnectionManager(ROOT);
+
+    @ArchTest
+    static final ArchRule noProcessBuilderOutsideComposeExecution =
+            ArchitectureRules.noProcessBuilderOutsideComposeExecution(ROOT);
+
+    @ArchTest
+    static final ArchRule noRuntimeExec = ArchitectureRules.noRuntimeExec(ROOT);
 }
