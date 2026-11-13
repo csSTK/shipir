@@ -15,6 +15,7 @@ Same pipeline as `next-task`, for a hand-picked set of beads instead of an epic'
 
 Follow `next-task` steps 1–8, with these differences:
 
+Record: the `run-start` uses `--kind beads --units <bead ids>`.
 1. **Branch:** `next-task-branch` with prefix `task`, unit ID = the first bead ID, title = that bead's title (one bead) or a short summary of the set. E.g. `task/shipr-hae-event-worker-interrupt`.
 2. **Check beads:** `next-task-plan` part 1 with the given beads as the work set. Beads without a `model:` label fail the check: stop and suggest `/text-to-task` or adding the label. (Findings filed by `next-task-findings` already carry one. To run a whole group of them, use `/next-task <findings-epic>`.) Dependencies between the given beads order the waves; an open blocker outside the set stops the run.
 3. **Dependencies, plan, hand-off, verify, findings:** exactly as in `next-task` steps 3–6, including the **Red before green** check (a report without it is a must-fix) and the **Red-green check** script run (`.claude/scripts/red-green-check.sh <WT>` after re-running `next-task-test`, before the review; its output goes to the reviewer) and the `next-task-review` loop after each bead (max 3 rounds, then stop that bead and hand off) and the BLOCKED handling (blocked bead: status `blocked`, notes, worktree kept, dependents skipped, no finish; rerunning resumes in the worktree). Commit each bead as `<bead title> (<bead-id>)`.

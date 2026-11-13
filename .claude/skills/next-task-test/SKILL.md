@@ -52,6 +52,8 @@ Only if `frontend/playwright.config.ts` exists. Needs the one-time `pnpm exec pl
 
 See `next-task-e2e` for the conventions.
 
+Record: after each run, `node tools/pipeline-dashboard/record.mjs tests --scope <backend|frontend|e2e|full> --passed <n> --failed <n> --duration <seconds>` (no `--run` needed inside the worktree; append `2>/dev/null || true`, it must never fail a standalone run).
+
 ## Report
 
 For each command: the command, pass or fail, and the test counts. On failure, give the first relevant error lines, not the whole log, and keep the last ~40 lines of the failing output so a BLOCKED report can quote it. Implementers count failed runs for the retry cap in `next-task-implement`.

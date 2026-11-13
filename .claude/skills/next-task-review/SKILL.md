@@ -53,3 +53,5 @@ Run by `next-task-finish` before the push, once per run. Same reviewer, but the 
 3. Must-fix items: send them to the **same implementer** (SendMessage; if it can't be reached, start a new implementer with the findings), then re-verify and review again.
 4. **Max 3 review rounds** per child. If the third review still has Must-fix items, stop that child: don't commit, report the open findings with the worktree path and let the user decide.
 5. Commit the child only after a PASS.
+
+Record: `review --bead <id> --verdict <PASS|FIX> --mustFix <n> --round <n>` after each review (branch review: `--bead branch`, with `step-start/step-end --step review` around it).

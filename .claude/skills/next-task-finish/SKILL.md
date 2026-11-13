@@ -11,6 +11,8 @@ Everything runs **inside the worktree** (`cd <WT> && ...`). The main checkout is
 
 Docs and bead closing happen **before** the push, so they're included in it.
 
+Record: `step-start --step finish` at the start. The full gate in step 2 records its `tests` (see `next-task-test`) and the branch review its `review` and `step-start/step-end --step review`. `step-start --step push` before step 6 and `step-end --step push --sha $(git rev-parse HEAD)` after it (the pushed commit), then, still in `<WT>` right before step 7 removes it, `step-end --step finish` and `run-end --status done` (record.mjs only exists on the branch, so never call it from `MAIN`). Under `next-task-batch`, for the last epic that runs: also `run-end --run <BATCH-RUN> --status done|blocked` right before removing `<WT>`, or, if that epic stopped, from its kept `<WT>` at the stop (`blocked` if any epic stopped or was skipped). Every stop in this skill: `run-end --status blocked` (failed gate, conflict, rejected push, open must-fix).
+
 1. **Rebase onto the latest dev.** `git fetch origin` then `git rebase origin/dev`. If there are conflicts, stop and report. Don't resolve them by guessing.
 2. **Full test gate.** Run `next-task-test full` on the rebased branch. If anything fails, **stop**: don't close beads, don't push, and report the failure.
    **Branch review** (always): run the branch mode of `next-task-review` over `origin/dev..HEAD`, giving the reviewer the output of `.claude/scripts/red-green-check.sh <WT> origin/dev`.

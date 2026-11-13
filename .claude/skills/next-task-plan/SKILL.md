@@ -40,3 +40,5 @@ Implement bead <child-id> in worktree <absolute worktree path> on branch <branch
 Your file set: <paths>. Other agents are working in parallel on: <other children's paths>. Don't touch those.
 Do not commit, push or close the bead. Report back as that skill describes, including out-of-scope findings.
 ```
+
+Record: `child-start` (see `next-task` step 5) is written by the orchestrator when it sends this prompt.
