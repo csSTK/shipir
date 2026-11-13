@@ -67,3 +67,15 @@ The `agent` events come from the SubagentStop hook (`hooks/subagent-stop.mjs`, r
 - `/tokens.css` is `frontend/src/shared/styles/tokens.css`; everything else is served from `public/` only (resolved, symlinks and traversal refused).
 
 **CI status:** the pushed SHA is the `sha` field of the last `step-end` event with `step=push` (the skill emits `record.mjs step-end --step push --sha <sha>`). For such runs, `ci` is `{sha, state, runs[]}` from `gh run list --commit <sha> --json status,conclusion,url,name` (execFile with an argument list, SHA must be 7-40 hex chars). `state` is `success|failure|pending|none|unknown`; missing/failing `gh` gives `unknown`. Results are cached per SHA; only `success` is cached for good, everything else (pending, failure because CI may be re-run, none, unknown) is refreshed after `ciRefreshMs` (15 s). `ci` is null without a pushed SHA.
+
+## UI
+
+Open `http://127.0.0.1:4690/` after starting the server. Plain HTML/CSS/JS in `public/` (no build): `index.html`, `app.css` (design tokens from `/tokens.css` only, light and dark, `prefers-reduced-motion`), `app.js` (hash routing, SSE) and `format.mjs` (pure helpers).
+
+- `#/` lists all runs: running first, then newest; batch members are nested under their batch. It refreshes on every `run-changed` SSE event, no reload. The header shows `Live` or `Reconnecting`.
+- `#/runs/<id>` is a deep link to a run: header stats, step timeline, children (model, wave, duration, tokens, cost, result, review verdict and rounds, red-before-green), reviews, tests, findings filed and CI links.
+- Costs are estimates (marked as such); an unknown cost is shown as `—`, never `$0.00`.
+- The list view fetches `/api/runs/:id` per run to get the CI state (the list endpoint has no `ci`).
+- Untrusted strings are rendered with `textContent`; CI links must be http(s).
+
+Tests: `node --test tools/pipeline-dashboard/test/` includes `ui.test.mjs` (helpers). Browser check: `node tools/pipeline-dashboard/test/e2e/ui.e2e.mjs` starts `createServer` on a temp fixture store and drives it with Playwright from `frontend/node_modules` (run `pnpm exec playwright install chromium` in `frontend/` once).

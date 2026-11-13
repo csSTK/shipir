@@ -1,3 +1,19 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Pipeline dashboard</title></head>
-<body><p>Pipeline dashboard UI is not built yet. API: <a href="/api/runs">/api/runs</a></p></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Pipeline dashboard</title>
+  <link rel="stylesheet" href="/tokens.css">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/">Pipeline</a>
+    <span class="live" id="live" data-state="connecting" role="status">Connecting</span>
+  </header>
+  <main id="app" class="page"></main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
