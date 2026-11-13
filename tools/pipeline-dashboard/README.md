@@ -1,6 +1,6 @@
 # Pipeline dashboard
 
-Dev tooling (Node, built-ins only) that records and shows `/next-task*` runs. This folder currently holds the recorder; the server, hooks and UI follow in later beads.
+Dev tooling (Node, built-ins only) that records and shows `/next-task*` runs. This folder holds the recorder (`record.mjs`), the SubagentStop and SessionStart hooks (`hooks/`), the server (`server.mjs`, `lib/`) and the UI (`public/`).
 
 ## Store
 
