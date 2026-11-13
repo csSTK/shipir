@@ -126,14 +126,15 @@ public class HostOverviewService {
                                        SecurityContext context) {
         try {
             DockerSystemInfoDto info = docker.info(host.getId(), endpoints.endpointOf(host));
-            // Visible only through deployment grants: counts of what the lists show (own containers; images and
-            // volumes are not listed there), never the host-wide numbers.
+            // Visible only through deployment grants: counts of what the lists show (own containers), and no host
+            // facts (version, CPUs, memory) or image/volume counts at all (null), never the host-wide numbers.
             Containers containers = restricted ? visibleContainers(host, context)
                     : new Containers(info.containersRunning(), info.containersStopped(), info.containersHealthy(),
                             info.containersUnhealthy());
             return new HostOverviewResponse(host.getId(), host.getName(), host.getConnectionType(), endpointOf(host),
-                    Status.UP, null, info.dockerVersion(), info.cpus(), info.memoryBytes(), containers,
-                    restricted ? 0 : info.images(), restricted ? 0 : info.volumes(), tagList);
+                    Status.UP, null, restricted ? null : info.dockerVersion(), restricted ? null : info.cpus(),
+                    restricted ? null : info.memoryBytes(), containers,
+                    restricted ? null : info.images(), restricted ? null : info.volumes(), tagList);
         } catch (DockerConnectionException e) {
             return down(host, ViewerErrorCodes.forViewer(e.getCode(), admin), tagList);
         } catch (EncryptionKeyMissingException e) {

@@ -51,7 +51,7 @@ export interface ContainerCounts {
   unhealthy: number
 }
 
-/** One row of `GET /api/hosts/overview`. All stats are null while the status is DOWN. */
+/** One row of `GET /api/hosts/overview`. All stats are null while the status is DOWN; host facts and images/volumes are also null for a user who sees the host only through deployment grants. */
 export interface HostOverview {
   id: string
   name: string

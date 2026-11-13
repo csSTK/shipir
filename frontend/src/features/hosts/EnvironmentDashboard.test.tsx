@@ -98,6 +98,17 @@ describe('EnvironmentDashboard', () => {
     }
   })
 
+  it('hides the Images and Volumes tiles and the host facts for a deployment-grant-only user', async () => {
+    serve([{ ...up, dockerVersion: null, cpus: null, memoryBytes: null, images: null, volumes: null }])
+    renderAt('a')
+    expect(await screen.findByRole('heading', { name: 'Local' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Containers/ })).toHaveTextContent('7')
+    expect(screen.queryByRole('link', { name: /Images/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Volumes/ })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Docker 27/)).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Networks/ })).toBeInTheDocument()
+  })
+
   it('counts the published domains on the Domains tile', async () => {
     serve([up])
     renderAt('a')

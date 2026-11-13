@@ -78,8 +78,11 @@ class HostOverviewVisibilityTest extends HostApiTestBase {
                 .andExpect(jsonPath("$[0].containers.stopped").value(1))
                 .andExpect(jsonPath("$[0].containers.healthy").value(1))
                 .andExpect(jsonPath("$[0].containers.unhealthy").value(0))
-                .andExpect(jsonPath("$[0].images").value(0))
-                .andExpect(jsonPath("$[0].volumes").value(0));
+                .andExpect(jsonPath("$[0].images").doesNotExist())
+                .andExpect(jsonPath("$[0].volumes").doesNotExist())
+                .andExpect(jsonPath("$[0].dockerVersion").doesNotExist())
+                .andExpect(jsonPath("$[0].cpus").doesNotExist())
+                .andExpect(jsonPath("$[0].memoryBytes").doesNotExist());
     }
 
     @Test
@@ -93,8 +96,8 @@ class HostOverviewVisibilityTest extends HostApiTestBase {
                 .andExpect(jsonPath("$[0].containers.running").value(0))
                 .andExpect(jsonPath("$[0].containers.stopped").value(0))
                 .andExpect(jsonPath("$[0].containers.unhealthy").value(0))
-                .andExpect(jsonPath("$[0].images").value(0))
-                .andExpect(jsonPath("$[0].volumes").value(0));
+                .andExpect(jsonPath("$[0].images").doesNotExist())
+                .andExpect(jsonPath("$[0].volumes").doesNotExist());
     }
 
     @Test
@@ -106,7 +109,10 @@ class HostOverviewVisibilityTest extends HostApiTestBase {
                     .andExpect(jsonPath("$[0].containers.running").value(3))
                     .andExpect(jsonPath("$[0].containers.stopped").value(2))
                     .andExpect(jsonPath("$[0].images").value(7))
-                    .andExpect(jsonPath("$[0].volumes").value(5));
+                    .andExpect(jsonPath("$[0].volumes").value(5))
+                    .andExpect(jsonPath("$[0].dockerVersion").value("27.0.1"))
+                    .andExpect(jsonPath("$[0].cpus").value(4))
+                    .andExpect(jsonPath("$[0].memoryBytes").value(8_000_000_000L));
         }
     }
 }

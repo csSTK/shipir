@@ -59,9 +59,11 @@ function ResourceTiles({ env, up }: { env: HostOverview; up: boolean }) {
   const routes = useRoutes(env.id, up) // the server filters it like the Domains page, so the count is what this user may see
   const listed = { // Same union as the Deployments page: live projects plus managed ones that were never deployed.
     deployments: deployments.data ? joinRows(deployments.data, managed.data ?? []).length : undefined, networks: networks.data?.length, domains: routes.data?.length }
+  // Images and volumes are null for a running environment the user sees only through deployment grants: hide, not "0".
+  const hideHostWide = up && env.images === null && env.volumes === null
   return (
       <ul className="dash__tiles">
-        {ENV_RESOURCES.map(({ slug, label, icon: Icon, tone }) => {
+        {ENV_RESOURCES.filter(({ slug }) => !(hideHostWide && (slug === 'images' || slug === 'volumes'))).map(({ slug, label, icon: Icon, tone }) => {
           const count = up ? countFor(env, slug, listed) : null
           return (
             <li key={slug}>

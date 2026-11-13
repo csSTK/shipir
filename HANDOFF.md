@@ -63,3 +63,4 @@ Epic shipr-m15h (managed reverse proxy): `V40__create_proxy_tables` (`proxy_inst
 
 - **Decided:** all timestamp columns use `TIMESTAMPTZ` (implemented in V1-V4). The drafts used `TIMESTAMP`; `TIMESTAMPTZ` is the usual recommendation in PostgreSQL to avoid time-zone ambiguity, and it maps cleanly to `Instant`/`OffsetDateTime` in Java.
 - **Decided:** the `created_by` / `owner_user_id` foreign keys keep no `ON DELETE` rule (RESTRICT), so a user who owns or created hosts, stacks or versions cannot be deleted (history is kept). `stacks.host_id` and `stack_versions.stack_id` stay `ON DELETE CASCADE`.
+- **Decided (2026-11-13, shipr-kqbc.77):** a user who sees a host only through deployment grants gets `dockerVersion`, `cpus`, `memoryBytes`, `images` and `volumes` as null from `/hosts/overview` (host facts need a host grant or ADMIN); container counts stay filtered. The environment dashboard hides the Images and Volumes tiles for them instead of showing 0.

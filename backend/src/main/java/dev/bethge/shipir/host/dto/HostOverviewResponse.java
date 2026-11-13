@@ -7,7 +7,9 @@ import java.util.UUID;
 
 /**
  * Live state of one environment. For {@code DOWN} environments {@code error} holds a stable code and all
- * statistics are {@code null}; for {@code UP} environments {@code error} is {@code null}. {@code tags} is sorted.
+ * statistics are {@code null}; for {@code UP} environments {@code error} is {@code null}. For a user who sees the
+ * environment only through deployment grants, {@code dockerVersion}, {@code cpus}, {@code memoryBytes},
+ * {@code images} and {@code volumes} are {@code null} too (host facts need a host grant or ADMIN). {@code tags} is sorted.
  */
 public record HostOverviewResponse(UUID id, String name, ConnectionType connectionType, String endpoint,
                                    Status status, String error, String dockerVersion, Integer cpus,
