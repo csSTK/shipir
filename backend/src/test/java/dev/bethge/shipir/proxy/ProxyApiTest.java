@@ -595,4 +595,141 @@ class ProxyApiTest {
 
         assertThat(jdbc.queryForObject("SELECT count(*) FROM proxy_instances", Integer.class)).isZero();
     }
+
+    // ---- host delete with proxy removal (shipr-0qbh.74) ----------------------------------------------------
+
+    private void failComposeDown() throws Exception {
+        org.mockito.stubbing.Answer<ComposeProcessResult> failing = inv ->
+                new ComposeProcessResult(1, false, List.of("cannot connect to the Docker daemon"));
+        org.mockito.Mockito.doAnswer(failing).when(execution).execute(any(), any(), eq(ComposeCommand.DOWN), any(), any());
+        org.mockito.Mockito.doAnswer(failing).when(execution).execute(any(), any(), eq(ComposeCommand.DOWN), any(), any(), any());
+        org.mockito.Mockito.doAnswer(failing).when(execution).execute(any(), any(), eq(ComposeCommand.DOWN), any(), any(), any(), any());
+        org.mockito.Mockito.doAnswer(failing).when(execution).execute(any(), any(), eq(ComposeCommand.DOWN), any(), any(), any(), any(), any());
+    }
+
+    private String deleteAudit() {
+        return jdbc.queryForObject("SELECT details::text FROM audit_log WHERE action = 'HOST_DELETE'", String.class);
+    }
+
+    private void assertDeleteAudit(boolean removeProxy, List<String> leftovers) {
+        assertThat(jdbc.queryForObject("SELECT details->>'removeProxy' FROM audit_log WHERE action = 'HOST_DELETE'",
+                String.class)).isEqualTo(String.valueOf(removeProxy));
+        assertThat(jdbc.queryForObject("SELECT details->'leftovers' FROM audit_log WHERE action = 'HOST_DELETE'",
+                String.class)).isEqualTo(leftovers.isEmpty() ? "[]"
+                : leftovers.stream().map(l -> "\"" + l + "\"").collect(java.util.stream.Collectors.joining(", ", "[", "]")));
+        // only the two keys: no compose output, Docker error text or secret
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_log, jsonb_object_keys(details) k "
+                + "WHERE action = 'HOST_DELETE' AND k NOT IN ('removeProxy', 'leftovers')", Integer.class)).isZero();
+        assertThat(deleteAudit()).doesNotContain(SECRET).doesNotContain("cannot connect");
+    }
+
+    @Test
+    void deletingTheHostWithRemoveProxyRemovesProjectVolumesAndAnUnusedNetwork() throws Exception {
+        setup(TRAEFIK_HTTP);
+        awaitWrites();
+        networkList = List.of(new NetworkDto("n0", "bridge", "bridge", "local", null, false, 0),
+                new NetworkDto("n9", "shipir-proxy", "bridge", "local", null, false, 0));
+        commands.clear();
+
+        mvc.perform(login("admin").write(delete("/api/hosts/" + hostId + "?removeProxy=true")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.leftovers").isEmpty());
+
+        assertThat(commands).contains(ComposeCommand.DOWN);
+        verify(volumes).removeVolume(any(), any(), eq("shipir-proxy_shipir-proxy-config"));
+        verify(volumes).removeVolume(any(), any(), eq("shipir-proxy_shipir-proxy-acme"));
+        verify(networks).removeNetwork(any(), any(), eq("n9"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM docker_hosts", Integer.class)).isZero();
+        assertDeleteAudit(true, List.of());
+    }
+
+    @Test
+    void aNetworkStillInUseIsKeptAndListedAsLeftover() throws Exception {
+        setup(TRAEFIK_HTTP);
+        awaitWrites();
+        networkList = List.of(new NetworkDto("n9", "shipir-proxy", "bridge", "local", null, false, 2));
+
+        mvc.perform(login("admin").write(delete("/api/hosts/" + hostId + "?removeProxy=true")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.leftovers[0]").value("network shipir-proxy"));
+
+        verify(networks, never()).removeNetwork(any(), any(), any());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM docker_hosts", Integer.class)).isZero();
+        assertDeleteAudit(true, List.of("network shipir-proxy"));
+    }
+
+    @Test
+    void anUnreachableHostIsStillDeletedAndTheLeftoversAreListed() throws Exception {
+        setup(TRAEFIK_HTTP);
+        awaitWrites();
+        failComposeDown();
+
+        mvc.perform(login("admin").write(delete("/api/hosts/" + hostId + "?removeProxy=true")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.leftovers[0]").value("project shipir-proxy"))
+                .andExpect(jsonPath("$.leftovers[1]").value("volume shipir-proxy_shipir-proxy-config"))
+                .andExpect(jsonPath("$.leftovers[2]").value("volume shipir-proxy_shipir-proxy-acme"))
+                .andExpect(jsonPath("$.leftovers[3]").value("network shipir-proxy"));
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM docker_hosts", Integer.class)).isZero();
+        assertDeleteAudit(true, List.of("project shipir-proxy", "volume shipir-proxy_shipir-proxy-config",
+                "volume shipir-proxy_shipir-proxy-acme", "network shipir-proxy"));
+    }
+
+    @Test
+    void deletingTheHostWithoutRemoveProxyLeavesTheProxyOnTheDockerHost() throws Exception {
+        setup(TRAEFIK_HTTP);
+        awaitWrites();
+        commands.clear();
+
+        mvc.perform(login("admin").write(delete("/api/hosts/" + hostId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.leftovers").isEmpty());
+
+        assertThat(commands).doesNotContain(ComposeCommand.DOWN);
+        verify(volumes, never()).removeVolume(any(), any(), any());
+        verify(networks, never()).removeNetwork(any(), any(), any());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM docker_hosts", Integer.class)).isZero();
+        assertDeleteAudit(false, List.of());
+    }
+
+    @Test
+    void removeProxyOnAHostWithoutProxyJustDeletesTheHost() throws Exception {
+        mvc.perform(login("admin").write(delete("/api/hosts/" + hostId + "?removeProxy=true")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.leftovers").isEmpty());
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM docker_hosts", Integer.class)).isZero();
+    }
+
+    private void assertNoDockerCall() {
+        org.mockito.Mockito.verifyNoInteractions(volumes, networks, execution);
+    }
+
+    @Test
+    void aNonAdminCannotRemoveTheProxyThroughHostDelete() throws Exception {
+        setup(TRAEFIK_HTTP);
+        awaitWrites();
+        grant("operator", "OPERATE");
+        org.mockito.Mockito.clearInvocations(volumes, networks, execution);
+
+        for (String user : List.of("operator", "viewer")) {
+            mvc.perform(login(user).write(delete("/api/hosts/" + hostId + "?removeProxy=true")))
+                    .andExpect(status().isForbidden());
+        }
+
+        assertNoDockerCall();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM docker_hosts", Integer.class)).isOne();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM proxy_instances", Integer.class)).isOne();
+    }
+
+    @Test
+    void removeProxyOnAnUnknownHostIsNotFoundWithoutADockerCall() throws Exception {
+        org.mockito.Mockito.clearInvocations(volumes, networks, execution);
+
+        mvc.perform(login("admin").write(delete("/api/hosts/" + UUID.randomUUID() + "?removeProxy=true")))
+                .andExpect(status().isNotFound());
+
+        assertNoDockerCall();
+    }
 }

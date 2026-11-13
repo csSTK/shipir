@@ -26,7 +26,7 @@ class HostServiceEgressTest {
 
     private HostService service(boolean allowPrivate) {
         return new HostService(null, null, null, docker, null, null,
-                new EgressPolicy(new EgressProperties(allowPrivate)), null, null, null);
+                new EgressPolicy(new EgressProperties(allowPrivate)), null, null, null, null);
     }
 
     private static ConnectionTestRequest tcp(String host) {
@@ -89,7 +89,7 @@ class HostServiceEgressTest {
         var connections = mock(DockerHostConnectionManager.class);
         when(connections.localEndpoint()).thenReturn(new DockerEndpoint.Local("/var/run/docker.sock"));
         var local = new HostService(null, null, null, docker, connections, null,
-                new EgressPolicy(new EgressProperties(false)), null, null, null);
+                new EgressPolicy(new EgressProperties(false)), null, null, null, null);
 
         ConnectionTestResult result = local.testConnection(
                 new ConnectionTestRequest(ConnectionType.LOCAL, null, null, null, null, null));

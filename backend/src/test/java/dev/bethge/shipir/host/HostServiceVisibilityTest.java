@@ -18,7 +18,7 @@ class HostServiceVisibilityTest {
     private final CurrentAccess access = mock(CurrentAccess.class);
     private final HostService service =
             new HostService(hosts, null, null, null, null, access, null, null, null, mock(
-                    org.springframework.transaction.PlatformTransactionManager.class));
+                    org.springframework.transaction.PlatformTransactionManager.class), null);
     private final UUID id = UUID.randomUUID();
 
     @Test

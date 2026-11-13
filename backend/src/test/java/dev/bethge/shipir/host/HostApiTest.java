@@ -56,7 +56,7 @@ class HostApiTest extends HostApiTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Renamed"));
 
-        mvc.perform(admin.write(delete("/api/hosts/" + id))).andExpect(status().isNoContent());
+        mvc.perform(admin.write(delete("/api/hosts/" + id))).andExpect(status().isOk());
         // no environment left: the admin is back at the ENVIRONMENT setup step
         mvc.perform(get("/api/hosts").session(admin.session()))
                 .andExpect(status().isForbidden())

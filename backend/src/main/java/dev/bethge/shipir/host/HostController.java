@@ -3,6 +3,7 @@ package dev.bethge.shipir.host;
 import dev.bethge.shipir.docker.dto.ConnectionTestResult;
 import dev.bethge.shipir.host.dto.ConnectionTestRequest;
 import dev.bethge.shipir.host.dto.CreateHostRequest;
+import dev.bethge.shipir.host.dto.HostDeleteResponse;
 import dev.bethge.shipir.host.dto.HostOverviewResponse;
 import dev.bethge.shipir.host.dto.HostResponse;
 import dev.bethge.shipir.host.dto.SetHostTagsRequest;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -71,8 +73,7 @@ class HostController {
     }
 
     @DeleteMapping("/{id}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    void delete(@PathVariable UUID id) {
-        service.delete(id);
+    HostDeleteResponse delete(@PathVariable UUID id, @RequestParam(defaultValue = "false") boolean removeProxy) {
+        return service.delete(id, removeProxy);
     }
 }

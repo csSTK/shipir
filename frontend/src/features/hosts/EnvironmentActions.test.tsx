@@ -57,7 +57,7 @@ async function choose(item: 'Rename' | 'Delete' | 'Edit tags') {
 
 const gone = () => waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
 
-const mutationCalls = () => apiFetchMock.mock.calls.filter(([path]) => path !== '/hosts/overview')
+const mutationCalls = () => apiFetchMock.mock.calls.filter(([path]) => path !== '/hosts/overview' && path !== '/hosts/a/proxy/managed')
 
 describe('environment row actions', () => {
   it.each(['OPERATOR', 'VIEWER'] as const)('are hidden for %s', async (role) => {
@@ -128,6 +128,56 @@ describe('environment row actions', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(mutationCalls()).toEqual([['/hosts/a', { method: 'DELETE' }]])
+  })
+
+  const withProxy = (path: string, method?: string) => {
+    if (path === '/hosts/a/proxy/managed') return { instance: { type: 'TRAEFIK' }, setupBlockedReason: null }
+    return method === 'DELETE' ? { leftovers: [] } : undefined
+  }
+
+  it('shows the remove-proxy checkbox only when the host has a managed proxy', async () => {
+    renderOverview('ADMIN')
+    await choose('Delete')
+    const dialog = screen.getByRole('dialog', { name: 'Delete environment' })
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledWith('/hosts/a/proxy/managed'))
+    expect(within(dialog).queryByRole('checkbox')).toBeNull()
+  })
+
+  it('the checkbox is off by default and an unchecked delete does not ask for proxy removal', async () => {
+    renderOverview('ADMIN', withProxy)
+    await choose('Delete')
+    const dialog = screen.getByRole('dialog', { name: 'Delete environment' })
+    const box = await within(dialog).findByRole('checkbox', { name: /also remove the managed proxy/i })
+    expect(box).not.toBeChecked()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
+    await gone()
+    expect(mutationCalls()).toEqual([['/hosts/a', { method: 'DELETE' }]])
+  })
+
+  it('a checked box sends removeProxy=true', async () => {
+    renderOverview('ADMIN', withProxy)
+    await choose('Delete')
+    const dialog = screen.getByRole('dialog', { name: 'Delete environment' })
+    fireEvent.click(await within(dialog).findByRole('checkbox', { name: /also remove the managed proxy/i }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
+    await gone()
+    expect(mutationCalls()).toEqual([['/hosts/a?removeProxy=true', { method: 'DELETE' }]])
+  })
+
+  it('lists what the proxy removal left behind and keeps the dialog until it is closed', async () => {
+    renderOverview('ADMIN', (path, method) =>
+      method === 'DELETE' ? { leftovers: ['volume shipir-proxy_shipir-proxy-acme', 'network shipir-proxy'] } : withProxy(path, method),
+    )
+    await choose('Delete')
+    const dialog = screen.getByRole('dialog', { name: 'Delete environment' })
+    fireEvent.click(await within(dialog).findByRole('checkbox', { name: /also remove the managed proxy/i }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+    const result = await screen.findByRole('dialog', { name: 'Environment deleted' })
+    expect(result).toHaveTextContent('volume shipir-proxy_shipir-proxy-acme')
+    expect(result).toHaveTextContent('network shipir-proxy')
+    fireEvent.click(within(result).getByRole('button', { name: 'Done' }))
+    await gone()
   })
 
   it('delete cancel and Escape do nothing', async () => {

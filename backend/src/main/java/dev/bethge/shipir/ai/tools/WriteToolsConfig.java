@@ -215,7 +215,7 @@ class WriteToolsConfig {
     AiTool deleteHostTool(HostService hosts) {
         return write("delete_host", "Delete an environment and its deployment records (host containers untouched).",
                 hostSchema(), Role.ADMIN, (a, c) -> {
-                    hosts.delete(uuid(a, "hostId"));
+                    hosts.delete(uuid(a, "hostId"), false);
                     return OK;
                 });
     }

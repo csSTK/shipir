@@ -16,9 +16,11 @@ import dev.bethge.shipir.docker.dto.ConnectionTestResult;
 import dev.bethge.shipir.docker.tls.TlsMaterialValidator;
 import dev.bethge.shipir.host.dto.ConnectionTestRequest;
 import dev.bethge.shipir.host.dto.CreateHostRequest;
+import dev.bethge.shipir.host.dto.HostDeleteResponse;
 import dev.bethge.shipir.host.dto.HostResponse;
 import dev.bethge.shipir.host.dto.SetHostTagsRequest;
 import dev.bethge.shipir.permission.CurrentAccess;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -47,12 +49,13 @@ public class HostService {
     private final EgressPolicy egress;
     private final HostTagService tags;
     private final ApplicationEventPublisher events;
+    private final ObjectProvider<ManagedProxyRemoval> proxyRemoval;
     private final TransactionTemplate tx;
 
     HostService(DockerHostRepository hosts, UserRepository users, SecretCipher cipher,
                 DockerSystemService docker, DockerHostConnectionManager connections, CurrentAccess access,
                 EgressPolicy egress, HostTagService tags, ApplicationEventPublisher events,
-                PlatformTransactionManager transactions) {
+                PlatformTransactionManager transactions, ObjectProvider<ManagedProxyRemoval> proxyRemoval) {
         this.hosts = hosts;
         this.users = users;
         this.cipher = cipher;
@@ -62,6 +65,7 @@ public class HostService {
         this.egress = egress;
         this.tags = tags;
         this.events = events;
+        this.proxyRemoval = proxyRemoval;
         this.tx = new TransactionTemplate(transactions);
     }
 
@@ -209,13 +213,25 @@ public class HostService {
         }
     }
 
-    @Auditable(action = "HOST_DELETE", targetType = "HOST", targetId = "#id")
-    @Transactional
-    public void delete(UUID id) {
-        hosts.delete(find(id));
-        hosts.flush();
-        connections.evict(id);
-        events.publishEvent(new HostRemovedEvent(id));
+    /**
+     * Deletes the environment. With {@code removeProxy} the managed proxy is removed from the Docker host first, best
+     * effort: a failure never stops the deletion, it is reported in {@code leftovers}. The removal runs synchronously in
+     * the request and is bounded by {@code shipir.compose.timeout}. Not transactional: the proxy
+     * removal talks to Docker and must not hold a database connection.
+     */
+    @Auditable(action = "HOST_DELETE", targetType = "HOST", targetId = "#id",
+            details = "{'removeProxy': #removeProxy, 'leftovers': #result.leftovers()}")
+    public HostDeleteResponse delete(UUID id, boolean removeProxy) {
+        find(id);
+        ManagedProxyRemoval removal = removeProxy ? proxyRemoval.getIfAvailable() : null;
+        List<String> leftovers = removal == null ? List.of() : removal.removeBestEffort(id);
+        tx.executeWithoutResult(status -> {
+            hosts.delete(find(id));
+            hosts.flush();
+            connections.evict(id);
+            events.publishEvent(new HostRemovedEvent(id));
+        });
+        return new HostDeleteResponse(leftovers);
     }
 
     private DockerHost find(UUID id) {

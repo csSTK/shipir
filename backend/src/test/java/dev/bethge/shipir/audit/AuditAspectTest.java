@@ -284,7 +284,7 @@ class AuditAspectTest {
         String id = jdbc.queryForObject("SELECT id::text FROM docker_hosts", String.class);
         assertThat(send(s, patch("/api/hosts/" + id).content("{\"name\":\"renamed\"}")).getResponse().getStatus())
                 .isEqualTo(200);
-        assertThat(send(s, delete("/api/hosts/" + id)).getResponse().getStatus()).isEqualTo(204);
+        assertThat(send(s, delete("/api/hosts/" + id)).getResponse().getStatus()).isEqualTo(200);
 
         for (String action : List.of("HOST_CREATE", "HOST_RENAME", "HOST_DELETE")) {
             List<Map<String, Object>> rows = rows(action);

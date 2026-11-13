@@ -1,11 +1,13 @@
 import { useId, useState, type FormEvent } from 'react'
 import { MoreHorizontal, Pencil, Tag, Trash2 } from 'lucide-react'
 import { ApiError } from '../../shared/api/client.ts'
-import { Button, ConfirmDialog, Dialog, IconButton, Menu, TextField } from '../../shared/ui/index.ts'
-import { useDeleteHost, useRenameHost, type HostOverview } from './api.ts'
+import { Button, Checkbox, ConfirmDialog, Dialog, IconButton, Menu, TextField } from '../../shared/ui/index.ts'
+import { useManagedProxy } from '../domains/api.ts'
+import { useDeleteHost, useInvalidateHostData, useRenameHost, type HostOverview } from './api.ts'
 import { EditTagsDialog } from './EditTagsDialog.tsx'
 import { useTranslation } from 'react-i18next'
 import i18n from 'i18next'
+import './EnvironmentActions.css'
 
 const NAME_MAX = 100
 
@@ -62,22 +64,64 @@ function RenameDialog({ env, open, onClose }: { env: HostOverview; open: boolean
 function DeleteDialog({ env, open, onClose, onDeleted }: { env: HostOverview; open: boolean; onClose: () => void; onDeleted?: () => void }) {
   const { t } = useTranslation('hosts')
   const [problem, setProblem] = useState<string | null>(null)
+  const [removeProxy, setRemoveProxy] = useState(false)
+  const [leftovers, setLeftovers] = useState<string[] | null>(null)
   const remove = useDeleteHost()
+  const invalidate = useInvalidateHostData()
+  const proxy = useManagedProxy(env.id, { enabled: open, retry: false, refetchOnWindowFocus: false })
+  const hasProxy = Boolean(proxy.data?.instance)
 
   function confirm() {
     setProblem(null)
-    remove.mutate(env.id, {
-      onSuccess: () => {
-        onClose()
-        onDeleted?.()
+    remove.mutate(
+      { id: env.id, removeProxy: hasProxy && removeProxy },
+      {
+        onSuccess: (result) => {
+          if (result?.leftovers?.length) {
+            setLeftovers(result.leftovers)
+            return
+          }
+          onClose()
+          onDeleted?.()
+        },
+        onError: (err) =>
+          setProblem(
+            err instanceof ApiError && err.code === 'HOST_NOT_FOUND'
+              ? t('EnvironmentActions.thisEnvironmentNoLongerExists')
+              : t('EnvironmentActions.couldNotDeleteTheEnvironment'),
+          ),
       },
-      onError: (err) =>
-        setProblem(
-          err instanceof ApiError && err.code === 'HOST_NOT_FOUND'
-            ? t('EnvironmentActions.thisEnvironmentNoLongerExists')
-            : t('EnvironmentActions.couldNotDeleteTheEnvironment'),
-        ),
-    })
+    )
+  }
+
+  function finish() {
+    void invalidate()
+    onClose()
+    onDeleted?.()
+  }
+
+  if (leftovers) {
+    return (
+      <Dialog
+        open={open}
+        onOpenChange={(next) => !next && finish()}
+        title={t('EnvironmentActions.environmentDeleted')}
+        description={t('EnvironmentActions.proxyLeftovers', { name: env.name })}
+        footer={
+          <Button variant="primary" onClick={finish}>
+            {t('EnvironmentActions.done')}
+          </Button>
+        }
+      >
+        <ul className="env-leftovers">
+          {leftovers.map((item) => (
+            <li key={item}>
+              <code>{item}</code>
+            </li>
+          ))}
+        </ul>
+      </Dialog>
+    )
   }
 
   return (
@@ -91,6 +135,14 @@ function DeleteDialog({ env, open, onClose, onDeleted }: { env: HostOverview; op
       loading={remove.isPending}
       onConfirm={confirm}
     >
+      {hasProxy && (
+        <Checkbox
+          className="env-delete__check"
+          label={t('EnvironmentActions.alsoRemoveTheManagedProxy')}
+          checked={removeProxy}
+          onChange={(e) => setRemoveProxy(e.target.checked)}
+        />
+      )}
       {problem && (
         <p role="alert" className="ui-error">
           {problem}

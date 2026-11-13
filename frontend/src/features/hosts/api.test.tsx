@@ -60,11 +60,23 @@ describe('hosts mutations', () => {
     const { invalidate, wrapper } = setup()
     const { result } = renderHook(() => useDeleteHost(), { wrapper })
 
-    result.current.mutate('abc')
+    result.current.mutate({ id: 'abc', removeProxy: false })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
     expect(apiFetchMock).toHaveBeenCalledWith('/hosts/abc', { method: 'DELETE' })
     expect(invalidatedKeys(invalidate)).toContain(JSON.stringify(['auth', 'me']))
+  })
+
+  it('delete with removeProxy asks the server to remove the proxy and keeps the lists while leftovers exist', async () => {
+    apiFetchMock.mockResolvedValue({ leftovers: ['network shipir-proxy'] })
+    const { invalidate, wrapper } = setup()
+    const { result } = renderHook(() => useDeleteHost(), { wrapper })
+
+    result.current.mutate({ id: 'abc', removeProxy: true })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(apiFetchMock).toHaveBeenCalledWith('/hosts/abc?removeProxy=true', { method: 'DELETE' })
+    expect(invalidatedKeys(invalidate)).toEqual([])
   })
 
   it('rename patches the name and refreshes the lists', async () => {

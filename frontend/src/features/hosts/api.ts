@@ -92,7 +92,7 @@ export function useHostsOverview() {
   })
 }
 
-function useInvalidateHostData() {
+export function useInvalidateHostData() {
   const queryClient = useQueryClient()
   return () =>
     Promise.all([
@@ -131,11 +131,24 @@ export function useRenameHost() {
   })
 }
 
+/** `DELETE /api/hosts/{id}`: `leftovers` lists what a requested proxy removal could not remove on the Docker host. */
+export interface HostDeleteResult {
+  leftovers: string[]
+}
+
+/**
+ * Deletes an environment. With `removeProxy` the managed proxy is removed from the Docker host first (best effort).
+ * When something is left behind the lists are not refreshed yet, so the dialog can still show it: the caller invalidates
+ * with `useInvalidateHostData` once the user has seen it.
+ */
 export function useDeleteHost() {
   const invalidate = useInvalidateHostData()
   return useMutation({
-    mutationFn: (id: string) => apiFetch<void>(`/hosts/${id}`, { method: 'DELETE' }),
-    onSuccess: () => void invalidate(),
+    mutationFn: ({ id, removeProxy }: { id: string; removeProxy: boolean }) =>
+      apiFetch<HostDeleteResult | undefined>(`/hosts/${id}${removeProxy ? '?removeProxy=true' : ''}`, { method: 'DELETE' }),
+    onSuccess: (result) => {
+      if (!result?.leftovers?.length) void invalidate()
+    },
   })
 }
 

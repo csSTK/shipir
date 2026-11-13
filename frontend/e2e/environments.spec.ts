@@ -118,6 +118,7 @@ test('admin renames and deletes an environment', async ({ page, api }) => {
   await expect(rename).toHaveCount(0)
   await expect(page.getByRole('link', { name: /Production/ })).toBeVisible()
 
+  api.mock('GET', '/api/hosts/a/proxy/managed', { body: { instance: null, setupBlockedReason: null } })
   await chooseAction(page, 'Production', 'Delete')
   const confirm = page.getByRole('dialog', { name: 'Delete environment' })
   await expect(confirm).toContainText('Production')
@@ -127,6 +128,27 @@ test('admin renames and deletes an environment', async ({ page, api }) => {
   await confirm.getByRole('button', { name: 'Delete' }).click()
   await expect(confirm).toHaveCount(0)
   await expect(page.getByText('No environments yet. Add your first Docker environment.')).toBeVisible()
+})
+
+test('deleting an environment can also remove the managed proxy and shows what was left behind', async ({ page, api }) => {
+  api.mock('GET', '/api/auth/me', { body: user('ADMIN') })
+  api.mock('GET', '/api/hosts/overview', { body: [local] })
+  api.mock('GET', '/api/hosts/a/proxy/managed', { body: { instance: { type: 'TRAEFIK' }, setupBlockedReason: null } })
+  await page.goto('/')
+
+  await chooseAction(page, 'Local', 'Delete')
+  const confirm = page.getByRole('dialog', { name: 'Delete environment' })
+  const box = confirm.getByRole('checkbox', { name: /also remove the managed proxy/i })
+  await expect(box).not.toBeChecked()
+  await box.check()
+  api.mock('DELETE', '/api/hosts/a', { body: { leftovers: ['network shipir-proxy'] } })
+  await confirm.getByRole('button', { name: 'Delete' }).click()
+
+  const result = page.getByRole('dialog', { name: 'Environment deleted' })
+  await expect(result).toContainText('network shipir-proxy')
+  api.mock('GET', '/api/hosts/overview', { body: [] })
+  await result.getByRole('button', { name: 'Done' }).click()
+  await expect(result).toHaveCount(0)
 })
 
 test('rename shows a taken name inline', async ({ page, api }) => {

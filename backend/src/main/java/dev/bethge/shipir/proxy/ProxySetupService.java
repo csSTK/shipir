@@ -24,6 +24,7 @@ import dev.bethge.shipir.docker.client.VolumeService;
 import dev.bethge.shipir.docker.dto.NetworkCreateSpec;
 import dev.bethge.shipir.host.HostPortsService;
 import dev.bethge.shipir.host.HostResourcesService;
+import dev.bethge.shipir.host.ManagedProxyRemoval;
 import dev.bethge.shipir.host.dto.HostPortsResponse;
 import dev.bethge.shipir.host.dto.ProxyDetectionResponse;
 import dev.bethge.shipir.common.exception.CodedException;
@@ -40,6 +41,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +59,7 @@ import java.util.UUID;
  * and appear in the deployment's encrypted env only; they are never returned, audited or logged.
  */
 @Service
-public class ProxySetupService {
+public class ProxySetupService implements ManagedProxyRemoval {
 
     private static final Logger log = LoggerFactory.getLogger(ProxySetupService.class);
 
@@ -65,6 +67,8 @@ public class ProxySetupService {
     static final long POLL_MILLIS = 500;
     /** Compose project name + volume name of the template's config volume. */
     static final String CONFIG_VOLUME = ProxySyncService.PROXY_DEPLOYMENT + "_shipir-proxy-config";
+    /** Compose project name + volume name of the template's ACME data volume. */
+    static final String ACME_VOLUME = ProxySyncService.PROXY_DEPLOYMENT + "_shipir-proxy-acme";
     private static final List<Integer> PROXY_PORTS = List.of(80, 443);
 
     private final ProxyInstanceRepository instances;
@@ -257,7 +261,8 @@ public class ProxySetupService {
         });
     }
 
-    private void removeLocked(UUID hostId) {
+    /** Returns whether the config volume is gone (a failure there never fails the removal). */
+    private boolean removeLocked(UUID hostId) {
         ProxyInstance instance = instances.findByHostId(hostId).orElseThrow(ProxySetupService::notFound);
         if (instance.getDeploymentId() != null) {
             try {
@@ -284,18 +289,93 @@ public class ProxySetupService {
         }
         routes.deleteAll(hostRoutes);
         instances.delete(instance);
-        removeConfigVolume(hostId, endpoint);
+        return removeConfigVolume(hostId, endpoint);
+    }
+
+    /**
+     * Used when the environment is deleted with "also remove the managed proxy": the normal removal (compose down,
+     * routes, config volume), then the ACME data volume and the proxy network if no container uses it. Any Docker or
+     * Compose failure is reported in the result instead of thrown, so the host can still be deleted. Runs
+     * synchronously; compose down is bounded by {@code shipir.compose.timeout}, the Docker calls by their own timeouts.
+     */
+    @Override
+    public List<String> removeBestEffort(UUID hostId) {
+        access.requireAdminOperate(hostId);
+        if (instances.findByHostId(hostId).isEmpty()) {
+            return List.of();
+        }
+        List<String> everything = List.of("project " + ProxySyncService.PROXY_DEPLOYMENT, "volume " + CONFIG_VOLUME,
+                "volume " + ACME_VOLUME, "network " + ProxySyncService.PROXY_NETWORK);
+        boolean configVolumeGone;
+        try {
+            configVolumeGone = sync.exclusive(hostId, () -> removeLocked(hostId));
+        } catch (ProxyException e) {
+            if ("PROXY_NOT_FOUND".equals(e.code())) {
+                return List.of();
+            }
+            log.warn("Could not remove the managed proxy of host {}: {}", hostId, e.code());
+            return everything;
+        } catch (RuntimeException e) {
+            log.warn("Could not remove the managed proxy of host {}: {}", hostId, e.toString());
+            return everything;
+        }
+        List<String> leftovers = new ArrayList<>();
+        try {
+            DockerEndpoint endpoint = access.endpoint(hostId);
+            if (!configVolumeGone) {
+                leftovers.add("volume " + CONFIG_VOLUME);
+            }
+            if (!removeVolumeQuietly(hostId, endpoint, ACME_VOLUME)) {
+                leftovers.add("volume " + ACME_VOLUME);
+            }
+            if (!removeNetworkIfUnused(hostId, endpoint)) {
+                leftovers.add("network " + ProxySyncService.PROXY_NETWORK);
+            }
+        } catch (RuntimeException e) {
+            log.warn("Could not clean up the proxy volumes and network of host {}: {}", hostId, e.toString());
+            return List.of("volume " + CONFIG_VOLUME, "volume " + ACME_VOLUME, "network " + ProxySyncService.PROXY_NETWORK);
+        }
+        return leftovers;
+    }
+
+    private boolean removeVolumeQuietly(UUID hostId, DockerEndpoint endpoint, String name) {
+        try {
+            volumes.removeVolume(hostId, endpoint, name);
+            return true;
+        } catch (DockerConnectionException e) {
+            if (e.getCode() == DockerErrorCode.NOT_FOUND) {
+                return true;
+            }
+            log.warn("Could not remove volume {} on host {}: {}", name, hostId, e.getCode());
+            return false;
+        }
+    }
+
+    /** True when the network is gone afterwards; false when it is still used by a container or could not be removed. */
+    private boolean removeNetworkIfUnused(UUID hostId, DockerEndpoint endpoint) {
+        try {
+            var network = networks.list(hostId, endpoint).stream()
+                    .filter(n -> ProxySyncService.PROXY_NETWORK.equals(n.name())).findFirst();
+            if (network.isEmpty()) {
+                return true;
+            }
+            if (network.get().containerCount() > 0) {
+                return false;
+            }
+            networks.removeNetwork(hostId, endpoint, network.get().id());
+            return true;
+        } catch (DockerConnectionException e) {
+            if (e.getCode() == DockerErrorCode.NOT_FOUND) {
+                return true;
+            }
+            log.warn("Could not remove network {} on host {}: {}", ProxySyncService.PROXY_NETWORK, hostId, e.getCode());
+            return false;
+        }
     }
 
     /** The config volume holds the decrypted certificate keys; the ACME data volume stays. Best effort. */
-    private void removeConfigVolume(UUID hostId, DockerEndpoint endpoint) {
-        try {
-            volumes.removeVolume(hostId, endpoint, CONFIG_VOLUME);
-        } catch (DockerConnectionException e) {
-            if (e.getCode() != DockerErrorCode.NOT_FOUND) {
-                log.warn("Could not remove volume {} on host {}: {}", CONFIG_VOLUME, hostId, e.getCode());
-            }
-        }
+    private boolean removeConfigVolume(UUID hostId, DockerEndpoint endpoint) {
+        return removeVolumeQuietly(hostId, endpoint, CONFIG_VOLUME);
     }
 
     /** EXISTING_PROXY, PORTS_IN_USE, UNKNOWN (caller does not see the whole host) or null (a setup is possible). */
