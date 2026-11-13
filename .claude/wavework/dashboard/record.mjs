@@ -10,7 +10,7 @@ import {
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const STORE_ENV = 'SHIPIR_PIPELINE_STORE';
+export const STORE_ENV = 'WAVEWORK_PIPELINE_STORE';
 export const EVENT_TYPES = [
   'run-start', 'run-end', 'step-start', 'step-end', 'child-start', 'child-end',
   'review', 'tests', 'finding', 'agent',
@@ -24,7 +24,7 @@ const NUMERIC = new Set([
 const LIST = new Set(['units']);
 export const RUN_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
-/** Store directory: $SHIPIR_PIPELINE_STORE, else <git common dir>/pipeline-runs. Throws if neither works. */
+/** Store directory: $WAVEWORK_PIPELINE_STORE, else <git common dir>/pipeline-runs. Throws if neither works. */
 export function resolveStoreDir({ cwd = process.cwd(), env = process.env } = {}) {
   if (env[STORE_ENV]) return path.resolve(env[STORE_ENV]);
   const out = execFileSync('git', ['rev-parse', '--git-common-dir'], {

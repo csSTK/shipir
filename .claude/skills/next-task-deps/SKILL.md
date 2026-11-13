@@ -1,31 +1,33 @@
 ---
 name: next-task-deps
-description: Step 3 of /next-task. Installs backend and frontend dependencies and applies safe (non-major) updates as a separate, verified commit. Normally invoked by the next-task skill, not directly.
+description: Step 3 of /next-task. Installs the dependencies of every area and applies safe (non-major) updates as a separate, verified commit. Normally invoked by the next-task skill, not directly.
 ---
 
 # next-task-deps
 
 The goal is a working install with current patch and minor versions, without mixing dependency churn into feature commits or taking on breaking upgrades unannounced.
 
-## Frontend (`frontend/`, only if it exists)
+## Areas
 
-1. `pnpm install --frozen-lockfile` checks that the lockfile matches `package.json`.
-   - If it fails, run `pnpm install` and include the lockfile in the update commit.
-2. `pnpm update` updates within the semver ranges in `package.json`. Never use `--latest`.
-3. `pnpm outdated` shows what's left: major versions not taken.
+- `backend` (`backend`, only if it exists)
+- `frontend` (`frontend`, only if it exists)
 
-## Backend (`backend/`, only if it exists)
+CLAUDE.md gives the project's dependency-update commands and what to leave alone; follow it.
 
-1. Install and compile: `./backend/mvnw -f backend/pom.xml -q dependency:resolve test-compile`.
-2. Report available updates: `./backend/mvnw -f backend/pom.xml -q versions:display-dependency-updates versions:display-plugin-updates`.
-   - Apply only patch and minor bumps of versions pinned directly in `pom.xml`.
-   - Leave versions managed by the Spring Boot parent alone. Bumping the parent itself, including a minor bump, is a separate decision.
+For each area that exists, with the project's own package manager:
+
+1. Install exactly what the lockfile says (frozen or locked mode where the tool has one).
+   - If the lockfile is out of date, run a normal install and include the lockfile in the update commit.
+2. Update within the version ranges the manifest already declares. Never use a "latest" or major-bumping flag.
+3. List what is still outdated: major versions not taken.
+   - Apply only patch and minor bumps of versions pinned directly in the project's manifests.
+   - Leave versions managed by a framework parent or BOM alone. Bumping that itself, including a minor bump, is a separate decision.
 
 ## Verify and commit
 
 - If anything changed, run the full checks once:
-  - `pnpm lint && pnpm test && pnpm build` in `frontend/`
-  - `./backend/mvnw -f backend/pom.xml verify`
-- If they pass, commit only the dependency files (`package.json`, `pnpm-lock.yaml`, `pom.xml`) as `Update dependencies (patch/minor)`.
+  - `backend`: `./backend/mvnw -f backend/pom.xml verify`
+  - `frontend`: `pnpm --dir frontend lint && pnpm --dir frontend exec tsc -b && pnpm --dir frontend test && pnpm --dir frontend build`
+- If they pass, commit only the dependency files (manifests and lockfiles) as `Update dependencies (patch/minor)`.
 - If they fail, revert the updates (`git checkout -- <files>`), keep the plain install, and mention it in the report.
-- **Major updates** and Spring Boot parent bumps are listed in the report, never applied here. Offer to file a bead for them.
+- **Major updates** and framework parent bumps are listed in the report, never applied here. Offer to file a bead for them.

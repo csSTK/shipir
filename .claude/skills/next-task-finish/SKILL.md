@@ -11,7 +11,7 @@ Everything runs **inside the worktree** (`cd <WT> && ...`). The main checkout is
 
 Docs and bead closing happen **before** the push, so they're included in it.
 
-Record: `step-start --step finish` at the start. The full gate in step 2 records its `tests` (see `next-task-test`) and the branch review its `review` and `step-start/step-end --step review`. `step-start --step push` before step 6 and `step-end --step push --sha $(git rev-parse HEAD)` after it (the pushed commit), then, still in `<WT>` right before step 7 removes it, `step-end --step finish` and `run-end --status done` (record.mjs only exists on the branch, so never call it from `MAIN`). Under `next-task-batch`, for the last epic that runs: also `run-end --run <BATCH-RUN> --status done|blocked` right before removing `<WT>`, or, if that epic stopped, from its kept `<WT>` at the stop (`blocked` if any epic stopped or was skipped). Every stop in this skill: `run-end --status blocked` (failed gate, conflict, rejected push, open must-fix).
+Record: `step-start --step finish` at the start. The full gate in step 2 records its `tests` (see `next-task-test`) and the branch review its `review` and `step-start/step-end --step review`. `step-start --step push` before step 6 and `step-end --step push --sha $(git rev-parse HEAD)` after it (the pushed commit), then, still in `<WT>` right before step 7 removes it, `step-end --step finish` and `run-end --status done` (record from `<WT>` while it exists, never after it is removed). Under `next-task-batch`, for the last epic that runs: also `run-end --run <BATCH-RUN> --status done|blocked` right before removing `<WT>`, or, if that epic stopped, from its kept `<WT>` at the stop (`blocked` if any epic stopped or was skipped). Every stop in this skill: `run-end --status blocked` (failed gate, conflict, rejected push, open must-fix).
 
 1. **Rebase onto the latest dev.** `git fetch origin` then `git rebase origin/dev`. If there are conflicts, stop and report. Don't resolve them by guessing.
 2. **Full test gate.** Run `next-task-test full` on the rebased branch. If anything fails, **stop**: don't close beads, don't push, and report the failure.
@@ -28,7 +28,6 @@ Record: `step-start --step finish` at the start. The full gate in step 2 records
    - Code Map (`docs/CODE_MAP.md`): check that every added, moved or removed file has a correct one-line entry.
    - README.md: update only if setup, commands or features visible to users changed.
    - CLAUDE.md: update Build & Test or the rules only if they changed.
-   - HANDOFF.md: tick any decisions this run settled. Remove items that are now fully covered.
    - Commit as `Document <epic title> (<epic-id>)` (bead runs: `Document <short summary> (<id>, <id>)`), including `.beads/issues.jsonl`.
 6. **Push to dev.**
    - `git fetch origin` and check `git merge-base --is-ancestor origin/dev HEAD`. If dev moved in the meantime, go back to step 1 (rebase and run the gate again).

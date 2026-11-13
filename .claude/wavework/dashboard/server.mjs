@@ -7,11 +7,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createCiLookup } from './lib/ci.mjs';
 import { deriveTimeline } from './lib/derive.mjs';
+import { projectName, readSettings, resolvePort } from './lib/settings.mjs';
+import { resolveTokensFile } from './lib/tokens.mjs';
 import { RUN_ID, listRuns, readRun, resolveStoreDir } from './record.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(HERE, '..', '..');
-const DEFAULT_PORT = 4690;
+// This folder is <repo>/.claude/wavework/dashboard, so the checkout root is three levels up.
+const REPO_ROOT = path.resolve(HERE, '..', '..', '..');
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml',
@@ -34,6 +36,11 @@ function sendJson(res, status, body) {
   const data = JSON.stringify(body);
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
   res.end(data);
+}
+
+function sendText(res, status, type, text) {
+  res.writeHead(status, { 'content-type': type, 'cache-control': 'no-cache' });
+  res.end(text);
 }
 
 function sendFile(res, file) {
@@ -114,8 +121,11 @@ function watchStore(storeDir, onChange, { mode = 'auto', pollMs = 1000 } = {}) {
 }
 
 export function createServer({
-  storeDir = resolveStoreDir(), port = Number(process.env.PIPELINE_DASHBOARD_PORT ?? DEFAULT_PORT),
-  publicDir = path.join(HERE, 'public'), tokensPath = path.join(REPO_ROOT, 'frontend/src/shared/styles/tokens.css'),
+  storeDir = resolveStoreDir(), port = resolvePort(HERE),
+  publicDir = path.join(HERE, 'public'),
+  // The project's own tokens CSS: a fixed absolute path, or a function returning it (or null) per request.
+  tokensPath = () => resolveTokensFile(REPO_ROOT, readSettings(HERE).tokensFile),
+  project = projectName(REPO_ROOT),
   ghRunner, ciRefreshMs = 15_000, watch = 'auto', pollMs = 1000,
 } = {}) {
   const ci = createCiLookup({ ghRunner, refreshMs: ciRefreshMs });
@@ -171,6 +181,8 @@ export function createServer({
 
     // root: the checkout this server runs from, so the SessionStart hook can replace a server whose worktree was deleted.
     if (rawPath === '/api/health') return sendJson(res, 200, { ok: true, root: HERE });
+    // project: the repo directory name, shown in the UI title.
+    if (rawPath === '/api/info') return sendJson(res, 200, { project });
     if (rawPath === '/api/runs') return sendJson(res, 200, listSummaries());
     if (rawPath === '/api/events') {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
@@ -187,7 +199,12 @@ export function createServer({
       return detail ? sendJson(res, 200, detail) : sendJson(res, 404, { error: 'run not found' });
     }
     if (rawPath.startsWith('/api/')) return sendJson(res, 404, { error: 'not found' });
-    if (rawPath === '/tokens.css') return sendFile(res, tokensPath);
+    if (rawPath === '/tokens.css') {
+      // Optional project theme, loaded after the default theme. Nothing configured: an empty stylesheet.
+      const file = typeof tokensPath === 'function' ? tokensPath() : tokensPath;
+      if (!file) return sendText(res, 200, 'text/css; charset=utf-8', '/* no project tokens configured */\n');
+      return sendFile(res, file);
+    }
     const r = resolvePublic(publicDir, rawPath);
     if (r.file) return sendFile(res, r.file);
     return sendJson(res, r.status, { error: r.status === 400 ? 'bad request' : 'not found' });

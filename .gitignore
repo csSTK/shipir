@@ -56,3 +56,6 @@ backups/
 
 ### Playwright visual run ###
 frontend/playwright-report-visual/
+
+# Root dev tooling (wavework)
+/node_modules/

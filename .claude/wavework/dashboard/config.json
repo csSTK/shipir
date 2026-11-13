@@ -1,0 +1,4 @@
+{
+  "port": 4690,
+  "tokensFile": "frontend/src/shared/styles/tokens.css"
+}

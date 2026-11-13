@@ -1,0 +1,68 @@
+{
+  "lockVersion": 1,
+  "version": "0.1.2",
+  "files": {
+    "agents/implementer-haiku.md": "50e27b0d541e1ddc7398f945693ca66c2197536104fda64a4a11018f13ff7627",
+    "agents/implementer-sonnet.md": "c0d59bb33cc375c2c72fd886def2b9c7defaf78ed4be0af1dfd19f739af399da",
+    "scripts/red-green-check.sh": "08f78e3ce61fbee76e91e3f9f4c7087f21dec3b2734f40569cbdf4ef214ecde0",
+    "scripts/red-green-check.test.sh": "b82e337314218d9e9798ddccb6a1596bf8414aa25b6c059e38f7ee529e7b3f59",
+    "skills/next-task-batch/SKILL.md": "29060e703502129e996b3199676e04cb6714f04c8e3547d67263f405ce6a15fc",
+    "skills/next-task-beads/SKILL.md": "0229c68b2a5c77a84f64c4f953eac2e824da6bc72f789f71644a84eeb7de0fb0",
+    "skills/next-task-branch/SKILL.md": "09699e65df5f2f06be2eb3933d0d4f2128dd211d30904b285f7b74b5b3308c41",
+    "skills/next-task-code/SKILL.md": "c94307b3ea39a559d9d18956c0b127de9972f820c367640dcc79b0f4f403ed65",
+    "skills/next-task-deps/SKILL.md": "9da5a85f46e7206fc662e99161386651242507bedb82c759638aa74a02fef69d",
+    "skills/next-task-e2e/SKILL.md": "1357f918edb9e7b5cc124c9ae573abfeae9791a3aa0c5c5451b2d252f35089c0",
+    "skills/next-task-findings/SKILL.md": "4c8f6697480a80a49a47830ec333c448172a98c4ca1e4def4641a191637f61e4",
+    "skills/next-task-finish/SKILL.md": "02fd0e2ff176af262f9585dfc29063583abebb136fbb92b2255f437e0dace705",
+    "skills/next-task-implement/SKILL.md": "c7a9377ecfb9079b64a33dc800a1c96b9b97b03f37f928b1911a15a14d401a86",
+    "skills/next-task-plan/SKILL.md": "34ce3c839f41c05f093948878244282cacf0c8a9d65c27c7b1c32a0e447034e4",
+    "skills/next-task-review/SKILL.md": "916e2765cb976d559a3a1fb91d1b1c8328237ca666a84386a0981b9d7c5e1b49",
+    "skills/next-task-test/SKILL.md": "c83357d8abebd504f8344529047677886f51d92dbb073c5d4f286087c73a5654",
+    "skills/next-task-write-tests/SKILL.md": "89f28e6b309d28296c2e5fb1591d9241c2f2f603f487c9b84b28537775fd5ab3",
+    "skills/next-task/SKILL.md": "94ab5969c4b9301b271e27a8e5b8c508d37648ab378e8234bf83ce81b2655c77",
+    "skills/text-to-task/SKILL.md": "20dc1dc8c6000762211f20a8ecaa7bd69a89378e58c94521dd18735acabcb053",
+    "skills/watch-ci/SKILL.md": "10a05fe25882d1ef2b270832297371fbfff78c650014de9eee3198df92729834",
+    "wavework/dashboard/README.md": "c834fa870b939dd4eecb1751e08dc9fd3e724c342fca4981a301a01db7d1bb88",
+    "wavework/dashboard/config.json": "6567107edc5263cdc85c3a2c2835cb422c9b054b2201d1ac3acb69805d3b1e6c",
+    "wavework/dashboard/hooks/session-start.mjs": "2e3f412bc5ef3303ccec5b921964633bd72fceb029b0b345e9d47f2de0300dfb",
+    "wavework/dashboard/hooks/subagent-stop.mjs": "8400cb20af108a7beefa5a2c2bee449cef97ada7f05c867d03777e41e07a2a48",
+    "wavework/dashboard/lib/ci.mjs": "70566fa9c296f1f76f08859af43a1e4b42e4a8036a0cc92c483aacced48fd8e2",
+    "wavework/dashboard/lib/derive.mjs": "7cc6be2494334f72c2f16e58b98ee767d79f10d572bf69cf9711f79562c7b972",
+    "wavework/dashboard/lib/settings.mjs": "24306c1393fe544c2ee1f82ef0ac0814b1e7e485a05af12afcf72988d6307172",
+    "wavework/dashboard/lib/tokens.mjs": "b99b99608924055c8778ef9644a56c5668d71566185bf1e21ab361fe9155cf04",
+    "wavework/dashboard/pricing.json": "9535737a8d186efc13dbb53fd65a4b1d80a9c7cedc462d864f88ad07d3c91e8d",
+    "wavework/dashboard/public/app.css": "c2ab04859acde257b3b5c3b8e6c70c0300cf95a64ec8989d00cbc63eb400dcaa",
+    "wavework/dashboard/public/app.js": "8f8e4cab5e5c31abe70cf6f8ded42e185dfd90910c20c727a299e242147fcc6d",
+    "wavework/dashboard/public/default-theme.css": "8668bde2fee6a67822dac11d8fd113c43d7fedc74ed8fc1db9142d27f7ffeea8",
+    "wavework/dashboard/public/format.mjs": "f599d7dc611326c1bb2c771a6635a07f98609b9e425a88b3c621218aa65d1016",
+    "wavework/dashboard/public/index.html": "0499d36b6a522c05f5dd445425653d2ebf9f4f97461892074a14cb5d494535cb",
+    "wavework/dashboard/record.mjs": "9004ba6468b988ecda2024782dcac40b08f8045d86d852ded680e3064ab12d63",
+    "wavework/dashboard/server.mjs": "38f8b8ea52005607a84483cf460756020b4e8a94e5bb189f284e94b06661a295"
+  },
+  "hooks": [
+    {
+      "event": "SessionStart",
+      "entry": {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/wavework/dashboard/hooks/session-start.mjs\"",
+            "timeout": 5
+          }
+        ]
+      }
+    },
+    {
+      "event": "SubagentStop",
+      "entry": {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/wavework/dashboard/hooks/subagent-stop.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    }
+  ]
+}

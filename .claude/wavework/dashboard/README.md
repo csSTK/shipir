@@ -1,10 +1,10 @@
 # Pipeline dashboard
 
-Dev tooling (Node, built-ins only) that records and shows `/next-task*` runs. This folder holds the recorder (`record.mjs`), the SubagentStop and SessionStart hooks (`hooks/`), the server (`server.mjs`, `lib/`) and the UI (`public/`).
+Installed by `wavework init` / `wavework update` into `.claude/wavework/dashboard/` (managed by the lock file: do not edit, change `dashboard` in `.claude/wavework.json` instead). Dev tooling (Node >= 22, built-ins only, no node_modules) that records and shows `/next-task*` runs. This folder holds the recorder (`record.mjs`), the SubagentStop and SessionStart hooks (`hooks/`), the server (`server.mjs`, `lib/`), the UI (`public/`) and `config.json` (port and tokensFile, written from the config).
 
 ## Store
 
-`$(git rev-parse --git-common-dir)/pipeline-runs/<run-id>/`, shared by every worktree of the repo (never committed, lives inside `.git`). Override with `SHIPIR_PIPELINE_STORE=<dir>` (used by tests).
+`$(git rev-parse --git-common-dir)/pipeline-runs/<run-id>/`, shared by every worktree of the repo (never committed, lives inside `.git`). Override with `WAVEWORK_PIPELINE_STORE=<dir>` (used by tests).
 
 - `run.json`: summary, replaced atomically (write temp file, rename).
 - `events.jsonl`: append-only, one JSON object per line, written with `O_APPEND` so parallel sub-agents do not interleave lines.
@@ -14,7 +14,7 @@ Dev tooling (Node, built-ins only) that records and shows `/next-task*` runs. Th
 ## CLI
 
 ```
-node tools/pipeline-dashboard/record.mjs <event> [--run <id>] [--key value ...]
+node .claude/wavework/dashboard/record.mjs <event> [--run <id>] [--key value ...]
 ```
 
 Without `--run` the run is found by cwd: the running run whose `worktree` contains the current directory (deepest worktree wins). `--units a,b` is a list, known numeric keys are stored as numbers, `--some-key` becomes `someKey`. Run ids match `[A-Za-z0-9][A-Za-z0-9._-]*` and are at most 128 characters. `readRun` applies the same check and returns null for anything else, so URL params can be passed in safely.
@@ -42,7 +42,7 @@ Other keys passed on the command line are stored as given, except `ts`, `type` a
 
 ## Agent events and pricing
 
-The `agent` events come from the SubagentStop hook (`hooks/subagent-stop.mjs`, registered in `.claude/settings.json`). Claude Code passes `cwd`, `agent_id`, `agent_type` and `agent_transcript_path` on stdin. The hook reads the sub-agent transcript: usage is taken from assistant messages (`message.usage`, `message.model`), deduplicated by message id (streamed content blocks repeat the id; the max per field wins), duration is last minus first timestamp. The run is found by cwd (falling back to the cwd recorded in the transcript); no running run means nothing is written. The hook always exits 0 and prints nothing to stdout.
+The `agent` events come from the SubagentStop hook (`hooks/subagent-stop.mjs`, registered in `.claude/settings.json` by wavework). Claude Code passes `cwd`, `agent_id`, `agent_type` and `agent_transcript_path` on stdin. The hook reads the sub-agent transcript: usage is taken from assistant messages (`message.usage`, `message.model`), deduplicated by message id (streamed content blocks repeat the id; the max per field wins), duration is last minus first timestamp. The run is found by cwd (falling back to the cwd recorded in the transcript); no running run means nothing is written. The hook always exits 0 and prints nothing to stdout.
 
 `pricing.json` holds USD per million tokens (`input`, `output`, `cacheRead`, `cacheWrite`) per model id. The cost is the sum over messages, each priced with its own model. If any message's model is missing from the table, the event has no `cost` field (never 0). Prices are estimates: cache write is the 5-minute rate (1.25x input), and Haiku uses the rate card for prompts up to 100K tokens.
 
@@ -50,19 +50,15 @@ The `agent` events come from the SubagentStop hook (`hooks/subagent-stop.mjs`, r
 
 `record.mjs` exports `resolveStoreDir`, `findRunByCwd`, `recordEvent`, `readRun`, `listRuns`, `parseArgs`, `main`, `EVENT_TYPES`, `RUN_ID`, so the server and hooks reuse store resolution and lookup.
 
-## Tests
-
-`node --test tools/pipeline-dashboard/test/`
-
 ## SessionStart hook
 
-`hooks/session-start.mjs` is registered in `.claude/settings.json` beside `bd prime`. At session start it checks `GET /api/health` on `PIPELINE_DASHBOARD_PORT` (300 ms timeout):
+`hooks/session-start.mjs` is registered in `.claude/settings.json` by wavework. At session start it checks `GET /api/health` on the dashboard port (`PIPELINE_DASHBOARD_PORT`, else `config.json`, else 4690) (300 ms timeout):
 
 - Health answers `{"ok":true, "root":"<dir>"}` and `root` exists: prints nothing.
-- Health answers but its `root` (the checkout `server.mjs` runs from) no longer exists, e.g. a deleted worktree: stops that server via `<store>/server.pid` and starts a fresh one. The pid file is `{"pid","port","root"}`. The hook kills the recorded pid only when port and root match the answering server and `lsof` lists that pid as the single listener on the port while `ps` shows `pipeline-dashboard/server.mjs` (a recorded pid alone is not proof, pids get reused). If the record does not match or either check cannot run, it prints one warning and kills nothing.
-- Nothing listens: starts `server.mjs` detached (`stdio` to `<store>/server.log`, pid file `<store>/server.pid`) and prints `{"systemMessage":"Pipeline dashboard: http://127.0.0.1:<port>"}` once it answers. The server runs from the main checkout's `tools/pipeline-dashboard/server.mjs` (main checkout = parent of `git rev-parse --path-format=absolute --git-common-dir`) when that exists, else from the copy the hook belongs to. So the long-lived server does not depend on a worktree that `/next-task-finish` later deletes.
+- Health answers but its `root` (the checkout `server.mjs` runs from) no longer exists, e.g. a deleted worktree: stops that server via `<store>/server.pid` and starts a fresh one. The pid file is `{"pid","port","root"}`. The hook kills the recorded pid only when port and root match the answering server and `lsof` lists that pid as the single listener on the port while `ps` shows that record's own `<root>/server.mjs` (so another repo's dashboard is never touched) (a recorded pid alone is not proof, pids get reused). If the record does not match or either check cannot run, it prints one warning and kills nothing.
+- Nothing listens: starts `server.mjs` detached (`stdio` to `<store>/server.log`, pid file `<store>/server.pid`) and prints `{"systemMessage":"Pipeline dashboard: http://127.0.0.1:<port>"}` once it answers. The server runs from the main checkout's `.claude/wavework/dashboard/server.mjs` (main checkout = parent of `git rev-parse --path-format=absolute --git-common-dir`) when that exists, else from the copy the hook belongs to. So the long-lived server does not depend on a worktree that `/next-task-finish` later deletes.
 - Another process holds the port: prints one `systemMessage` warning and starts nothing.
-- Nothing answers within the start wait (600 ms) after the spawn: prints `{"systemMessage":"Pipeline dashboard: could not start, see <store>/server.log"}`. The spawned pid is recorded at spawn, so a server that is still starting stays stoppable.
+- Nothing answers within the start wait (2 s) after the spawn: prints `{"systemMessage":"Pipeline dashboard: could not start, see <store>/server.log"}`. The spawned pid is recorded at spawn, so a server that is still starting stays stoppable.
 
 `PIPELINE_DASHBOARD_START_WAIT_MS` overrides the start wait. It is a test-only knob (tests set it near zero to force the "gave up waiting" path); do not set it in normal use.
 
@@ -74,7 +70,7 @@ Timing: the hook always exits 0 and has a worst case of about 1.5 s on the stale
 
 ## Server/API
 
-`node tools/pipeline-dashboard/server.mjs` (Node built-ins only) binds `127.0.0.1` only, port `PIPELINE_DASHBOARD_PORT` (default 4690), reads the store via `resolveStoreDir`. `createServer({storeDir, port, publicDir, tokensPath, ghRunner, ciRefreshMs, watch, pollMs})` is the factory used by tests (`port: 0`, stubbed `ghRunner`; `await server.listen()`, `server.port`, `await server.close()`).
+`wavework dashboard` (or `node .claude/wavework/dashboard/server.mjs`) binds `127.0.0.1` only, port `PIPELINE_DASHBOARD_PORT`, else `config.json` (`dashboard.port`), else 4690, reads the store via `resolveStoreDir`. `createServer({storeDir, port, publicDir, tokensPath, project, ghRunner, ciRefreshMs, watch, pollMs})` is the factory used by tests (`port: 0`, stubbed `ghRunner`; `await server.listen()`, `server.port`, `await server.close()`).
 
 - `GET /api/health`: `{ok:true, root}`; `root` is the directory `server.mjs` runs from (the SessionStart hook uses it to spot a server whose checkout is gone).
 - `GET /api/runs`: run summaries (`run.json` fields + `totals`), newest `started` first; batch members (runs whose `parent` is another run) are nested in the batch's `children`.
@@ -82,13 +78,14 @@ Timing: the hook always exits 0 and has a worst case of about 1.5 s on the stale
 - A batch that is still `running` but whose members have all ended is reported as ended (`blocked` if any member is blocked/failed, else `done`, `ended` = latest member end) in both endpoints.
 - Requests need a `Host` of `127.0.0.1:<port>` or `localhost:<port>`, else 403 (DNS-rebinding guard).
 - `GET /api/events`: Server-Sent Events, `event: run-changed` with `data: {"id": "<run id>"}` when a store file changes (`fs.watch` recursive as trigger, polling fallback, also if the store does not exist yet).
-- `/tokens.css` is `frontend/src/shared/styles/tokens.css`; everything else is served from `public/` only (resolved, symlinks and traversal refused).
+- `GET /api/info`: `{project}`, the repo directory name (the main checkout), shown in the UI.
+- `/tokens.css` is the project's own tokens file (`dashboard.tokensFile`, resolved inside the repo, symlinks leaving it refused) or an empty stylesheet when none is configured; everything else is served from `public/` only (resolved, symlinks and traversal refused).
 
 **CI status:** the pushed SHA is the `sha` field of the last `step-end` event with `step=push` (the skill emits `record.mjs step-end --step push --sha <sha>`). For such runs, `ci` is `{sha, state, runs[]}` from `gh run list --commit <sha> --json status,conclusion,url,name` (execFile with an argument list, SHA must be 7-40 hex chars). `state` is `success|failure|pending|none|unknown`; missing/failing `gh` gives `unknown`. Results are cached per SHA; only `success` is cached for good, everything else (pending, failure because CI may be re-run, none, unknown) is refreshed after `ciRefreshMs` (15 s). `ci` is null without a pushed SHA.
 
 ## UI
 
-Open `http://127.0.0.1:4690/` after starting the server. Plain HTML/CSS/JS in `public/` (no build): `index.html`, `app.css` (design tokens from `/tokens.css` only, light and dark, `prefers-reduced-motion`), `app.js` (hash routing, SSE) and `format.mjs` (pure helpers).
+Open `http://127.0.0.1:4690/` (your port) after starting the server. Plain HTML/CSS/JS in `public/` (no build): `index.html`, `default-theme.css` (neutral tokens, light and dark), `app.css` (design tokens only, `prefers-reduced-motion`; the project's `/tokens.css` loads after the default theme and may override any token), `app.js` (hash routing, SSE) and `format.mjs` (pure helpers).
 
 - `#/` lists all runs: running first, then newest; batch members are nested under their batch. It refreshes on every `run-changed` SSE event, no reload. The header shows `Live` or `Reconnecting`.
 - `#/runs/<id>` is a deep link to a run: header stats, step timeline, children (model, wave, duration, tokens, cost, result, review verdict and rounds, red-before-green), reviews, tests, findings filed and CI links.
@@ -96,4 +93,4 @@ Open `http://127.0.0.1:4690/` after starting the server. Plain HTML/CSS/JS in `p
 - The list view fetches `/api/runs/:id` per run to get the CI state (the list endpoint has no `ci`).
 - Untrusted strings are rendered with `textContent`; CI links must be http(s).
 
-Tests: `node --test tools/pipeline-dashboard/test/` includes `ui.test.mjs` (helpers). Browser check: `node tools/pipeline-dashboard/test/e2e/ui.e2e.mjs` starts `createServer` on a temp fixture store and drives it with Playwright from `frontend/node_modules` (run `pnpm exec playwright install chromium` in `frontend/` once).
+Tests live in the wavework package (`test/dashboard/`), not in the target repository.

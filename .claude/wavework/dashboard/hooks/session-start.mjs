@@ -2,7 +2,10 @@
 // SessionStart hook: makes sure the pipeline dashboard server runs and tells the user its URL.
 // Health answers from a live checkout -> silent. Port free -> start server.mjs detached (log in <store>/server.log)
 // and print the URL. Port held by something else, or by a server whose checkout was deleted and is not the
-// recorded one -> one warning. Always exits 0; worst case about 1.5 s (stale-server replace path).
+// recorded one -> one warning. Always exits 0.
+// Time budget (hard kill is the 5 s `timeout` in settings.json), worst case = stale-server replace path:
+//   probe 300 ms + lsof 800 + ps 800 + stop wait 250 + start wait 2000 + probes 150 + node start-up ~100  =  about 4.4 s.
+// Keep the sum under 5 s when changing any of these.
 // Output format: https://code.claude.com/docs/en/hooks.md (systemMessage on stdout JSON; exit 0).
 import { execFile, execFileSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -11,14 +14,17 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveStoreDir } from '../record.mjs';
+import { resolvePort } from '../lib/settings.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OWN_SERVER = path.join(HERE, '..', 'server.mjs');
-const DEFAULT_PORT = 4690;
+// Where the dashboard lives in a checkout (wavework init puts it there).
+const DASHBOARD_REL = ['.claude', 'wavework', 'dashboard'];
 const PROBE_MS = 300;        // first health probe
 const LOOP_PROBE_MS = 150;   // probes while waiting for a started server
 // How long a started server gets to answer. The env override is for tests (a near-zero wait forces "gave up waiting").
-const WAIT_MS = Number(process.env.PIPELINE_DASHBOARD_START_WAIT_MS) > 0 ? Number(process.env.PIPELINE_DASHBOARD_START_WAIT_MS) : 600;
+const WAIT_MS = Number(process.env.PIPELINE_DASHBOARD_START_WAIT_MS) > 0 ? Number(process.env.PIPELINE_DASHBOARD_START_WAIT_MS) : 2000;
+const EXEC_MS = 800;         // lsof / ps each (a loaded machine can be slow; see the budget above)
 const STOP_WAIT_MS = 250;    // how long a stopped stale server gets to release the port
 const STALE_LOCK_MS = 5000;  // a start lock this old belongs to a crashed hook
 
@@ -28,7 +34,7 @@ function emit(systemMessage) {
   process.stdout.write(JSON.stringify({ systemMessage }) + '\n');
 }
 
-const inUse = (port) => `Pipeline dashboard: port ${port} is in use by another process (set PIPELINE_DASHBOARD_PORT to change it)`;
+const inUse = (port) => `Pipeline dashboard: port ${port} is in use by another process (set dashboard.port in .claude/wavework.json and run wavework update to change it)`;
 const staleInUse = (port) => `Pipeline dashboard: port ${port} is in use by a server from a missing checkout that is not the recorded one; stop it to start the dashboard`;
 const couldNotStart = (logFile) => `Pipeline dashboard: could not start, see ${logFile}`;
 
@@ -62,12 +68,11 @@ function probe(port, timeout) {
 
 const isMissingCheckout = (root) => typeof root === 'string' && !existsSync(root);
 
-const LISTENER_MARKER = 'pipeline-dashboard/server.mjs';
 
 /** Runs a fixed program with an argument list (no shell). Resolves to stdout, or null when it cannot run or fails. */
 function run(file, args) {
   return new Promise((resolve) => {
-    execFile(file, args, { encoding: 'utf8', timeout: 500 }, (err, stdout) => resolve(err ? null : stdout));
+    execFile(file, args, { encoding: 'utf8', timeout: EXEC_MS }, (err, stdout) => resolve(err ? null : stdout));
   });
 }
 
@@ -76,13 +81,19 @@ function run(file, args) {
  * merely recorded (pids get reused) is not enough. Anything that cannot be checked (no lsof or ps, no listener) counts
  * as not proven, so nothing is killed.
  */
-async function isDashboardListener(pid, port) {
+/** True when `command` names `serverFile` as a whole argument (not merely as the tail of a longer path). */
+export function commandNamesServer(command, serverFile) {
+  const escaped = serverFile.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|\\s)${escaped}(\\s|$)`).test(command.trim());
+}
+
+async function isDashboardListener(pid, port, serverFile) {
   const listing = await run('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t']);
   if (listing === null) return false;
   const pids = listing.split('\n').filter(Boolean).map(Number);
   if (pids.length !== 1 || pids[0] !== pid) return false;
   const command = await run('ps', ['-p', String(pid), '-o', 'command=']);
-  return command !== null && command.includes(LISTENER_MARKER);
+  return command !== null && commandNamesServer(command, serverFile);
 }
 
 /** The main checkout's directory (the common git dir's parent), or null outside git. */
@@ -103,7 +114,7 @@ function mainCheckout() {
  */
 function serverLocation() {
   const main = mainCheckout();
-  const mainServer = main ? path.join(main, 'tools', 'pipeline-dashboard', 'server.mjs') : null;
+  const mainServer = main ? path.join(main, ...DASHBOARD_REL, 'server.mjs') : null;
   if (mainServer && existsSync(mainServer)) return { server: mainServer, cwd: main, root: path.dirname(mainServer) };
   return { server: OWN_SERVER, cwd: process.cwd(), root: path.dirname(OWN_SERVER) };
 }
@@ -183,7 +194,7 @@ async function startServer({ server, cwd, root }, { logFile, pidFile, port }) {
   const logFd = openSync(logFile, 'a');
   let child;
   try {
-    child = spawn(process.execPath, [server], { cwd, env: process.env, detached: true, stdio: ['ignore', logFd, logFd] });
+    child = spawn(process.execPath, [server], { cwd, env: { ...process.env, PIPELINE_DASHBOARD_PORT: String(port) }, detached: true, stdio: ['ignore', logFd, logFd] });
   } finally {
     closeSync(logFd);
   }
@@ -223,7 +234,9 @@ async function waitForServer(port, spawned) {
 async function stopRecordedServer(pidFile, port, root) {
   const record = readRecord(pidFile);
   if (!record || record.port !== port || record.root !== root || !Number.isInteger(record.pid) || record.pid < 1) return false;
-  if (!(await isDashboardListener(record.pid, port))) return false;
+  // The command line must name this record's own server file (<root>/server.mjs): another repo's dashboard, or
+  // a developer's own, never matches, so one repo's hook can only ever stop the server it started itself.
+  if (!(await isDashboardListener(record.pid, port, path.join(String(record.root), 'server.mjs')))) return false;
   try {
     process.kill(record.pid, 'SIGTERM');
   } catch {
@@ -241,7 +254,7 @@ async function stopRecordedServer(pidFile, port, root) {
 }
 
 async function main() {
-  const port = Number(process.env.PIPELINE_DASHBOARD_PORT ?? DEFAULT_PORT);
+  const port = resolvePort(path.join(HERE, '..'));
   if (!Number.isInteger(port) || port < 1 || port > 65535) return;
   const url = `http://127.0.0.1:${port}`;
 

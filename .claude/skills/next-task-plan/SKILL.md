@@ -14,7 +14,7 @@ The **work set** is either an epic's children (`/next-task`) or the beads passed
 3. For each open child, `bd show <child>` must have:
    - a clear description and testable acceptance criteria
    - a `model:haiku` or `model:sonnet` label
-   - no unresolved open decision from HANDOFF.md
+   - no unresolved open decision
 
    If any child fails this, **stop** and tell the user which child and what's missing. Suggest `/text-to-task` to fix it. Don't patch the beads yourself.
 4. Blockers outside the set, from `bd dep list <child>`: if a child depends on an issue outside the set that's still open, **stop** and report it.
@@ -26,7 +26,7 @@ Grep `docs/CODE_MAP.md` (read only the parts you need), plus the paths named in 
 
 Build **waves**:
 - Wave 1 holds the children with no open dependencies inside the epic. The next wave holds the children whose dependencies are all in earlier waves. Continue the same way.
-- Children in the same wave run in parallel only if their file sets don't overlap. Shared files count as overlapping: `pom.xml`, `package.json`, `application.yml`, `CLAUDE.md`, `README.md`. If two overlap, move one into the next wave.
+- Children in the same wave run in parallel only if their file sets don't overlap. Shared files count as overlapping: build and dependency manifests (lockfiles included), shared configuration, `CLAUDE.md`, `README.md`. If two overlap, move one into the next wave.
   - Exception: Code Map lines in `docs/CODE_MAP.md`. Tell parallel agents to edit only their own lines; you resolve conflicts while committing.
 
 Show the plan to the user as a short table: wave, child, model, file set, plus the worktree path. Then continue without waiting, unless the plan surfaced a problem.

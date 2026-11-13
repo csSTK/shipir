@@ -8,16 +8,8 @@ description: Implement a beads task until its (already written) tests pass, with
 Write the production code that makes the tests from `next-task-write-tests` pass.
 
 - **Stay in your file set.** If you need to change a file outside it, stop and report why. Don't just change it.
-- **Follow CLAUDE.md:**
-  - package-by-feature, and the dependency direction (`docker/` knows no other feature)
-  - never pass docker-java types outward
-  - DTOs are built in the service layer
-  - `ProcessBuilder` with an argument list, never a shell
-  - all file access goes through `PathValidationUtil`
-  - no secrets in logs
-  - Flyway owns the schema
-- **Frontend UI** (components, styles, interactions): read `.claude/skills/apple-design/SKILL.md` first and apply it. Skip its "Initial Response" section; that's meant for interactive chats. Add no new UI library unless the bead names it.
-- **No database writes** outside Testcontainers (see Database Access in CLAUDE.md). If the task needs one, e.g. running the app against the dev database, stop and report it. Don't attempt it.
+- **Follow CLAUDE.md:** its architecture, security and code-style rules apply to every line you write. If a rule and the bead disagree, stop and report. Don't guess.
+- **UI changes** (under `frontend/`): read `.claude/skills/apple-design/SKILL.md` first and apply it. Add no new UI library unless the bead names it.
 - **Match the surrounding code style**, naming and comment density. No speculative abstractions, flags or configuration the bead doesn't ask for.
 - **Don't weaken tests to get green.** If a test turns out to be wrong, fix it and say why in the report.
 - **Out-of-scope work** you discover goes into a new bead (`bd create`, then `bd dep add`). Don't do it.

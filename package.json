@@ -1,0 +1,8 @@
+{
+  "name": "shipir-tooling",
+  "private": true,
+  "description": "Dev tooling only (wavework pipeline). The product lives in backend/ and frontend/.",
+  "devDependencies": {
+    "wavework": "0.1.2"
+  }
+}

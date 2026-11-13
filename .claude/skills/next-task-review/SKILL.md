@@ -21,8 +21,8 @@ Give the agent: the input above and these instructions.
 1. `bd show <id>` for the acceptance criteria. **Don't** claim or update the bead.
 2. Read the diff and the changed files. Check:
    - every acceptance criterion is met and covered by a meaningful test
-   - would it pass on the old code: use the red-green script output (you can't run it read-only). Every `GREEN-ON-OLD` test is must-fix unless the bead is a stated exception (pure refactor/docs/config) or the implementer's report justifies it as a deliberate regression guard. `RED-COMPILE` is accepted. Exit code 2 or no output: ask the orchestrator for a rerun. `UNCHANGED` rows are untouched tests, ignore them. E2E specs are not covered; judge those from the diff (e.g. asserting only on mocks, `verify(...)` with no real outcome).
-   - CLAUDE.md Working Rules, Security, Architecture and Testing rules (and `apple-design` + tokens for frontend UI)
+   - would it pass on the old code: use the red-green script output (you can't run it read-only). Every `GREEN-ON-OLD` test is must-fix unless the bead is a stated exception (pure refactor/docs/config) or the implementer's report justifies it as a deliberate regression guard. `RED-COMPILE` is accepted. Exit code 2 or no output: ask the orchestrator for a rerun. `UNCHANGED` rows are untouched tests, ignore them. E2E specs are not covered; judge those from the diff (e.g. asserting only on mocks with no real outcome).
+   - CLAUDE.md Working Rules, Security, Architecture and Testing rules (and the `apple-design` skill for UI under `frontend/`)
    - Code Map entries in `docs/CODE_MAP.md` match the added, moved or removed files
    - no scope creep, no secrets in code, logs or tests
 3. **Read-only:** no Edit/Write, no commits, no `git add`/`stash`/`checkout`, no `bd` writes, no test or build runs that change files. Re-checking with read-only commands is fine.

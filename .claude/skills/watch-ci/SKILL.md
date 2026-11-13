@@ -11,7 +11,7 @@ Argument (optional): a numeric run ID or a branch name. Default: the runs for `H
 
 ## 1. Preflight
 
-- `command -v gh`. If missing, stop: "gh is not installed. Run `brew install gh`, then `! gh auth login`."
+- `command -v gh`. If missing, stop: "gh is not installed. Install the GitHub CLI (https://cli.github.com), then `! gh auth login`."
 - `gh auth status`. If not authenticated, stop: "gh is not logged in. Run `! gh auth login`."
 
 ## 2. Resolve the target

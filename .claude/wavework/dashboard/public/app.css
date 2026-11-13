@@ -1,4 +1,4 @@
-/* Pipeline dashboard. Tokens only (served from /tokens.css); no raw colors, sizes, radii or durations. */
+/* Pipeline dashboard. Tokens only (/default-theme.css, optionally overridden by the project tokens at /tokens.css); no raw colors, sizes, radii or durations. */
 *, *::before, *::after { box-sizing: border-box; }
 
 html { background: var(--color-bg); }

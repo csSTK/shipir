@@ -9,13 +9,13 @@ Orchestrates one epic from branch to push. You coordinate; the implementer sub-a
 
 **Input:** an epic ID, optionally with the flag `--watch-ci` (`$ARGUMENTS`). Remove the flag, then take the rest as the epic ID. If the ID is missing, or `bd show <id>` says it isn't an epic, stop and ask for one, whatever flags were passed. A whole-branch review always runs before the push (step 7). Never pick an epic yourself.
 
-**By invoking this skill the user authorizes** for this epic: creating and deleting its branch and worktree, committing, pushing the branch to `dev` (fast-forward only) and filing `finding` beads (under the "Findings: <category>" epics, see `next-task-findings`). Nothing else: never force-push, never rewrite pushed history, never add attribution lines (see CLAUDE.md).
+**By invoking this skill the user authorizes** for this epic: creating and deleting its branch and worktree, committing, pushing the branch to `dev` (fast-forward only) and filing `finding` beads (under the standing findings epics, see `next-task-findings`). Nothing else: never force-push, never rewrite pushed history, never add attribution lines (see CLAUDE.md).
 
 ## Steps
 
 Each step lives in its own skill under `.claude/skills/`. Read that skill's `SKILL.md` and follow it. Stop and report to the user whenever a step says to stop. Don't skip ahead.
 
-**Recording:** `Record:` lines call `node tools/pipeline-dashboard/record.mjs <event> --run <RUN> ...` from `<WT>` (record.mjs only exists on the branch, so never from `MAIN`; record the end of the run before the worktree is removed). `<RUN>` = the branch name with `/` replaced by `.` (e.g. `epic.shipr-1hxo-pipeline-dashboard`). Fire-and-forget: it always exits 0, never wait on or react to it. Fields: `tools/pipeline-dashboard/README.md`.
+**Recording:** `Record:` lines call `node .claude/wavework/dashboard/record.mjs <event> --run <RUN> ...` from `<WT>` (record from `<WT>` while it exists; record the end of the run before the worktree is removed). `<RUN>` = the branch name with `/` replaced by `.` (e.g. `epic.shipr-1hxo-pipeline-dashboard`). Fire-and-forget: it always exits 0, never wait on or react to it. Fields: `.claude/wavework/dashboard/README.md`.
 
 Record: every stop in steps 1–7 (failed bead check or deps, failed plan, failed verification after the retry, review round 3 still failing, blocked child): `run-end --status blocked`.
 
@@ -31,14 +31,14 @@ Record: every stop in steps 1–7 (failed bead check or deps, failed plan, faile
    1. write tests (`next-task-write-tests`)
    2. implement (`next-task-code`)
    3. e2e tests (`next-task-e2e`)
-   4. run focused backend and frontend tests (`next-task-test`)
+   4. run the focused checks of its area (`next-task-test`)
    5. report back as finished, with out-of-scope findings
 6. **After each sub-agent reports:** verify the result yourself before accepting it:
    - `cd <WT> && git branch --show-current` still shows the epic branch, and the changed files are in `<WT>`, not in the main checkout
    - re-run `next-task-test` for its area
    - the report has a **Red before green** section (failing test name + assertion line, or an explicit allowed exception); if missing, treat it as a review must-fix and send it back to the implementer
-   - **Red-green check:** after re-running `next-task-test` and before the review, run `.claude/scripts/red-green-check.sh <WT>` (it runs the child's new/changed backend and frontend tests against the pre-change code in a throwaway worktree; needs Docker for backend tests). Exit 0 = ok, 1 = some test is `GREEN-ON-OLD`, 2 = tool/setup error (fix the cause and rerun; never treat as a pass). Pass its output to the reviewer. Skip only for a stated exception (pure refactor/docs/config), where it prints "no tests changed" anyway
-   - check the diff against the acceptance criteria and the CLAUDE.md rules (architecture, security, and `apple-design` for frontend UI)
+   - **Red-green check:** after re-running `next-task-test` and before the review, run `.claude/scripts/red-green-check.sh <WT>` (it runs the child's new/changed tests against the pre-change code in a throwaway worktree; tests that need external services need them running). Exit 0 = ok, 1 = some test is `GREEN-ON-OLD`, 2 = tool/setup error (fix the cause and rerun; never treat as a pass). Pass its output to the reviewer. Skip only for a stated exception (pure refactor/docs/config), where it prints "no tests changed" anyway
+   - check the diff against the acceptance criteria and the CLAUDE.md rules (architecture, security, and `apple-design` for UI under `frontend/`)
    - **Review:** run `next-task-review` (fresh read-only reviewer sub-agent). Must-fix findings go back to the same implementer (SendMessage), then re-verify and review again; at most 3 review rounds per child. Out-of-scope findings go to `next-task-findings`. If round 3 still has must-fix findings, stop that child uncommitted and hand off to the user with the open findings
    - after a review PASS, commit only that child's files: `git commit -m "<child title> (<child-id>)"`
    - **Findings:** run `next-task-findings` for the agent's reported findings and whatever your own review of the diff turned up outside the child's scope

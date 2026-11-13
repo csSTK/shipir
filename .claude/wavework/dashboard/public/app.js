@@ -15,6 +15,16 @@ function show(...nodes) {
   else if (onBack) app.querySelector('.back')?.focus({ preventScroll: true });
 }
 const liveEl = document.getElementById('live');
+let project = '';
+const appTitle = () => (project ? `Pipeline dashboard · ${project}` : 'Pipeline dashboard');
+// The project name (repo directory) comes from the server; the page works without it.
+fetch('/api/info').then((r) => r.json()).then((info) => {
+  if (typeof info?.project !== 'string') return;
+  project = info.project;
+  const brand = document.querySelector('.brand');
+  if (brand) brand.textContent = `Pipeline · ${project}`;
+  document.title = appTitle();
+}).catch(() => {});
 
 /** Tiny element builder: h('td', {class: 'num'}, 'text', childNode). Strings become text nodes. */
 function h(tag, attrs, ...kids) {
@@ -80,7 +90,7 @@ function renderList() {
   show(
     h('div', { class: 'head' }, h('h1', null, 'Pipeline runs'), h('p', { class: 'muted small' }, 'Costs are estimates from token usage.')),
     content);
-  document.title = 'Pipeline dashboard';
+  document.title = appTitle();
 }
 
 async function loadList() {
@@ -157,7 +167,7 @@ function renderDetail(id) {
       h('span', { class: 'small muted' }, r.conclusion ?? r.status));
   });
 
-  document.title = `${runTitle(run)} · Pipeline dashboard`;
+  document.title = `${runTitle(run)} · ${appTitle()}`;
   show(
     backLink(),
     h('div', { 'data-testid': 'run-detail', class: 'stack' },

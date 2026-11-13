@@ -1,11 +1,11 @@
 ---
 name: next-task-findings
-description: Writes problems found outside the scope of the current task into the shared backlog as beads labelled `finding`, deduplicated and grouped under a few standing "Findings: <category>" epics so each epic can be run with /next-task. Used by the /next-task orchestrators after each child and before finishing; also usable on its own.
+description: Writes problems found outside the scope of the current task into the shared backlog as beads labelled `finding`, deduplicated and grouped under a few standing findings epics so each epic can be run with /next-task. Used by the /next-task orchestrators after each child and before finishing; also usable on its own.
 ---
 
 # next-task-findings
 
-The shared backlog for findings is **beads with the label `finding`** (synced via Dolt, so every session and machine sees them). Not a markdown file: CLAUDE.md requires beads for all tracking. `BACKLOG.md` stays the list of Portainer features.
+The shared backlog for findings is **beads with the label `finding`** (synced via Dolt, so every session and machine sees them). Not a markdown file: findings are tracked in beads like all other work.
 
 Findings are not loose beads. Each one is a **child of a category epic**, with a `model:` label and acceptance criteria, so `/next-task <findings-epic>` can run the whole group without further planning.
 
@@ -24,7 +24,7 @@ Findings are not loose beads. Each one is a **child of a category epic**, with a
 
 Two classes, four category epics. Pick exactly one category per finding.
 
-| Class | Category | Slug | Typical content |
+| Class | Category epic title | Slug | Typical content |
 |---|---|---|---|
 | Real | Security & authorization | `security` | auth, permission, token, egress, path, subprocess, secret handling, missing re-authorization |
 | Real | Bugs & correctness | `bugs` | wrong behaviour, data loss, races, broken UX flows |
@@ -41,8 +41,8 @@ Class "Real" = a bug, security issue, data-loss risk or CLAUDE.md rule violation
 2. **Find or create the category epic.** `bd list --type epic --status open --label fcat:<slug>`. Always use that one, even while it is being run: never create a second epic for the same category. If there is none at all, create it:
 
    ```bash
-   bd create --type=epic --priority=<2 for security/bugs, 3 for tests/quality> \
-     --title="Findings: <Category name>" --labels fcat:<slug> \
+   bd create --type=epic --priority=<2 for Real categories, 3 for Quality> \
+     --title="<epic title from the table>" --labels fcat:<slug> \
      --description="Standing backlog of <category> findings. Run with /next-task <id>." \
      --acceptance="All child findings closed or consciously dropped."
    ```
@@ -58,7 +58,9 @@ Class "Real" = a bug, security issue, data-loss risk or CLAUDE.md rule violation
    ```
 
    - `bug` for wrong behaviour, `chore` for quality. Priority: 1 security or data loss, 2 user-visible bug, 3 quality, 4 nice to have.
-   - `model:` by the Model Policy in CLAUDE.md: `haiku` for small, well-specified, low-risk fixes; `sonnet` for everything else and anything touching auth, permissions, remote host access or the audit log. When unsure, `sonnet`.
+   - `model:` by the Model Policy in CLAUDE.md. When unsure, `sonnet`:
+     - `haiku`: Small, well-specified, low-risk changes: boilerplate, renames, simple DTOs or entities, config tweaks, docs, straightforward tests. Never for auth, permissions, remote host access, the audit log, subprocess execution, path handling or streaming.
+     - `sonnet`: Everything else: multi-file features, non-trivial logic, debugging, refactors, concurrency and streaming, and anything touching auth, permissions, remote host access, the audit log, subprocess execution or path handling. When unsure, use sonnet.
    - The description and criteria must be enough to run without a planning session. If a finding needs a design decision (an open question), don't file a runnable child: say so in the description and leave out the `model:` label so `next-task-plan` stops on it.
 4. **Don't fix it here** and don't widen the running task. Findings never block the run, except priority 1: report those to the user at once.
 

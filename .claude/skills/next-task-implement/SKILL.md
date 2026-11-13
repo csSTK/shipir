@@ -17,7 +17,7 @@ You implement exactly one child bead. You don't plan, redesign or widen the scop
 2. **Write tests:** `next-task-write-tests`. The tests must fail first.
 3. **Implement:** `next-task-code`. Makes the tests pass and updates your `docs/CODE_MAP.md` lines.
 4. **E2E:** `next-task-e2e`. Adds or extends specs for the user-visible flow, or reports n/a.
-5. **Run focused tests:** `next-task-test`. Backend and frontend for your area, plus lint, type checks and e2e if present. Everything must pass.
+5. **Run focused tests:** `next-task-test`. The checks of your area, plus lint, type checks and e2e where configured. Everything must pass.
    - **Retry cap:** count every focused run (`next-task-test`) of this bead that fails after you changed code. After the **3rd failed run**, stop. Don't weaken tests, don't try a 4th time. Step 6 then reports BLOCKED.
 6. **Report back. You're finished.** Don't commit, push or close the bead. Leave your changes uncommitted in the worktree. If blocked (retry cap, or a stop from steps 0–3), report **BLOCKED** instead of the success report: the reason, the failing command and the last ~40 lines of its failing output, the files changed so far, and findings. Otherwise report:
    - the worktree check result (path and branch)
