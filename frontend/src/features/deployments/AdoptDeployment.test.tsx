@@ -23,6 +23,7 @@ const live = [
 function serve(role: string, adopt: () => Promise<unknown>) {
   apiFetch.mockImplementation((path: string) => {
     if (path === '/auth/me') return Promise.resolve({ username: 'u', role, setupRequired: false })
+    if (path === '/hosts') return Promise.resolve([{ id: 'h1', name: 'h', connectionType: 'LOCAL', host: null, port: null, tls: false, createdAt: 'x', tags: [], canOperate: true }])
     if (path === '/hosts/h1/deployments') return Promise.resolve(live)
     if (path === '/hosts/h1/managed-deployments') return Promise.resolve([])
     if (path === '/hosts/h1/deployments/blog/adopt') return adopt()

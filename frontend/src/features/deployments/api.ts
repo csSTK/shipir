@@ -42,6 +42,8 @@ export interface ManagedDeployment {
   createdAt: string
   /** The managed proxy deployment: ADMIN only, shown as managed via Domains. Optional for older servers. */
   systemManaged?: boolean
+  /** The caller has OPERATE on this deployment (host or deployment grant); optional for older servers (treated as true). */
+  canOperate?: boolean
 }
 
 /** Git source of a deployment (`null` for FILE deployments); never contains a token. */

@@ -333,7 +333,7 @@ public class DeploymentRunService {
             deployments.save(deployment);
             return new DeploymentSummaryResponse(deployment.getId(), deployment.getName(), deployment.getStatus(),
                     deployment.getSourceType(), deployment.getLastDeployedAt(), deployment.getCreatedAt(),
-                    deployment.isSystemManaged());
+                    deployment.isSystemManaged(), true);
         } finally {
             locks.release(deployment.getId());
         }

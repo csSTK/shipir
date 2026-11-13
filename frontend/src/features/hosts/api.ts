@@ -15,6 +15,8 @@ export interface Host {
   createdAt: string
   /** Sorted, lowercase environment tags. */
   tags: string[]
+  /** The caller has OPERATE on this host itself (not only on single deployments); gates host-level writes. */
+  canOperate?: boolean
 }
 
 /** Body of create and connection test. LOCAL sends none of host/port/PEMs. */

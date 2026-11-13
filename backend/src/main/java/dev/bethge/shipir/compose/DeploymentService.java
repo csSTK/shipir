@@ -114,7 +114,8 @@ public class DeploymentService {
         return deployments.findByHostIdOrderByNameAsc(hostId).stream()
                 .filter(s -> visible.isEmpty() || visible.get().contains(s.getId()))
                 .map(s -> new DeploymentSummaryResponse(s.getId(), s.getName(), s.getStatus(), s.getSourceType(),
-                        s.getLastDeployedAt(), s.getCreatedAt(), s.isSystemManaged()))
+                        s.getLastDeployedAt(), s.getCreatedAt(), s.isSystemManaged(),
+                        access.canOperate(hostId, s.getId())))
                 .toList();
     }
 

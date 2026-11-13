@@ -305,8 +305,8 @@ public class HostService {
         }
     }
 
-    private static HostResponse toResponse(DockerHost h, List<String> tags) {
+    private HostResponse toResponse(DockerHost h, List<String> tags) {
         return new HostResponse(h.getId(), h.getName(), h.getConnectionType(), h.getHost(), h.getPort(),
-                h.hasTls(), h.getCreatedAt(), tags);
+                h.hasTls(), h.getCreatedAt(), tags, access.canOperate(h.getId()));
     }
 }

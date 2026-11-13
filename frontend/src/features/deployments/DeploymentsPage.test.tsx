@@ -25,9 +25,10 @@ const deployments = [
 const me = (role: string) => ({ username: 'u', role, setupRequired: false })
 
 /** Routes mocked API calls by path; unknown paths reject like a 404. */
-function serve(live: unknown, opts: { role?: string; managed?: unknown[] } = {}) {
+function serve(live: unknown, opts: { role?: string; managed?: unknown[]; hostCanOperate?: boolean; hostsPending?: boolean } = {}) {
   apiFetch.mockImplementation((path: string) => {
     if (path === '/auth/me') return Promise.resolve(me(opts.role ?? 'VIEWER'))
+    if (path === '/hosts') return opts.hostsPending ? new Promise(() => {}) : Promise.resolve([{ id: 'h1', name: 'h', connectionType: 'LOCAL', host: null, port: null, tls: false, createdAt: 'x', tags: [], canOperate: opts.hostCanOperate ?? true }])
     if (path === '/hosts/h1/deployments') return live instanceof Error ? Promise.reject(live) : Promise.resolve(live)
     if (path === '/hosts/h1/managed-deployments') return Promise.resolve(opts.managed ?? [])
     return Promise.reject(new ApiError(404, 'x', 'NOT_FOUND'))
@@ -140,6 +141,50 @@ describe('DeploymentsPage', () => {
     expect(screen.queryByRole('button', { name: 'Deploy shipir-proxy' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Stop shipir-proxy' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Deploy shop' })).toBeInTheDocument()
+  })
+
+  it('hides write actions from an OPERATOR whose grant is VIEW-only (shipr-0qbh.97)', async () => {
+    serve(deployments, {
+      role: 'OPERATOR',
+      hostCanOperate: false,
+      managed: [{ id: 'm1', name: 'shop', status: 'RUNNING', source: 'FILE', lastDeployedAt: null, createdAt: 'x', canOperate: false }],
+    })
+    renderPage()
+    await screen.findByText('/srv/shop')
+    expect(screen.queryByRole('button', { name: 'Add deployment' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Deploy shop' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Stop shop' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Adopt/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Remove/ })).not.toBeInTheDocument()
+  })
+
+  it('hides Add deployment from a VIEW-only OPERATOR on a host without managed deployments', async () => {
+    serve(deployments, { role: 'OPERATOR', hostCanOperate: false, managed: [] })
+    renderPage()
+    await screen.findByText('/srv/shop')
+    expect(screen.queryByRole('button', { name: 'Add deployment' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Adopt/ })).not.toBeInTheDocument()
+  })
+
+  it('keeps Add deployment hidden while the host is loading (fail closed)', async () => {
+    serve(deployments, { role: 'OPERATOR', hostsPending: true })
+    renderPage()
+    await screen.findByText('/srv/shop')
+    expect(screen.queryByRole('button', { name: 'Add deployment' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Adopt/ })).not.toBeInTheDocument()
+  })
+
+  it('offers only the granted deployment to an OPERATOR with a deployment-level grant', async () => {
+    serve(deployments, {
+      role: 'OPERATOR',
+      hostCanOperate: false,
+      managed: [{ id: 'm1', name: 'shop', status: 'RUNNING', source: 'FILE', lastDeployedAt: null, createdAt: 'x', canOperate: true }],
+    })
+    renderPage()
+    await screen.findByText('/srv/shop')
+    expect(screen.getByRole('button', { name: 'Deploy shop' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add deployment' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Adopt/ })).not.toBeInTheDocument()
   })
 
   it('lets operators add a deployment and deploy a managed one', async () => {
@@ -276,6 +321,7 @@ describe('DeploymentsPage', () => {
     function serveWithDelete(role: string, remove: () => Promise<unknown>) {
       apiFetch.mockImplementation((path: string, init?: { method?: string }) => {
         if (path === '/auth/me') return Promise.resolve(me(role))
+        if (path === '/hosts') return Promise.resolve([{ id: 'h1', name: 'h', connectionType: 'LOCAL', host: null, port: null, tls: false, createdAt: 'x', tags: [], canOperate: true }])
         if (path === '/hosts/h1/deployments') return Promise.resolve(deployments)
         if (path === '/hosts/h1/managed-deployments') return Promise.resolve([managedShop])
         if (path.startsWith('/hosts/h1/deployments/') && init?.method === 'DELETE') return remove()

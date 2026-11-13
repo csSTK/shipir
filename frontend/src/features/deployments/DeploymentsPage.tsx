@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { FileText, GitBranch, PackagePlus, Play, Square, Trash2 } from 'lucide-react'
 import { describeResourceError } from '../hosts/format.ts'
+import { useHosts } from '../hosts/api.ts'
 import { useCurrentUser } from '../auth/index.ts'
 import { Checkbox, Badge, Button, ConfirmDialog, PageHeader, ResourceTable, type MenuEntry, type ResourceColumn, type RowActions } from '../../shared/ui/index.ts'
 import {
@@ -40,6 +41,10 @@ export function DeploymentsPage() {
   const isAdmin = user?.role === 'ADMIN'
   const live = useDeployments(id)
   const managed = useManagedDeployments(id)
+  // Host-level writes (add, template install, adopt, remove) need OPERATE on the host, not just a write role. Fail closed:
+  // hidden until the host (and its flag) has loaded.
+  const hosts = useHosts()
+  const canWriteHost = canWrite && hosts.data?.find((h) => h.id === id)?.canOperate === true
   const deploy = useDeployDeployment(id)
   const stop = useStopDeployment(id)
   const remove = useRemoveUnmanagedDeployment(id)
@@ -184,6 +189,8 @@ export function DeploymentsPage() {
     // the managed proxy is operated through Domains; only an ADMIN may act on it here
     if (!canWrite || (isSystem(r) && !isAdmin)) return { menu: [details] }
     if (r.managed) {
+      // a VIEW-only grant on this deployment: the server would answer 403 to deploy and stop
+      if (r.managed.canOperate === false) return { menu: [details] }
       return {
         primary: [
           { label: t('DeploymentsPage.deploy'), icon: Play, onSelect: () => run('deploy', r.managed!), disabled: busy },
@@ -192,6 +199,7 @@ export function DeploymentsPage() {
         menu: [details],
       }
     }
+    if (!canWriteHost) return { menu: [details] }
     return {
       primary: r.live
         ? [
@@ -218,7 +226,7 @@ export function DeploymentsPage() {
       <PageHeader
         title={t('DeploymentsPage.deployments')}
         actions={
-          canWrite ? (
+          canWriteHost ? (
             <Button variant="primary" onClick={() => setAdding(true)}>
               {t('DeploymentsPage.addDeployment')}
             </Button>

@@ -23,8 +23,12 @@ const NO_PROXY = { visible: true, proxy: null, container: null, network: null }
 /** Raw proxy configuration (ADMIN, advanced mode on the domains page): nothing generated, no custom content, no history; specs override. */
 const EMPTY_PROXY_CONFIG = { type: 'TRAEFIK', managed: [], customFileName: 'custom.yml', custom: '', customUpdatedAt: null }
 
+/** The host list the deployments page reads `canOperate` from (host-level writes are hidden until it says true); specs override. */
+const OPERABLE_HOSTS = [{ id: 'a', name: 'Local', connectionType: 'LOCAL', host: null, port: null, tls: false, createdAt: '2026-10-01T10:00:00Z', tags: [], canOperate: true }]
+
 function defaultFor(method: string, path: string): MockResponse | undefined {
   if (method !== 'GET') return undefined
+  if (path === '/api/hosts') return { body: OPERABLE_HOSTS }
   if (/^\/api\/hosts\/[^/]+\/stats\/history$/.test(path)) return { body: EMPTY_HISTORY }
   // The environment dashboard counts deployments, managed deployments and networks on every visit; specs override.
   if (/^\/api\/hosts\/[^/]+\/(deployments|managed-deployments|networks)$/.test(path)) return { body: [] }
