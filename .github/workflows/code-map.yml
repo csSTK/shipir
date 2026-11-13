@@ -1,0 +1,52 @@
+name: Code map
+
+# Mechanical rules for docs/code-map/ (entry format, length, no bead IDs, paths exist, index links).
+# Separate from ci.yml because that workflow ignores **/*.md on pull requests, which would skip map-only changes.
+# Runs when the map, the checker or any file a map entry can point at changes. Node only, no install.
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - 'docs/code-map/**'
+      - 'tools/**'
+      - 'backend/**'
+      - 'frontend/**'
+      - 'scripts/**'
+      - '.github/**'
+      - '.claude/**'
+      - '*'
+  pull_request:
+    paths:
+      - 'docs/code-map/**'
+      - 'tools/**'
+      - 'backend/**'
+      - 'frontend/**'
+      - 'scripts/**'
+      - '.github/**'
+      - '.claude/**'
+      - '*'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  code-map:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Code map checker test
+        run: node --test tools/code-map/test/*.test.mjs
+
+      - name: Code map check
+        run: node tools/code-map/check.mjs
