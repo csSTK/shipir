@@ -1,1 +1,25 @@
 # Code map: backend common
+
+- backend/src/main/java/dev/bethge/shipir/common/config/SecurityConfig.java, backend/src/test/java/dev/bethge/shipir/common/config/{SecurityHeadersTest,SecureCookiesHttpsTest}.java: session filter chain (cookie CSRF, JSON 401/403, role matchers, setup gate), CSP and security headers, HSTS/Secure cookies with shipir.security.https
+- backend/src/main/java/dev/bethge/shipir/common/config/PasswordEncoderConfig.java, backend/src/test/java/dev/bethge/shipir/common/config/PasswordEncoderConfigTest.java: Argon2id PasswordEncoder (DelegatingPasswordEncoder, bcrypt match-only)
+- backend/src/main/java/dev/bethge/shipir/common/config/OpenApiConfig.java, backend/src/test/java/dev/bethge/shipir/common/config/{OpenApiTest,OpenApiDisabledTest}.java: springdoc spec and Swagger UI under /api (login required), switchable via shipir.openapi.enabled
+- backend/src/main/java/dev/bethge/shipir/common/config/WebSocketConfig.java: STOMP endpoint /ws with simple broker /topic, same-origin check, handshake authenticated by the session filter chain
+- backend/src/main/java/dev/bethge/shipir/common/config/{ClockConfig,SchedulingConfig}.java: system UTC Clock bean, @EnableScheduling
+- backend/src/main/java/dev/bethge/shipir/common/config/SecureFilesStartupCheck.java, backend/src/test/java/dev/bethge/shipir/common/config/SecureFilesStartupCheckTest.java: fails startup when the platform has no SecureDirectoryStream support
+- backend/src/main/java/dev/bethge/shipir/common/exception/{ErrorResponse,GlobalExceptionHandler}.java: `{code, message, details}` error record and handler for validation and malformed bodies (400)
+- backend/src/main/java/dev/bethge/shipir/common/exception/{CodedException,RequestThrottled}.java: `code()` interface mapped by AiToolRegistry; marker for throttled (429) exceptions that AuditAspect does not record
+- backend/src/main/java/dev/bethge/shipir/common/net/{EgressPolicy,EgressProperties,EgressDeniedException,EgressHttpClient}.java: shared SSRF policy and pinned-DNS HTTP client for outbound requests to user-influenced URLs; private ranges need shipir.egress.allow-private-ranges
+- backend/src/test/java/dev/bethge/shipir/common/net/{EgressPolicyTest,EgressHttpClientTest}.java: denied ranges, rebinding, redirects, body cap and deadline
+- backend/src/main/java/dev/bethge/shipir/common/security/{SecretCipher,EncryptionProperties}.java: AES-256-GCM for secrets at rest, key shipir.encryption-key (optional, invalid key fails startup)
+- backend/src/main/java/dev/bethge/shipir/common/security/{EncryptionKeyMissingException,InvalidEncryptionKeyException,SecretDecryptionException}.java: cipher exceptions, messages never contain key or plaintext
+- backend/src/test/java/dev/bethge/shipir/common/security/SecretCipherTest.java: round trip, tamper, wrong key, key validation, no logging
+- backend/src/main/java/dev/bethge/shipir/common/security/{SetupGateFilter,SetupStatus,SetupStep,EnvironmentPresence}.java: setup gate answering 403 SETUP_REQUIRED on /api/** while a user step is pending; ports implemented by auth/ and host/
+- backend/src/main/java/dev/bethge/shipir/common/security/SystemScope.java: ScopedValue marking unattended system callers (schedulers, purge job) that CurrentAccess treats as unrestricted
+- backend/src/main/java/dev/bethge/shipir/common/security/AiInvocationContext.java: ScopedValue marking a call as made by the AI assistant; AuditAspect adds the AI marker, so audit/ does not depend on ai/
+- backend/src/main/java/dev/bethge/shipir/common/security/{UserAccessChangedEvent,DeploymentRemovedEvent,HostRemovedEvent,ChatSessionsPurgedEvent}.java: events driving stream revalidation and chat view-context cleanup
+- backend/src/main/java/dev/bethge/shipir/common/stream/{RunOutput,RunStatus}.java: port for run output implemented by ComposeOutputStreamService; host/ depends on it, never on streaming/
+- backend/src/main/java/dev/bethge/shipir/common/util/PathValidationUtil.java, backend/src/main/java/dev/bethge/shipir/common/util/PathValidationException.java, backend/src/test/java/dev/bethge/shipir/common/util/PathValidationUtilTest.java: central path guard (traversal, absolute, encoded, symlink escape), use-time symlink check, deployment name rule
+- backend/src/main/java/dev/bethge/shipir/common/util/SecureFiles.java, backend/src/test/java/dev/bethge/shipir/common/util/SecureFilesTest.java: symlink-race-free file access below a fixed root through NOFOLLOW directory handles; fails closed without SecureDirectoryStream
+- backend/src/main/java/dev/bethge/shipir/common/util/OutputSanitizer.java, backend/src/test/java/dev/bethge/shipir/common/util/OutputSanitizerTest.java: neutralizes control, C1 and bidi characters in streamed output
+- backend/src/main/java/dev/bethge/shipir/common/util/DnsNames.java, backend/src/test/java/dev/bethge/shipir/common/util/DnsNamesTest.java: lower-case DNS hostname validation shared by the compose generator and proxy route validator
+- backend/src/main/java/dev/bethge/shipir/common/util/EndpointUrls.java: normalize/sameEndpoint for comparing configured endpoint URLs (AI and OIDC settings, external identity issuers)

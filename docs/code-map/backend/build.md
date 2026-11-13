@@ -1,1 +1,16 @@
 # Code map: backend build
+- backend/pom.xml: Maven build, Java 25, Spring Boot parent, docker-java, JGit, OIDC primitives, Flyway, Testcontainers
+- backend/{mvnw,mvnw.cmd,.mvn/wrapper/*}: Maven wrapper
+- backend/Dockerfile, backend/.dockerignore: multi-stage image (Temurin build, JRE alpine runtime with docker-cli and compose, non-root user, /data/stacks), build context exclusions
+- backend/src/main/java/dev/bethge/shipir/ShipirApplication.java: Spring Boot entry point
+- backend/src/main/java/dev/bethge/shipir/**/package-info.java: one-line Javadoc per package of the architecture tree
+- backend/src/main/resources/application.yml: app name, datasource (DB_* env), JPA validate without OSIV, Flyway, session cookie and shipir.* defaults
+- backend/src/main/resources/application-demo.yml, backend/src/main/resources/db/testdata/R__demo_seed.sql: demo profile adding db/testdata to Flyway: seed users per role, sample data, throwaway compose stack with Postgres
+- backend/src/test/java/dev/bethge/shipir/demo/{DemoSeedProfileOffTest,DemoSeedProfileOnTest}.java: no seed rows without the profile; seed on an empty DB with documented passwords
+- backend/src/test/java/dev/bethge/shipir/{ShipirApplicationTests,DatasourcePropertiesTest}.java: context load with Postgres 16, datasource defaults and DB_* overrides
+- backend/src/test/java/dev/bethge/shipir/PostgresTestConfiguration.java: reusable @TestConfiguration with a @ServiceConnection postgres:16-alpine; integration tests import it
+- backend/src/test/java/dev/bethge/shipir/SetupGateFixture.java: shared test helper resetWithAdminHost (gives ADMIN one LOCAL host so the setup gate passes)
+- backend/src/test/java/dev/bethge/shipir/MutableClock.java: shared test Clock moved with advance/set, used by scheduler, throttle, cache, rate-limit and stream tests
+- backend/src/test/resources/application.properties: test initial-admin password
+- backend/src/test/java/dev/bethge/shipir/migration/{SchemaMigrationTest,AiProviderConfigsMigrationTest,RenameStacksToDeploymentsMigrationTest,TeamNameUniqueMigrationTest,UsernameUniqueMigrationTest}.java: schema constraints, cascades and data-moving migrations on throwaway databases
+- backend/src/test/java/dev/bethge/shipir/architecture/{ArchitectureRules,ArchitectureTest,ArchitectureRulesFailTest}.java, backend/src/test/java/dev/bethge/shipir/architecture/fixture/**: ArchUnit rules (dependency direction, docker-java only in docker/, no ProcessBuilder/Runtime.exec outside compose.execution) plus fixtures proving rules fail

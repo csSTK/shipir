@@ -1,1 +1,10 @@
 # Code map: backend permission
+
+- backend/src/main/java/dev/bethge/shipir/permission/{Permission,PermissionLevel,PermissionRepository}.java: grant entity (one per user xor team, on a host or a deployment), level enum VIEW/OPERATE, repository with effective (own + team) grant queries
+- backend/src/main/java/dev/bethge/shipir/permission/{PermissionService,PermissionSubject,PermissionEvaluator,DeploymentDirectory,MethodSecurityConfig}.java: access decisions (ADMIN all, host grant covers its deployments, VIEWER never operates, best grant wins), `@PreAuthorize` evaluator
+- backend/src/main/java/dev/bethge/shipir/permission/{PermissionController,PermissionGrantService,PermissionException}.java, backend/src/main/java/dev/bethge/shipir/permission/dto/*: ADMIN grants API (GET/PUT /api/users/{id}/permissions, GET .../teams), audited, publishes UserAccessChangedEvent
+- backend/src/main/java/dev/bethge/shipir/permission/{Team,TeamMember,TeamMemberId,TeamRepository,TeamMemberRepository,TeamService,TeamController}.java: teams (ADMIN-only /api/teams/**, case-insensitive unique name, members, team grants), `syncMemberships` for OIDC groups
+- backend/src/main/java/dev/bethge/shipir/permission/CurrentAccess.java: facade over PermissionService for the current user; services enforce view (404) and operate (403) via it; SystemScope callers unrestricted, never isAdmin
+- backend/src/test/java/dev/bethge/shipir/permission/{PermissionServiceTest,PermissionApiTest,TeamApiTest,CurrentAccessTest}.java: role x level x host/deployment matrix incl. team grants, grants API and teams API (roles, CSRF, validation, audit)
+- backend/src/test/java/dev/bethge/shipir/permission/{PermissionGrantQueryCountTest,PermissionGrantServiceGuardTest,TeamServiceGuardTest,TeamAccessEventsTest}.java: constant query count, ADMIN guards on service methods, access-changed events
+- backend/src/main/resources/db/migration/V{22,30,42}__*.sql: Flyway migrations for permissions, teams and the case-insensitive unique team name

@@ -1,1 +1,12 @@
 # Code map: backend notification
+
+- backend/src/main/java/dev/bethge/shipir/notification/{Notification,NotificationPreference,NotificationPreferenceRepository,NotificationRepository}.java: notification and per-user preference entities (missing preference row = enabled), visibility-filtered queries
+- backend/src/main/java/dev/bethge/shipir/notification/{NotificationType,NotificationDraft}.java: notification types (host, deployment, container, git/image auto-update, uptime) and the draft carrying target ids and names
+- backend/src/main/java/dev/bethge/shipir/notification/NotificationService.java: listens to host, run-failure, auto-update, container-problem and uptime events; recipients are opted-in users who may view the target; list/unread/read
+- backend/src/main/java/dev/bethge/shipir/notification/NotificationController.java, backend/src/main/java/dev/bethge/shipir/notification/dto/{NotificationPageResponse,NotificationPreferenceDto,NotificationResponse,UnreadCountResponse}.java: /api/notifications list, unread-count, read, read-all, preferences
+- backend/src/main/java/dev/bethge/shipir/notification/{NotificationWebhook,NotificationWebhookRepository}.java, backend/src/main/java/dev/bethge/shipir/notification/dto/Webhook{Request,Response,TestResponse}.java: webhook entity (URL encrypted, hint only) and bodies (request toString hides the URL)
+- backend/src/main/java/dev/bethge/shipir/notification/{WebhookController,WebhookService,WebhookException}.java: ADMIN /api/notifications/webhooks CRUD and test, audited
+- backend/src/main/java/dev/bethge/shipir/notification/{WebhookDeliveryService,WebhookProperties}.java: async JSON POST per subscribed webhook via EgressHttpClient (no redirects or retries), first listener so in-app failures cannot skip it
+- backend/src/test/java/dev/bethge/shipir/notification/{NotificationTestBase,NotificationApiTest,NotificationListenerTest,NotificationNewTypesTest,NotificationPermissionTest}.java: API, event to rows, recipients and columns, permission filtering
+- backend/src/test/java/dev/bethge/shipir/notification/{WebhookTestBase,WebhookApiTest,WebhookDeliveryTest,WebhookDeliveryEgressTest,WebhookDeliveryListenerFailureTest,WebhookTestDeniedTargetTest,WebhookWithoutKeyTest}.java: webhook API and delivery against JDK HttpServer stubs, egress denial, no-key
+- backend/src/main/resources/db/migration/V{9,10,23,45}__*.sql: Flyway migrations for notifications, webhooks, extended types and error_code
