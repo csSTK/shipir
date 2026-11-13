@@ -68,5 +68,7 @@
   "AccountPage.language_de": "Deutsch",
   "AccountPage.noNotificationSettings": "No notification settings yet",
   "AccountPage.noNotificationSettingsHint": "Once Shipir has events you can be notified about, you can choose them here.",
-  "TokensSection.noApiTokensHint": "Create a token to let scripts and tools call the Shipir API as you."
+  "TokensSection.noApiTokensHint": "Create a token to let scripts and tools call the Shipir API as you.",
+  "AccountPage.signInManagedBySso": "Sign-in managed by single sign-on",
+  "AccountPage.signInManagedBySsoText": "Your password and two-factor sign-in are managed by your single sign-on provider. Change them there; Shipir does not ask for a local password or code for this account."
 }

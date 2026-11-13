@@ -464,5 +464,6 @@
   "UsersSettingsPage.unlinkSsoIdentityText": "Unlink the single sign-on identity of <strong>{{username}}</strong>? The user is signed out and can no longer sign in through the identity provider.",
   "UsersSettingsPage.linkYourSsoIdentity": "Link your own SSO identity for",
   "UsersSettingsPage.linkSsoPasswordNote": "A linked user's local password can no longer be changed or reset until the identity is unlinked.",
-  "UsersSettingsPage.issuerMismatch": "The issuer does not match the configured provider."
+  "UsersSettingsPage.issuerMismatch": "The issuer does not match the configured provider.",
+  "UsersSettingsPage.linkSsoRoleNote": "After linking, the role is set by the provider's groups at every sign-in and manual role changes are overwritten. The last enabled ADMIN is never demoted this way."
 }

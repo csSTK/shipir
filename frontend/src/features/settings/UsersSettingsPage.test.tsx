@@ -174,6 +174,13 @@ describe('UsersSettingsPage', () => {
     expect(calls('PUT')[0]).toEqual(['/users/u2/external-identity', { method: 'PUT', body: { issuer: 'https://idp.example.com', subject: 'sub-1' } }])
   })
 
+  it('warns in the link dialog that the role then follows the identity provider groups', async () => {
+    renderPage()
+    await screen.findByText('anna')
+    fireEvent.click(screen.getByRole('button', { name: 'Link SSO identity for anna' }))
+    expect(within(screen.getByRole('dialog')).getByText(/role is set by the provider's groups at every sign-in/i)).toBeTruthy()
+  })
+
   it('lets an ADMIN link their own identity only after confirming their password', async () => {
     renderPage()
     await screen.findByText('anna')

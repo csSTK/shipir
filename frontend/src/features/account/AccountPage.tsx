@@ -309,8 +309,19 @@ export function AccountPage({
         </dl>
       </Card>
       <LanguageSection locale={user.locale} />
-      <PasswordSection username={user.username} />
-      <TwoFactorSection enabled={user.twoFactorEnabled === true} />
+      {user.externalIssuer ? (
+        <Card className="account__card" role="region" aria-labelledby="account-sso-managed">
+          <h2 className="account__heading" id="account-sso-managed">
+            {t('AccountPage.signInManagedBySso')}
+          </h2>
+          <p>{t('AccountPage.signInManagedBySsoText')}</p>
+        </Card>
+      ) : (
+        <>
+          <PasswordSection username={user.username} />
+          <TwoFactorSection enabled={user.twoFactorEnabled === true} />
+        </>
+      )}
       <TokensSection />
       <PreferencesSection />
     </div>

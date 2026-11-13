@@ -21,7 +21,6 @@ const OIDC_ERRORS: Record<string, string> = {
   get PROVIDER_INVALID() { return i18n.t('auth:LoginPage.theSingleSignOnProvider2') },
   get OIDC_NOT_CONFIGURED() { return i18n.t('auth:LoginPage.singleSignOnIsNot') },
   get ENCRYPTION_KEY_MISSING() { return i18n.t('auth:LoginPage.singleSignOnIsNot2') },
-  get LAST_ADMIN() { return i18n.t('auth:LoginPage.singleSignOnWouldLeaveShipir') },
   get TOO_MANY_ATTEMPTS() { return i18n.t('auth:LoginPage.tooManySignInAttemptsTryAgain') },
 }
 const OIDC_GENERIC_ERROR = () => i18n.t('auth:LoginPage.singleSignOnFailedPlease')

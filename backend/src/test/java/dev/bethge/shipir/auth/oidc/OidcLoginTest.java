@@ -157,14 +157,43 @@ class OidcLoginTest extends OidcTestBase {
     }
 
     @Test
-    void lastEnabledAdminIsNotDemotedBySso() throws Exception {
+    void lastEnabledAdminIsNotDemotedBySsoButKeepsAdminAndIsAudited() throws Exception {
         configure(true, true);
         signIn(claims("sub-22", "tess", "admins"));
         jdbc.update("UPDATE users SET disabled_at = now() WHERE external_subject IS NULL AND role = 'ADMIN'");
 
-        Flow f = signIn(claims("sub-22", "tess", "viewers"));
-        assertThat(f.callbackLocation()).isEqualTo("/?oidc_error=LAST_ADMIN");
+        ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger)
+                org.slf4j.LoggerFactory.getLogger(OidcUserResolver.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                new ch.qos.logback.core.read.ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        Flow f;
+        try {
+            f = signIn(claims("sub-22", "tess", "viewers"));
+        } finally {
+            logger.detachAppender(appender);
+        }
+        assertThat(f.callbackLocation()).isEqualTo("/");
+        assertThat(meJson(f.session())).contains("\"username\":\"tess\"");
         assertThat(jdbc.queryForObject("SELECT role FROM users WHERE username = 'tess'", String.class))
+                .isEqualTo("ADMIN");
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM audit_log WHERE action = 'OIDC_ROLE_KEPT_LAST_ADMIN' AND username = 'tess'",
+                Integer.class)).isEqualTo(1);
+        assertThat(appender.list).anyMatch(e -> e.getLevel() == ch.qos.logback.classic.Level.WARN
+                && e.getFormattedMessage().contains("last enabled ADMIN"));
+    }
+
+    @Test
+    void lastEnabledAdminWithNoMatchingGroupIsKeptToo() throws Exception {
+        configure(true, true);
+        signIn(claims("sub-24", "vic", "admins"));
+        jdbc.update("UPDATE users SET disabled_at = now() WHERE external_subject IS NULL AND role = 'ADMIN'");
+
+        Flow f = signIn(claims("sub-24", "vic", "nobody"));
+        assertThat(f.callbackLocation()).isEqualTo("/");
+        assertThat(jdbc.queryForObject("SELECT role FROM users WHERE username = 'vic'", String.class))
                 .isEqualTo("ADMIN");
     }
 

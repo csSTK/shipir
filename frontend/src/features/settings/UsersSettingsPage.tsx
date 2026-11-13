@@ -226,6 +226,7 @@ function LinkIdentityDialog({ user, self, onClose }: { user: ManagedUser; self: 
       <form id="user-link-form" onSubmit={submit} className="settings__form">
         <p className="settings__muted">{t('UsersSettingsPage.linkSsoHelp')}</p>
         <p className="settings__muted">{t('UsersSettingsPage.linkSsoPasswordNote')}</p>
+        <p className="settings__muted">{t('UsersSettingsPage.linkSsoRoleNote')}</p>
         <TextField label={t('UsersSettingsPage.ssoIssuer')} value={issuer} onChange={(e) => setIssuer(e.target.value)} autoFocus autoComplete="off" />
         <TextField label={t('UsersSettingsPage.ssoSubject')} value={subject} onChange={(e) => setSubject(e.target.value)} autoComplete="off" />
         {problem && (

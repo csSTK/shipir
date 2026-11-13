@@ -56,6 +56,20 @@ afterEach(() => {
 })
 
 describe('AccountPage', () => {
+  it('hides the password change for a linked user and explains why', () => {
+    route()
+    renderPage('https://idp.example.com')
+    expect(screen.queryByLabelText('Current password')).toBeNull()
+    expect(screen.queryByRole('button', { name: /change password/i })).toBeNull()
+    expect(screen.getByText(/password and two-factor sign-in are managed by your single sign-on provider/i)).toBeTruthy()
+  })
+
+  it('keeps the password change for a local user', () => {
+    route()
+    renderPage(null)
+    expect(screen.getByLabelText('Current password')).toBeTruthy()
+  })
+
   it('shows the linked identity only for single sign-on users', () => {
     route()
     renderPage('https://id.example.com')

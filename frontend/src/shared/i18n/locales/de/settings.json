@@ -464,5 +464,6 @@
   "UsersSettingsPage.unlinkSsoIdentityText": "Die Single-Sign-on-Identität von <strong>{{username}}</strong> trennen? Der Benutzer wird abgemeldet und kann sich nicht mehr über den Identity-Provider anmelden.",
   "UsersSettingsPage.linkYourSsoIdentity": "Eigene SSO-Identität verknüpfen für",
   "UsersSettingsPage.linkSsoPasswordNote": "Das lokale Passwort eines verknüpften Benutzers kann nicht mehr geändert oder zurückgesetzt werden, bis die Identität getrennt wird.",
-  "UsersSettingsPage.issuerMismatch": "Der Issuer passt nicht zum konfigurierten Provider."
+  "UsersSettingsPage.issuerMismatch": "Der Issuer passt nicht zum konfigurierten Provider.",
+  "UsersSettingsPage.linkSsoRoleNote": "Nach der Verknüpfung wird die Rolle bei jeder Anmeldung durch die Gruppen des Anbieters gesetzt; manuelle Rollenänderungen werden überschrieben. Der letzte aktive ADMIN wird dadurch nie herabgestuft."
 }

@@ -86,15 +86,6 @@ describe('LoginPage single sign-on', () => {
     expect(await screen.findByText('Too many sign-in attempts. Try again in a few minutes.')).toBeInTheDocument()
   })
 
-  it('shows a specific message when SSO would remove the last enabled administrator', async () => {
-    renderLogin({ enabled: true, displayName: 'x', localLoginEnabled: true }, '?oidc_error=LAST_ADMIN')
-    expect(
-      await screen.findByText(
-        'Single sign-on would leave Shipir without an enabled administrator. Ask an administrator to check your group mapping.',
-      ),
-    ).toBeInTheDocument()
-  })
-
   it('shows a generic message for an unknown code', async () => {
     renderLogin({ enabled: true, displayName: 'x', localLoginEnabled: true }, '?oidc_error=%3Cb%3Eevil')
     expect(await screen.findByText('Single sign-on failed. Please try again.')).toBeInTheDocument()

@@ -68,5 +68,7 @@
   "AccountPage.language_de": "Deutsch",
   "AccountPage.noNotificationSettings": "Noch keine Benachrichtigungseinstellungen",
   "AccountPage.noNotificationSettingsHint": "Sobald es Ereignisse gibt, über die Shipir dich informieren kann, wählst du sie hier aus.",
-  "TokensSection.noApiTokensHint": "Erstelle ein Token, damit Skripte und Tools die Shipir-API in deinem Namen aufrufen können."
+  "TokensSection.noApiTokensHint": "Erstelle ein Token, damit Skripte und Tools die Shipir-API in deinem Namen aufrufen können.",
+  "AccountPage.signInManagedBySso": "Anmeldung über Single Sign-on",
+  "AccountPage.signInManagedBySsoText": "Dein Passwort und die Zwei-Faktor-Anmeldung werden von deinem Single-Sign-on-Anbieter verwaltet. Ändere sie dort; Shipir fragt für dieses Konto kein lokales Passwort und keinen Code ab."
 }
