@@ -4,6 +4,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import dev.bethge.shipir.common.util.PathValidationException;
+import dev.bethge.shipir.compose.DeploymentException;
 import dev.bethge.shipir.compose.DeploymentProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,13 +12,16 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.util.Arrays;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -238,6 +242,82 @@ class ComposeFileRepositoryTest {
     @Test
     void repoDirIsSubdirectoryOfDeploymentDir() {
         assertThat(repo.repoDir(HOST, "web")).isEqualTo(repo.deploymentDir(HOST, "web").resolve("repo"));
+    }
+
+    /** The read cap is the config editor's default ({@code shipir.config-editor.max-file-bytes}, 1 MiB). */
+    private static final int CAP = 1024 * 1024;
+
+    @Test
+    void readRejectsComposeFileLargerThanTheCap() throws IOException {
+        repo.write(HOST, "web", "x", null);
+        Files.write(repo.deploymentDir(HOST, "web").resolve("compose.yaml"), filled(CAP + 1));
+
+        assertThatThrownBy(() -> repo.readCompose(HOST, "web"))
+                .isInstanceOfSatisfying(DeploymentException.class, e -> {
+                    assertThat(e.status()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE);
+                    assertThat(e.code()).isEqualTo("FILE_TOO_LARGE");
+                });
+    }
+
+    @Test
+    void readRejectsEnvFileLargerThanTheCap() throws IOException {
+        repo.write(HOST, "web", "x", "A=1");
+        Files.write(repo.deploymentDir(HOST, "web").resolve(".env"), filled(CAP + 1));
+
+        assertThatThrownBy(() -> repo.readEnv(HOST, "web"))
+                .isInstanceOfSatisfying(DeploymentException.class,
+                        e -> assertThat(e.code()).isEqualTo("FILE_TOO_LARGE"));
+    }
+
+    @Test
+    void readReturnsFileExactlyAtTheCap() throws IOException {
+        repo.write(HOST, "web", "x", null);
+        Files.write(repo.deploymentDir(HOST, "web").resolve("compose.yaml"), filled(CAP));
+
+        assertThat(repo.readCompose(HOST, "web")).hasValueSatisfying(text -> assertThat(text).hasSize(CAP));
+    }
+
+    private static byte[] filled(int size) {
+        byte[] bytes = new byte[size];
+        Arrays.fill(bytes, (byte) 'a');
+        return bytes;
+    }
+
+    @Test
+    void writeRejectsEnvContentOverTheCapInBytesAndLeavesFilesUntouched() {
+        repo.write(HOST, "web", "v1", "A=1");
+        String oversizedEnv = "B=" + "a".repeat(CAP);
+
+        assertThatThrownBy(() -> repo.write(HOST, "web", "v2", oversizedEnv))
+                .isInstanceOfSatisfying(DeploymentException.class, e -> {
+                    assertThat(e.status()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE);
+                    assertThat(e.code()).isEqualTo("FILE_TOO_LARGE");
+                });
+        assertThat(repo.readCompose(HOST, "web")).contains("v1");
+        assertThat(repo.readEnv(HOST, "web")).contains("A=1");
+    }
+
+    @Test
+    void writeRejectsComposeWithMultibyteContentOverTheCapInBytes() {
+        // 400_000 characters (under the 500_000-character write limit of the API) of three-byte characters: 1_200_000
+        // UTF-8 bytes, above the cap. A character count check alone would let this through.
+        String multibyte = "€".repeat(400_000);
+
+        assertThatThrownBy(() -> repo.write(HOST, "web", multibyte, null))
+                .isInstanceOfSatisfying(DeploymentException.class,
+                        e -> assertThat(e.code()).isEqualTo("FILE_TOO_LARGE"));
+        assertThat(repo.readCompose(HOST, "web")).isEmpty();
+    }
+
+    @Test
+    void writeAcceptsContentExactlyAtTheCapInBytes() {
+        // "B=" is 2 bytes and each "ä" 2 bytes, so this env content is exactly CAP bytes
+        String envAtCap = "B=" + "ä".repeat((CAP - 2) / 2);
+        repo.write(HOST, "web", "a".repeat(CAP), envAtCap);
+
+        assertThat(repo.readCompose(HOST, "web")).hasValueSatisfying(text -> assertThat(text).hasSize(CAP));
+        assertThat(repo.readEnv(HOST, "web")).hasValueSatisfying(
+                text -> assertThat(text.getBytes(StandardCharsets.UTF_8)).hasSize(CAP));
     }
 
     @Test

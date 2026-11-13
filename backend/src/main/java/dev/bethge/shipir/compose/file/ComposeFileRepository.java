@@ -39,6 +39,13 @@ public class ComposeFileRepository {
     public static final String REPO_DIR = "repo";
     /** Every file this repository writes into a deployment directory (other files there are not Shipir-approved). */
     public static final Set<String> SHIPIR_WRITTEN_FILES = Set.of(COMPOSE_FILE, ENV_FILE, ROLLBACK_OVERRIDE_FILE);
+    /**
+     * Largest UTF-8 size of a {@code compose.yaml} or {@code .env} that {@link #write} stores and {@link #readCompose}/
+     * {@link #readEnv} return (bytes). Same default as the config editor's {@code shipir.config-editor.max-file-bytes}
+     * (1 MiB). Not configurable: these files are read whole into memory on many paths and no operator need for a larger one
+     * has come up. Larger content fails with 413 FILE_TOO_LARGE, on write before anything touches the disk.
+     */
+    public static final long MAX_FILE_BYTES = 1024 * 1024;
 
     private static final FileAttribute<Set<PosixFilePermission>> DIR_PERMISSIONS =
             PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------"));
@@ -56,6 +63,11 @@ public class ComposeFileRepository {
 
     /** Writes compose.yaml and, if {@code envContent} is non-null, .env; a null {@code envContent} removes an existing .env. */
     public void write(UUID hostId, String deploymentName, String composeContent, String envContent) {
+        // checked before the disk is touched: a file that read() would refuse must never be stored
+        requireWithinCap(COMPOSE_FILE, composeContent);
+        if (envContent != null) {
+            requireWithinCap(ENV_FILE, envContent);
+        }
         try (SecureFiles.Parent parent = openDeploymentDir(hostId, deploymentName, true)) {
             writeAtomically(parent.dir(), COMPOSE_FILE, composeContent);
             if (envContent != null) {
@@ -71,6 +83,7 @@ public class ComposeFileRepository {
     /** Writes the temporary rollback override next to {@code compose.yaml}; returns its path. */
     public Path writeRollbackOverride(UUID hostId, String deploymentName, String content) {
         Path file = deploymentDir(hostId, deploymentName).resolve(ROLLBACK_OVERRIDE_FILE);
+        requireWithinCap(ROLLBACK_OVERRIDE_FILE, content);
         try (SecureFiles.Parent parent = openDeploymentDir(hostId, deploymentName, true)) {
             writeAtomically(parent.dir(), ROLLBACK_OVERRIDE_FILE, content);
         } catch (IOException e) {
@@ -202,7 +215,12 @@ public class ComposeFileRepository {
             if (!parent.dir().isRegularFile(name)) {
                 return Optional.empty();
             }
-            return Optional.of(new String(parent.dir().readAll(name, Integer.MAX_VALUE - 8L), StandardCharsets.UTF_8));
+            // readAll returns at most MAX_FILE_BYTES + 1 bytes, so one extra byte reveals an oversized file
+            byte[] bytes = parent.dir().readAll(name, MAX_FILE_BYTES);
+            if (bytes.length > MAX_FILE_BYTES) {
+                throw tooLarge(name);
+            }
+            return Optional.of(new String(bytes, StandardCharsets.UTF_8));
         } catch (NoSuchFileException missing) {
             return Optional.empty();
         } catch (SecureFiles.NotRegularFileException e) {
@@ -211,6 +229,21 @@ public class ComposeFileRepository {
         } catch (IOException e) {
             throw new UncheckedIOException("Could not read " + name, e);
         }
+    }
+
+    /**
+     * Refuses content whose UTF-8 size exceeds {@link #MAX_FILE_BYTES}. Counted in bytes, not characters: the API's
+     * character limits allow several MB of multibyte text, which read() would then refuse (a self-lock).
+     */
+    private static void requireWithinCap(String name, String content) {
+        if (content.getBytes(StandardCharsets.UTF_8).length > MAX_FILE_BYTES) {
+            throw tooLarge(name);
+        }
+    }
+
+    private static DeploymentException tooLarge(String name) {
+        return new DeploymentException(HttpStatus.CONTENT_TOO_LARGE, "FILE_TOO_LARGE",
+                "The deployment file " + name + " is larger than " + MAX_FILE_BYTES + " bytes");
     }
 
     private static void deleteQuietly(SecureFiles.Dir dir, String name) {

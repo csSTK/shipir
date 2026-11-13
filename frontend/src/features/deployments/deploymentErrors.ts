@@ -66,6 +66,8 @@ export function describeDeploymentError(error: unknown, fallback: string): strin
         ].join(' ')
       case 'REMOTE_BIND_MOUNT_DENIED':
         return [i18n.t('deployments:deploymentErrors.remoteBindMountDenied'), ...(error.details ?? [])].join(' ')
+      case 'FILE_TOO_LARGE':
+        return i18n.t('deployments:deploymentErrors.theDeploymentFileIsTooLarge')
       case 'HOST_NOT_FOUND':
         return i18n.t('deployments:deploymentErrors.thisEnvironmentNoLongerExists')
       default:

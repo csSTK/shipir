@@ -269,6 +269,7 @@
   "deploymentErrors.remoteBindMountDenied": "Bind-Mounts sind auf einer entfernten Umgebung ohne die Rolle ADMIN nicht erlaubt. Verwende stattdessen ein benanntes Volume.",
   "deploymentErrors.theComposeFileOfThis": "Die Compose-Datei dieses Projekts liegt in einem Verzeichnis, das Shipir nicht lesen darf. Füge stattdessen das YAML ein.",
   "deploymentErrors.thisProjectUsesPathsRelative": "Dieses Projekt verwendet Pfade relativ zu seinem ursprünglichen Verzeichnis, die Shipir nicht beibehalten kann. Mache sie absolut und übernimm es erneut:",
+  "deploymentErrors.theDeploymentFileIsTooLarge": "Die Compose- oder .env-Datei dieser Umgebung ist zu groß, als dass Shipir sie lesen kann. Mache sie kleiner.",
   "deploymentErrors.thisEnvironmentNoLongerExists": "Diese Umgebung existiert nicht mehr.",
   "deploymentErrors.youAreNotAllowedTo": "Das darfst du nicht.",
   "deploymentErrors.authenticationFailed": "Authentifizierung fehlgeschlagen",

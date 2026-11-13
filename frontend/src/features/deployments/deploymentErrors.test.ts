@@ -11,6 +11,11 @@ describe('describeDeploymentError', () => {
     expect(text).toMatch(/named volume/i)
   })
 
+  it('says that a stored compose or env file is too large, not the generic error', () => {
+    const error = new ApiError(413, 'x', 'FILE_TOO_LARGE')
+    expect(describeDeploymentError(error, 'fallback')).toMatch(/too large/i)
+  })
+
   it('lists the other violations of a mixed refusal', () => {
     const error = new ApiError(403, 'x', 'REMOTE_BIND_MOUNT_DENIED', undefined, ['x: privileged'])
     expect(describeDeploymentError(error, 'fallback')).toMatch(/named volume.*x: privileged/i)
