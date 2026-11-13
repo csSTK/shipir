@@ -72,6 +72,8 @@ export interface ImageAutoUpdateInfo {
 }
 
 export interface ManagedDeploymentDetail extends ManagedDeployment {
+  /** The caller has OPERATE on this host or deployment; false for a VIEW-only grant (no env values, no write actions). */
+  canOperate: boolean
   yaml: string
   git?: GitInfo | null
   imageAutoUpdate?: ImageAutoUpdateInfo | null

@@ -56,9 +56,12 @@ export function DeploymentDetailPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { data: user } = useCurrentUser()
-  const canWrite = user?.role === 'ADMIN' || user?.role === 'OPERATOR'
-
   const deployment = useManagedDeployment(hostId, deploymentId)
+  // The role only says what the account may ever do; the grant on this host/deployment decides (VIEW-only grants
+  // get 403s on every write, e.g. ENV_VALUES_RESTRICTED), so the server's `canOperate` flag gates the controls too.
+  const roleMayWrite = user?.role === 'ADMIN' || user?.role === 'OPERATOR'
+  const viewOnlyGrant = roleMayWrite && deployment.data?.canOperate === false
+  const canWrite = roleMayWrite && !viewOnlyGrant
   const versions = useDeploymentVersions(hostId, deploymentId)
   const deploy = useDeployDeployment(hostId)
   const redeploy = useGitRedeploy(hostId)
@@ -298,6 +301,11 @@ export function DeploymentDetailPage() {
         }
       />
 
+      {viewOnlyGrant && (
+        <p role="note" className="sd-muted">
+          {t('DeploymentDetailPage.viewOnlyGrantHint')}
+        </p>
+      )}
       {data.systemManaged && (
         <p role="note" className="sd-muted">
           {t('DeploymentDetailPage.managedViaDomainsHint')} <Link to={`/environments/${hostId}/domains`}>{t('DeploymentDetailPage.openDomains')}</Link>

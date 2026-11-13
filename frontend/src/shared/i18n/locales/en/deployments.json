@@ -70,6 +70,7 @@
   "DeploymentDetailPage.pullNewerImagesAndRecreate": "Pull newer images and recreate the containers",
   "DeploymentDetailPage.deployOnceFirst": "Deploy once first",
   "DeploymentDetailPage.saveOrCancelEditsFirst": "Save or cancel your edits first.",
+  "DeploymentDetailPage.viewOnlyGrantHint": "You have view-only access to this deployment, so changes, deploys and environment values are not available.",
   "DeploymentDetailPage.updating": "Updating…",
   "DeploymentDetailPage.pullUpdate": "Pull & update",
   "DeploymentDetailPage.stop": "Stop",

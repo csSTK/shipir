@@ -747,7 +747,7 @@ public class DeploymentService {
                 List.of(field + ": must not be blank"));
     }
 
-    private static DeploymentDetailResponse toDetail(Deployment s, String yaml, List<String> envKeys) {
+    private DeploymentDetailResponse toDetail(Deployment s, String yaml, List<String> envKeys) {
         GitInfo gitInfo = s.getSourceType() == DeploymentSource.GIT
                 ? new GitInfo(s.getGitRepoUrl(), s.getGitRef(), s.getGitComposePath(), s.getGitCredentialId(),
                         s.getLastCommitSha(), s.isAutoUpdateEnabled(), s.getAutoUpdateIntervalSeconds(),
@@ -760,6 +760,6 @@ public class DeploymentService {
                 : null;
         return new DeploymentDetailResponse(s.getId(), s.getName(), s.getStatus(), s.getSourceType(),
                 s.getLastDeployedAt(), s.getCreatedAt(), yaml, envKeys, gitInfo, imageInfo, s.getProfiles(),
-                s.isSystemManaged());
+                s.isSystemManaged(), access.canOperate(s.getHostId(), s.getId()));
     }
 }

@@ -128,6 +128,24 @@ describe('DeploymentDetailPage', () => {
     expect(apiFetch).not.toHaveBeenCalledWith(`${BASE}/webhook`, expect.anything())
   })
 
+  it('hides write controls and explains why for an operator with a view-only grant', async () => {
+    serve('OPERATOR', { [`GET ${BASE}`]: () => ({ ...deployment, canOperate: false }) })
+    renderPage()
+    await screen.findByRole('list', { name: 'Versions' })
+    expect(screen.getByText(/view-only access to this deployment/i)).toBeInTheDocument()
+    for (const name of ['Deploy', 'Stop', 'Delete', 'Edit', 'Pull & update']) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
+    }
+    expect(screen.queryByRole('region', { name: 'Redeploy webhook' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the write controls for an operator who may operate', async () => {
+    serve('OPERATOR', { [`GET ${BASE}`]: () => ({ ...deployment, canOperate: true }) })
+    renderPage()
+    expect(await screen.findByRole('button', { name: 'Edit' })).toBeInTheDocument()
+    expect(screen.queryByText(/view-only access/i)).not.toBeInTheDocument()
+  })
+
   it('hides all write actions from viewers', async () => {
     serve('VIEWER')
     renderPage()

@@ -70,6 +70,7 @@
   "DeploymentDetailPage.pullNewerImagesAndRecreate": "Neuere Images pullen und die Container neu erstellen",
   "DeploymentDetailPage.deployOnceFirst": "Deploye zuerst einmal",
   "DeploymentDetailPage.saveOrCancelEditsFirst": "Bearbeitung zuerst speichern oder abbrechen.",
+  "DeploymentDetailPage.viewOnlyGrantHint": "Du hast nur Leserechte für dieses Deployment, daher sind Änderungen, Deployments und Umgebungswerte nicht verfügbar.",
   "DeploymentDetailPage.updating": "Wird aktualisiert…",
   "DeploymentDetailPage.pullUpdate": "Pullen & aktualisieren",
   "DeploymentDetailPage.stop": "Stoppen",
