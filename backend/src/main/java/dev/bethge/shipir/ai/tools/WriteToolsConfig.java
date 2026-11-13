@@ -1,6 +1,7 @@
 package dev.bethge.shipir.ai.tools;
 
 import dev.bethge.shipir.auth.Role;
+import dev.bethge.shipir.compose.DeploymentException;
 import dev.bethge.shipir.compose.DeploymentRunService;
 import dev.bethge.shipir.compose.DeploymentService;
 import dev.bethge.shipir.compose.DeploymentSource;
@@ -76,8 +77,19 @@ class WriteToolsConfig {
 
     @Bean
     AiTool gitRedeployDeploymentTool(DeploymentRunService deployments) {
-        return write("git_redeploy_deployment", "Pull the latest commit of a Git deployment and redeploy. Async.",
-                deploymentSchema(), Role.OPERATOR, (a, c) -> deployments.gitRedeploy(uuid(a, "hostId"), uuid(a, "deploymentId"), c.username()));
+        return write("git_redeploy_deployment", "Pull the latest commit of a Git deployment and redeploy. Async. Not for ADMINs.",
+                deploymentSchema(), Role.OPERATOR, (a, c) -> {
+                    try {
+                        return deployments.gitRedeploy(uuid(a, "hostId"), uuid(a, "deploymentId"), c.username());
+                    } catch (DeploymentException e) {
+                        if ("REVIEW_REQUIRED".equals(e.code())) {
+                            // never bypass the review: the answer only has to be readable by the model
+                            throw new DeploymentException(e.status(), e.code(), "As ADMIN, Git redeploys need a review of the pulled "
+                                    + "files in the UI (Deployment > Pull & redeploy); this can't be done from chat.");
+                        }
+                        throw e;
+                    }
+                });
     }
 
     @Bean

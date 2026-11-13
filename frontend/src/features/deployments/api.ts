@@ -254,12 +254,39 @@ export function usePullUpdate(hostId: string) {
   })
 }
 
-/** Pulls the repository and redeploys (`POST .../git/redeploy`, 202); output streams like a normal deploy. */
+/** Step 1 of an ADMIN's Pull & redeploy: the commit now checked out and the hash of the files to review. */
+export interface GitPullResult {
+  commitSha: string
+  graphHash: string | null
+}
+
+/** Pulls into the checkout without deploying (`POST .../git/pull`); the files to review are what is on disk afterwards. */
+export function useGitPull(hostId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (deploymentId: string) =>
+      apiFetch<GitPullResult>(`${managedBase(hostId)}/${deploymentId}/git/pull`, { method: 'POST' }),
+    // the cached file tree is from before the pull: the review must read the post-pull files
+    onSuccess: (_result, deploymentId) =>
+      queryClient.removeQueries({ queryKey: ['hosts', hostId, 'managed-deployments', deploymentId, 'files'] }),
+  })
+}
+
+export interface GitRedeployInput {
+  deploymentId: string
+  /** The reviewed pull (ADMIN, step 2); without it the server pulls and deploys in one step (OPERATOR). */
+  review?: GitPullResult
+}
+
+/** Redeploys a Git deployment (`POST .../git/redeploy`, 202); output streams like a normal deploy. */
 export function useGitRedeploy(hostId: string) {
   const invalidate = useInvalidateDeployments(hostId)
   return useMutation({
-    mutationFn: (deploymentId: string) =>
-      apiFetch<DeploymentRun>(`${managedBase(hostId)}/${deploymentId}/git/redeploy`, { method: 'POST' }),
+    mutationFn: ({ deploymentId, review }: GitRedeployInput) =>
+      apiFetch<DeploymentRun>(`${managedBase(hostId)}/${deploymentId}/git/redeploy`, {
+        method: 'POST',
+        ...(review ? { body: { commitSha: review.commitSha, graphHash: review.graphHash } } : {}),
+      }),
     onSuccess: () => void invalidate(),
   })
 }

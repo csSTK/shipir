@@ -181,6 +181,20 @@ public class GitRepositoryService {
         return sync(repoDir, repoUrl, commitSha, composePath, credentialId);
     }
 
+    /** The commit the checkout in {@code repoDir} is on, read locally (no network); null if there is no readable checkout. */
+    public String headCommit(Path repoDir) {
+        if (!Files.exists(repoDir.resolve(".git"))) {
+            return null;
+        }
+        try (Git git = Git.open(repoDir.toFile())) {
+            ObjectId head = git.getRepository().resolve("HEAD^{commit}");
+            return head == null ? null : head.name();
+        } catch (IOException | RuntimeException e) {
+            log.warn("Local git check failed: {}", e.getClass().getSimpleName());
+            return null;
+        }
+    }
+
     /**
      * The commit {@code ref} points to on the remote right now, via {@code ls-remote} only (nothing is downloaded).
      * Annotated tags are peeled to their commit, so the value equals what {@link #sync} would check out. A full commit

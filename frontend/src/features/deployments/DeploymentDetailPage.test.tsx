@@ -50,9 +50,9 @@ const details: Record<string, unknown> = {
   v1: detail('v1', 'services:\n  web:\n    image: nginx:0', [{ key: 'KEEP', changed: false }], ['GONE']),
 }
 
-type Handler = (init?: { method?: string }) => unknown
+type Handler = (init?: { method?: string; body?: unknown }) => unknown
 function serve(role: string, overrides: Record<string, Handler> = {}) {
-  apiFetch.mockImplementation((path: string, init?: { method?: string }) => {
+  apiFetch.mockImplementation((path: string, init?: { method?: string; body?: unknown }) => {
     const key = `${init?.method ?? 'GET'} ${path}`
     if (overrides[key]) {
       const r = overrides[key](init)
@@ -311,16 +311,41 @@ describe('DeploymentDetailPage', () => {
     expect(await screen.findByText('pu-8')).toBeInTheDocument()
   })
 
-  it('shows an ADMIN the extra files before Pull & redeploy and starts it only after confirming', async () => {
+  const SHA = 'a'.repeat(40)
+
+  it('pulls first for an ADMIN, shows the pulled files and redeploys with the reviewed commit and hash', async () => {
+    const pull = vi.fn(() => ({ commitSha: SHA, graphHash: 'h1' }))
     const redeploy = vi.fn(() => ({ runId: 'rd-8', versionId: 'v4' }))
-    serve('ADMIN', { [`GET ${BASE}`]: gitDeployment, [`GET ${BASE}/files`]: extraFiles, [`POST ${BASE}/git/redeploy`]: redeploy })
+    serve('ADMIN', {
+      [`GET ${BASE}`]: gitDeployment, [`GET ${BASE}/files`]: extraFiles,
+      [`POST ${BASE}/git/pull`]: pull, [`POST ${BASE}/git/redeploy`]: redeploy,
+    })
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Pull & redeploy' }))
     const dialog = await screen.findByRole('dialog', { name: 'Review before redeploying' })
-    expect(redeploy).not.toHaveBeenCalled()
     expect(await within(dialog).findByText('conf/extra.yaml')).toBeInTheDocument()
+    expect(pull).toHaveBeenCalledTimes(1)
+    expect(redeploy).not.toHaveBeenCalled()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Pull & redeploy' }))
     expect(await screen.findByText('rd-8')).toBeInTheDocument()
+    expect(redeploy).toHaveBeenCalledWith(expect.objectContaining({ method: 'POST', body: { commitSha: SHA, graphHash: 'h1' } }))
+  })
+
+  it('explains a changed review and pulls again when the files changed since the review', async () => {
+    const pull = vi.fn(() => ({ commitSha: SHA, graphHash: 'h1' }))
+    const redeploy = vi.fn(() => new ApiError(409, 'x', 'FILES_CHANGED_SINCE_REVIEW'))
+    serve('ADMIN', {
+      [`GET ${BASE}`]: gitDeployment, [`GET ${BASE}/files`]: extraFiles,
+      [`POST ${BASE}/git/pull`]: pull, [`POST ${BASE}/git/redeploy`]: redeploy,
+    })
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Pull & redeploy' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Review before redeploying' })
+    await within(dialog).findByText('conf/extra.yaml')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Pull & redeploy' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/changed since you reviewed/i)
+    await waitFor(() => expect(pull).toHaveBeenCalledTimes(2))
+    expect(screen.queryByText('rd-8')).not.toBeInTheDocument()
   })
 
   it('lets an OPERATOR start Pull & redeploy without a review', async () => {

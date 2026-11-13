@@ -664,5 +664,11 @@
   "DeploymentsPage.managedViaDomains": "Managed via Domains",
   "DeploymentDetailPage.managedViaDomains": "Managed via Domains",
   "DeploymentDetailPage.managedViaDomainsHint": "This deployment is the reverse proxy and is managed through Domains. Only an administrator can change it here.",
-  "DeploymentDetailPage.openDomains": "Open Domains"
+  "DeploymentDetailPage.openDomains": "Open Domains",
+  "DeploymentDetailPage.pullingTheRepository": "Pulling the repository…",
+  "DeploymentDetailPage.couldNotPullTheRepository": "Could not pull the repository. Try again.",
+  "DeploymentDetailPage.pullAgain": "Pull again",
+  "DeployFilesReview.pulledCommit": "Pulled commit {{sha}}. These are the files after the pull.",
+  "deploymentErrors.filesChangedSinceReview": "The files changed since you reviewed them. The list shows the current files: review them again.",
+  "deploymentErrors.reviewRequired": "Pull and review the files first, then confirm the redeploy."
 }

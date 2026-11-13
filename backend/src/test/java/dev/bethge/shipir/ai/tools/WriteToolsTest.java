@@ -508,6 +508,17 @@ class WriteToolsTest {
     }
 
     @Test
+    void gitRedeployAsAdminIsRefusedWithAMessageThatPointsToTheUi() {
+        jdbc.update("UPDATE deployments SET source_type = 'GIT', git_repo_url = 'https://example.com/r.git', git_ref = 'main', "
+                + "git_compose_path = 'compose.yaml' WHERE id = ?", deploymentId);
+
+        ToolResult redeploy = confirmed("git_redeploy_deployment", stack(hostId, deploymentId), Role.ADMIN);
+
+        assertThat(redeploy.error()).isTrue();
+        assertThat(redeploy.content()).contains("REVIEW_REQUIRED").contains("Pull & redeploy").contains("can't be done from chat");
+    }
+
+    @Test
     void setAutoUpdateConfiguresAGitStack() {
         jdbc.update("UPDATE deployments SET source_type = 'GIT', git_repo_url = 'https://example.com/r.git', git_ref = 'main', "
                 + "git_compose_path = 'compose.yaml' WHERE id = ?", deploymentId);

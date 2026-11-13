@@ -7,6 +7,7 @@ import { useCurrentUser } from '../auth/index.ts'
 import {
   useDeleteDeployment,
   useDeployDeployment,
+  useGitPull,
   useGitRedeploy,
   useManagedDeployment,
   usePullUpdate,
@@ -61,6 +62,7 @@ export function DeploymentDetailPage() {
   const versions = useDeploymentVersions(hostId, deploymentId)
   const deploy = useDeployDeployment(hostId)
   const redeploy = useGitRedeploy(hostId)
+  const gitPull = useGitPull(hostId)
   const pullUpdate = usePullUpdate(hostId)
   const stop = useStopDeployment(hostId)
   const rollback = useRollbackDeployment(hostId)
@@ -132,7 +134,7 @@ export function DeploymentDetailPage() {
 
   const data = deployment.data
   const hasDeployed = versions.data?.some((v) => v.deployed) ?? false
-  const busy = deploy.isPending || redeploy.isPending || pullUpdate.isPending || stop.isPending || rollback.isPending
+  const busy = deploy.isPending || redeploy.isPending || gitPull.isPending || pullUpdate.isPending || stop.isPending || rollback.isPending
 
   function startDeploy() {
     setActionError(null)
@@ -158,16 +160,43 @@ export function DeploymentDetailPage() {
 
   function startRedeploy() {
     setActionError(null)
-    redeploy.mutate(deploymentId, {
+    redeploy.mutate({ deploymentId }, {
       onSuccess: (d) => setStarted({ kind: 'redeploy', runId: d.runId }),
       onError: (err) => setActionError(describeDeploymentError(err, t('DeploymentDetailPage.couldNotStartTheRedeployment'))),
     })
   }
 
   // An ADMIN's run stores a hash that approves every file in the directory for later automatic runs: show them first.
+  // Two steps for an ADMIN: pull into the checkout, review the pulled files, then confirm with the reviewed hash.
+  function startReview() {
+    setDialogError(null)
+    gitPull.mutate(deploymentId, {
+      onError: (err) => setDialogError(describeDeploymentError(err, t('DeploymentDetailPage.couldNotPullTheRepository'))),
+    })
+  }
+
+  function confirmRedeploy() {
+    if (!gitPull.data) {
+      startReview()
+      return
+    }
+    redeploy.mutate({ deploymentId, review: gitPull.data }, {
+      onSuccess: (d) => { closeDialog(); setStarted({ kind: 'redeploy', runId: d.runId }) },
+      onError: (err) => {
+        setDialogError(describeDeploymentError(err, t('DeploymentDetailPage.couldNotStartTheRedeployment')))
+        // the files changed after the review: show the current ones
+        if (err instanceof ApiError && err.code === 'FILES_CHANGED_SINCE_REVIEW') {
+          gitPull.mutate(deploymentId, { onError: () => undefined })
+        }
+      },
+    })
+  }
+
   function onRedeployClick() {
-    if (user?.role === 'ADMIN') setDialog({ kind: 'redeploy' })
-    else startRedeploy()
+    if (user?.role === 'ADMIN') {
+      setDialog({ kind: 'redeploy' })
+      startReview()
+    } else startRedeploy()
   }
 
   function onPullUpdateClick() {
@@ -390,10 +419,18 @@ export function DeploymentDetailPage() {
         <ConfirmDialog
           size="xl"
           title={t('DeploymentDetailPage.reviewBeforeRedeploying')}
-          confirmLabel={t('DeploymentDetailPage.pullRedeploy')}
-          onConfirm={() => { closeDialog(); startRedeploy() }}
+          confirmLabel={gitPull.isError ? t('DeploymentDetailPage.pullAgain') : t('DeploymentDetailPage.pullRedeploy')}
+          onConfirm={confirmRedeploy}
+          loading={gitPull.isPending || redeploy.isPending}
+          error={dialogError}
           open onOpenChange={(open) => !open && closeDialog()}
-          details={<DeployFilesReview hostId={hostId} deploymentId={deploymentId} />}
+          details={
+            gitPull.isPending ? (
+              <p role="status" className="dfr-note">{t('DeploymentDetailPage.pullingTheRepository')}</p>
+            ) : gitPull.data ? (
+              <DeployFilesReview hostId={hostId} deploymentId={deploymentId} commitSha={gitPull.data.commitSha} />
+            ) : null
+          }
         >
           <Trans t={t} i18nKey="DeploymentDetailPage.redeployNameApprovesTheFiles" values={{ name: data.name }} components={{ strong: <strong /> }} />
         </ConfirmDialog>

@@ -22,6 +22,8 @@ import dev.bethge.shipir.compose.execution.ComposeExecutionService;
 import dev.bethge.shipir.compose.execution.ComposeOptions;
 import dev.bethge.shipir.compose.execution.ComposeProcessResult;
 import dev.bethge.shipir.compose.file.ComposeFileRepository;
+import dev.bethge.shipir.compose.dto.GitPullResponse;
+import dev.bethge.shipir.compose.dto.GitRedeployRequest;
 import dev.bethge.shipir.compose.file.ComposeGraphHasher;
 import dev.bethge.shipir.compose.validation.ComposeValidationService;
 import dev.bethge.shipir.compose.validation.ValidationResult;
@@ -131,8 +133,50 @@ public class DeploymentRunService {
      */
     @Auditable(action = "DEPLOYMENT_GIT_REDEPLOY", targetType = "DEPLOYMENT", targetId = "#id")
     public DeploymentRunResponse gitRedeploy(UUID hostId, UUID id, String username) {
+        return gitRedeploy(hostId, id, username, null);
+    }
+
+    /**
+     * Step 2 of the two-step "Pull &amp; redeploy": deploys the checkout that {@link #gitPull} left and the ADMIN reviewed,
+     * without fetching again. 409 FILES_CHANGED_SINCE_REVIEW if the files hash differently now. An ADMIN must always send the
+     * review (409 REVIEW_REQUIRED): their approval covers exactly the files shown. Others may omit it (one step: pull and deploy;
+     * they never approve files, see {@code unrestricted}).
+     */
+    @Auditable(action = "DEPLOYMENT_GIT_REDEPLOY", targetType = "DEPLOYMENT", targetId = "#id")
+    public DeploymentRunResponse gitRedeploy(UUID hostId, UUID id, String username, GitRedeployRequest reviewed) {
         deploymentService.requireOperate(hostId, id);
-        return start(hostId, id, userIdOf(username), username, null, "DEPLOYMENT_GIT_REDEPLOY_RESULT", true);
+        return start(hostId, id, userIdOf(username), username, null, "DEPLOYMENT_GIT_REDEPLOY_RESULT", true, reviewed);
+    }
+
+    /**
+     * Step 1 of the two-step "Pull &amp; redeploy": fetches the ref into the checkout (no deploy, no version) and returns the
+     * commit and graph hash of the files now on disk for the review. The checkout stays on the pulled commit (a later run
+     * realigns it); a failed pull is rolled back like a failed redeploy.
+     */
+    @Auditable(action = "DEPLOYMENT_GIT_PULL", targetType = "DEPLOYMENT", targetId = "#id")
+    public GitPullResponse gitPull(UUID hostId, UUID id, String username) {
+        deploymentService.requireOperate(hostId, id);
+        var host = deploymentService.requireHost(hostId);
+        Deployment deployment = deploymentService.requireDeployment(hostId, id);
+        DockerEndpoint endpoint = deploymentService.endpointOf(host);
+        UUID userId = userIdOf(username);
+        locks.acquire(deployment.getId());
+        DeploymentVersion source = null;
+        String envText = null;
+        try {
+            source = deploymentService.currentVersion(deployment);
+            envText = decryptEnv(source);
+            DeploymentVersion current = source;
+            GitCheckout checkout = pull(deployment, endpoint, envText, () -> unrestricted(username, userId, deployment, endpoint, current));
+            return new GitPullResponse(checkout.commitSha(), graphHashOf(deployment));
+        } catch (RuntimeException e) {
+            if (source != null && deployment.getSourceType() == DeploymentSource.GIT) {
+                restoreAfterFailedPull(deployment, source, envText, userId, username);
+            }
+            throw e;
+        } finally {
+            locks.release(deployment.getId());
+        }
     }
 
     /**
@@ -592,9 +636,19 @@ public class DeploymentRunService {
 
     private DeploymentRunResponse start(UUID hostId, UUID id, UUID userId, String username, UUID rollbackTo,
                                     String resultAction, boolean pullGit) {
+        return start(hostId, id, userId, username, rollbackTo, resultAction, pullGit, null);
+    }
+
+    private DeploymentRunResponse start(UUID hostId, UUID id, UUID userId, String username, UUID rollbackTo,
+                                    String resultAction, boolean pullGit, GitRedeployRequest reviewed) {
         var host = deploymentService.requireHost(hostId);
         Deployment deployment = deploymentService.requireDeployment(hostId, id);
         DockerEndpoint endpoint = deploymentService.endpointOf(host);
+        if (pullGit && reviewed == null && deployment.getSourceType() == DeploymentSource.GIT
+                && !SYSTEM_USER.equals(username) && unrestricted(username, userId, deployment, endpoint, null)) {
+            throw new DeploymentException(HttpStatus.CONFLICT, "REVIEW_REQUIRED",
+                    "An ADMIN approves exactly the files they reviewed: pull first, review the files, then confirm");
+        }
         locks.acquire(deployment.getId());
         boolean started = false;
         DeploymentVersion restoreSource = null;
@@ -605,8 +659,9 @@ public class DeploymentRunService {
             String envText = decryptEnv(source);
             restoreSource = source;
             restoreEnv = envText;
-            GitCheckout checkout = pullGit ? pull(deployment, endpoint, envText,
-                    () -> unrestricted(username, userId, deployment, endpoint, source)) : null;
+            GitCheckout checkout = !pullGit ? null
+                    : reviewed != null ? reviewedCheckout(deployment, reviewed)
+                    : pull(deployment, endpoint, envText, () -> unrestricted(username, userId, deployment, endpoint, source));
             if (!pullGit) {
                 alignCheckout(deployment, source);
             }
@@ -617,6 +672,10 @@ public class DeploymentRunService {
             files.write(hostId, deployment.getName(), yaml, envText);
             // hashed before the (slow) policy check, so an edit made meanwhile leaves a stale hash that fails safe next run
             String graphHashBeforeGate = graphHashOf(deployment);
+            // step 2 of a reviewed redeploy: what is about to run must be exactly what was reviewed (null = unhashable, no approval stored)
+            if (reviewed != null && !java.util.Objects.equals(graphHashBeforeGate, reviewed.graphHash())) {
+                throw filesChanged();
+            }
             boolean approved = enforceRunPolicy(deployment, endpoint, username, userId, source);
             // an ADMIN deploy that references paths the hash skips (.shipir-backups, repo/.git) vouches for nothing: no hash
             String graphHash = approved && graphHashBeforeGate != null
@@ -741,6 +800,29 @@ public class DeploymentRunService {
             git.ensureCommit(files.repoDir(deployment.getHostId(), deployment.getName()), deployment.getGitRepoUrl(),
                     version.getCommitSha(), deployment.getGitComposePath(), deployment.getGitCredentialId());
         }
+    }
+
+    /**
+     * Step 2 of the two-step redeploy: the checkout left by {@link #gitPull} must be on the reviewed commit and hash to it. No
+     * fetch: a newer remote commit is not part of the approval.
+     */
+    private GitCheckout reviewedCheckout(Deployment deployment, GitRedeployRequest reviewed) {
+        if (deployment.getSourceType() != DeploymentSource.GIT) {
+            throw new DeploymentException(HttpStatus.BAD_REQUEST, "NOT_A_GIT_DEPLOYMENT", "This deployment is not sourced from Git");
+        }
+        Path repoDir = files.repoDir(deployment.getHostId(), deployment.getName());
+        // the checkout must be on the reviewed commit already (local read, never a fetch) and still hash to the reviewed hash
+        if (!reviewed.commitSha().equalsIgnoreCase(git.headCommit(repoDir))
+                || !java.util.Objects.equals(reviewed.graphHash(), graphHashOf(deployment))) {
+            throw filesChanged();
+        }
+        return git.ensureCommit(repoDir, deployment.getGitRepoUrl(), reviewed.commitSha(), deployment.getGitComposePath(),
+                deployment.getGitCredentialId());
+    }
+
+    private static DeploymentException filesChanged() {
+        return new DeploymentException(HttpStatus.CONFLICT, "FILES_CHANGED_SINCE_REVIEW",
+                "The files changed since they were reviewed: pull and review them again");
     }
 
     /** Fetches the ref into the checkout and validates the compose file; the previous file is restored when invalid. */

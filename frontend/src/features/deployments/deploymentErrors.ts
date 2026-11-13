@@ -7,6 +7,10 @@ export function describeDeploymentError(error: unknown, fallback: string): strin
     switch (error.code) {
       case 'DEPLOYMENT_IN_PROGRESS':
         return i18n.t('deployments:deploymentErrors.aRunIsAlreadyIn')
+      case 'FILES_CHANGED_SINCE_REVIEW':
+        return i18n.t('deployments:deploymentErrors.filesChangedSinceReview')
+      case 'REVIEW_REQUIRED':
+        return i18n.t('deployments:deploymentErrors.reviewRequired')
       case 'DEPLOYMENT_NAME_TAKEN':
         return i18n.t('deployments:deploymentErrors.aDeploymentWithThisName')
       case 'ENCRYPTION_KEY_MISSING':

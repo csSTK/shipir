@@ -67,6 +67,7 @@ class DeploymentSystemManagedWriteApiTest extends DeploymentTestBase {
         m.put("services", id -> get(url() + "/" + id + "/services"));
         m.put("profiles", id -> put(url() + "/" + id + "/profiles").contentType(APPLICATION_JSON)
                 .content("{\"profiles\":[]}"));
+        m.put("git-pull", id -> post(url() + "/" + id + "/git/pull"));
         m.put("git-redeploy", id -> post(url() + "/" + id + "/git/redeploy"));
         m.put("git-auto-update", id -> put(url() + "/" + id + "/git/auto-update").contentType(APPLICATION_JSON)
                 .content("{\"enabled\":false}"));

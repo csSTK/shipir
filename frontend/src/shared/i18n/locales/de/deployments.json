@@ -664,5 +664,11 @@
   "DeploymentsPage.managedViaDomains": "Verwaltet über Domains",
   "DeploymentDetailPage.managedViaDomains": "Verwaltet über Domains",
   "DeploymentDetailPage.managedViaDomainsHint": "Dieses Deployment ist der Reverse-Proxy und wird über Domains verwaltet. Nur ein Administrator kann es hier ändern.",
-  "DeploymentDetailPage.openDomains": "Domains öffnen"
+  "DeploymentDetailPage.openDomains": "Domains öffnen",
+  "DeploymentDetailPage.pullingTheRepository": "Repository wird gepullt…",
+  "DeploymentDetailPage.couldNotPullTheRepository": "Das Repository konnte nicht gepullt werden. Versuche es erneut.",
+  "DeploymentDetailPage.pullAgain": "Erneut pullen",
+  "DeployFilesReview.pulledCommit": "Gepullter Commit {{sha}}. Das sind die Dateien nach dem Pull.",
+  "deploymentErrors.filesChangedSinceReview": "Die Dateien haben sich seit deiner Prüfung geändert. Die Liste zeigt die aktuellen Dateien: Prüfe sie erneut.",
+  "deploymentErrors.reviewRequired": "Pulle zuerst und prüfe die Dateien, bestätige dann das erneute Deployen."
 }

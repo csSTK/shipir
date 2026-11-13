@@ -104,7 +104,10 @@ class GitDeploymentApiTest extends DeploymentTestBase {
                 .setCommitter("t", "t@example.com").call().getName();
     }
 
+    private final java.util.concurrent.atomic.AtomicInteger gitRequests = new java.util.concurrent.atomic.AtomicInteger();
+
     private void serve(HttpExchange ex) throws IOException {
+        gitRequests.incrementAndGet();
         String path = ex.getRequestURI().getPath();
         boolean isPrivate = path.startsWith("/private.git/");
         if (!isPrivate && !path.startsWith("/public.git/")) {
@@ -293,13 +296,150 @@ class GitDeploymentApiTest extends DeploymentTestBase {
                 .contains("DEPLOYMENT_GIT_REDEPLOY:SUCCESS", "DEPLOYMENT_GIT_REDEPLOY_RESULT:SUCCESS");
     }
 
+    private org.springframework.test.web.servlet.ResultActions pull(Login l, String id) throws Exception {
+        return mvc.perform(l.write(post(url() + "/" + id + "/git/pull")));
+    }
+
+    /** Step 1 (pull for review) then step 2 (confirm) with the reviewed commit and hash, as the UI does for an ADMIN. */
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder reviewedRedeploy(Login l, String id)
+            throws Exception {
+        String body = pull(l, id).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        return confirm(l, id, body);
+    }
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder confirm(Login l, String id, String pullBody) {
+        String commit = JsonPath.read(pullBody, "$.commitSha");
+        String hash = JsonPath.read(pullBody, "$.graphHash");
+        return l.write(post(url() + "/" + id + "/git/redeploy")).contentType(APPLICATION_JSON)
+                .content("{\"commitSha\":\"%s\",\"graphHash\":\"%s\"}".formatted(commit, hash));
+    }
+
+    @Test
+    void pullChecksOutTheNewCommitAndReturnsItsHashWithoutDeploying() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitdeployment", credential(TOKEN));
+        String second = commit("extra/app.conf", "a=1\n");
+        commands.clear();
+
+        pull(admin, id).andExpect(status().isOk()).andExpect(jsonPath("$.commitSha").value(second))
+                .andExpect(jsonPath("$.graphHash").isNotEmpty());
+
+        assertThat(repoCheckout("gitdeployment").resolve("extra/app.conf")).exists();
+        assertThat(commands).doesNotContain(ComposeCommand.UP);
+        assertThat(versionShas(id)).hasSize(1);
+    }
+
+    @Test
+    void adminRedeployWithTheReviewedHashDeploysAndStoresThatHash() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitdeployment", credential(TOKEN));
+        String second = commit("extra/app.conf", "a=1\n");
+        String pullBody = pull(admin, id).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+
+        mvc.perform(confirm(admin, id, pullBody)).andExpect(status().isAccepted());
+        awaitResults(1);
+
+        assertThat(versionShas(id)).hasSize(2).endsWith(second);
+        assertThat(jdbc.queryForObject("SELECT graph_hash FROM deployment_versions WHERE commit_sha = ?", String.class, second))
+                .isEqualTo(JsonPath.<String>read(pullBody, "$.graphHash"));
+    }
+
+    @Test
+    void redeployIsRefusedWhenAFileChangedAfterTheReview() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitdeployment", credential(TOKEN));
+        commit("extra/app.conf", "a=1\n");
+        String pullBody = pull(admin, id).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        Files.writeString(repoCheckout("gitdeployment").resolve("extra/app.conf"), "a=EVIL\n");
+        commands.clear();
+
+        mvc.perform(confirm(admin, id, pullBody)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("FILES_CHANGED_SINCE_REVIEW"));
+
+        assertThat(commands).doesNotContain(ComposeCommand.UP);
+        assertThat(versionShas(id)).hasSize(1);
+    }
+
+    @Test
+    void redeployDeploysTheReviewedCommitNotAnewerOneOnTheRemote() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitdeployment", credential(TOKEN));
+        String second = commit("compose.yaml", YAML_B);
+        String pullBody = pull(admin, id).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        commit("compose.yaml", YAML_A + "    privileged: true\n");
+
+        mvc.perform(confirm(admin, id, pullBody)).andExpect(status().isAccepted());
+        awaitResults(1);
+
+        assertThat(versionShas(id)).endsWith(second);
+        assertThat(files.readCompose(hostId, "gitdeployment").orElseThrow()).contains(YAML_B).doesNotContain("privileged");
+    }
+
+    @Test
+    void redeployWithACommitThatIsNotTheReviewedCheckoutIsRefused() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitdeployment", credential(TOKEN));
+        String first = head();
+        commit("compose.yaml", YAML_B);
+        String pullBody = pull(admin, id).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String hash = JsonPath.read(pullBody, "$.graphHash");
+        commands.clear();
+
+        // the hash is the one of the reviewed tree, the commit is another one that is in the local object store
+        mvc.perform(admin.write(post(url() + "/" + id + "/git/redeploy")).contentType(APPLICATION_JSON)
+                        .content("{\"commitSha\":\"%s\",\"graphHash\":\"%s\"}".formatted(first, hash)))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("FILES_CHANGED_SINCE_REVIEW"));
+
+        assertThat(commands).doesNotContain(ComposeCommand.UP);
+        assertThat(versionShas(id)).hasSize(1);
+    }
+
+    @Test
+    void redeployWithACommitThatIsNotLocalIsRefusedWithoutFetching() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitdeployment", credential(TOKEN));
+        commit("compose.yaml", YAML_B);
+        String pullBody = pull(admin, id).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String hash = JsonPath.read(pullBody, "$.graphHash");
+        String unknown = commit("other.txt", "x");
+        commands.clear();
+        int before = gitRequests.get();
+
+        mvc.perform(admin.write(post(url() + "/" + id + "/git/redeploy")).contentType(APPLICATION_JSON)
+                        .content("{\"commitSha\":\"%s\",\"graphHash\":\"%s\"}".formatted(unknown, hash)))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("FILES_CHANGED_SINCE_REVIEW"));
+
+        assertThat(gitRequests.get()).isEqualTo(before);
+        assertThat(commands).doesNotContain(ComposeCommand.UP);
+        assertThat(versionShas(id)).hasSize(1);
+    }
+
+    @Test
+    void adminRedeployWithoutAReviewIsRefused() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitdeployment", credential(TOKEN));
+        commit("compose.yaml", YAML_B);
+        commands.clear();
+
+        mvc.perform(admin.write(post(url() + "/" + id + "/git/redeploy"))).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("REVIEW_REQUIRED"));
+
+        assertThat(commands).doesNotContain(ComposeCommand.UP);
+        assertThat(versionShas(id)).hasSize(1);
+    }
+
+    @Test
+    void viewerCannotPullForReview() throws Exception {
+        pull(login("viewer"), UUID.randomUUID().toString()).andExpect(status().isForbidden());
+    }
+
     @Test
     void unchangedCommitStillRedeploysOnManualTrigger() throws Exception {
         Login admin = login("admin");
         String id = createGit(admin, "gitdeployment", credential(TOKEN));
-        mvc.perform(admin.write(post(url() + "/" + id + "/git/redeploy"))).andExpect(status().isAccepted());
+        mvc.perform(reviewedRedeploy(admin, id)).andExpect(status().isAccepted());
         awaitResults(1);
-        mvc.perform(admin.write(post(url() + "/" + id + "/git/redeploy"))).andExpect(status().isAccepted());
+        mvc.perform(reviewedRedeploy(admin, id)).andExpect(status().isAccepted());
         awaitResults(2);
 
         assertThat(versionShas(id)).containsExactly(head(), head(), head());
@@ -312,7 +452,7 @@ class GitDeploymentApiTest extends DeploymentTestBase {
         String id = createGit(admin, "gitdeployment", credential(TOKEN));
         String first = head();
         commit("compose.yaml", YAML_B);
-        mvc.perform(admin.write(post(url() + "/" + id + "/git/redeploy"))).andExpect(status().isAccepted());
+        mvc.perform(reviewedRedeploy(admin, id)).andExpect(status().isAccepted());
         awaitResults(1);
         UUID firstVersion = jdbc.queryForObject(
                 "SELECT id FROM deployment_versions WHERE commit_sha = ?", UUID.class, first);
@@ -380,7 +520,7 @@ class GitDeploymentApiTest extends DeploymentTestBase {
         String id = createGit(admin, "gitdeployment", cred);
         commit("compose.yaml", YAML_B);
         StringBuilder seen = new StringBuilder();
-        seen.append(mvc.perform(admin.write(post(url() + "/" + id + "/git/redeploy"))).andReturn()
+        seen.append(mvc.perform(reviewedRedeploy(admin, id)).andReturn()
                 .getResponse().getContentAsString());
         awaitResults(1);
         seen.append(mvc.perform(admin.write(post(url())).contentType(APPLICATION_JSON)
@@ -482,7 +622,7 @@ class GitDeploymentApiTest extends DeploymentTestBase {
         String id = createGit(admin, "gitdeployment", credential(TOKEN));
         String first = head();
         commit("compose.yaml", YAML_B);
-        mvc.perform(admin.write(post(url() + "/" + id + "/git/redeploy"))).andExpect(status().isAccepted());
+        mvc.perform(reviewedRedeploy(admin, id)).andExpect(status().isAccepted());
         awaitResults(1);
         assertThat(Files.readString(repoCheckout("gitdeployment").resolve("compose.yaml"))).isEqualTo(YAML_B);
         UUID firstVersion = jdbc.queryForObject(
@@ -501,7 +641,7 @@ class GitDeploymentApiTest extends DeploymentTestBase {
         Login admin = login("admin");
         String id = createGit(admin, "gitdeployment", credential(TOKEN));
         String invalid = commit("compose.yaml", "services:\n  web:\n    image: INVALID\n");
-        mvc.perform(admin.write(post(url() + "/" + id + "/git/redeploy"))).andExpect(status().isBadRequest())
+        pull(admin, id).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_COMPOSE"));
         // the failed pull no longer leaves the invalid commit checked out (shipr-y37c.2)
         assertThat(Files.readString(repoCheckout("gitdeployment").resolve("compose.yaml"))).isEqualTo(YAML_A);

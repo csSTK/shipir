@@ -15,6 +15,8 @@ import dev.bethge.shipir.compose.dto.DeploymentSummaryResponse;
 import dev.bethge.shipir.compose.dto.DeploymentUpdateRequest;
 import dev.bethge.shipir.compose.dto.DeploymentVersionContentResponse;
 import dev.bethge.shipir.compose.dto.DeploymentVersionResponse;
+import dev.bethge.shipir.compose.dto.GitPullResponse;
+import dev.bethge.shipir.compose.dto.GitRedeployRequest;
 import dev.bethge.shipir.compose.dto.ProfilesRequest;
 import dev.bethge.shipir.compose.dto.ServicesResponse;
 import dev.bethge.shipir.compose.dto.WebhookIssuedResponse;
@@ -140,8 +142,16 @@ class DeploymentController {
 
     @PostMapping("/{id}/git/redeploy")
     @ResponseStatus(HttpStatus.ACCEPTED)
-    DeploymentRunResponse gitRedeploy(@PathVariable UUID hostId, @PathVariable UUID id, Authentication authentication) {
-        return runs.gitRedeploy(hostId, id, authentication.getName());
+    DeploymentRunResponse gitRedeploy(@PathVariable UUID hostId, @PathVariable UUID id,
+                                      @Valid @RequestBody(required = false) GitRedeployRequest reviewed,
+                                      Authentication authentication) {
+        return runs.gitRedeploy(hostId, id, authentication.getName(), reviewed);
+    }
+
+    /** Step 1 of "Pull &amp; redeploy": pulls into the checkout without deploying; the reviewed hash goes to the redeploy. */
+    @PostMapping("/{id}/git/pull")
+    GitPullResponse gitPull(@PathVariable UUID hostId, @PathVariable UUID id, Authentication authentication) {
+        return runs.gitPull(hostId, id, authentication.getName());
     }
 
     @PutMapping("/{id}/git/auto-update")

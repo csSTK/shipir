@@ -97,6 +97,25 @@ test('Pull & redeploy shows the output and the new commit', async ({ page, api }
   await expect(panel).toContainText('9999999')
 })
 
+test('ADMIN reviews the pulled files and confirms the redeploy with the reviewed hash', async ({ page, api }) => {
+  mockCommon(api, 'ADMIN')
+  const sha = 'b'.repeat(40)
+  api.mock('POST', `${BASE}/s1/git/pull`, { body: { commitSha: sha, graphHash: 'h1' } })
+  api.mock('GET', `${BASE}/s1/files`, {
+    body: [{ path: 'conf/extra.yaml', directory: false, size: 12, modifiedAt: '2026-10-01T10:00:00Z', readOnly: false }],
+  })
+  api.mock('POST', `${BASE}/s1/git/redeploy`, { status: 202, body: { runId: 'dep-9', versionId: 'v2' } })
+  await page.goto('/environments/a/deployments/s1')
+  await page.getByRole('button', { name: 'Pull & redeploy' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Review before redeploying' })
+  await expect(dialog.getByText('conf/extra.yaml')).toBeVisible()
+  await expect(dialog).toContainText('bbbbbbb')
+  const request = page.waitForRequest((r) => r.method() === 'POST' && r.url().endsWith('/git/redeploy'))
+  await dialog.getByRole('button', { name: 'Pull & redeploy' }).click()
+  expect((await request).postDataJSON()).toEqual({ commitSha: sha, graphHash: 'h1' })
+  await expect(page.getByLabel('Deployment output')).toContainText('dep-9')
+})
+
 test('saves auto-update settings', async ({ page, api }) => {
   mockCommon(api, 'OPERATOR')
   api.mock('PUT', `${BASE}/s1/git/auto-update`, { body: deployment })
