@@ -1,11 +1,16 @@
 #!/usr/bin/env node
 // Code map checker: mechanical rules for a folder of per-module code map files.
-// Usage: node tools/code-map/check.mjs [dir] [--id-prefix shipr-] [--max 160]
-// Self-contained (Node built-ins only) so it can be shipped on its own.
+// Installed by `wavework init` / `wavework update` for the folder code map layout (codeMap.path without .md).
+// Usage: node .claude/scripts/code-map-check.mjs [dir] [--id-prefix proj-] [--max 160]
+//   dir defaults to docs/code-map (relative to the repository root); --max to 160.
+//   Without --id-prefix the bead ID prefix is derived from .beads/ (config.yaml issue-prefix, else the first ID
+//   in issues.jsonl); when none is found rule 2 is skipped.
+// Exit code: 0 ok, 1 violations (file:line: message on stderr), 2 usage error.
+// Self-contained (Node built-ins only).
 //
 // Entry line: "- <path>[, <path>...]: <description>". Rules:
 //   1. description at most --max characters
-//   2. no bead ID (<id-prefix><alnum>[.<digits>]...)
+//   2. no bead ID (<id-prefix><alnum>[.<digits>]...), unless no prefix is known
 //   3. every path exists (after {A,B} brace expansion; * ? ** globs match at least one entry)
 //   4. every map file except index.md is linked from index.md, every index link exists
 //   5. no path is listed in two map files (or twice in one)
@@ -117,11 +122,11 @@ function listMarkdown(dir) {
  * Checks the map folder `dir` against the repo at `root`.
  * Returns violations as { file, line, message } (file relative to root, line 1-based).
  */
-export function check(dir, { root, idPrefix = 'shipr-', max = 160 } = {}) {
+export function check(dir, { root, idPrefix = null, max = 160 } = {}) {
   const violations = [];
   const rel = (f) => path.relative(root, f).split(path.sep).join('/');
   const add = (file, line, message) => violations.push({ file: rel(file), line, message });
-  const idRe = new RegExp(`\\b${idPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[a-z0-9]+(\\.[0-9]+)*\\b`);
+  const idRe = idPrefix ? new RegExp(`\\b${idPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[a-z0-9]+(\\.[0-9]+)*\\b`) : null;
 
   if (!fs.existsSync(dir)) {
     violations.push({ file: rel(dir), line: 1, message: 'code map directory does not exist' });
@@ -144,7 +149,7 @@ export function check(dir, { root, idPrefix = 'shipr-', max = 160 } = {}) {
       if (sep < 0) { add(file, line, "entry must look like '- <path>: <description>'"); return; }
       const description = text.slice(sep + 2).trim();
       if (description.length > max) add(file, line, `description is ${description.length} characters, max ${max}`);
-      const id = idRe.exec(text);
+      const id = idRe?.exec(text);
       if (id) add(file, line, `bead ID '${id[0]}' in entry`);
       for (const raw of splitPaths(text.slice(2, sep))) {
         for (const p of expandBraces(raw)) {
@@ -182,12 +187,34 @@ function resolveRoot() {
   try {
     return execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   } catch {
+    // not a git checkout: this file lives in <root>/.claude/scripts/
     return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
   }
 }
 
+/**
+ * Bead ID prefix of the repository (with trailing "-"), or null. `.beads/config.yaml` `issue-prefix:` wins
+ * (a commented-out line does not count), else the prefix of the first ID in `.beads/issues.jsonl`.
+ */
+export function deriveIdPrefix(root) {
+  const normalize = (p) => (p.endsWith('-') ? p : `${p}-`);
+  try {
+    const m = /^issue-prefix:\s*["']?([A-Za-z][A-Za-z0-9-]*)["']?\s*(?:#.*)?$/m.exec(fs.readFileSync(path.join(root, '.beads', 'config.yaml'), 'utf8'));
+    if (m) return normalize(m[1]);
+  } catch { /* no config */ }
+  try {
+    for (const line of fs.readFileSync(path.join(root, '.beads', 'issues.jsonl'), 'utf8').split('\n')) {
+      if (!line.trim()) continue;
+      const id = JSON.parse(line)?.id;
+      const m = typeof id === 'string' ? /^(.+)-[a-z0-9]+(?:\.[0-9]+)*$/.exec(id) : null;
+      return m ? `${m[1]}-` : null;
+    }
+  } catch { /* no issues, or not JSON */ }
+  return null;
+}
+
 export function parseArgs(argv) {
-  const opts = { dir: 'docs/code-map', idPrefix: 'shipr-', max: 160 };
+  const opts = { dir: 'docs/code-map', idPrefix: undefined, max: 160 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--id-prefix') opts.idPrefix = argv[++i];
@@ -195,15 +222,23 @@ export function parseArgs(argv) {
     else if (a.startsWith('--')) throw new Error(`unknown option ${a}`);
     else opts.dir = a;
   }
-  if (!opts.idPrefix || !Number.isInteger(opts.max) || opts.max < 1) throw new Error('invalid --id-prefix or --max');
+  if (opts.idPrefix === '' || !Number.isInteger(opts.max) || opts.max < 1) throw new Error('invalid --id-prefix or --max');
   return opts;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// Real paths on both sides: node resolves import.meta.url, argv[1] may go through a symlink (macOS /var, a linked checkout).
+const isMain = (() => {
+  try {
+    return Boolean(process.argv[1]) && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url));
+  } catch { return false; }
+})();
+
+if (isMain) {
   try {
     const opts = parseArgs(process.argv.slice(2));
     const root = resolveRoot();
-    const violations = check(path.resolve(root, opts.dir), { root, idPrefix: opts.idPrefix, max: opts.max });
+    const idPrefix = opts.idPrefix ?? deriveIdPrefix(root);
+    const violations = check(path.resolve(root, opts.dir), { root, idPrefix, max: opts.max });
     for (const v of violations) console.error(`${v.file}:${v.line}: ${v.message}`);
     if (violations.length) {
       console.error(`${violations.length} code map violation(s)`);

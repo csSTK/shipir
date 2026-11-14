@@ -39,10 +39,12 @@
     }
   },
   "tracker": {
-    "kind": "beads"
+    "kind": "beads",
+    "idPrefix": "shipr"
   },
   "codeMap": {
-    "path": "docs/CODE_MAP.md"
+    "path": "docs/code-map",
+    "maxDescription": 160
   },
   "uiSkill": {
     "name": "apple-design",

@@ -13,6 +13,6 @@ Write the production code that makes the tests from `next-task-write-tests` pass
 - **Match the surrounding code style**, naming and comment density. No speculative abstractions, flags or configuration the bead doesn't ask for.
 - **Don't weaken tests to get green.** If a test turns out to be wrong, fix it and say why in the report.
 - **Out-of-scope work** you discover goes into a new bead (`bd create`, then `bd dep add`). Don't do it.
-- **Update the Code Map** in `docs/CODE_MAP.md`, only your own files' lines, one short line each: `path: what it is`.
+- **Update the Code Map** in the same change, in the module file under `docs/code-map/` that covers your files (find it in `docs/code-map/index.md`): only your own files' lines, one line each (`- path: what it is`), at most 160 characters, no bead IDs, no history. A new module file must be linked from the index.
 
 **Done when** the new tests and the existing tests in the area pass (`next-task-test`, focused). If they still fail after 3 failed focused runs, stop and report BLOCKED (see `next-task-implement`).

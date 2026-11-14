@@ -23,7 +23,7 @@ Give the agent: the input above and these instructions.
    - every acceptance criterion is met and covered by a meaningful test
    - would it pass on the old code: use the red-green script output (you can't run it read-only). Every `GREEN-ON-OLD` test is must-fix unless the bead is a stated exception (pure refactor/docs/config) or the implementer's report justifies it as a deliberate regression guard. `RED-COMPILE` is accepted. Exit code 2 or no output: ask the orchestrator for a rerun. `UNCHANGED` rows are untouched tests, ignore them. E2E specs are not covered; judge those from the diff (e.g. asserting only on mocks with no real outcome).
    - CLAUDE.md Working Rules, Security, Architecture and Testing rules (and the `apple-design` skill for UI under `frontend/`)
-   - Code Map entries in `docs/CODE_MAP.md` match the added, moved or removed files
+   - Code Map entries in the module files under `docs/code-map/` match the added, moved or removed files: flag missing, stale or over-limit entries (a description over 160 characters). Run `node .claude/scripts/code-map-check.mjs docs/code-map --id-prefix shipr- --max 160` (read-only) and report its violations
    - no scope creep, no secrets in code, logs or tests
 3. **Read-only:** no Edit/Write, no commits, no `git add`/`stash`/`checkout`, no `bd` writes, no test or build runs that change files. Re-checking with read-only commands is fine.
 
@@ -44,7 +44,7 @@ Out-of-scope:
 
 ## Branch review (always)
 
-Run by `next-task-finish` before the push, once per run. Same reviewer, but the input is the whole branch: diff `origin/dev..HEAD` in `<WT>`, checked against the epic's (or all given beads') description and acceptance criteria as a whole: gaps between children, inconsistent behaviour, missing wiring or `docs/CODE_MAP.md` lines. Same checklist (including the red-green script output) and same output format. One fix round only, no 3-round loop (see `next-task-finish`).
+Run by `next-task-finish` before the push, once per run. Same reviewer, but the input is the whole branch: diff `origin/dev..HEAD` in `<WT>`, checked against the epic's (or all given beads') description and acceptance criteria as a whole: gaps between children, inconsistent behaviour, missing wiring or code map entries under `docs/code-map/`. Same checklist (including the red-green script output) and same output format. One fix round only, no 3-round loop (see `next-task-finish`).
 
 ## Loop (the orchestrator's side)
 

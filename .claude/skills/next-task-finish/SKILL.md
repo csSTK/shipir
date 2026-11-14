@@ -25,7 +25,7 @@ Record: `step-start --step finish` at the start. The full gate in step 2 records
    - Epic runs only: `bd close <epic> "<one line summary>"`, but only once every child is closed.
    - Beads that aren't done stay open, and the epic stays open too. Say so in the report.
 5. **Write documentation.** Keep it short, following the CLAUDE.md rule:
-   - Code Map (`docs/CODE_MAP.md`): check that every added, moved or removed file has a correct one-line entry.
+   - Code Map (`docs/code-map/`): check that every added, moved or removed file has a correct one-line entry in its module file, then run `node .claude/scripts/code-map-check.mjs docs/code-map --id-prefix shipr- --max 160` and fix every violation before committing (exit code 0 required).
    - README.md: update only if setup, commands or features visible to users changed.
    - CLAUDE.md: update Build & Test or the rules only if they changed.
    - Commit as `Document <epic title> (<epic-id>)` (bead runs: `Document <short summary> (<id>, <id>)`), including `.beads/issues.jsonl`.

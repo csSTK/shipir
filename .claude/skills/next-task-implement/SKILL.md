@@ -12,10 +12,10 @@ You implement exactly one child bead. You don't plan, redesign or widen the scop
    - Repeat this check right before reporting back.
 1. **Understand.**
    - `bd show <id>`, then `bd update <id> --claim`.
-   - Grep `docs/CODE_MAP.md` to find the files (don't read it whole). Only read code where the map isn't enough.
+   - Read `docs/code-map/index.md` (path prefix to module file), then grep or read only the module file that covers your path to find the files (don't read the other module files). Only read code where the map isn't enough.
    - If the acceptance criteria are unclear or contradict CLAUDE.md, stop and report. Don't guess.
 2. **Write tests:** `next-task-write-tests`. The tests must fail first.
-3. **Implement:** `next-task-code`. Makes the tests pass and updates your `docs/CODE_MAP.md` lines.
+3. **Implement:** `next-task-code`. Makes the tests pass and updates your lines in the module file.
 4. **E2E:** `next-task-e2e`. Adds or extends specs for the user-visible flow, or reports n/a.
 5. **Run focused tests:** `next-task-test`. The checks of your area, plus lint, type checks and e2e where configured. Everything must pass.
    - **Retry cap:** count every focused run (`next-task-test`) of this bead that fails after you changed code. After the **3rd failed run**, stop. Don't weaken tests, don't try a 4th time. Step 6 then reports BLOCKED.

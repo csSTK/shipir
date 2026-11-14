@@ -1,6 +1,7 @@
 name: Code map
 
-# Mechanical rules for docs/code-map/ (entry format, length, no bead IDs, paths exist, index links).
+# Mechanical rules for docs/code-map/ (entry format, length, no bead IDs, paths exist, index links),
+# run by wavework's checker (.claude/scripts/code-map-check.mjs, generated; do not edit).
 # Separate from ci.yml because that workflow ignores **/*.md on pull requests, which would skip map-only changes.
 # Runs when the map, the checker or any file a map entry can point at changes. Node only, no install.
 
@@ -45,8 +46,5 @@ jobs:
         with:
           node-version: 22
 
-      - name: Code map checker test
-        run: node --test tools/code-map/test/*.test.mjs
-
       - name: Code map check
-        run: node tools/code-map/check.mjs
+        run: node .claude/scripts/code-map-check.mjs docs/code-map --id-prefix shipr- --max 160
