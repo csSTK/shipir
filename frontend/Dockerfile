@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:24.22.1-alpine AS build
+FROM node:26.13.0-alpine AS build
 WORKDIR /app
 # pnpm version is taken from "packageManager" in package.json
 RUN corepack enable
