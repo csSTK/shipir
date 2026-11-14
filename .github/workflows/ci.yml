@@ -1,6 +1,7 @@
 name: CI
 
-# Dev and PR checks: path-filtered tests and the backup/restore shell test only. e2e and image builds are not run here.
+# Dev and PR checks: path-filtered, affected-only tests and the shell tests of scripts/. e2e, visual tests, build
+# and image builds run on release (release.yml) only; that run always executes the full suites.
 
 on:
   push:
@@ -25,8 +26,34 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
       scripts: ${{ steps.filter.outputs.scripts }}
+      csp: ${{ steps.filter.outputs.csp }}
+      affected: ${{ steps.base.outputs.affected }}
+      base: ${{ steps.base.outputs.base }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # the base commit must be reachable to validate it
+          fetch-depth: 0
+
+      # Commit the tests diff against: the PR base, or the previous head of the pushed branch. A push without a
+      # usable previous head (new branch: all zeros, force push: commit gone) runs everything (affected=false).
+      - id: base
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          base="$PUSH_BEFORE"
+          [[ "$EVENT_NAME" == "pull_request" ]] && base="$PR_BASE"
+          if [[ -n "$base" && ! "$base" =~ ^0+$ ]] && git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "Affected-test selection against $base"
+            echo "affected=true" >> "$GITHUB_OUTPUT"
+            echo "base=$base" >> "$GITHUB_OUTPUT"
+          else
+            echo "No usable base commit ('$base'): running everything"
+            echo "affected=false" >> "$GITHUB_OUTPUT"
+            echo "base=" >> "$GITHUB_OUTPUT"
+          fi
 
       - id: filter
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -34,10 +61,22 @@ jobs:
           filters: |
             backend:
               - 'backend/**'
+              - 'scripts/ci/**'
               - '.github/workflows/tests.yml'
               - '.github/workflows/ci.yml'
             frontend:
               - 'frontend/**'
+              - '.github/workflows/tests.yml'
+              - '.github/workflows/ci.yml'
+            # CSP and nginx header checks (tests.yml csp and nginx-headers jobs) on dev and PR runs
+            csp:
+              - 'frontend/nginx/**'
+              - 'frontend/index.html'
+              - 'frontend/vite.config.ts'
+              - 'frontend/playwright.csp.config.ts'
+              - 'frontend/e2e-csp/**'
+              - 'frontend/package.json'
+              - 'frontend/pnpm-lock.yaml'
               - '.github/workflows/tests.yml'
               - '.github/workflows/ci.yml'
             scripts:
@@ -54,8 +93,11 @@ jobs:
       backend: ${{ needs.changes.outputs.backend == 'true' }}
       frontend: ${{ needs.changes.outputs.frontend == 'true' }}
       e2e: false
+      affected: ${{ needs.changes.outputs.affected == 'true' }}
+      base: ${{ needs.changes.outputs.base }}
+      csp: ${{ needs.changes.outputs.csp == 'true' }}
 
-  # Shell test for scripts/backup.sh and restore.sh. It puts stubs for docker, pg_dump, pg_restore and psql
+  # Shell tests for scripts/. The backup one puts stubs for docker, pg_dump, pg_restore and psql
   # on PATH, so it starts no container and touches no database; the runner needs nothing extra.
   scripts:
     needs: changes
@@ -67,3 +109,6 @@ jobs:
 
       - name: Backup and restore script test
         run: scripts/backup-restore.test.sh
+
+      - name: Affected backend tests selection test
+        run: scripts/ci/affected-backend-tests.test.sh

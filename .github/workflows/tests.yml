@@ -15,6 +15,18 @@ on:
         description: Run Playwright e2e tests
         type: boolean
         default: false
+      affected:
+        description: Run only the tests affected by the diff against `base` (dev and PR runs); false runs everything (release)
+        type: boolean
+        default: false
+      base:
+        description: Commit to diff against when `affected` is true
+        type: string
+        default: ''
+      csp:
+        description: With `affected`, a file the CSP and nginx header checks depend on changed
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       backend:
@@ -40,6 +52,9 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # the affected-test selection diffs against `base`
+          fetch-depth: ${{ inputs.affected && '0' || '1' }} # quoted: a number 0 is falsy, so `&& 0 || 1` would give 1
 
       - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
@@ -48,9 +63,33 @@ jobs:
           cache: maven
           cache-dependency-path: backend/pom.xml
 
+      # FULL, NONE or a -Dtest pattern list; the reasons are printed to the log. Without `affected` it is FULL.
+      - name: Select backend tests
+        id: select
+        env:
+          AFFECTED: ${{ inputs.affected }}
+          BASE: ${{ inputs.base }}
+        run: |
+          if [[ "$AFFECTED" == "true" && -n "$BASE" ]]; then
+            selection="$(scripts/ci/affected-backend-tests.sh --base "$BASE")"
+          else
+            echo "affected: FULL: affected-test selection is off for this run" >&2
+            selection=FULL
+          fi
+          echo "Selected backend tests: $selection"
+          echo "selection=$selection" >> "$GITHUB_OUTPUT"
+
       # Testcontainers uses the Docker daemon of the runner.
       - name: Maven verify
-        run: ./backend/mvnw -f backend/pom.xml -B verify
+        if: ${{ steps.select.outputs.selection != 'NONE' }}
+        env:
+          SELECTION: ${{ steps.select.outputs.selection }}
+        run: |
+          if [[ "$SELECTION" == "FULL" ]]; then
+            ./backend/mvnw -f backend/pom.xml -B verify
+          else
+            ./backend/mvnw -f backend/pom.xml -B verify -Dtest="$SELECTION" -Dsurefire.failIfNoSpecifiedTests=false
+          fi
 
   frontend:
     if: ${{ inputs.frontend }}
@@ -61,6 +100,9 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # `vitest --changed` and the full-run triggers diff against `base`
+          fetch-depth: ${{ inputs.affected && '0' || '1' }} # quoted: a number 0 is falsy, so `&& 0 || 1` would give 1
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           package_json_file: frontend/package.json
@@ -73,8 +115,32 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
-      - run: pnpm test
-      - run: pnpm build
+
+      # Dev and PR runs (`affected`): type check always, full unit tests only when the test setup changed,
+      # otherwise only the tests that import a changed file. `pnpm build` is left to the release run.
+      - name: Type check
+        if: ${{ inputs.affected }}
+        run: pnpm exec tsc -b
+
+      - name: Unit tests
+        env:
+          AFFECTED: ${{ inputs.affected }}
+          BASE: ${{ inputs.base }}
+        run: |
+          if [[ "$AFFECTED" != "true" || -z "$BASE" ]]; then
+            echo "Unit tests: full run (affected-test selection is off for this run)"
+            pnpm test
+          elif git diff --name-only "$BASE...HEAD" | grep -Eq '^frontend/(package\.json|pnpm-lock\.yaml|vite\.config\.ts|tsconfig[^/]*|src/app/|src/test/)|^\.github/workflows/'; then
+            echo "Unit tests: full run (package.json, lockfile, Vite or tsconfig, src/app, src/test or a workflow changed)"
+            pnpm test
+          else
+            echo "Unit tests: only tests affected by the diff against $BASE"
+            pnpm vitest run --changed "$BASE" --passWithNoTests
+          fi
+
+      - name: Build
+        if: ${{ !inputs.affected }}
+        run: pnpm build
 
   e2e:
     if: ${{ inputs.e2e }}
@@ -127,9 +193,10 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # Runs with the frontend tests (so on dev pushes too): CSP regressions must not wait for a release.
+  # Release runs always; dev and PR runs (`affected`) only when a file the CSP depends on changed (the `csp` input,
+  # set by ci.yml: frontend/nginx/**, index.html, vite.config.ts, playwright.csp.config.ts, e2e-csp/, package.json, lockfile).
   csp:
-    if: ${{ inputs.frontend }}
+    if: ${{ inputs.frontend && (!inputs.affected || inputs.csp) }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     defaults:
@@ -154,8 +221,9 @@ jobs:
       # Builds the app and serves it with `vite preview` under the CSP from nginx/security-headers.inc.template.
       - run: pnpm e2e:csp
 
+  # Same rule as the csp job.
   nginx-headers:
-    if: ${{ inputs.frontend }}
+    if: ${{ inputs.frontend && (!inputs.affected || inputs.csp) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

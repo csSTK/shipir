@@ -14,4 +14,5 @@ Repo root: README, docker compose files, scripts/, config and top-level docs.
 - renovate.json: Renovate dependency update config
 - .gitignore: repo-wide ignore rules (env file, build output, local tooling state)
 - scripts/{backup.sh,restore.sh,backup-restore.test.sh}: hosting backup (DB dump plus stacks and volume-backups volumes), restore into an empty setup, shell test with stubbed tools
+- scripts/ci/{affected-backend-tests.sh,affected-backend-tests.test.sh}: picks the backend -Dtest patterns for a diff (changed packages, importers, architecture, FULL/NONE) plus its test
 - scripts/{check-template-images.sh,check-template-data-paths.sh}: read-only checks that every `apps.json` template image exists and mounts its declared volumes
