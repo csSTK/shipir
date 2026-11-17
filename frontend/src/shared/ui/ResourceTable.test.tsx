@@ -64,6 +64,26 @@ describe('ResourceTable', () => {
     expect(screen.getByRole('columnheader', { name: /Size/ })).toHaveAttribute('aria-sort', 'descending')
   })
 
+  it('keeps a sort direction on every click and never returns to unsorted', () => {
+    setup()
+    const size = screen.getByRole('button', { name: 'Size' })
+    fireEvent.click(size)
+    fireEvent.click(size)
+    fireEvent.click(size)
+    expect(screen.getByRole('columnheader', { name: /Size/ })).toHaveAttribute('aria-sort', 'ascending')
+    expect(names()).toEqual(['gamma', 'beta', 'Alpha'])
+  })
+
+  it('sorts rows without a value last when ascending', () => {
+    const withNull: ResourceColumn<Row>[] = [
+      columns[0],
+      { id: 'size', header: 'Size', render: (r) => String(r.size), sortValue: (r) => (r.id === '1' ? null : r.size) },
+    ]
+    setup({ columns: withNull })
+    fireEvent.click(screen.getByRole('button', { name: 'Size' }))
+    expect(names()).toEqual(['gamma', 'Alpha', 'beta'])
+  })
+
   it('does not offer sorting for columns without a sort value', () => {
     setup()
     expect(screen.queryByRole('button', { name: 'Plain' })).not.toBeInTheDocument()

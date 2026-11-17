@@ -1,12 +1,16 @@
 import {
   type ColumnDef,
   type ColumnSizingState,
+  type ColumnVisibilityState,
+  type RowData,
   type SortingState,
-  type VisibilityState,
+  columnSizingFeature,
+  columnVisibilityFeature,
+  createSortedRowModel,
   flexRender,
-  getCoreRowModel,
-  getSortedRowModel,
-  useReactTable,
+  rowSortingFeature,
+  tableFeatures,
+  useTable,
 } from '@tanstack/react-table'
 import { ArrowDown, ArrowUp, Check, Columns3, Ellipsis, Rows3, Rows4, type LucideIcon } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
@@ -95,6 +99,14 @@ interface Prefs {
   density: Density
 }
 
+/** Features the table uses (v9 opts in explicitly); module scope keeps the object stable across renders. */
+const features = tableFeatures({
+  rowSortingFeature,
+  columnVisibilityFeature,
+  columnSizingFeature,
+  sortedRowModel: createSortedRowModel(),
+})
+
 const DEFAULT_WIDTH = 160
 const MIN_WIDTH = 64
 const MAX_WIDTH = 900
@@ -144,7 +156,7 @@ function compare(a: unknown, b: unknown): number {
  * a pinned actions column and loading/error/empty states. Widths, hidden columns and density are
  * remembered per table `id` in localStorage.
  */
-export function ResourceTable<T>({
+export function ResourceTable<T extends RowData>({
   label,
   id,
   columns,
@@ -166,7 +178,7 @@ export function ResourceTable<T>({
   const [sorting, setSorting] = useState<SortingState>([{ id: defaultSort, desc: false }])
   const [initial] = useState(() => loadPrefs(tableId))
   const [sizing, setSizing] = useState<ColumnSizingState>(initial.widths ?? {})
-  const [visibility, setVisibility] = useState<VisibilityState>(() => {
+  const [visibility, setVisibility] = useState<ColumnVisibilityState>(() => {
     const hidden = initial.hidden ?? columns.filter((c) => c.defaultHidden).map((c) => c.id)
     return Object.fromEntries(hidden.map((h) => [h, false]))
   })
@@ -185,7 +197,7 @@ export function ResourceTable<T>({
     return (rows ?? []).filter((r) => !needle || searchText(r).toLowerCase().includes(needle))
   }, [rows, query, searchText])
 
-  const columnDefs = useMemo<ColumnDef<T>[]>(
+  const columnDefs = useMemo<ColumnDef<typeof features, T>[]>(
     () =>
       columns.map((c) => ({
         id: c.id,
@@ -195,7 +207,7 @@ export function ResourceTable<T>({
         enableSorting: !!c.sortValue,
         sortDescFirst: false,
         enableHiding: c.hideable !== false,
-        sortingFn: (a, b, columnId) => compare(a.getValue(columnId), b.getValue(columnId)),
+        sortFn: (a, b, columnId) => compare(a.getValue(columnId), b.getValue(columnId)),
         size: c.defaultWidth ?? DEFAULT_WIDTH,
         minSize: c.minWidth ?? MIN_WIDTH,
         maxSize: MAX_WIDTH,
@@ -204,7 +216,7 @@ export function ResourceTable<T>({
   )
 
   // columns without a value in any row stay out of the way until the user turns them on
-  const effectiveVisibility = useMemo<VisibilityState>(() => {
+  const effectiveVisibility = useMemo<ColumnVisibilityState>(() => {
     const all = rows ?? []
     if (all.length === 0) return visibility
     const out = { ...visibility }
@@ -214,7 +226,8 @@ export function ResourceTable<T>({
     return out
   }, [rows, columns, visibility])
 
-  const table = useReactTable({
+  const table = useTable({
+    features,
     data: filtered,
     columns: columnDefs,
     state: { sorting, columnSizing: sizing, columnVisibility: effectiveVisibility },
@@ -224,8 +237,6 @@ export function ResourceTable<T>({
     enableSortingRemoval: false,
     enableMultiSort: false,
     getRowId: (row) => rowKey(row),
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
   })
 
   const setWidth = useCallback((columnId: string, width: number) => {
