@@ -8,6 +8,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -40,9 +41,21 @@ class AuthEndpointsTest {
         return cookie;
     }
 
+    /**
+     * Mimics a browser that sends its session cookie. Since Spring Framework 7.0.10 the mock request only reports a
+     * valid requested session id when one was sent, and session-fixation protection only rotates then (as in a container).
+     */
+    private static RequestPostProcessor sendsSessionCookie(MockHttpSession session) {
+        return request -> {
+            request.setRequestedSessionId(session.getId());
+            return request;
+        };
+    }
+
     private MvcResult login(String username, String password, MockHttpSession session, Cookie csrf) throws Exception {
         return mvc.perform(post("/api/auth/login")
                         .session(session)
+                        .with(sendsSessionCookie(session))
                         .cookie(csrf)
                         .header("X-XSRF-TOKEN", csrf.getValue())
                         .contentType(APPLICATION_JSON)

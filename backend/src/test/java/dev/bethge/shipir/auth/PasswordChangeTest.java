@@ -62,7 +62,13 @@ class PasswordChangeTest {
 
     private MvcResult changePassword(MockHttpSession session, Cookie csrf, String current, String next)
             throws Exception {
+        // a browser sends its session cookie; the mock only then reports a valid requested session id (Framework 7.0.10),
+        // which session-fixation protection needs before it rotates
         return mvc.perform(post("/api/auth/password").session(session)
+                .with(request -> {
+                    request.setRequestedSessionId(session.getId());
+                    return request;
+                })
                 .cookie(csrf).header("X-XSRF-TOKEN", csrf.getValue())
                 .contentType(APPLICATION_JSON)
                 .content("{\"currentPassword\":\"%s\",\"newPassword\":\"%s\"}".formatted(current, next)))

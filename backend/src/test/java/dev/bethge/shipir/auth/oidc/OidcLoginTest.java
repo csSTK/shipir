@@ -83,8 +83,14 @@ class OidcLoginTest extends OidcTestBase {
         String before = authorize.getRequest().getSession(false).getId();
         Map<String, String> q = query(authorize.getResponse().getHeader("Location"));
         provider.grant("c-rot", q.get("code_challenge"), q.get("nonce"), claims("sub-rot", "rot", "ops"));
+        MockHttpSession session = (MockHttpSession) authorize.getRequest().getSession(false);
+        // a browser sends its session cookie; the mock only then reports a valid requested session id (Framework 7.0.10),
+        // which session-fixation protection needs before it rotates
         MvcResult cb = mvc.perform(get("/api/auth/oidc/callback").param("code", "c-rot").param("state", q.get("state"))
-                .session((MockHttpSession) authorize.getRequest().getSession(false))).andReturn();
+                .session(session).with(request -> {
+                    request.setRequestedSessionId(session.getId());
+                    return request;
+                })).andReturn();
         assertThat(cb.getRequest().getSession(false).getId()).isNotEqualTo(before);
     }
 
