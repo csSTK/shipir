@@ -14,6 +14,9 @@ class ArchitectureTest {
     static final ArchRule dockerKnowsNoFeature = ArchitectureRules.dockerKnowsNoFeature(ROOT);
 
     @ArchTest
+    static final ArchRule dockerNotOnComposeOrStreaming = ArchitectureRules.dockerNotOnComposeOrStreaming(ROOT);
+
+    @ArchTest
     static final ArchRule dockerJavaOnlyInDocker = ArchitectureRules.dockerJavaOnlyInDocker(ROOT);
 
     @ArchTest

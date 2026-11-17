@@ -3,7 +3,9 @@ package dev.bethge.shipir.architecture;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.ArchRule;
+import dev.bethge.shipir.architecture.fixture.common.CommonThing;
 import dev.bethge.shipir.architecture.fixture.compose.execution.GoodProcessBuilderUser;
+import dev.bethge.shipir.architecture.fixture.docker.GoodDockerCommonUser;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -24,6 +26,34 @@ class ArchitectureRulesFailTest {
     @Test
     void dockerDependingOnFeatureFails() {
         fails(ArchitectureRules.dockerKnowsNoFeature(ROOT), "BadDockerClass");
+    }
+
+    @Test
+    void dockerDependingOnProxyFails() {
+        fails(ArchitectureRules.dockerKnowsNoFeature(ROOT), "BadDockerProxyUser");
+    }
+
+    @Test
+    void dockerDependingOnBackupFails() {
+        fails(ArchitectureRules.dockerKnowsNoFeature(ROOT), "BadDockerBackupUser");
+    }
+
+    @Test
+    void dockerMayDependOnCommon() {
+        // Only the allowed pair is imported, so no other fixture violation can mask the result.
+        JavaClasses allowed = new ClassFileImporter().importClasses(GoodDockerCommonUser.class, CommonThing.class);
+        assertThatCode(() -> ArchitectureRules.dockerKnowsNoFeature(ROOT).check(allowed))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void dockerDependingOnComposeFails() {
+        fails(ArchitectureRules.dockerNotOnComposeOrStreaming(ROOT), "BadDockerComposeUser");
+    }
+
+    @Test
+    void dockerDependingOnStreamingFails() {
+        fails(ArchitectureRules.dockerNotOnComposeOrStreaming(ROOT), "BadDockerStreamingUser");
     }
 
     @Test

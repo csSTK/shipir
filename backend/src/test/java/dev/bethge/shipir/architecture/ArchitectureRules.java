@@ -21,14 +21,24 @@ final class ArchitectureRules {
     private ArchitectureRules() {
     }
 
+    /**
+     * Allowlist: classes in docker/ may depend on shipir classes only in docker/ and common/. Anything else in the
+     * shipir tree (any current or future module) is a violation. Third-party packages are not affected.
+     */
     static ArchRule dockerKnowsNoFeature(String root) {
+        DescribedPredicate<JavaClass> shipirOutsideAllowlist = JavaClass.Predicates.resideInAPackage(root + "..")
+                .and(DescribedPredicate.not(
+                        JavaClass.Predicates.resideInAnyPackage(root + ".docker..", root + ".common..")));
         return noClasses().that().resideInAPackage(root + ".docker..")
-                .should().dependOnClassesThat().resideInAnyPackage(
-                        root + ".host..", root + ".compose..", root + ".config_editor..",
-                        root + ".streaming..", root + ".git..", root + ".notification..",
-                        root + ".ai..", root + ".retention..", root + ".auth..",
-                        root + ".permission..", root + ".audit..", root + ".registry..")
-                .as("docker/ must not depend on any feature module");
+                .should().dependOnClassesThat(shipirOutsideAllowlist)
+                .as("docker/ may depend on shipir classes only in docker/ and common/");
+    }
+
+    /** docker/ is the lower layer: compose/ and streaming/ use it, never the other way round (CLAUDE.md). */
+    static ArchRule dockerNotOnComposeOrStreaming(String root) {
+        return noClasses().that().resideInAPackage(root + ".docker..")
+                .should().dependOnClassesThat().resideInAnyPackage(root + ".compose..", root + ".streaming..")
+                .as("docker/ must not depend on compose/ or streaming/");
     }
 
     static ArchRule dockerJavaOnlyInDocker(String root) {
