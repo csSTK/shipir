@@ -78,6 +78,11 @@ public class LoginThrottle {
         purge(clock.instant());
     }
 
+    /** Forgets every attempt and lockout. For tests that share one application context across test classes. */
+    public synchronized void clear() {
+        entries.clear();
+    }
+
     /** Remaining lock time if the username or the address is locked, else empty. */
     public synchronized Optional<Duration> lockedFor(Scope scope, String username, String address) {
         Instant now = clock.instant();

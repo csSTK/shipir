@@ -20,7 +20,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
@@ -50,10 +49,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @AutoConfigureMockMvc
 @Import(PostgresTestConfiguration.class)
-@TestPropertySource(properties = {"shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=", "shipir.config-editor.backups-per-file=3", "shipir.config-editor.max-file-bytes=200"})
+@TestPropertySource(properties = {"shipir.config-editor.backups-per-file=3", "shipir.config-editor.max-file-bytes=200"})
 class ConfigFileApiTest {
 
     private static final String PASSWORD = "A-test-Passw0rd-for-config-files!";

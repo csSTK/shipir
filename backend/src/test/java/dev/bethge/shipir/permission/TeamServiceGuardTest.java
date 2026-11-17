@@ -11,7 +11,6 @@ import org.springframework.security.authentication.AuthenticationCredentialsNotF
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.annotation.DirtiesContext;
 
 import java.util.List;
 import java.util.UUID;
@@ -21,7 +20,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** The public {@link TeamService#get} guards itself: ADMIN only, whoever calls it (e.g. the AI tool). */
 @SpringBootTest
 @Import(PostgresTestConfiguration.class)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class TeamServiceGuardTest {
 
     @Autowired

@@ -5,7 +5,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.springframework.test.context.TestPropertySource;
 
 import java.util.List;
 import java.util.UUID;
@@ -20,7 +19,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** CRUD of {@code /managed-deployments/{id}/uptime-checks}: validation, limit, permissions, CSRF, audit, notification types. */
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class UptimeCheckApiTest extends DeploymentTestBase {
 
     private String deploymentId;

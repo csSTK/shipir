@@ -10,7 +10,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -33,7 +32,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Scheduler tick against a stub server: due selection, result recording, flapping dedupe (DOWN after 2 consecutive
  * failures, UP after one success, notify only on state change), failure isolation and the results purge.
  */
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 @RecordApplicationEvents
 class UptimeSchedulerTest extends DeploymentTestBase {
 

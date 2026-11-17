@@ -1,6 +1,7 @@
 package dev.bethge.shipir.host;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.test.context.TestPropertySource;
 
 import java.util.UUID;
 
@@ -9,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** TCP host exists but no encryption key is configured: ENCRYPTION_KEY_MISSING. */
+@TestPropertySource(properties = "shipir.encryption-key=")
 class HostResourcesNoKeyTest extends HostApiTestBase {
 
     @Test

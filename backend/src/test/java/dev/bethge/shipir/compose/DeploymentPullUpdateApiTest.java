@@ -5,7 +5,6 @@ import dev.bethge.shipir.compose.execution.ComposeCommand;
 import dev.bethge.shipir.streaming.ComposeOutputStreamService;
 import dev.bethge.shipir.common.stream.RunStatus;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.List;
@@ -27,7 +26,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** {@code POST managed-deployments/{id}/pull-update}: pull then up on the deployed version, stubbed compose execution. */
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 @org.springframework.test.context.event.RecordApplicationEvents
 class DeploymentPullUpdateApiTest extends DeploymentTestBase {
 

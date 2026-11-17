@@ -7,7 +7,6 @@ import dev.bethge.shipir.streaming.ComposeOutputStreamService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -35,7 +34,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Redeploy webhook: management by OPERATE users, the public {@code POST /api/webhooks/deploy/{token}} trigger. */
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class DeploymentWebhookApiTest extends DeploymentTestBase {
 
     private static final String TRIGGER = "/api/webhooks/deploy/";

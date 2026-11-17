@@ -27,7 +27,6 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -59,7 +58,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * proposed (nothing to encrypt them with), so the model gets an ENCRYPTION_KEY_MISSING error and no value is stored.
  */
 @SpringBootTest
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @AutoConfigureMockMvc
 @Import({PostgresTestConfiguration.class, ChatOrchestratorNoEncryptionKeyTest.StubConfig.class})
 @TestPropertySource(properties = {"shipir.encryption-key=",

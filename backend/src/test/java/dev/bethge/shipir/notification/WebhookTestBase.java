@@ -14,9 +14,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 /** Webhook tests: encryption key configured, short delivery timeout, ADMIN has an environment (setup gate). */
-@TestPropertySource(properties = {
-        "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
-        "shipir.notification.webhook-timeout=1s"})
+@TestPropertySource(properties = "shipir.notification.webhook-timeout=1s")
 abstract class WebhookTestBase extends NotificationTestBase {
 
     private final List<Stub> stubs = new ArrayList<>();

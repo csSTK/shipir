@@ -23,7 +23,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Bind mounts on a remote (TCP) host (shipr-kqbc.61): non-ADMIN users, and automatic runs under the same rules, get
  * 403 REMOTE_BIND_MOUNT_DENIED for any bind mount; named volumes and ADMIN deploys stay allowed.
  */
-@org.springframework.test.context.TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class DeploymentRemoteBindPolicyApiTest extends DeploymentTestBase {
 
     private static final String BIND = "services:\n  x:\n    image: alpine\n    volumes:\n      - {type: bind, source: ./data, target: /d}\n";

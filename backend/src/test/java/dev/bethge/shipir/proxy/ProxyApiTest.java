@@ -38,10 +38,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -78,10 +76,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Docker daemon is stubbed. The real daemon is covered by {@link ProxyRealDockerTest}.
  */
 @SpringBootTest
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @AutoConfigureMockMvc
 @Import(PostgresTestConfiguration.class)
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 @ExtendWith(OutputCaptureExtension.class)
 class ProxyApiTest {
 
@@ -451,7 +447,9 @@ class ProxyApiTest {
                 .andExpect(jsonPath("$.instance.dnsCredentialsHint").isNotEmpty())
                 .andExpect(jsonPath("$.runId").isNotEmpty());
 
-        assertThat(commands.stream().filter(c -> c == ComposeCommand.UP).count()).isEqualTo(upsBefore + 1);
+        // the redeploy runs on the executor after the response went out
+        await().atMost(java.time.Duration.ofSeconds(10)).untilAsserted(() ->
+                assertThat(commands.stream().filter(c -> c == ComposeCommand.UP).count()).isEqualTo(upsBefore + 1));
         String env = composeFiles.readEnv(hostId, "shipir-proxy").orElseThrow();
         assertThat(env).contains("ACME_EMAIL=new@example.com").contains(SECRET);
     }
@@ -554,7 +552,9 @@ class ProxyApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.runId").isNotEmpty());
         assertThat(jdbc.queryForObject("SELECT acme_email FROM proxy_instances", String.class)).isEqualTo("new@example.com");
-        assertThat(commands.stream().filter(c -> c == ComposeCommand.UP).count()).isEqualTo(upsBefore + 1);
+        // the redeploy runs on the executor after the response went out
+        await().atMost(java.time.Duration.ofSeconds(10)).untilAsserted(() ->
+                assertThat(commands.stream().filter(c -> c == ComposeCommand.UP).count()).isEqualTo(upsBefore + 1));
         assertThat(composeFiles.readEnv(hostId, "shipir-proxy").orElseThrow()).contains("ACME_EMAIL=new@example.com");
     }
 

@@ -21,9 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Stubbed Docker port: failing and hanging environments must not affect the others or the response time. */
-@TestPropertySource(properties = {
-        "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
-        "shipir.host.overview-timeout=1s"})
+@TestPropertySource(properties = "shipir.host.overview-timeout=1s")
 class HostOverviewResilienceTest extends HostApiTestBase {
 
     @MockitoBean

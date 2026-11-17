@@ -16,7 +16,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -46,7 +45,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@code shipir-proxy} deployment already exists on the daemon.
  */
 @SpringBootTest
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @AutoConfigureMockMvc
 @Import(PostgresTestConfiguration.class)
 class ProxyCustomConfigRealCaddyTest {

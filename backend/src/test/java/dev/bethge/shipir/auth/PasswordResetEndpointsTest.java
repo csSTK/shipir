@@ -14,7 +14,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -32,7 +31,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import({PostgresTestConfiguration.class, PasswordResetEndpointsTest.TestBeans.class})
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class PasswordResetEndpointsTest {
 
     private static final String OLD_PASSWORD = "Old-Passw0rd-for-tests!";

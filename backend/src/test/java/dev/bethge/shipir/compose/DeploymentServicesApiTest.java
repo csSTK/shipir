@@ -6,7 +6,6 @@ import dev.bethge.shipir.compose.execution.ComposeOptions;
 import dev.bethge.shipir.streaming.ComposeOutputStreamService;
 import dev.bethge.shipir.common.stream.RunStatus;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.List;
@@ -30,7 +29,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Profiles and per-service actions of a managed deployment, with stubbed compose execution. */
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class DeploymentServicesApiTest extends DeploymentTestBase {
 
     static final String PROFILE_YAML = "services:\n  web:\n    image: nginx\n  debug:\n    image: busybox\n    profiles: [debug]\n";

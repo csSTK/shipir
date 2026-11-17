@@ -9,7 +9,6 @@ import dev.bethge.shipir.docker.dto.DeploymentSummaryDto;
 import dev.bethge.shipir.common.security.SecretCipher;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.TestPropertySource;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -24,7 +23,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** {@code GET /api/search}: matching, limits, permission filtering and resilience against unreachable hosts. */
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class SearchApiTest extends HostApiTestBase {
 
     @Autowired

@@ -49,9 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Git-sourced deployments against a real smart-HTTP git server: JGit's {@link UploadPack} behind the JDK HttpServer, with
  * Basic auth on {@code /private.git}. Plain http is reachable only because of {@code allow-insecure-http}.
  */
-@TestPropertySource(properties = {
-        "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
-        "shipir.git.allow-insecure-http=true", "shipir.git.connect-timeout=5s"})
+@TestPropertySource(properties = {"shipir.git.allow-insecure-http=true", "shipir.git.connect-timeout=5s"})
 class GitDeploymentApiTest extends DeploymentTestBase {
 
     private static final String TOKEN = "ghp_SECRETTOKEN1234567890abcdef";
@@ -67,6 +65,7 @@ class GitDeploymentApiTest extends DeploymentTestBase {
     private String base;
     private ListAppender<ILoggingEvent> logs;
     private Logger rootLogger;
+    private Level previousRootLevel;
 
     @BeforeEach
     void startServer() throws Exception {
@@ -85,12 +84,16 @@ class GitDeploymentApiTest extends DeploymentTestBase {
         logs = new ListAppender<>();
         logs.start();
         rootLogger.addAppender(logs);
+        previousRootLevel = rootLogger.getLevel();
         rootLogger.setLevel(Level.DEBUG);
     }
 
     @AfterEach
     void stopServer() {
+        // the logging system lives for the whole JVM: left at DEBUG, every later class would log at DEBUG too
+        rootLogger.setLevel(previousRootLevel);
         rootLogger.detachAppender(logs);
+        logs.stop();
         server.stop(0);
         repo.close();
     }

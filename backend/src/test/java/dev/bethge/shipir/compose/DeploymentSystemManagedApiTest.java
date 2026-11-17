@@ -3,7 +3,6 @@ package dev.bethge.shipir.compose;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.context.TestPropertySource;
 
 import java.util.List;
 import java.util.UUID;
@@ -22,7 +21,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * A system-managed deployment (the managed proxy) holds ADMIN-only secrets in its env: the generic read endpoints
  * (env, detail with YAML) answer 403 for OPERATOR and VIEWER, ADMIN keeps access, other deployments are unaffected.
  */
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class DeploymentSystemManagedApiTest extends DeploymentTestBase {
 
     private static final String SECRET = "cf-dns-token-s3cr3t";

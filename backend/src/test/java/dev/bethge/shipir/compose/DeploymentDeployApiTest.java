@@ -5,7 +5,6 @@ import dev.bethge.shipir.compose.execution.ComposeCommand;
 import dev.bethge.shipir.streaming.ComposeOutputStreamService;
 import dev.bethge.shipir.common.stream.RunStatus;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.List;
@@ -29,7 +28,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class DeploymentDeployApiTest extends DeploymentTestBase {
 
     private static final String YAML_B = "services:\n  web:\n    image: nginx:alpine\n";

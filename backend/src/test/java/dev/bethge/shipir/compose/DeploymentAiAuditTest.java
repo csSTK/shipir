@@ -5,7 +5,6 @@ import dev.bethge.shipir.common.security.AiInvocationContext;
 import dev.bethge.shipir.streaming.ComposeOutputStreamService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.List;
@@ -22,7 +21,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** The async *_RESULT audit entry carries via=AI when the run was accepted inside an AI call (the worker thread does not inherit it). */
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class DeploymentAiAuditTest extends DeploymentTestBase {
 
     @MockitoBean
