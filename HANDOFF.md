@@ -13,7 +13,7 @@ This file holds the parts of the original planning handoff that aren't permanent
 ## Open decisions (ask the user, do not guess)
 
 - [x] **DECIDED:** Maven, with the Maven wrapper (`backend/mvnw`).
-- [x] **DECIDED:** Java 25 (LTS), Spring Boot 4.1.1 (pinned via `spring-boot-starter-parent`).
+- [x] **DECIDED:** Java 25 (LTS), Spring Boot 4.1.2 (pinned via `spring-boot-starter-parent`).
 - [x] **DECIDED:** Auth uses a server-side Spring Security session (HttpOnly cookie, cookie-based CSRF token for the SPA), not JWT. Reason: instant revocation on logout/password change, simplest for a same-origin SPA behind nginx, STOMP reuses the cookie.
 - [x] **DECIDED:** Password hashing uses Argon2id (`DelegatingPasswordEncoder`, `{argon2}` default, `{bcrypt}` match-only). Reason: Spring Security 7 BCrypt rejects passwords over 72 bytes, the password policy allows 15-128 characters.
 - [x] **DECIDED:** Classic Spring MVC + WebSocket/STOMP (no WebFlux).

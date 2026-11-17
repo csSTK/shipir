@@ -308,7 +308,7 @@ head -c "$N" "$F" | openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -md sha256 
 
 There is no importer for the JSONL tables and none is planned for now (decision 2026-10-28: document only). For a full restore, use `scripts/backup.sh` / `scripts/restore.sh`.
 
-### Backend (Java 25, Spring Boot 4.1.1)
+### Backend (Java 25, Spring Boot 4.1.2)
 
 ```bash
 ./backend/mvnw -f backend/pom.xml verify          # Compile and run tests
