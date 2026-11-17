@@ -65,6 +65,7 @@ class GitDeploymentApiTest extends DeploymentTestBase {
     private String base;
     private ListAppender<ILoggingEvent> logs;
     private Logger rootLogger;
+    private Level previousRootLevel;
 
     @BeforeEach
     void startServer() throws Exception {
@@ -83,12 +84,16 @@ class GitDeploymentApiTest extends DeploymentTestBase {
         logs = new ListAppender<>();
         logs.start();
         rootLogger.addAppender(logs);
+        previousRootLevel = rootLogger.getLevel();
         rootLogger.setLevel(Level.DEBUG);
     }
 
     @AfterEach
     void stopServer() {
+        // the logging system lives for the whole JVM: left at DEBUG, every later class would log at DEBUG too
+        rootLogger.setLevel(previousRootLevel);
         rootLogger.detachAppender(logs);
+        logs.stop();
         server.stop(0);
         repo.close();
     }
