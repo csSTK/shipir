@@ -1,5 +1,6 @@
 package dev.bethge.shipir.architecture;
 
+import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
@@ -43,4 +44,16 @@ class ArchitectureTest {
 
     @ArchTest
     static final ArchRule noRuntimeExec = ArchitectureRules.noRuntimeExec(ROOT);
+
+    @ArchTest
+    static final ArchRule rawFileIoOnlyInAllowlist = ArchitectureRules.rawFileIoOnlyInAllowlist(ROOT);
+
+    @ArchTest
+    static void rawFileIoAllowlistHasNoStaleEntries(JavaClasses classes) {
+        ArchitectureRules.RAW_FILE_IO_ALLOWLIST.keySet().forEach(name -> {
+            if (!classes.contain(ROOT + "." + name)) {
+                throw new AssertionError("Allowlisted class no longer exists, remove it: " + name);
+            }
+        });
+    }
 }

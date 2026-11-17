@@ -7,6 +7,17 @@ import com.tngtech.archunit.core.domain.JavaConstructorCall;
 import com.tngtech.archunit.core.domain.JavaConstructorReference;
 import com.tngtech.archunit.lang.ArchRule;
 
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.RandomAccessFile;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import static com.tngtech.archunit.base.DescribedPredicate.describe;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
@@ -129,5 +140,96 @@ final class ArchitectureRules {
         return noClasses().that().resideInAPackage(root + "..")
                 .should().accessTargetWhere(runtimeExec)
                 .as("Runtime.exec must not be used");
+    }
+
+    /**
+     * Pure metadata queries on {@code Files}: they neither read nor change file content, so they are not restricted.
+     * Every other {@code Files} method (read, write, open, create, delete, copy, move, walk, list, attributes,
+     * channels, ...) counts as raw file I/O, so a method added to the JDK is restricted by default.
+     */
+    private static final Set<String> FILES_METADATA_QUERIES = Set.of(
+            "exists", "notExists", "isDirectory", "isRegularFile", "isSymbolicLink", "isHidden", "isReadable",
+            "isWritable", "isExecutable", "isSameFile");
+
+    private static final List<Class<?>> FILE_STREAM_CLASSES = List.of(
+            FileInputStream.class, FileOutputStream.class, RandomAccessFile.class, FileReader.class, FileWriter.class);
+
+    /**
+     * Classes (relative to the root package) that may do raw file I/O, each with the reason it is acceptable. A new
+     * entry needs a review: the path must be derived from validated input (PathValidationUtil / SecureFiles), a
+     * temp directory or configuration, never a raw user-supplied path.
+     */
+    static final Map<String, String> RAW_FILE_IO_ALLOWLIST = Map.ofEntries(
+            Map.entry("backup.BackupService", "export spools DB tables to a private temp file and tars the stacks dir "
+                    + "walking without following links; no user-supplied path"),
+            Map.entry("compose.AdoptionService", "reads compose files of foreign projects only after PathValidationUtil "
+                    + "against the admin-configured adopt-allowed-dirs"),
+            Map.entry("compose.DeploymentRunService", "lists the names in a deployment dir from ComposeFileRepository "
+                    + "to see whether only Shipir-written files exist; no content is read"),
+            Map.entry("compose.execution.CliPluginDirs", "reads the docker CLI config.json of the Shipir process "
+                    + "(DOCKER_CONFIG or home), never user input"),
+            Map.entry("compose.execution.ComposeExecutionService", "writes TLS and registry-auth material into 0700 "
+                    + "temp dirs and deletes them again; checks paths with requireInside"),
+            Map.entry("compose.file.ComposeFileRepository", "the deployment file store: paths via PathValidationUtil, "
+                    + "reads and writes through SecureFiles"),
+            Map.entry("compose.file.ComposeGraphHasher", "fingerprints a deployment dir without following links; "
+                    + "rejects links leaving the dir"),
+            Map.entry("compose.validation.ComposeFilePolicy", "reads compose and include files after resolving them "
+                    + "to real paths inside the deployment dir"),
+            Map.entry("config_editor.ConfigFileService", "user-facing editor: PathValidationUtil, symlink rejection "
+                    + "and SecureFiles for every read and write"),
+            Map.entry("git.CloneGuard", "measures and deletes a clone dir the service created itself, never following "
+                    + "links"),
+            Map.entry("git.GitRepositoryService", "creates and checks the checkout dir derived from the validated "
+                    + "deployment dir; compose file reads go through SecureFiles"),
+            Map.entry("host.BuildContextArchiver", "tars a Shipir-owned git checkout, skipping links and .git"),
+            Map.entry("host.BuildTempSweeper", "deletes stale Shipir-prefixed spool dirs in the configured build temp "
+                    + "dir without following links"),
+            Map.entry("host.DockerfileReferenceScanner", "reads an upload that was spooled to a Shipir temp dir"),
+            Map.entry("host.ImageBuildService", "spools uploads into its own temp dir (random name) and removes it "
+                    + "afterwards; no user-supplied path"),
+            Map.entry("host.VolumeBackupService", "copies a stored backup into an owner-only temp file for the restore"),
+            Map.entry("host.VolumeBackupStore", "volume backup store: PathValidationUtil plus SecureFiles for list, "
+                    + "write, read, delete and prune"));
+
+    /** Raw file I/O outside {@code common.util} only in {@link #RAW_FILE_IO_ALLOWLIST}. */
+    static ArchRule rawFileIoOnlyInAllowlist(String root) {
+        return rawFileIoOnlyInAllowlist(root, RAW_FILE_IO_ALLOWLIST);
+    }
+
+    /**
+     * Raw file I/O ({@code java.nio.file.Files} except metadata queries, {@code FileChannel.open}, the File stream
+     * constructors) is allowed in {@code common.util} (PathValidationUtil, SecureFiles are the guarded entry points)
+     * and in the allowlisted classes, each named relative to {@code root}. Covers calls and method/constructor
+     * references ({@code Files::readString}, {@code FileInputStream::new}), which bypass a call-only check.
+     */
+    static ArchRule rawFileIoOnlyInAllowlist(String root, Map<String, String> allowlist) {
+        Set<String> allowedClasses = new java.util.HashSet<>();
+        allowlist.keySet().forEach(name -> allowedClasses.add(root + "." + name));
+        DescribedPredicate<JavaAccess<?>> rawFileIo = describe(
+                "is raw file I/O (Files, FileChannel.open, File streams) call or reference",
+                (JavaAccess<?> access) -> {
+                    JavaClass owner = access.getTargetOwner();
+                    String name = access.getTarget().getName();
+                    if (owner.isEquivalentTo(Files.class)) {
+                        return !FILES_METADATA_QUERIES.contains(name);
+                    }
+                    if (owner.isEquivalentTo(FileChannel.class)) {
+                        return name.equals("open");
+                    }
+                    return name.equals(CONSTRUCTOR_NAME)
+                            && FILE_STREAM_CLASSES.stream().anyMatch(owner::isEquivalentTo);
+                });
+        DescribedPredicate<JavaClass> allowlisted = describe("allowlisted",
+                c -> allowedClasses.contains(c.getName()) || allowedClasses.contains(outermost(c.getName())));
+        return noClasses().that().resideOutsideOfPackage(root + ".common.util..")
+                .and(DescribedPredicate.not(allowlisted))
+                .should().accessTargetWhere(rawFileIo)
+                .as("raw file I/O must only be done in common.util or an allowlisted class");
+    }
+
+    private static String outermost(String className) {
+        int nested = className.indexOf('$');
+        return nested < 0 ? className : className.substring(0, nested);
     }
 }

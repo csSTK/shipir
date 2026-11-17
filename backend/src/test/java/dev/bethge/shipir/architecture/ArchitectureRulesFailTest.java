@@ -5,8 +5,13 @@ import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.ArchRule;
 import dev.bethge.shipir.architecture.fixture.common.CommonThing;
 import dev.bethge.shipir.architecture.fixture.compose.execution.GoodProcessBuilderUser;
+import dev.bethge.shipir.architecture.fixture.common.util.UnrestrictedFileUser;
 import dev.bethge.shipir.architecture.fixture.docker.GoodDockerCommonUser;
+import dev.bethge.shipir.architecture.fixture.host.GoodAllowlistedFileUser;
+import dev.bethge.shipir.architecture.fixture.host.GoodFilesMetadataUser;
 import org.junit.jupiter.api.Test;
+
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -134,5 +139,69 @@ class ArchitectureRulesFailTest {
     @Test
     void runtimeExecMethodReferenceFails() {
         fails(ArchitectureRules.noRuntimeExec(ROOT), "BadRuntimeExecReferenceUser");
+    }
+
+    private static final Map<String, String> FIXTURE_ALLOWLIST =
+            Map.of("host.GoodAllowlistedFileUser", "fixture: stands for a reviewed class");
+
+    @Test
+    void filesReadOutsideAllowlistFails() {
+        fails(ArchitectureRules.rawFileIoOnlyInAllowlist(ROOT, FIXTURE_ALLOWLIST), "BadFilesReadUser");
+    }
+
+    @Test
+    void filesMethodReferenceOutsideAllowlistFails() {
+        fails(ArchitectureRules.rawFileIoOnlyInAllowlist(ROOT, FIXTURE_ALLOWLIST), "BadFilesReferenceUser");
+    }
+
+    @Test
+    void fileInputStreamConstructorOutsideAllowlistFails() {
+        fails(ArchitectureRules.rawFileIoOnlyInAllowlist(ROOT, FIXTURE_ALLOWLIST), "BadFileInputStreamUser");
+    }
+
+    @Test
+    void fileInputStreamConstructorReferenceOutsideAllowlistFails() {
+        fails(ArchitectureRules.rawFileIoOnlyInAllowlist(ROOT, FIXTURE_ALLOWLIST), "BadFileInputStreamReferenceUser");
+    }
+
+    @Test
+    void fileChannelOpenOutsideAllowlistFails() {
+        fails(ArchitectureRules.rawFileIoOnlyInAllowlist(ROOT, FIXTURE_ALLOWLIST), "BadFileChannelUser");
+    }
+
+    @Test
+    void allowlistedClassIsNotReported() {
+        assertThatThrownBy(() -> ArchitectureRules.rawFileIoOnlyInAllowlist(ROOT, FIXTURE_ALLOWLIST).check(FIXTURE))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageNotContaining("GoodAllowlistedFileUser");
+    }
+
+    @Test
+    void allowlistedClassPasses() {
+        // The allowlisted class is filtered out of the rule's subject, so it matches nothing; allowEmptyShould for that.
+        JavaClasses allowed = new ClassFileImporter().importClasses(GoodAllowlistedFileUser.class);
+        ArchRule rule = ArchitectureRules.rawFileIoOnlyInAllowlist(ROOT, FIXTURE_ALLOWLIST).allowEmptyShould(true);
+        assertThatCode(() -> rule.check(allowed)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void filesMetadataQueriesPass() {
+        JavaClasses metadata = new ClassFileImporter().importClasses(GoodFilesMetadataUser.class);
+        ArchRule rule = ArchitectureRules.rawFileIoOnlyInAllowlist(ROOT, Map.of());
+        assertThatCode(() -> rule.check(metadata)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void rawFileIoInCommonUtilIsUnrestricted() {
+        // The class lives in common.util, so the rule's package filter matches nothing; allowEmptyShould only for that.
+        JavaClasses util = new ClassFileImporter().importClasses(UnrestrictedFileUser.class);
+        ArchRule rule = ArchitectureRules.rawFileIoOnlyInAllowlist(ROOT, Map.of()).allowEmptyShould(true);
+        assertThatCode(() -> rule.check(util)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void everyAllowlistEntryHasAReason() {
+        ArchitectureRules.RAW_FILE_IO_ALLOWLIST.forEach((name, reason) ->
+                org.assertj.core.api.Assertions.assertThat(reason).as(name).isNotBlank());
     }
 }
