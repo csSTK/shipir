@@ -13,7 +13,6 @@ import dev.bethge.shipir.git.GitRepositoryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -38,7 +37,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * left behind; ADMIN is exempt. (Git redeploy, pull-update, image auto-update, webhook and env-only update are in
  * {@link DeploymentSecurityPolicyApiTest} and {@link GitDeploymentApiTest}.) Compose is the YAML-passthrough fake.
  */
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class DeploymentPolicyEntryPathsTest extends DeploymentTestBase {
 
     private static final String PRIVILEGED = "services:\n  x:\n    image: alpine\n    privileged: true\n";

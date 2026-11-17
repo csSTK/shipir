@@ -1,6 +1,7 @@
 package dev.bethge.shipir.compose;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.test.context.TestPropertySource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -9,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Without {@code shipir.encryption-key} deployments work, but env variables cannot be stored. */
+@TestPropertySource(properties = "shipir.encryption-key=")
 class DeploymentNoEncryptionKeyTest extends DeploymentTestBase {
 
     @Test

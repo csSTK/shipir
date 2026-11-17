@@ -1,7 +1,6 @@
 package dev.bethge.shipir.host;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.test.context.TestPropertySource;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -10,7 +9,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Needs a Docker daemon: the LOCAL environment is queried for real. */
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class HostOverviewApiTest extends HostApiTestBase {
 
     @Test

@@ -28,7 +28,6 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
@@ -60,12 +59,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** Agent loop against Postgres, real tools and services, with a scripted LLM. */
 @SpringBootTest
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @AutoConfigureMockMvc
 @Import({PostgresTestConfiguration.class, ChatOrchestratorTest.StubConfig.class})
 @TestPropertySource(properties = {"shipir.ai.chat.max-iterations=3", "shipir.ai.chat.messages-per-minute=1000",
         "shipir.ai.chat.max-history-messages=10", "shipir.ai.chat.max-concurrent-runs=2",
-        "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
         "shipir.stacks.base-dir=target/chat-orchestrator-stacks"})
 class ChatOrchestratorTest {
 

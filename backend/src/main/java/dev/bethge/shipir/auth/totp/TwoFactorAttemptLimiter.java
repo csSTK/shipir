@@ -56,4 +56,9 @@ class TwoFactorAttemptLimiter {
     void reset(String username) {
         states.remove(username);
     }
+
+    /** Forgets every failure and lockout. For tests that share one application context across test classes. */
+    void clear() {
+        states.clear();
+    }
 }

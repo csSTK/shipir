@@ -11,7 +11,6 @@ import org.springframework.security.authentication.AuthenticationCredentialsNotF
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.annotation.DirtiesContext;
 
 import java.util.List;
 import java.util.UUID;
@@ -23,7 +22,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** The public read methods and the mutators of {@link PermissionGrantService} guard themselves: ADMIN only, whoever calls them. */
 @SpringBootTest
 @Import(PostgresTestConfiguration.class)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class PermissionGrantServiceGuardTest {
 
     @Autowired

@@ -1,0 +1,2 @@
+# Test execution listeners that apply to every Spring test (see SharedContextResetListener)
+org.springframework.test.context.TestExecutionListener=dev.bethge.shipir.SharedContextResetListener

@@ -14,7 +14,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -40,7 +39,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import({PostgresTestConfiguration.class, LoginThrottleApiTest.TestBeans.class})
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class LoginThrottleApiTest {
 
     private static final String PASSWORD = "Old-Passw0rd-for-tests!";

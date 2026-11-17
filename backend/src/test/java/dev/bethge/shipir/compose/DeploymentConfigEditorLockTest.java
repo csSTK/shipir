@@ -2,7 +2,6 @@ package dev.bethge.shipir.compose;
 
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.context.TestPropertySource;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,7 +22,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * TOCTOU between the compose policy check and {@code up}: the files compose reads (include/extends/env_file targets) must
  * not change while a run holds the deployment lock, so the config editor refuses writes, deletes and restores then.
  */
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class DeploymentConfigEditorLockTest extends DeploymentTestBase {
 
     private String filesUrl(String id) {

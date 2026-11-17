@@ -15,7 +15,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -33,7 +32,6 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
  */
 @SpringBootTest
 @Import({PostgresTestConfiguration.class, AuditSelfRowLockTest.TestBeans.class})
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class AuditSelfRowLockTest {
 
     static class SelfUpdatingService {

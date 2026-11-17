@@ -15,7 +15,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -35,12 +34,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 /** Real Postgres, stub OIDC provider, one local user per role, encryption key configured, ADMIN has an environment. */
 @SpringBootTest
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @AutoConfigureMockMvc
 @Import(PostgresTestConfiguration.class)
-@TestPropertySource(properties = {
-        "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
-        "shipir.oidc.allow-insecure-http=true"})
+@TestPropertySource(properties = "shipir.oidc.allow-insecure-http=true")
 abstract class OidcTestBase {
 
     static final String PASSWORD = "A-test-Passw0rd-for-oidc-users!";

@@ -7,7 +7,6 @@ import dev.bethge.shipir.git.GitRepositoryService;
 import dev.bethge.shipir.streaming.ComposeOutputStreamService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.nio.file.Files;
@@ -28,7 +27,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** The webhook of a Git deployment pulls the repository and deploys the new commit (git redeploy), no compose pull. */
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class DeploymentWebhookGitTest extends DeploymentTestBase {
 
     @MockitoBean

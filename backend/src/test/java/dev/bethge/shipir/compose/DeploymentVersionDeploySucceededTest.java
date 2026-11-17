@@ -3,7 +3,6 @@ package dev.bethge.shipir.compose;
 import com.jayway.jsonpath.JsonPath;
 import dev.bethge.shipir.streaming.ComposeOutputStreamService;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.UUID;
@@ -25,7 +24,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Every path that needs "the version that is deployed" uses deploy_succeeded_at, not deployed_at (a started but failed
  * deploy sets only the latter) (shipr-0qbh.34).
  */
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class DeploymentVersionDeploySucceededTest extends DeploymentTestBase {
 
     private static final String YAML_B = "services:\n  web:\n    image: nginx:alpine\n";

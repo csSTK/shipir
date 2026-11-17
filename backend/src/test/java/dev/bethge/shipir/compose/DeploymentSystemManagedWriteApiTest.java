@@ -3,7 +3,6 @@ package dev.bethge.shipir.compose;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.util.LinkedHashMap;
@@ -27,7 +26,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * The managed proxy deployment (system-managed) is ADMIN-only on every write path of the generic deployment
  * endpoints: an OPERATOR with host OPERATE gets 403 and nothing runs; ADMIN and ordinary deployments are unaffected.
  */
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class DeploymentSystemManagedWriteApiTest extends DeploymentTestBase {
 
     private String managed;

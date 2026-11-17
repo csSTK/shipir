@@ -25,7 +25,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
@@ -56,11 +55,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** Certificate status API against real Postgres; Docker (containers, files, logs) is stubbed. */
 @SpringBootTest
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @AutoConfigureMockMvc
 @Import({PostgresTestConfiguration.class, ProxyStatusApiTest.ClockConfig.class})
-@TestPropertySource(properties = {"shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
-        "shipir.proxy.status.log-timeout=300ms", "shipir.proxy.status.cache-ttl=3s", "shipir.proxy.status.refresh-floor=2s"})
+@TestPropertySource(properties = {"shipir.proxy.status.log-timeout=300ms", "shipir.proxy.status.cache-ttl=3s", "shipir.proxy.status.refresh-floor=2s"})
 class ProxyStatusApiTest {
 
     @org.springframework.boot.test.context.TestConfiguration

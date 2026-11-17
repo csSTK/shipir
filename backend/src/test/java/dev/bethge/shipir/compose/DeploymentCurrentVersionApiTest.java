@@ -3,7 +3,6 @@ package dev.bethge.shipir.compose;
 import com.jayway.jsonpath.JsonPath;
 import dev.bethge.shipir.streaming.ComposeOutputStreamService;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.List;
@@ -22,7 +21,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** {@code current} in the version list means the latest successfully deployed version (shipr-qv7). */
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class DeploymentCurrentVersionApiTest extends DeploymentTestBase {
 
     private static final String YAML_B = "services:\n  web:\n    image: nginx:alpine\n";

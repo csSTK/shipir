@@ -1,6 +1,7 @@
 package dev.bethge.shipir.host;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.test.context.TestPropertySource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -9,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /** No {@code shipir.encryption-key}: LOCAL hosts work, TCP hosts cannot be stored. */
+@TestPropertySource(properties = "shipir.encryption-key=")
 class HostApiWithoutEncryptionKeyTest extends HostApiTestBase {
 
     @Test

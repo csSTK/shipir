@@ -30,7 +30,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Adopting a live Compose project: stubbed Docker listing/inspect, fake compose, real Postgres and file repository. */
-@org.springframework.test.context.TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class AdoptionApiTest extends DeploymentTestBase {
 
     static final Path ALLOWED = createAllowedDir();

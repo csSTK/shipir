@@ -4,7 +4,6 @@ import com.jayway.jsonpath.JsonPath;
 import dev.bethge.shipir.compose.execution.ComposeCommand;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.TestPropertySource;
 
 import java.util.Map;
 import java.util.UUID;
@@ -15,7 +14,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** {@link DeploymentRunService#rollbackImages} must run against the deployment's own compose file, plus the override. */
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class DeploymentRollbackImagesTest extends DeploymentTestBase {
 
     private static final String PIN = "nginx@sha256:" + "a".repeat(64);

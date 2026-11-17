@@ -12,7 +12,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.annotation.DirtiesContext;
 
 import java.util.List;
 import java.util.Locale;
@@ -25,7 +24,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(properties = "spring.jpa.properties.hibernate.session_factory.statement_inspector="
         + "dev.bethge.shipir.permission.PermissionGrantQueryCountTest$DeploymentSelectCounter")
 @Import(PostgresTestConfiguration.class)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class PermissionGrantQueryCountTest {
 
     @Autowired

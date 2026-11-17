@@ -15,7 +15,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.annotation.DirtiesContext;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -34,7 +33,6 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 
 @SpringBootTest
 @Import({PostgresTestConfiguration.class, PasswordResetServiceTest.TestBeans.class})
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @ExtendWith(OutputCaptureExtension.class)
 class PasswordResetServiceTest {
 

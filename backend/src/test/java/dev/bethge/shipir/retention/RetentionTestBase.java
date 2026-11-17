@@ -32,7 +32,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 /** Real Postgres, fixed clock, one user per role with a changed password, default retention (365 / 30). */
 @SpringBootTest
-@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 @AutoConfigureMockMvc
 @Import({PostgresTestConfiguration.class, RetentionTestBase.FixedClockConfig.class})
 abstract class RetentionTestBase {

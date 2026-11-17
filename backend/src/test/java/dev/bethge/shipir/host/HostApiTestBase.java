@@ -32,7 +32,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 /** Shared setup: real Postgres, the test Docker daemon as LOCAL socket, one user per role with a changed password. */
 @SpringBootTest
-@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 @AutoConfigureMockMvc
 @Import(PostgresTestConfiguration.class)
 abstract class HostApiTestBase {

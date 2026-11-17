@@ -15,7 +15,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.mockito.AdditionalAnswers;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.nio.file.Files;
@@ -44,7 +43,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * The image auto-update tick with a fixed clock, stubbed compose (see {@link DeploymentTestBase}), stubbed container and
  * image listings and a stubbed update check result. Real Postgres, real {@link DeploymentRunService}.
  */
-@TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class ImageAutoUpdateSchedulerTest extends DeploymentTestBase {
 
     private static final String KEY = "docker.io/library/nginx:latest";

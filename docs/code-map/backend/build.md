@@ -11,7 +11,8 @@
 - backend/src/test/java/dev/bethge/shipir/PostgresTestConfiguration.java: reusable @TestConfiguration with a @ServiceConnection postgres:16-alpine; integration tests import it
 - backend/src/test/java/dev/bethge/shipir/SetupGateFixture.java: shared test helper resetWithAdminHost (gives ADMIN one LOCAL host so the setup gate passes)
 - backend/src/test/java/dev/bethge/shipir/MutableClock.java: shared test Clock moved with advance/set, used by scheduler, throttle, cache, rate-limit and stream tests
-- backend/src/test/resources/application.properties: test initial-admin password
+- backend/src/test/resources/application.properties: test initial-admin password, shared encryption key, schedulers off
+- backend/src/test/java/dev/bethge/shipir/SharedContextResetListener.java, backend/src/test/resources/META-INF/spring.factories: snapshot the started DB on first use; restore it and clear throttles before a class reuses a cached context
 - backend/src/test/java/dev/bethge/shipir/migration/{SchemaMigrationTest,AiProviderConfigsMigrationTest,RenameStacksToDeploymentsMigrationTest,TeamNameUniqueMigrationTest,UsernameUniqueMigrationTest}.java: schema constraints, cascades and data-moving migrations on throwaway databases
 - backend/src/test/java/dev/bethge/shipir/architecture/{ArchitectureRules,ArchitectureTest,ArchitectureRulesFailTest}.java, backend/src/test/java/dev/bethge/shipir/architecture/fixture/**: ArchUnit rules + fail fixtures
 - backend/src/test/resources/archunit.properties: ArchUnit freeze config: store read-only (no create/update/refreeze); shrink steps inside

@@ -26,7 +26,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * The fake compose emits the YAML as JSON, so volumes use the long form that real {@code config --format json} normalizes to.
  * Non-ADMIN users cannot reach host root through Compose; ADMIN can; system runs follow the content author's role. */
-@org.springframework.test.context.TestPropertySource(properties = "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 class DeploymentSecurityPolicyApiTest extends DeploymentTestBase {
 
     private static final String PRIVILEGED = "services:\n  x:\n    image: alpine\n    privileged: true\n";

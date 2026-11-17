@@ -49,9 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Git-sourced deployments against a real smart-HTTP git server: JGit's {@link UploadPack} behind the JDK HttpServer, with
  * Basic auth on {@code /private.git}. Plain http is reachable only because of {@code allow-insecure-http}.
  */
-@TestPropertySource(properties = {
-        "shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
-        "shipir.git.allow-insecure-http=true", "shipir.git.connect-timeout=5s"})
+@TestPropertySource(properties = {"shipir.git.allow-insecure-http=true", "shipir.git.connect-timeout=5s"})
 class GitDeploymentApiTest extends DeploymentTestBase {
 
     private static final String TOKEN = "ghp_SECRETTOKEN1234567890abcdef";

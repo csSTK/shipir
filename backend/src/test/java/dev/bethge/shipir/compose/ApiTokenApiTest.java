@@ -26,8 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Personal API tokens: management through the session, authentication with {@code Authorization: Bearer shp_...}. */
-@TestPropertySource(properties = {"shipir.encryption-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
-        "shipir.api-tokens.max-per-user=3"})
+@TestPropertySource(properties = "shipir.api-tokens.max-per-user=3")
 class ApiTokenApiTest extends DeploymentTestBase {
 
     private static final String TOKENS = "/api/account/tokens";

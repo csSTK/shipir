@@ -13,7 +13,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 
@@ -29,7 +28,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @Import(PostgresTestConfiguration.class)
 @RecordApplicationEvents
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class TeamAccessEventsTest {
 
     @Autowired
