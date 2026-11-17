@@ -79,16 +79,17 @@ jobs:
           echo "Selected backend tests: $selection"
           echo "selection=$selection" >> "$GITHUB_OUTPUT"
 
-      # Testcontainers uses the Docker daemon of the runner.
+      # Testcontainers uses the Docker daemon of the runner. Two Surefire forks run test classes side by side: every
+      # Spring context has its own Postgres container and a random port, and Docker resources are UUID-named.
       - name: Maven verify
         if: ${{ steps.select.outputs.selection != 'NONE' }}
         env:
           SELECTION: ${{ steps.select.outputs.selection }}
         run: |
           if [[ "$SELECTION" == "FULL" ]]; then
-            ./backend/mvnw -f backend/pom.xml -B verify
+            ./backend/mvnw -f backend/pom.xml -B verify -DforkCount=2 -DreuseForks=true
           else
-            ./backend/mvnw -f backend/pom.xml -B verify -Dtest="$SELECTION" -Dsurefire.failIfNoSpecifiedTests=false
+            ./backend/mvnw -f backend/pom.xml -B verify -DforkCount=2 -DreuseForks=true -Dtest="$SELECTION" -Dsurefire.failIfNoSpecifiedTests=false
           fi
 
   frontend:
@@ -193,8 +194,9 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # Release runs always; dev and PR runs (`affected`) only when a file the CSP depends on changed (the `csp` input,
-  # set by ci.yml: frontend/nginx/**, index.html, vite.config.ts, playwright.csp.config.ts, e2e-csp/, package.json, lockfile).
+  # CSP e2e and nginx security header checks. Release runs always; dev and PR runs (`affected`) only when a file they
+  # depend on changed (the `csp` input, set by ci.yml: frontend/nginx/**, index.html, vite.config.ts,
+  # playwright.csp.config.ts, e2e-csp/, package.json, lockfile).
   csp:
     if: ${{ inputs.frontend && (!inputs.affected || inputs.csp) }}
     runs-on: ubuntu-latest
@@ -204,6 +206,10 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Starts the nginx image with the real templates and checks the headers of static answers (Docker, no install).
+      - name: nginx security headers
+        run: nginx/check-headers.sh
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
@@ -220,12 +226,3 @@ jobs:
 
       # Builds the app and serves it with `vite preview` under the CSP from nginx/security-headers.inc.template.
       - run: pnpm e2e:csp
-
-  # Same rule as the csp job.
-  nginx-headers:
-    if: ${{ inputs.frontend && (!inputs.affected || inputs.csp) }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: ./frontend/nginx/check-headers.sh
