@@ -15,7 +15,7 @@
 - frontend/src/features/deployments/deploy-output/{DeployOutput.tsx,DeployOutput.css,DeployOutput.test.tsx,useRunStream.ts}: live deploy log over STOMP with success or failed badge
 - frontend/src/features/deployments/diff/{VersionDiff.tsx,VersionDiff.css,index.ts}: Monaco diff of a version against its baseline plus env keys added and removed
 - frontend/src/features/deployments/editor/{YamlEditor.tsx,YamlEditor.test.tsx,EnvEditor.tsx,EnvEditor.test.tsx,editor.css,index.ts}: YAML editor with Compose schema validation and `.env` editor
-- frontend/src/features/deployments/editor/{MonacoYamlEditor.tsx,MonacoDiffEditor.tsx,YamlDiffEditor.tsx,YamlDiffEditor.test.tsx,monacoEnvironment.ts,yaml.worker.ts}: lazy Monaco editors, shared worker setup
+- frontend/src/features/deployments/editor/{MonacoYamlEditor.tsx,MonacoDiffEditor.tsx,YamlDiffEditor.tsx,YamlDiffEditor.test.tsx,monacoEnvironment.ts,yaml.worker.ts}: lazy Monaco editors, shared worker setup, monaco-yaml adapter for monaco-editor 0.57
 - frontend/src/features/deployments/editor/{compose-spec.json,composeFileMatch.ts,composeFileMatch.test.ts,editorFontSize.ts,editorFontSize.test.ts,envFile.ts,envFile.test.ts}: Compose JSON schema, file matching, font size, env parsing
 - frontend/src/features/deployments/logs/{DeploymentLogsPanel.tsx,DeploymentLogsPanel.css,DeploymentLogsPanel.test.tsx}: Logs card on the deployment detail page with service filter
 - frontend/src/features/deployments/services/{api.ts,index.ts,ServicesCard.tsx,services.css,ServicesCard.test.tsx}: services card: per-service restart, pull, up and profiles

@@ -6,6 +6,17 @@ import { defineConfig } from 'vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: [
+      {
+        // monaco-worker-manager@2.0.1 (via monaco-yaml@5.5.1, both latest) imports the pre-0.57 path.
+        // monaco-editor 0.57 maps `./*.js` to `esm/vs/*.js`, so that path no longer resolves.
+        // Remove once monaco-worker-manager/monaco-yaml import `monaco-editor/editor/editor.worker.js`.
+        find: /^monaco-editor\/esm\/vs\/editor\/editor\.worker\.js$/,
+        replacement: 'monaco-editor/editor/editor.worker.js',
+      },
+    ],
+  },
   server: {
     proxy: {
       '/api': 'http://localhost:8080',

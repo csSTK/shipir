@@ -91,6 +91,12 @@ test('pages, Monaco editors and workers run under the nginx CSP without violatio
   await expect(page.locator('.monaco-editor').first()).toBeVisible({ timeout: 30_000 })
   await page.waitForTimeout(1000) // workers start after the editor is up
 
+  // The monaco-yaml worker really answers: invalid Compose YAML (unknown top-level key) gets a diagnostic squiggle.
+  await page.locator('.monaco-editor').first().click()
+  await page.keyboard.press('ControlOrMeta+a')
+  await page.keyboard.type('bogus_top_level_key: 1\n')
+  await expect(page.locator('.monaco-editor .squiggly-error, .monaco-editor .squiggly-warning').first()).toBeVisible({ timeout: 15_000 })
+
   const reported = await page.evaluate(() => (window as unknown as { __csp?: string[] }).__csp ?? [])
   expect([...violations, ...reported], 'CSP violations').toEqual([])
 })

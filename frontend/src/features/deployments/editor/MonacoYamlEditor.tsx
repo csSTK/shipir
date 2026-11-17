@@ -5,7 +5,7 @@ import composeSchema from './compose-spec.json'
 import { useTranslation } from 'react-i18next'
 import { editorFontSize } from './editorFontSize.ts'
 import { COMPOSE_FILE_MATCH } from './composeFileMatch.ts'
-import { monaco } from './monacoEnvironment.ts'
+import { monacoForYaml } from './monacoEnvironment.ts'
 
 const SCHEMA_URI = 'inmemory://shipir/compose-spec.json'
 let configured = false
@@ -13,7 +13,7 @@ function configureOnce() {
   if (configured) return
   configured = true
   const { $schema: _s, $id: _i, ...schema } = composeSchema as Record<string, unknown>
-  configureMonacoYaml(monaco, {
+  configureMonacoYaml(monacoForYaml, {
     enableSchemaRequest: false,
     validate: true,
     completion: true,

@@ -2,7 +2,7 @@
 
 - frontend/package.json: scripts (dev, build, test, lint, e2e, e2e:visual) and dependencies
 - frontend/pnpm-lock.yaml: pnpm lockfile
-- frontend/{vite.config.ts,tsconfig.json,tsconfig.app.json,tsconfig.node.json,tsconfig.e2e.json,.oxlintrc.json}: Vite dev proxy and Vitest config, TypeScript projects, oxlint rules
+- frontend/{vite.config.ts,tsconfig.json,tsconfig.app.json,tsconfig.node.json,tsconfig.e2e.json,.oxlintrc.json}: Vite dev proxy, Monaco worker alias and Vitest config, TypeScript projects, oxlint rules
 - frontend/{index.html,public/favicon.svg,.gitignore,.dockerignore}: HTML entry, favicon, ignore files
 - frontend/Dockerfile: multi-stage image: pnpm build, then nginx-unprivileged on :8080
 - frontend/nginx/{default.conf.template,security-headers.inc.template,check-headers.sh}: nginx config: SPA fallback, `/api` and `/ws` proxy, security headers and their check
