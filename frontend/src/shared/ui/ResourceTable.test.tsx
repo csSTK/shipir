@@ -269,9 +269,11 @@ describe('ResourceTable', () => {
       expect(screen.queryByRole('button', { name: 'Start beta' })).not.toBeInTheDocument()
       expect(document.querySelector('table')?.style.getPropertyValue('--rt-action-slots')).toBe('1')
       fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions for beta' }), { button: 0, ctrlKey: false })
+      // Both the primary action and the menu action live in the one overflow menu. Check while it is open:
+      // selecting an item closes the menu.
+      expect(await screen.findByRole('menuitem', { name: 'Delete' })).toBeInTheDocument()
       fireEvent.click(await screen.findByRole('menuitem', { name: 'Start' }))
       expect(start).toHaveBeenCalledWith('1')
-      expect(await screen.findByRole('menuitem', { name: 'Delete' })).toBeInTheDocument()
     })
   })
 
