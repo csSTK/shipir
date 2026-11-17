@@ -138,7 +138,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 | Compose execution | `docker compose` as a subprocess (`ProcessBuilder`). No reimplementation of the Compose spec                                                        |
 | Real-time         | WebSocket with STOMP (logs, events, compose output, exec terminal)                                                                                  |
 | Auth              | Spring Security, server-side session (HttpOnly cookie + CSRF), RBAC                                                                                 |
-| Tests             | JUnit 5, Testcontainers (Postgres + Docker), ArchUnit later                                                                                         |
+| Tests             | JUnit 5, Testcontainers (Postgres + Docker), ArchUnit                                                                                               |
 
 ## Build & Test
 
@@ -235,7 +235,7 @@ dev.bethge.shipir
 └── audit/             AuditLogEntry, service, AuditAspect (AOP, @Auditable)
 ```
 
-**Dependency direction:** `docker/` knows no other feature module. `compose/` and `streaming/` may use `docker/`, never the other way around. `ai/` may call other feature services (its tools are thin adapters over them); no feature imports `ai/`. The AI-origin marker for audit entries lives in `common/`, so `audit/` never depends on `ai/`. To be enforced with ArchUnit later.
+**Dependency direction:** `docker/` knows no other feature module. `compose/` and `streaming/` may use `docker/`, never the other way around. `ai/` may call other feature services (its tools are thin adapters over them); no feature imports `ai/`. The AI-origin marker for audit entries lives in `common/`, so `audit/` never depends on `ai/`. Enforced by ArchUnit in `mvnw verify` (`architecture/ArchitectureRules`): `docker/` may only use `docker/` and `common/`, `ProcessBuilder` only in `compose.execution`, raw file I/O only in an allowlist with a reason per class, no new cycles between top-level modules (existing ones frozen in `src/test/resources/archunit_store/`; how to shrink it: `archunit.properties`).
 
 **Principles:**
 
