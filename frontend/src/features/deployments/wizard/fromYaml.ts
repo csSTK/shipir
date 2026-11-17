@@ -22,7 +22,7 @@ const fail = (message: string): never => {
 }
 
 /** Failure reason from `deployments:fromYaml.<key>`. */
-const tr = (key: string, opts?: Record<string, unknown>): string => i18n.t(`deployments:fromYaml.${key}`, opts)
+const tr = (key: string, opts: Record<string, string> = {}): string => i18n.t(`deployments:fromYaml.${key}`, opts)
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v)
 const SERVICE_KEYS = ['image', 'command', 'restart', 'ports', 'environment', 'volumes', 'networks', 'depends_on']
 const KNOWN_UNSUPPORTED = ['build', 'deploy', 'healthcheck', 'extends', 'labels', 'container_name']
