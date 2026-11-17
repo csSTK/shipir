@@ -1,17 +1,29 @@
 name: CI
 
-# Dev and PR checks: path-filtered, affected-only tests and the shell tests of scripts/. e2e, visual tests, build
-# and image builds run on release (release.yml) only; that run always executes the full suites.
+# Dev and PR checks: path-filtered, affected-only tests, the shell tests of scripts/ and the code map check. e2e,
+# visual tests, build and image builds run on release (release.yml) only; that run always executes the full suites.
 
 on:
   push:
     branches: [dev]
   pull_request:
-    paths-ignore: ['**/*.md', 'renovate.json', 'LICENSE*', 'LICENCE', '.vscode/**', '.claude/**']
+    # Everything except docs, config and tooling; the code map and its checker are re-included (later patterns win)
+    # because the code map check in `changes` must also run for map-only pull requests.
+    paths:
+      - '**'
+      - '!**/*.md'
+      - '!renovate.json'
+      - '!LICENSE*'
+      - '!LICENCE'
+      - '!.vscode/**'
+      - '!.claude/**'
+      - 'docs/code-map/**'
+      - '.claude/scripts/code-map-check.mjs'
 
+# A newer PR commit replaces the running check; a dev push is never cancelled (its minutes are already billed).
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -19,13 +31,14 @@ permissions:
   pull-requests: read
 
 jobs:
+  # Decides what the test run has to cover, then runs the small checks (script tests, code map) on the same runner:
+  # each as its own job cost a billed minute for a few seconds of work.
   changes:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
-      scripts: ${{ steps.filter.outputs.scripts }}
       csp: ${{ steps.filter.outputs.csp }}
       affected: ${{ steps.base.outputs.affected }}
       base: ${{ steps.base.outputs.base }}
@@ -68,7 +81,7 @@ jobs:
               - 'frontend/**'
               - '.github/workflows/tests.yml'
               - '.github/workflows/ci.yml'
-            # CSP and nginx header checks (tests.yml csp and nginx-headers jobs) on dev and PR runs
+            # CSP and nginx header checks (tests.yml csp job) on dev and PR runs
             csp:
               - 'frontend/nginx/**'
               - 'frontend/index.html'
@@ -82,10 +95,42 @@ jobs:
             scripts:
               - 'scripts/**'
               - '.github/workflows/ci.yml'
+            # the code map check verifies that every mapped path exists, so any source, tooling or root file counts
+            codemap:
+              - 'docs/code-map/**'
+              - 'tools/**'
+              - 'backend/**'
+              - 'frontend/**'
+              - 'scripts/**'
+              - '.github/**'
+              - '.claude/**'
+              - '*'
 
+      # Shell tests for scripts/. The backup one puts stubs for docker, pg_dump, pg_restore and psql
+      # on PATH, so it starts no container and touches no database; the runner needs nothing extra.
+      - name: Backup and restore script test
+        if: ${{ steps.filter.outputs.scripts == 'true' }}
+        run: scripts/backup-restore.test.sh
+
+      - name: Affected backend tests selection test
+        if: ${{ steps.filter.outputs.scripts == 'true' }}
+        run: scripts/ci/affected-backend-tests.test.sh
+
+      # Mechanical rules for docs/code-map/ (entry format, length, no bead IDs, paths exist, index links),
+      # run by wavework's checker (.claude/scripts/code-map-check.mjs, generated; do not edit). Node only, no install.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: ${{ steps.filter.outputs.codemap == 'true' }}
+        with:
+          node-version: 26
+
+      - name: Code map check
+        if: ${{ steps.filter.outputs.codemap == 'true' }}
+        run: node .claude/scripts/code-map-check.mjs docs/code-map --id-prefix shipr- --max 160
+
+  # `!cancelled()`: a failing script test or code map check in `changes` must not hide the test results.
   tests:
     needs: changes
-    if: ${{ needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' }}
+    if: ${{ !cancelled() && (needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true') }}
     uses: ./.github/workflows/tests.yml
     permissions:
       contents: read
@@ -96,19 +141,3 @@ jobs:
       affected: ${{ needs.changes.outputs.affected == 'true' }}
       base: ${{ needs.changes.outputs.base }}
       csp: ${{ needs.changes.outputs.csp == 'true' }}
-
-  # Shell tests for scripts/. The backup one puts stubs for docker, pg_dump, pg_restore and psql
-  # on PATH, so it starts no container and touches no database; the runner needs nothing extra.
-  scripts:
-    needs: changes
-    if: ${{ needs.changes.outputs.scripts == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Backup and restore script test
-        run: scripts/backup-restore.test.sh
-
-      - name: Affected backend tests selection test
-        run: scripts/ci/affected-backend-tests.test.sh

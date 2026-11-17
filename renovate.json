@@ -11,13 +11,14 @@
 	"minimumReleaseAge": "3 days",
 	"prHourlyLimit": 5,
 	"prConcurrentLimit": 5,
+	"rebaseWhen": "conflicted",
 	"platformAutomerge": false,
 	"automergeStrategy": "squash",
 	"packageRules": [
 		{
-			"description": "Patch updates and digest pins merge themselves once CI is green",
+			"description": "No automerge: it rebased on every dev push and re-ran the full CI each time; green PRs are merged by the nightly routine",
 			"matchUpdateTypes": ["patch", "pin", "digest", "lockFileMaintenance"],
-			"automerge": true
+			"automerge": false
 		}
 	],
 	"vulnerabilityAlerts": {
