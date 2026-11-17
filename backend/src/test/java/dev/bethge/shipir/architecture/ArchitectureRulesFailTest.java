@@ -2,6 +2,7 @@ package dev.bethge.shipir.architecture;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
+import com.tngtech.archunit.ArchConfiguration;
 import com.tngtech.archunit.lang.ArchRule;
 import dev.bethge.shipir.architecture.fixture.common.CommonThing;
 import dev.bethge.shipir.architecture.fixture.compose.execution.GoodProcessBuilderUser;
@@ -9,7 +10,14 @@ import dev.bethge.shipir.architecture.fixture.common.util.UnrestrictedFileUser;
 import dev.bethge.shipir.architecture.fixture.docker.GoodDockerCommonUser;
 import dev.bethge.shipir.architecture.fixture.host.GoodAllowlistedFileUser;
 import dev.bethge.shipir.architecture.fixture.host.GoodFilesMetadataUser;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.io.IOException;
+import java.util.stream.Stream;
 
 import java.util.Map;
 
@@ -203,5 +211,103 @@ class ArchitectureRulesFailTest {
     void everyAllowlistEntryHasAReason() {
         ArchitectureRules.RAW_FILE_IO_ALLOWLIST.forEach((name, reason) ->
                 org.assertj.core.api.Assertions.assertThat(reason).as(name).isNotBlank());
+    }
+
+    // --- module cycles -------------------------------------------------------------------------------------------
+
+    private static final String CYCLE_ROOT = ROOT + ".cycle";
+    private static final JavaClasses CYCLE_FIXTURE = new ClassFileImporter().importPackages(CYCLE_ROOT);
+    private static final Path COMMITTED_STORE = Path.of("src/test/resources/archunit_store");
+
+    @AfterEach
+    void resetArchConfiguration() {
+        ArchConfiguration.get().reset();
+    }
+
+    @Test
+    void moduleCycleFails() {
+        fails(ArchitectureRules.modulesFreeOfCycles(CYCLE_ROOT), "Slice alpha");
+    }
+
+    @Test
+    void commonConfigIsIgnoredInModuleCycles() {
+        // beta -> common.config -> beta would be a cycle if common.config were a slice; it must not be reported.
+        assertThatThrownBy(() -> ArchitectureRules.modulesFreeOfCycles(CYCLE_ROOT).check(CYCLE_FIXTURE))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageNotContaining("WiringConfig")
+                .hasMessageNotContaining("Slice common");
+    }
+
+    private static final JavaClasses KNOWN_CYCLE = new ClassFileImporter()
+            .importPackages(CYCLE_ROOT + ".alpha", CYCLE_ROOT + ".beta");
+
+    private static void setFreezeConfig(Path store, boolean writable) {
+        ArchConfiguration config = ArchConfiguration.get();
+        config.setProperty("freeze.store.default.path", store.toString());
+        config.setProperty("freeze.store.default.allowStoreCreation", String.valueOf(writable));
+        config.setProperty("freeze.store.default.allowStoreUpdate", String.valueOf(writable));
+        config.setProperty("freeze.refreeze", "false");
+    }
+
+    @Test
+    void frozenRuleToleratesKnownCycleButFailsOnNewCycle(@TempDir Path dir) {
+        Path store = dir.resolve("store");
+        // (a) baseline the known cycle alpha<->beta into a fresh temp store (never the committed one)
+        setFreezeConfig(store, true);
+        assertThatCode(() -> ArchitectureRules.moduleCyclesFrozen(CYCLE_ROOT).check(KNOWN_CYCLE))
+                .doesNotThrowAnyException();
+
+        // (b) store locked like archunit.properties: the known cycle is tolerated
+        setFreezeConfig(store, false);
+        assertThatCode(() -> ArchitectureRules.moduleCyclesFrozen(CYCLE_ROOT).check(KNOWN_CYCLE))
+                .doesNotThrowAnyException();
+
+        // (c) a second cycle gamma<->delta is not in the baseline: fails as a violation, not as a store error
+        assertThatThrownBy(() -> ArchitectureRules.moduleCyclesFrozen(CYCLE_ROOT).check(CYCLE_FIXTURE))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("Slice gamma")
+                .hasMessageContaining("Slice delta")
+                .hasMessageNotContaining("Updating frozen violations is disabled");
+    }
+
+    @Test
+    void committedStoreIsNotWrittenByARun() throws IOException {
+        String before = snapshot(COMMITTED_STORE);
+        // The fixture lacks all baselined cycles, so ArchUnit wants to rewrite the store; with updates disabled it
+        // refuses and writes nothing.
+        assertThatThrownBy(() -> ArchitectureRules.moduleCyclesFrozen(CYCLE_ROOT).check(CYCLE_FIXTURE))
+                .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getClass().getSimpleName())
+                        .isEqualTo("StoreUpdateFailedException"));
+        org.assertj.core.api.Assertions.assertThat(snapshot(COMMITTED_STORE))
+                .as("the committed store is read-only").isEqualTo(before);
+    }
+
+    @Test
+    void frozenRuleWithoutStoreFailsInsteadOfCreatingIt(@TempDir Path dir) throws IOException {
+        Path missing = dir.resolve("store");
+        ArchConfiguration.get().setProperty("freeze.store.default.path", missing.toString());
+        assertThatThrownBy(() -> ArchitectureRules.moduleCyclesFrozen(CYCLE_ROOT).check(CYCLE_FIXTURE))
+                .hasMessageContaining("Creating new violation store is disabled");
+        org.assertj.core.api.Assertions.assertThat(missing).doesNotExist();
+    }
+
+    @Test
+    void committedConfigForbidsStoreCreationAndRefreeze() {
+        ArchConfiguration config = ArchConfiguration.get();
+        org.assertj.core.api.Assertions.assertThat(config.getProperty("freeze.store.default.allowStoreCreation"))
+                .isEqualTo("false");
+        org.assertj.core.api.Assertions.assertThat(config.getProperty("freeze.refreeze")).isEqualTo("false");
+        org.assertj.core.api.Assertions.assertThat(config.getProperty("freeze.store.default.allowStoreUpdate"))
+                .isEqualTo("false");
+    }
+
+    private static String snapshot(Path dir) throws IOException {
+        try (Stream<Path> files = Files.walk(dir)) {
+            StringBuilder out = new StringBuilder();
+            for (Path file : files.filter(Files::isRegularFile).sorted().toList()) {
+                out.append(file.getFileName()).append('=').append(Files.readString(file).hashCode()).append(';');
+            }
+            return out.toString();
+        }
     }
 }

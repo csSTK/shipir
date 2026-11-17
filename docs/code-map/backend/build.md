@@ -13,4 +13,6 @@
 - backend/src/test/java/dev/bethge/shipir/MutableClock.java: shared test Clock moved with advance/set, used by scheduler, throttle, cache, rate-limit and stream tests
 - backend/src/test/resources/application.properties: test initial-admin password
 - backend/src/test/java/dev/bethge/shipir/migration/{SchemaMigrationTest,AiProviderConfigsMigrationTest,RenameStacksToDeploymentsMigrationTest,TeamNameUniqueMigrationTest,UsernameUniqueMigrationTest}.java: schema constraints, cascades and data-moving migrations on throwaway databases
-- backend/src/test/java/dev/bethge/shipir/architecture/{ArchitectureRules,ArchitectureTest,ArchitectureRulesFailTest}.java, backend/src/test/java/dev/bethge/shipir/architecture/fixture/**: ArchUnit rules (docker/ allowlist, docker-java only in docker/, no ProcessBuilder/Runtime.exec, raw file I/O allowlist) plus fail fixtures
+- backend/src/test/java/dev/bethge/shipir/architecture/{ArchitectureRules,ArchitectureTest,ArchitectureRulesFailTest}.java, backend/src/test/java/dev/bethge/shipir/architecture/fixture/**: ArchUnit rules + fail fixtures
+- backend/src/test/resources/archunit.properties: ArchUnit freeze config: store read-only (no create/update/refreeze); shrink steps inside
+- backend/src/test/resources/archunit_store/: committed baseline of frozen module cycles (audit-auth, compose-host, host-permission, ...); edit only to shrink

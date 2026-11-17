@@ -6,6 +6,9 @@ import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaConstructorCall;
 import com.tngtech.archunit.core.domain.JavaConstructorReference;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.library.freeze.FreezingArchRule;
+import com.tngtech.archunit.library.dependencies.SliceAssignment;
+import com.tngtech.archunit.library.dependencies.SliceIdentifier;
 
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -20,6 +23,7 @@ import java.util.Set;
 
 import static com.tngtech.archunit.base.DescribedPredicate.describe;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
 /**
  * Module dependency rules of the architecture tree (CLAUDE.md). Parameterised by root package so
@@ -226,6 +230,44 @@ final class ArchitectureRules {
                 .and(DescribedPredicate.not(allowlisted))
                 .should().accessTargetWhere(rawFileIo)
                 .as("raw file I/O must only be done in common.util or an allowlisted class");
+    }
+
+    /**
+     * The top-level modules (first package below {@code root}) must not depend on each other in a cycle. Classes in
+     * {@code common.config} (SecurityConfig, WebSocketConfig, ...) are the composition root that wires modules together
+     * and are left out of every slice. Not frozen here so the fail test can check it directly; see
+     * {@link #moduleCyclesFrozen}.
+     */
+    static ArchRule modulesFreeOfCycles(String root) {
+        String compositionRoot = root + ".common.config";
+        SliceAssignment modules = new SliceAssignment() {
+            @Override
+            public String getDescription() {
+                return "top-level module below " + root + " (without common.config)";
+            }
+
+            @Override
+            public SliceIdentifier getIdentifierOf(JavaClass javaClass) {
+                String name = javaClass.getPackageName();
+                if (name.equals(compositionRoot) || name.startsWith(compositionRoot + ".")
+                        || !name.startsWith(root + ".")) {
+                    return SliceIdentifier.ignore();
+                }
+                String rest = name.substring(root.length() + 1);
+                int dot = rest.indexOf('.');
+                return SliceIdentifier.of(dot < 0 ? rest : rest.substring(0, dot));
+            }
+        };
+        return slices().assignedFrom(modules).should().beFreeOfCycles()
+                .as("top-level modules must be free of cycles (common.config ignored)");
+    }
+
+    /**
+     * {@link #modulesFreeOfCycles} with today's cycles frozen in the committed store (see archunit.properties): only
+     * a cycle that is not in the baseline fails. The store is read-only in CI and not refrozen.
+     */
+    static ArchRule moduleCyclesFrozen(String root) {
+        return FreezingArchRule.freeze(modulesFreeOfCycles(root));
     }
 
     private static String outermost(String className) {

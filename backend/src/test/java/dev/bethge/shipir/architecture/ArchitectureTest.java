@@ -49,6 +49,9 @@ class ArchitectureTest {
     static final ArchRule rawFileIoOnlyInAllowlist = ArchitectureRules.rawFileIoOnlyInAllowlist(ROOT);
 
     @ArchTest
+    static final ArchRule moduleCyclesFrozen = ArchitectureRules.moduleCyclesFrozen(ROOT);
+
+    @ArchTest
     static void rawFileIoAllowlistHasNoStaleEntries(JavaClasses classes) {
         ArchitectureRules.RAW_FILE_IO_ALLOWLIST.keySet().forEach(name -> {
             if (!classes.contain(ROOT + "." + name)) {
