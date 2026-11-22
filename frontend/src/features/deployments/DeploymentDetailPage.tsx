@@ -436,7 +436,7 @@ export function DeploymentDetailPage() {
             gitPull.isPending ? (
               <p role="status" className="dfr-note">{t('DeploymentDetailPage.pullingTheRepository')}</p>
             ) : gitPull.data ? (
-              <DeployFilesReview hostId={hostId} deploymentId={deploymentId} commitSha={gitPull.data.commitSha} />
+              <DeployFilesReview hostId={hostId} deploymentId={deploymentId} commitSha={gitPull.data.commitSha} graphHash={gitPull.data.graphHash} />
             ) : null
           }
         >

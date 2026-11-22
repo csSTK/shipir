@@ -107,6 +107,12 @@ public class DeploymentService {
         return files.deploymentDir(hostId, requireDeployment(hostId, id).getName());
     }
 
+    /** Validated Git staging directory of a deployment (may not exist): what step 1 of "Pull &amp; redeploy" fetched, for the staged review read. */
+    public java.nio.file.Path stagingDirectoryOf(UUID hostId, UUID id) {
+        requireHost(hostId);
+        return files.stagingDir(hostId, requireDeployment(hostId, id).getName());
+    }
+
     public List<DeploymentSummaryResponse> list(UUID hostId) {
         requireHostView(hostId);
         requireHost(hostId);

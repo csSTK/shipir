@@ -101,11 +101,14 @@ test('ADMIN reviews the pulled files and confirms the redeploy with the reviewed
   mockCommon(api, 'ADMIN')
   const sha = 'b'.repeat(40)
   api.mock('POST', `${BASE}/s1/git/pull`, { body: { commitSha: sha, graphHash: 'h1' } })
-  api.mock('GET', `${BASE}/s1/files`, {
+  api.mock('GET', `${BASE}/s1/files/staged`, {
     body: [{ path: 'conf/extra.yaml', directory: false, size: 12, modifiedAt: '2026-10-01T10:00:00Z', readOnly: false }],
   })
   api.mock('POST', `${BASE}/s1/git/redeploy`, { status: 202, body: { runId: 'dep-9', versionId: 'v2' } })
   await page.goto('/environments/a/deployments/s1')
+  // the YAML editor is a lazy chunk: the dev server may reload the page when it first optimizes Monaco, which would close
+  // the dialog opened meanwhile. Wait until the page has settled before interacting.
+  await expect(page.locator('.monaco-editor').first()).toBeVisible({ timeout: 20_000 })
   await page.getByRole('button', { name: 'Pull & redeploy' }).click()
   const dialog = page.getByRole('dialog', { name: 'Review before redeploying' })
   await expect(dialog.getByText('conf/extra.yaml')).toBeVisible()

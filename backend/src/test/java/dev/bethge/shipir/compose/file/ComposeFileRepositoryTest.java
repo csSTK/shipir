@@ -337,4 +337,107 @@ class ComposeFileRepositoryTest {
         }
         assertThat(appender.list).noneMatch(e -> e.getFormattedMessage().contains("topsecret"));
     }
+
+    @Test
+    void stagingAreaLiesOutsideTheDeploymentDirectory() {
+        assertThat(repo.stagingDir(HOST, "web")).isEqualTo(base.resolve(HOST.toString()).resolve(".staging").resolve("web"));
+        assertThat(repo.stagingDir(HOST, "web").startsWith(repo.deploymentDir(HOST, "web"))).isFalse();
+        assertThat(repo.stagingRepoDir(HOST, "web")).isEqualTo(repo.stagingDir(HOST, "web").resolve("repo"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"../web", "..", ".staging", "web/../../x", "a/b", ""})
+    void stagingRejectsNamesThatAreNotDeploymentNames(String name) {
+        assertThatThrownBy(() -> repo.stagingDir(HOST, name)).isInstanceOf(PathValidationException.class);
+        assertThatThrownBy(() -> repo.writeStaged(HOST, name, "x", null)).isInstanceOf(PathValidationException.class);
+        assertThatThrownBy(() -> repo.discardStaging(HOST, name)).isInstanceOf(PathValidationException.class);
+    }
+
+    @Test
+    void stagedFilesAreWrittenApartFromTheLiveOnes() {
+        repo.write(HOST, "web", "live\n", "A=live\n");
+
+        repo.writeStaged(HOST, "web", "staged\n", "A=staged\n");
+
+        assertThat(repo.readCompose(HOST, "web")).contains("live\n");
+        assertThat(repo.stagingDir(HOST, "web").resolve("compose.yaml")).hasContent("staged\n");
+        assertThat(repo.stagingDir(HOST, "web").resolve(".env")).hasContent("A=staged\n");
+    }
+
+    @Test
+    void promoteStagedRepoReplacesTheLiveCheckoutAndClearsTheStaging() throws IOException {
+        repo.write(HOST, "web", "live\n", null);
+        Files.createDirectories(repo.repoDir(HOST, "web"));
+        Files.writeString(repo.repoDir(HOST, "web").resolve("old.txt"), "old");
+        repo.writeStaged(HOST, "web", "staged\n", null);
+        Files.createDirectories(repo.stagingRepoDir(HOST, "web"));
+        Files.writeString(repo.stagingRepoDir(HOST, "web").resolve("new.txt"), "new");
+
+        repo.promoteStagedRepo(HOST, "web");
+
+        assertThat(repo.repoDir(HOST, "web").resolve("new.txt")).hasContent("new");
+        assertThat(repo.repoDir(HOST, "web").resolve("old.txt")).doesNotExist();
+        assertThat(repo.stagingDir(HOST, "web")).doesNotExist();
+        assertThat(repo.readCompose(HOST, "web")).contains("live\n"); // compose.yaml is written by the run, not by promotion
+    }
+
+    @Test
+    void promoteStagedRepoWithoutALiveCheckoutJustMovesTheStagedOne() throws IOException {
+        repo.write(HOST, "web", "live\n", null);
+        Files.createDirectories(repo.stagingRepoDir(HOST, "web"));
+        Files.writeString(repo.stagingRepoDir(HOST, "web").resolve("new.txt"), "new");
+
+        repo.promoteStagedRepo(HOST, "web");
+
+        assertThat(repo.repoDir(HOST, "web").resolve("new.txt")).hasContent("new");
+    }
+
+    @Test
+    void promoteStagedRepoWithoutStagingFailsAndKeepsTheLiveCheckout() throws IOException {
+        Files.createDirectories(repo.repoDir(HOST, "web"));
+        Files.writeString(repo.repoDir(HOST, "web").resolve("old.txt"), "old");
+
+        assertThatThrownBy(() -> repo.promoteStagedRepo(HOST, "web")).isInstanceOf(IllegalStateException.class);
+
+        assertThat(repo.repoDir(HOST, "web").resolve("old.txt")).hasContent("old");
+    }
+
+    @Test
+    void discardStagingIsIdempotentAndDeletingTheDeploymentRemovesItsStaging() {
+        repo.discardStaging(HOST, "web");
+        repo.write(HOST, "web", "live\n", null);
+        repo.writeStaged(HOST, "web", "staged\n", null);
+
+        repo.delete(HOST, "web");
+
+        assertThat(repo.stagingDir(HOST, "web")).doesNotExist();
+        assertThat(repo.deploymentDir(HOST, "web")).doesNotExist();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void promoteStagedRepoWorksWhenTheLiveDirectoryHoldsAnEntryNamedPrevious(boolean asDirectory) throws IOException {
+        repo.write(HOST, "web", "live\n", null);
+        Path previous = repo.deploymentDir(HOST, "web").resolve("previous");
+        if (asDirectory) {
+            Files.createDirectories(previous);
+            Files.writeString(previous.resolve("a.txt"), "a");
+        } else {
+            Files.writeString(previous, "a");
+        }
+        Files.createDirectories(repo.repoDir(HOST, "web"));
+        Files.writeString(repo.repoDir(HOST, "web").resolve("old.txt"), "old");
+        repo.writeStaged(HOST, "web", "staged\n", null);
+        Files.createDirectories(repo.stagingRepoDir(HOST, "web"));
+        Files.writeString(repo.stagingRepoDir(HOST, "web").resolve("new.txt"), "new");
+        repo.copyLiveFilesToStaging(HOST, "web");
+
+        repo.promoteStagedRepo(HOST, "web");
+
+        assertThat(repo.repoDir(HOST, "web").resolve("new.txt")).hasContent("new");
+        assertThat(repo.repoDir(HOST, "web").resolve("old.txt")).doesNotExist();
+        assertThat(previous).exists();
+        assertThat(repo.stagingDir(HOST, "web")).doesNotExist();
+        assertThat(repo.stagingDir(HOST, "web").resolveSibling("web.previous")).doesNotExist();
+    }
 }

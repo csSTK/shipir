@@ -199,6 +199,10 @@ abstract class DeploymentTestBase {
                         : new ComposeProcessResult(0, false, List.of("Container web  Started"));
             }
             String yaml = files.readCompose(h, name).orElse("");
+            if (inv.getArguments().length > 5 && inv.getArgument(5) instanceof Path staged
+                    && staged.toAbsolutePath().normalize().startsWith(files.stagingDir(h, name))) {
+                yaml = Files.readString(staged); // validation of a staged Git checkout (not live yet)
+            }
             return yaml.contains("INVALID")
                     ? new ComposeProcessResult(1, false, List.of("yaml: line 2: INVALID mapping"))
                     : new ComposeProcessResult(0, false, List.of());

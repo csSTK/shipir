@@ -168,6 +168,11 @@ public class ComposeExecutionService {
                                         DockerEndpoint endpoint, Consumer<String> onLine, Path composeFile,
                                         Path overrideFile, ComposeOptions options) {
         Path deploymentDir = files.deploymentDir(hostId, deploymentName);
+        Path stagingDir = files.stagingDir(hostId, deploymentName);
+        if (composeFile != null && composeFile.toAbsolutePath().normalize().startsWith(stagingDir)) {
+            // validation of a Git checkout that is staged for review, not live yet: same rules, rooted at the staging directory
+            deploymentDir = stagingDir;
+        }
         Path dir = deploymentDir;
         Path file = deploymentDir.resolve(ComposeFileRepository.COMPOSE_FILE);
         List<String> cmd = new ArrayList<>(executable);

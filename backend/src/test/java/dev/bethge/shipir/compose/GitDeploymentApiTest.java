@@ -317,19 +317,213 @@ class GitDeploymentApiTest extends DeploymentTestBase {
                 .content("{\"commitSha\":\"%s\",\"graphHash\":\"%s\"}".formatted(commit, hash));
     }
 
+    private String filesUrl(String id) {
+        return url() + "/" + id + "/files";
+    }
+
+    /** Paths in the config editor's tree (live) or the staged tree. */
+    private List<String> treePaths(Login l, String id, boolean staged) throws Exception {
+        String body = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get(filesUrl(id) + (staged ? "/staged" : "")).session(l.session()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        return JsonPath.read(body, "$[*].path");
+    }
+
+    private String readFile(Login l, String id, String path, boolean staged) throws Exception {
+        String body = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get(filesUrl(id) + (staged ? "/staged" : "")).param("path", path).session(l.session()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        return JsonPath.read(body, "$.content");
+    }
+
     @Test
-    void pullChecksOutTheNewCommitAndReturnsItsHashWithoutDeploying() throws Exception {
+    void pullStagesTheNewCommitAndLeavesTheLiveCheckoutUntouched() throws Exception {
         Login admin = login("admin");
         String id = createGit(admin, "gitdeployment", credential(TOKEN));
+        String first = head();
         String second = commit("extra/app.conf", "a=1\n");
         commands.clear();
 
         pull(admin, id).andExpect(status().isOk()).andExpect(jsonPath("$.commitSha").value(second))
                 .andExpect(jsonPath("$.graphHash").isNotEmpty());
 
+        assertThat(repoCheckout("gitdeployment").resolve("extra/app.conf")).doesNotExist();
+        assertThat(treePaths(admin, id, false)).doesNotContain("repo/extra/app.conf");
+        assertThat(treePaths(admin, id, true)).contains("repo/extra/app.conf");
+        assertThat(readFile(admin, id, "repo/extra/app.conf", true)).isEqualTo("a=1\n");
+        assertThat(commands).doesNotContain(ComposeCommand.UP);
+        assertThat(versionShas(id)).containsExactly(first);
+        assertThat(jdbc.queryForObject("SELECT last_commit_sha FROM deployments WHERE id = ?::uuid", String.class, id))
+                .isEqualTo(first);
+    }
+
+    @Test
+    void abandonedReviewLeavesTheDeployedFilesAsTheOnlyCurrentContent() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitdeployment", credential(TOKEN));
+        commit("compose.yaml", YAML_B);
+        commit("extra/app.conf", "a=1\n");
+
+        pull(admin, id).andExpect(status().isOk());
+        // the ADMIN cancels the review: nothing more is called. A later read (config editor, as the AI tools use it) and the
+        // compose file the next run would use are still the deployed version
+        assertThat(readFile(admin, id, "repo/compose.yaml", false)).isEqualTo(YAML_A);
+        assertThat(treePaths(admin, id, false)).doesNotContain("repo/extra/app.conf");
+        assertThat(files.readCompose(hostId, "gitdeployment").orElseThrow()).isEqualTo(YAML_A);
+        assertThat(readFile(admin, id, "repo/compose.yaml", true)).isEqualTo(YAML_B);
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(filesUrl(id))
+                        .param("path", "repo/extra/app.conf").session(admin.session()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void aNewPullReplacesTheEarlierStaging() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitdeployment", credential(TOKEN));
+        commit("one.txt", "1");
+        pull(admin, id).andExpect(status().isOk());
+        String third = commit("two.txt", "2");
+
+        pull(admin, id).andExpect(status().isOk()).andExpect(jsonPath("$.commitSha").value(third));
+
+        assertThat(treePaths(admin, id, true)).contains("repo/one.txt", "repo/two.txt");
+    }
+
+    @Test
+    void failedPullLeavesNoStagingAndTheLiveCheckoutUntouched() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitdeployment", credential(TOKEN));
+        commit("extra/app.conf", "a=1\n");
+        pull(admin, id).andExpect(status().isOk());
+        jdbc.update("UPDATE deployments SET git_ref = 'does-not-exist' WHERE id = ?::uuid", id);
+
+        pull(admin, id).andExpect(status().isBadRequest());
+
+        assertThat(treePaths(admin, id, true)).isEmpty();
+        assertThat(repoCheckout("gitdeployment").resolve("compose.yaml")).exists();
+        assertThat(files.readCompose(hostId, "gitdeployment").orElseThrow()).isEqualTo(YAML_A);
+    }
+
+    @Test
+    void confirmedRedeployPromotesTheStagedFilesAndClearsTheStaging() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitdeployment", credential(TOKEN));
+        String second = commit("extra/app.conf", "a=1\n");
+        String pullBody = pull(admin, id).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+
+        mvc.perform(confirm(admin, id, pullBody)).andExpect(status().isAccepted());
+        awaitResults(1);
+
         assertThat(repoCheckout("gitdeployment").resolve("extra/app.conf")).exists();
+        assertThat(readFile(admin, id, "repo/extra/app.conf", false)).isEqualTo("a=1\n");
+        assertThat(treePaths(admin, id, true)).isEmpty();
+        assertThat(versionShas(id)).endsWith(second);
+    }
+
+    @Test
+    void liveOnlyAuxFileAtPullTimeIsShownInTheStagedTreeAndTheConfirmedHashMatches() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitdeployment", credential(TOKEN));
+        Path aux = files.deploymentDir(hostId, "gitdeployment").resolve("conf/extra.yaml");
+        Files.createDirectories(aux.getParent());
+        Files.writeString(aux, "x: 1\n");
+        String second = commit("extra/app.conf", "a=1\n");
+        String pullBody = pull(admin, id).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+
+        // the review lists what the live directory will contain after promotion, so the approval covers it
+        assertThat(treePaths(admin, id, true)).contains("conf/extra.yaml", "repo/extra/app.conf");
+        assertThat(aux).exists();
+        mvc.perform(confirm(admin, id, pullBody)).andExpect(status().isAccepted());
+        awaitResults(1);
+
+        assertThat(jdbc.queryForObject("SELECT graph_hash FROM deployment_versions WHERE commit_sha = ?", String.class, second))
+                .isEqualTo(JsonPath.<String>read(pullBody, "$.graphHash"));
+    }
+
+    @Test
+    void auxFileAddedToTheLiveDirectoryAfterThePullIsRefusedAndStoresNothing() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitdeployment", credential(TOKEN));
+        commit("extra/app.conf", "a=1\n");
+        String pullBody = pull(admin, id).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        Files.writeString(files.deploymentDir(hostId, "gitdeployment").resolve("late.conf"), "evil=1\n");
+        commands.clear();
+
+        mvc.perform(confirm(admin, id, pullBody)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("FILES_CHANGED_SINCE_REVIEW"));
+
         assertThat(commands).doesNotContain(ComposeCommand.UP);
         assertThat(versionShas(id)).hasSize(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM deployment_versions WHERE deployment_id = ?::uuid", Integer.class, id))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void secondConfirmWithoutANewPullIsRefusedBecauseTheStagingIsGone() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitdeployment", credential(TOKEN));
+        commit("extra/app.conf", "a=1\n");
+        String pullBody = pull(admin, id).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        mvc.perform(confirm(admin, id, pullBody)).andExpect(status().isAccepted());
+        awaitResults(1);
+
+        mvc.perform(confirm(admin, id, pullBody)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("FILES_CHANGED_SINCE_REVIEW"));
+    }
+
+    @Test
+    void confirmWithoutAnyPullIsRefused() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitdeployment", credential(TOKEN));
+        commands.clear();
+
+        mvc.perform(admin.write(post(url() + "/" + id + "/git/redeploy")).contentType(APPLICATION_JSON)
+                        .content("{\"commitSha\":\"%s\",\"graphHash\":\"x\"}".formatted(head())))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("FILES_CHANGED_SINCE_REVIEW"));
+
+        assertThat(commands).doesNotContain(ComposeCommand.UP);
+    }
+
+    @Test
+    void stagedReadRefusesMaliciousPathsAndExcludedFiles() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitdeployment", credential(TOKEN));
+        commit("extra/app.conf", "a=1\n");
+        pull(admin, id).andExpect(status().isOk());
+        java.nio.file.Files.writeString(BASE_DIR.resolve("outside-secret.txt"), "secret");
+        Path link = files.stagingRepoDir(hostId, "gitdeployment").resolve("escape");
+        Files.createSymbolicLink(link, BASE_DIR.resolve("outside-secret.txt"));
+
+        for (String path : new String[]{"../../../outside-secret.txt", "repo/../../../../outside-secret.txt", "/etc/passwd",
+                "%2e%2e/%2e%2e/outside-secret.txt", "repo/escape", "compose.yaml", ".env", "repo/.git/config"}) {
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(filesUrl(id) + "/staged")
+                            .param("path", path).session(admin.session()))
+                    .andExpect(status().is4xxClientError())
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(
+                            org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("secret"))));
+        }
+        assertThat(treePaths(admin, id, true)).doesNotContain("compose.yaml", ".env", "repo/escape");
+    }
+
+    @Test
+    void stagedFilesAreForPullersOnlyAndEnvLikeContentFollowsTheConfigEditorRules() throws Exception {
+        Login admin = login("admin");
+        String id = createGit(admin, "gitdeployment", credential(TOKEN));
+        commit("config/app.env", "TOKEN=hunter2\n");
+        pull(admin, id).andExpect(status().isOk());
+
+        // listing shows the name, as the live tree does; reading the content is what env-like files restrict
+        assertThat(treePaths(admin, id, true)).contains("repo/config/app.env");
+        assertThat(readFile(login("operator"), id, "repo/config/app.env", true)).isEqualTo("TOKEN=hunter2\n");
+        Login viewer = login("viewer");
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(filesUrl(id) + "/staged")
+                        .session(viewer.session()))
+                .andExpect(status().isForbidden());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(filesUrl(id) + "/staged")
+                        .param("path", "repo/config/app.env").session(viewer.session()))
+                .andExpect(status().isForbidden())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("hunter2"))));
     }
 
     @Test
@@ -353,7 +547,7 @@ class GitDeploymentApiTest extends DeploymentTestBase {
         String id = createGit(admin, "gitdeployment", credential(TOKEN));
         commit("extra/app.conf", "a=1\n");
         String pullBody = pull(admin, id).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        Files.writeString(repoCheckout("gitdeployment").resolve("extra/app.conf"), "a=EVIL\n");
+        Files.writeString(files.stagingRepoDir(hostId, "gitdeployment").resolve("extra/app.conf"), "a=EVIL\n");
         commands.clear();
 
         mvc.perform(confirm(admin, id, pullBody)).andExpect(status().isConflict())
@@ -361,6 +555,7 @@ class GitDeploymentApiTest extends DeploymentTestBase {
 
         assertThat(commands).doesNotContain(ComposeCommand.UP);
         assertThat(versionShas(id)).hasSize(1);
+        assertThat(repoCheckout("gitdeployment").resolve("extra/app.conf")).doesNotExist();
     }
 
     @Test
@@ -643,16 +838,12 @@ class GitDeploymentApiTest extends DeploymentTestBase {
     void failedPullLeavesTheCheckoutOnTheDeployedCommitAndPlainDeployStillWorks() throws Exception {
         Login admin = login("admin");
         String id = createGit(admin, "gitdeployment", credential(TOKEN));
-        String invalid = commit("compose.yaml", "services:\n  web:\n    image: INVALID\n");
+        commit("compose.yaml", "services:\n  web:\n    image: INVALID\n");
         pull(admin, id).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_COMPOSE"));
-        // the failed pull no longer leaves the invalid commit checked out (shipr-y37c.2)
+        // the invalid commit was only ever in the staging area, which a failed pull removes (shipr-y37c.2, shipr-kqbc.83)
         assertThat(Files.readString(repoCheckout("gitdeployment").resolve("compose.yaml"))).isEqualTo(YAML_A);
-        // alignCheckout of a plain deploy still covers a checkout found on a newer commit (simulated directly)
-        try (Git local = Git.open(repoCheckout("gitdeployment").toFile())) {
-            local.reset().setMode(org.eclipse.jgit.api.ResetCommand.ResetType.HARD).setRef(invalid).call();
-        }
-        assertThat(Files.readString(repoCheckout("gitdeployment").resolve("compose.yaml"))).contains("INVALID");
+        assertThat(treePaths(admin, id, true)).isEmpty();
 
         mvc.perform(admin.write(post(url() + "/" + id + "/deploy"))).andExpect(status().isAccepted());
         awaitResults(1);

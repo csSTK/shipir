@@ -38,6 +38,12 @@ class ConfigFileController {
         return path == null ? service.tree(hostId, id) : service.read(hostId, id, path);
     }
 
+    /** The review of "Pull &amp; redeploy": files fetched into the staging area, not yet live. Same shape as {@code GET /files}. */
+    @GetMapping("/staged")
+    Object staged(@PathVariable UUID hostId, @PathVariable UUID id, @RequestParam(required = false) String path) {
+        return path == null ? service.stagedTree(hostId, id) : service.stagedRead(hostId, id, path);
+    }
+
     @PutMapping
     ConfigFileResponse write(@PathVariable UUID hostId, @PathVariable UUID id, @RequestParam String path,
                              @Valid @RequestBody ConfigFileWriteRequest request) {

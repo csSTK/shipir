@@ -335,13 +335,16 @@ describe('DeploymentDetailPage', () => {
     const pull = vi.fn(() => ({ commitSha: SHA, graphHash: 'h1' }))
     const redeploy = vi.fn(() => ({ runId: 'rd-8', versionId: 'v4' }))
     serve('ADMIN', {
-      [`GET ${BASE}`]: gitDeployment, [`GET ${BASE}/files`]: extraFiles,
+      [`GET ${BASE}`]: gitDeployment, [`GET ${BASE}/files/staged`]: extraFiles,
+      [`GET ${BASE}/files`]: () => [{ path: 'conf/live-only.yaml', directory: false, size: 1, modifiedAt: '2026-10-01T10:00:00Z', readOnly: false }],
       [`POST ${BASE}/git/pull`]: pull, [`POST ${BASE}/git/redeploy`]: redeploy,
     })
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Pull & redeploy' }))
     const dialog = await screen.findByRole('dialog', { name: 'Review before redeploying' })
+    // the review shows the staged files of the pull, never the live directory
     expect(await within(dialog).findByText('conf/extra.yaml')).toBeInTheDocument()
+    expect(within(dialog).queryByText('conf/live-only.yaml')).not.toBeInTheDocument()
     expect(pull).toHaveBeenCalledTimes(1)
     expect(redeploy).not.toHaveBeenCalled()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Pull & redeploy' }))
@@ -353,7 +356,7 @@ describe('DeploymentDetailPage', () => {
     const pull = vi.fn(() => ({ commitSha: SHA, graphHash: 'h1' }))
     const redeploy = vi.fn(() => new ApiError(409, 'x', 'FILES_CHANGED_SINCE_REVIEW'))
     serve('ADMIN', {
-      [`GET ${BASE}`]: gitDeployment, [`GET ${BASE}/files`]: extraFiles,
+      [`GET ${BASE}`]: gitDeployment, [`GET ${BASE}/files/staged`]: extraFiles,
       [`POST ${BASE}/git/pull`]: pull, [`POST ${BASE}/git/redeploy`]: redeploy,
     })
     renderPage()

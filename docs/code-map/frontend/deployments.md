@@ -5,7 +5,7 @@
 - frontend/src/features/deployments/{DeploymentDetailPage.tsx,DeploymentDetailPage.css,DeploymentDetailPage.test.tsx}: deployment detail: status, Deploy/Stop/Delete, versions timeline with rollback, cards
 - frontend/src/features/deployments/{AddDeploymentDialog.tsx,NewFileCreate.test.tsx}: add dialog: YAML, wizard, template, Git, import file and Portainer sources; new file creation test
 - frontend/src/features/deployments/{DeploymentContentPanel.tsx,DeploymentRunPanel.tsx}: deployment YAML and env keys with draft edit; deploy run wrapper around the live output
-- frontend/src/features/deployments/{DeployFilesReview.tsx,DeployFilesReview.css}: extra files listed in the ADMIN deploy confirm dialog before the directory is approved
+- frontend/src/features/deployments/{DeployFilesReview.tsx,DeployFilesReview.css}: extra files in the ADMIN deploy confirm dialog; after a Git pull the staged files, not the live dir
 - frontend/src/features/deployments/{AdoptDeploymentDialog.tsx,AdoptDeployment.test.tsx}: Adopt dialog for unmanaged deployments, asks for pasted YAML when needed
 - frontend/src/features/deployments/{GitSourceFields.tsx,GitSourcePanel.tsx,GitSourcePanel.test.tsx,GitDeployments.test.tsx}: Git source fields in the add dialog and the detail panel with auto-update
 - frontend/src/features/deployments/{ImageAutoUpdatePanel.tsx,ImageAutoUpdatePanel.css,ImageAutoUpdatePanel.test.tsx}: automatic image updates card with optional daily UTC window

@@ -89,9 +89,29 @@ public class ConfigFileService {
     }
 
     public List<ConfigFileEntry> tree(UUID hostId, UUID id) {
+        return tree(hostId, id, false);
+    }
+
+    /**
+     * The files of the Git staging area (what step 1 of "Pull &amp; redeploy" fetched, not yet live) under the same rules as
+     * {@link #tree}: compose.yaml, .env and Shipir's own paths are not listed. Everything is read-only.
+     */
+    public List<ConfigFileEntry> stagedTree(UUID hostId, UUID id) {
+        return tree(hostId, id, true);
+    }
+
+    /** Reads one staged file under the rules of {@link #read} (env-like files need OPERATE access, links are refused). */
+    public ConfigFileResponse stagedRead(UUID hostId, UUID id, String path) {
+        Target t = target(hostId, id, path, false, true);
+        requireEnvReadAccess(hostId, id, t.rel());
+        requireFile(t.file());
+        return response(t);
+    }
+
+    private List<ConfigFileEntry> tree(UUID hostId, UUID id, boolean staged) {
         deployments.requireView(hostId, id);
         deployments.requireAdminIfSystemManaged(hostId, id);
-        Path dir = deployments.directoryOf(hostId, id);
+        Path dir = staged ? deployments.stagingDirectoryOf(hostId, id) : deployments.directoryOf(hostId, id);
         if (!Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) {
             return List.of();
         }
@@ -107,7 +127,7 @@ public class ConfigFileService {
                     if (hidden(rel) || attrs.isSymbolicLink()) {
                         return FileVisitResult.SKIP_SUBTREE;
                     }
-                    entries.add(new ConfigFileEntry(rel, true, 0, attrs.lastModifiedTime().toInstant(), readOnly(rel)));
+                    entries.add(new ConfigFileEntry(rel, true, 0, attrs.lastModifiedTime().toInstant(), staged || readOnly(rel)));
                     return entries.size() >= MAX_TREE_ENTRIES ? FileVisitResult.TERMINATE : FileVisitResult.CONTINUE;
                 }
 
@@ -115,7 +135,7 @@ public class ConfigFileService {
                 public FileVisitResult visitFile(Path f, BasicFileAttributes attrs) {
                     String rel = relative(dir, f);
                     if (attrs.isRegularFile() && !hidden(rel)) {
-                        entries.add(new ConfigFileEntry(rel, false, attrs.size(), attrs.lastModifiedTime().toInstant(), readOnly(rel)));
+                        entries.add(new ConfigFileEntry(rel, false, attrs.size(), attrs.lastModifiedTime().toInstant(), staged || readOnly(rel)));
                     }
                     return entries.size() >= MAX_TREE_ENTRIES ? FileVisitResult.TERMINATE : FileVisitResult.CONTINUE;
                 }
@@ -226,13 +246,17 @@ public class ConfigFileService {
     }
 
     private Target target(UUID hostId, UUID id, String path, boolean forWrite) {
+        return target(hostId, id, path, forWrite, false);
+    }
+
+    private Target target(UUID hostId, UUID id, String path, boolean forWrite, boolean staged) {
         if (forWrite) {
             deployments.requireOperate(hostId, id);
         } else {
             deployments.requireView(hostId, id);
             deployments.requireAdminIfSystemManaged(hostId, id);
         }
-        Path root = deployments.directoryOf(hostId, id);
+        Path root = staged ? deployments.stagingDirectoryOf(hostId, id) : deployments.directoryOf(hostId, id);
         if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
             if (!forWrite) {
                 throw new ConfigFileException(HttpStatus.NOT_FOUND, "FILE_NOT_FOUND", "File not found");

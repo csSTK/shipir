@@ -27,10 +27,24 @@ const withPath = (hostId: string, deploymentId: string, path: string, suffix = '
   `${filesBase(hostId, deploymentId)}${suffix}?path=${encodeURIComponent(path)}`
 const filesKey = (hostId: string, deploymentId: string) => ['hosts', hostId, 'managed-deployments', deploymentId, 'files'] as const
 
-export function useConfigTree(hostId: string, deploymentId: string) {
+export function useConfigTree(hostId: string, deploymentId: string, enabled = true) {
   return useQuery({
     queryKey: [...filesKey(hostId, deploymentId), 'tree'],
     queryFn: () => apiFetch<ConfigFileEntry[]>(filesBase(hostId, deploymentId)),
+    enabled,
+  })
+}
+
+/**
+ * The files fetched by step 1 of "Pull & redeploy" (staging area, not live yet), read under the config editor's rules. The
+ * commit is part of the key and nothing is kept once the review closes: a staged tree is only valid for the pull it belongs to.
+ */
+export function useStagedConfigTree(hostId: string, deploymentId: string, commitSha: string | undefined, graphHash?: string | null) {
+  return useQuery({
+    queryKey: [...filesKey(hostId, deploymentId), 'staged-tree', commitSha, graphHash],
+    queryFn: () => apiFetch<ConfigFileEntry[]>(`${filesBase(hostId, deploymentId)}/staged`),
+    enabled: commitSha !== undefined,
+    gcTime: 0,
   })
 }
 

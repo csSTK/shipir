@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { useConfigTree } from './config-files/api.ts'
+import { useConfigTree, useStagedConfigTree } from './config-files/api.ts'
 import './DeployFilesReview.css'
 
 /** The config tree stops at this many entries (ConfigFileService.MAX_TREE_ENTRIES). */
@@ -8,11 +8,15 @@ const TREE_LIMIT = 5000
 /**
  * Lists the files in the deployment directory (include / extends / env_file targets and other extras; compose.yaml, .env
  * and Shipir's own paths are not part of the tree). An ADMIN's deploy approves whatever is on disk, so they see it first.
- * With `commitSha` (Pull & redeploy, after the pull) the files are the pulled ones and the commit is named.
+ * With `commitSha` (Pull & redeploy, after the pull) the files are the staged ones of that pull (not live yet, so the live
+ * directory is not shown) and the commit is named.
  */
-export function DeployFilesReview({ hostId, deploymentId, commitSha }: { hostId: string; deploymentId: string; commitSha?: string }) {
+export function DeployFilesReview({ hostId, deploymentId, commitSha, graphHash }: { hostId: string; deploymentId: string; commitSha?: string; graphHash?: string | null }) {
   const { t } = useTranslation('deployments')
-  const tree = useConfigTree(hostId, deploymentId)
+  const staged = commitSha !== undefined
+  const live = useConfigTree(hostId, deploymentId, !staged)
+  const stagedTree = useStagedConfigTree(hostId, deploymentId, commitSha, graphHash)
+  const tree = staged ? stagedTree : live
 
   if (tree.isPending) {
     return (

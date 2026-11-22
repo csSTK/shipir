@@ -137,8 +137,8 @@ public class DeploymentRunService {
     }
 
     /**
-     * Step 2 of the two-step "Pull &amp; redeploy": deploys the checkout that {@link #gitPull} left and the ADMIN reviewed,
-     * without fetching again. 409 FILES_CHANGED_SINCE_REVIEW if the files hash differently now. An ADMIN must always send the
+     * Step 2 of the two-step "Pull &amp; redeploy": promotes the staged checkout that {@link #gitPull} fetched and the ADMIN reviewed
+     * to the live one and deploys it, without fetching again. 409 FILES_CHANGED_SINCE_REVIEW if the files hash differently now. An ADMIN must always send the
      * review (409 REVIEW_REQUIRED): their approval covers exactly the files shown. Others may omit it (one step: pull and deploy;
      * they never approve files, see {@code unrestricted}).
      */
@@ -149,9 +149,10 @@ public class DeploymentRunService {
     }
 
     /**
-     * Step 1 of the two-step "Pull &amp; redeploy": fetches the ref into the checkout (no deploy, no version) and returns the
-     * commit and graph hash of the files now on disk for the review. The checkout stays on the pulled commit (a later run
-     * realigns it); a failed pull is rolled back like a failed redeploy.
+     * Step 1 of the two-step "Pull &amp; redeploy": fetches the ref into a separate staging checkout (no deploy, no version,
+     * the live checkout, {@code compose.yaml} and {@code .env} stay untouched) and returns the commit and graph hash of the
+     * staged files for the review. A new step 1 replaces an earlier staging; a failed pull leaves none; an abandoned review
+     * leaves the staging unused until the next step 1 or the deployment's deletion. Step 2 promotes it.
      */
     @Auditable(action = "DEPLOYMENT_GIT_PULL", targetType = "DEPLOYMENT", targetId = "#id")
     public GitPullResponse gitPull(UUID hostId, UUID id, String username) {
@@ -161,19 +162,28 @@ public class DeploymentRunService {
         DockerEndpoint endpoint = deploymentService.endpointOf(host);
         UUID userId = userIdOf(username);
         locks.acquire(deployment.getId());
-        DeploymentVersion source = null;
-        String envText = null;
         try {
-            source = deploymentService.currentVersion(deployment);
-            envText = decryptEnv(source);
-            DeploymentVersion current = source;
-            GitCheckout checkout = pull(deployment, endpoint, envText, () -> unrestricted(username, userId, deployment, endpoint, current));
-            return new GitPullResponse(checkout.commitSha(), graphHashOf(deployment));
-        } catch (RuntimeException e) {
-            if (source != null && deployment.getSourceType() == DeploymentSource.GIT) {
-                restoreAfterFailedPull(deployment, source, envText, userId, username);
+            if (deployment.getSourceType() != DeploymentSource.GIT) {
+                throw new DeploymentException(HttpStatus.BAD_REQUEST, "NOT_A_GIT_DEPLOYMENT", "This deployment is not sourced from Git");
             }
-            throw e;
+            DeploymentVersion current = deploymentService.currentVersion(deployment);
+            String envText = decryptEnv(current);
+            String name = deployment.getName();
+            files.discardStaging(hostId, name);
+            try {
+                GitCheckout checkout = git.sync(files.stagingRepoDir(hostId, name), deployment.getGitRepoUrl(), deployment.getGitRef(),
+                        deployment.getGitComposePath(), deployment.getGitCredentialId());
+                // the same layout and files as the live directory has after promotion, so the hash is the one the run will see
+                files.writeStaged(hostId, name, checkout.composeYaml(), envText);
+                files.copyLiveFilesToStaging(hostId, name);
+                if (unrestricted(username, userId, deployment, endpoint, current)) {
+                    validateStaged(deployment, endpoint);
+                }
+                return new GitPullResponse(checkout.commitSha(), stagedGraphHashOf(deployment));
+            } catch (RuntimeException e) {
+                files.discardStaging(hostId, name);
+                throw e;
+            }
         } finally {
             locks.release(deployment.getId());
         }
@@ -589,6 +599,10 @@ public class DeploymentRunService {
                         deploymentService.composeFileOf(deployment));
     }
 
+    private String stagedGraphHashOf(Deployment deployment) {
+        return ComposeGraphHasher.hash(files.stagingDir(deployment.getHostId(), deployment.getName())).orElse(null);
+    }
+
     private String graphHashOf(Deployment deployment) {
         return ComposeGraphHasher.hash(files.deploymentDir(deployment.getHostId(), deployment.getName())).orElse(null);
     }
@@ -672,7 +686,8 @@ public class DeploymentRunService {
             files.write(hostId, deployment.getName(), yaml, envText);
             // hashed before the (slow) policy check, so an edit made meanwhile leaves a stale hash that fails safe next run
             String graphHashBeforeGate = graphHashOf(deployment);
-            // step 2 of a reviewed redeploy: what is about to run must be exactly what was reviewed (null = unhashable, no approval stored)
+            // step 2: the promoted live directory must hash to what was reviewed (the staged tree held everything live adds);
+            // anything added or changed in the live directory since the pull is a change since the review (null = unhashable)
             if (reviewed != null && !java.util.Objects.equals(graphHashBeforeGate, reviewed.graphHash())) {
                 throw filesChanged();
             }
@@ -803,21 +818,43 @@ public class DeploymentRunService {
     }
 
     /**
-     * Step 2 of the two-step redeploy: the checkout left by {@link #gitPull} must be on the reviewed commit and hash to it. No
-     * fetch: a newer remote commit is not part of the approval.
+     * Step 2 of the two-step redeploy: promotes the staged checkout (left by {@link #gitPull}) to the live one, if it is on the
+     * reviewed commit and its files still hash to the reviewed hash. No fetch: a newer remote commit is not part of the
+     * approval. The live checkout is replaced only after both checks, so a refused step 2 changes nothing live.
      */
     private GitCheckout reviewedCheckout(Deployment deployment, GitRedeployRequest reviewed) {
         if (deployment.getSourceType() != DeploymentSource.GIT) {
             throw new DeploymentException(HttpStatus.BAD_REQUEST, "NOT_A_GIT_DEPLOYMENT", "This deployment is not sourced from Git");
         }
-        Path repoDir = files.repoDir(deployment.getHostId(), deployment.getName());
-        // the checkout must be on the reviewed commit already (local read, never a fetch) and still hash to the reviewed hash
-        if (!reviewed.commitSha().equalsIgnoreCase(git.headCommit(repoDir))
-                || !java.util.Objects.equals(reviewed.graphHash(), graphHashOf(deployment))) {
+        UUID hostId = deployment.getHostId();
+        String name = deployment.getName();
+        // local reads only, never a fetch; no staging (no step 1, expired or already promoted) reads as "changed"
+        String stagedCommit = git.headCommit(files.stagingRepoDir(hostId, name));
+        if (stagedCommit == null || !reviewed.commitSha().equalsIgnoreCase(stagedCommit)
+                || !java.util.Objects.equals(reviewed.graphHash(), stagedGraphHashOf(deployment))) {
             throw filesChanged();
         }
-        return git.ensureCommit(repoDir, deployment.getGitRepoUrl(), reviewed.commitSha(), deployment.getGitComposePath(),
-                deployment.getGitCredentialId());
+        files.promoteStagedRepo(hostId, name);
+        return git.ensureCommit(files.repoDir(hostId, name), deployment.getGitRepoUrl(), stagedCommit,
+                deployment.getGitComposePath(), deployment.getGitCredentialId());
+    }
+
+    /**
+     * {@code docker compose config} on the staged files, so an invalid compose file is reported at step 1 (400 INVALID_COMPOSE).
+     * Only for callers who may run host-level compose features: for everyone else compose must not open the files before the
+     * run policy has checked them (step 2 does that on the promoted files, as for every other entry path).
+     */
+    private void validateStaged(Deployment deployment, DockerEndpoint endpoint) {
+        ValidationResult result;
+        try {
+            result = validation.validate(deployment.getHostId(), deployment.getName(), endpoint,
+                    files.stagingRepoComposeFile(deployment.getHostId(), deployment.getName(), deployment.getGitComposePath()));
+        } catch (ComposeExecutionException e) {
+            throw new DeploymentException(HttpStatus.BAD_GATEWAY, "COMPOSE_UNAVAILABLE", "docker compose could not run");
+        }
+        if (!result.valid()) {
+            throw new DeploymentException(HttpStatus.BAD_REQUEST, "INVALID_COMPOSE", "The compose file is invalid", result.errors());
+        }
     }
 
     private static DeploymentException filesChanged() {
