@@ -19,7 +19,9 @@ public final class StepUpSession {
 
     /** Forgets the recorded {@code auth_time}; every sign-in calls this first, so one user's freshness never carries over to the next. */
     public static void clear(HttpSession session) {
-        session.removeAttribute(AUTH_TIME);
+        if (session != null) {
+            session.removeAttribute(AUTH_TIME);
+        }
     }
 
     public static Optional<Instant> authTime(HttpSession session) {

@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, apiFetch } from '../../shared/api/client.ts'
+import { useCurrentUser } from '../auth/api.ts'
 import { UsersSettingsPage } from './UsersSettingsPage.tsx'
 import type { ManagedUser } from './api.ts'
 
@@ -26,10 +27,17 @@ const me: ManagedUser = { ...base, id: 'u1', username: 'root', role: 'ADMIN', di
 const anna: ManagedUser = { ...base, id: 'u2', username: 'anna', role: 'OPERATOR', disabled: false }
 const bob: ManagedUser = { ...base, id: 'u3', username: 'bob', role: 'VIEWER', disabled: true, disabledAt: '2026-10-02T10:00:00Z' }
 
+/** Keeps the current-user query active, as the app shell does, so a refetch after a self-link is observable. */
+function CurrentUserObserver() {
+  useCurrentUser()
+  return null
+}
+
 function renderPage(handler?: (path: string, method: string, body: unknown) => unknown, list = [me, anna, bob]) {
   apiFetchMock.mockImplementation((path: string, options?: { method?: string; body?: unknown }) => {
     const method = options?.method ?? 'GET'
     if (method === 'GET' && path === '/users') return Promise.resolve(list)
+    if (method === 'GET' && path === '/auth/me') return Promise.resolve({ username: 'root' })
     if (method === 'GET' && path === '/auth/step-up')
       return Promise.resolve({ method: 'PASSWORD', totpRequired: false, fresh: false, windowSeconds: 300 })
     if (method === 'GET' && path === '/settings/security') return Promise.resolve({ require2faForAdmins: false, updatedAt: null })
@@ -39,6 +47,7 @@ function renderPage(handler?: (path: string, method: string, body: unknown) => u
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
+      <CurrentUserObserver />
       <UsersSettingsPage currentUsername="root" />
     </QueryClientProvider>,
   )
@@ -198,6 +207,31 @@ describe('UsersSettingsPage', () => {
       '/users/u1/external-identity',
       { method: 'PUT', body: { issuer: 'https://idp.example.com', subject: 'sub-root', stepUp: { password: 'my-password' } } },
     ])
+  })
+
+  it('refetches the current user and drops the self-link action after a self-link', async () => {
+    const list = [{ ...me }, anna, bob]
+    renderPage(
+      (_path, method) => {
+        if (method !== 'PUT') return undefined
+        list[0] = { ...me, externalIdentity: true }
+        return list[0]
+      },
+      list,
+    )
+    await screen.findByText('anna')
+    const meCalls = () => apiFetchMock.mock.calls.filter(([p]) => p === '/auth/me').length
+    await waitFor(() => expect(meCalls()).toBe(1))
+    fireEvent.click(screen.getByRole('button', { name: 'Link your own SSO identity for root' }))
+    const form = screen.getByRole('dialog')
+    fireEvent.change(within(form).getByLabelText('Issuer URL'), { target: { value: 'https://idp.example.com' } })
+    fireEvent.change(within(form).getByLabelText('Subject (sub)'), { target: { value: 'sub-root' } })
+    fireEvent.click(within(form).getByRole('button', { name: 'Link' }))
+    const confirm = await screen.findByRole('dialog', { name: "Confirm it's you" })
+    fireEvent.change(await within(confirm).findByLabelText('Current password'), { target: { value: 'my-password' } })
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Confirm' }))
+    await waitFor(() => expect(meCalls()).toBe(2))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Link your own SSO identity for root' })).toBeNull())
   })
 
   it('offers no self-link for an ADMIN who already signs in via SSO, and none of the other self-actions', async () => {

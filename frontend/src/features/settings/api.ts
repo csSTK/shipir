@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../../shared/api/client.ts'
 import { downloadFile, saveBlob } from '../../shared/api/transfer.ts'
 import type { ChatSession, ChatSessionDetail } from '../ai-chat/api.ts'
+import { CURRENT_USER_KEY } from '../auth/api.ts'
 import type { StepUpCredentials } from '../auth/stepUp.ts'
 import { NOTIFICATION_TYPE_LABELS, type NotificationType } from '../notifications/api.ts'
 import i18n from 'i18next'
@@ -616,13 +617,18 @@ export function useResetUserTwoFactor() {
 
 export function useLinkUserIdentity() {
   const invalidate = useInvalidateUsers()
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ id, issuer, subject, stepUp }: { id: string; issuer: string; subject: string; stepUp?: StepUpCredentials }) =>
       apiFetch<ManagedUser>(`${USERS_BASE}/${id}/external-identity`, {
         method: 'PUT',
         body: { issuer, subject, ...(stepUp ? { stepUp } : {}) },
       }),
-    onSuccess: () => void invalidate(),
+    onSuccess: () => {
+      void invalidate()
+      // A self-link sets the signed-in user's externalIssuer
+      void queryClient.invalidateQueries({ queryKey: CURRENT_USER_KEY })
+    },
   })
 }
 

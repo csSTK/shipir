@@ -208,6 +208,29 @@ class ExternalIdentityLinkTest extends OidcTestBase {
         selfLink(admin, "{\"password\":\"" + PASSWORD + "\"}").andExpect(status().isTooManyRequests())
                 .andExpect(header().exists(HttpHeaders.RETRY_AFTER));
         assertThat(adminIssuer()).isNull();
+        assertThat(audit("USER_IDENTITY_LINK", "FAILURE")).isPositive();
+        assertThat(audit("USER_IDENTITY_LINK", "SUCCESS")).isZero();
+        assertThat(jdbc.queryForObject("SELECT coalesce(string_agg(details::text, ' '), '') FROM audit_log WHERE action = 'USER_IDENTITY_LINK'",
+                String.class)).doesNotContain("not-the-password").doesNotContain(PASSWORD);
+    }
+
+    @Test
+    void aConsumedTotpCodeStaysConsumedWhenTheLinkFailsAfterwards() throws Exception {
+        Login admin = login("admin");
+        String setup = mvc.perform(admin.write(post("/api/auth/2fa/setup"))).andReturn().getResponse()
+                .getContentAsString();
+        byte[] secret = Totp.fromBase32(com.jayway.jsonpath.JsonPath.read(setup, "$.secret"));
+        mvc.perform(admin.write(post("/api/auth/2fa/confirm")).contentType(APPLICATION_JSON)
+                .content("{\"code\":\"" + Totp.code(secret, Totp.stepAt(Instant.now())) + "\"}"))
+                .andExpect(status().isOk());
+        link(admin, "viewer", "https://idp.example.com", "sub-admin").andExpect(status().isOk());
+        String body = "{\"password\":\"" + PASSWORD + "\",\"code\":\""
+                + Totp.code(secret, Totp.stepAt(Instant.now()) + 1) + "\"}";
+        selfLink(admin, body).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("IDENTITY_TAKEN"));
+        mvc.perform(admin.write(delete("/api/users/" + id("viewer") + "/external-identity")))
+                .andExpect(status().isOk());
+        selfLink(admin, body).andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("STEP_UP_INVALID"));
+        assertThat(adminIssuer()).isNull();
     }
 
     @Test
