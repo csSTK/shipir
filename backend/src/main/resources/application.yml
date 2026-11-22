@@ -139,6 +139,8 @@ server:
         http-only: true
         same-site: lax
         secure: ${shipir.security.https}
+      # no URL rewriting (;jsessionid): session ids stay out of logs, Referer headers and links
+      tracking-modes: cookie
 spring:
   application:
     name: shipir

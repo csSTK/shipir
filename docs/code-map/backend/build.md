@@ -4,7 +4,7 @@
 - backend/Dockerfile, backend/.dockerignore: multi-stage image (Temurin build, JRE alpine runtime with docker-cli and compose, non-root user, /data/stacks), build context exclusions
 - backend/src/main/java/dev/bethge/shipir/ShipirApplication.java: Spring Boot entry point
 - backend/src/main/java/dev/bethge/shipir/**/package-info.java: one-line Javadoc per package of the architecture tree
-- backend/src/main/resources/application.yml: app name, datasource (DB_* env), JPA validate without OSIV, Flyway, session cookie and shipir.* defaults
+- backend/src/main/resources/application.yml: app name, datasource (DB_* env), JPA validate without OSIV, Flyway, session cookie and cookie-only session tracking, shipir.* defaults
 - backend/src/main/resources/application-demo.yml, backend/src/main/resources/db/testdata/R__demo_seed.sql: demo profile adding db/testdata to Flyway: seed users per role, sample data, throwaway compose stack with Postgres
 - backend/src/test/java/dev/bethge/shipir/demo/{DemoSeedProfileOffTest,DemoSeedProfileOnTest}.java: no seed rows without the profile; seed on an empty DB with documented passwords
 - backend/src/test/java/dev/bethge/shipir/{ShipirApplicationTests,DatasourcePropertiesTest}.java: context load with Postgres 16, datasource defaults and DB_* overrides
