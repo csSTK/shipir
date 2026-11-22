@@ -55,6 +55,8 @@ Priority: inherit from the request (default P2). Use P1 only when the user says 
 
 ## 4. Create
 
+Run `bd dolt pull` first, so new IDs don't collide with beads another clone already created. If it fails or reports a conflict, stop and report it.
+
 Create the epic first, then the children, capturing IDs with `--silent`:
 
 ```bash
@@ -70,8 +72,8 @@ T1=$(bd create "<child title>" -t task -p 2 --parent "$EPIC" -l model:sonnet --s
 bd dep add "$T2" "$T1"   # only if T2 really needs T1 first
 ```
 
-Titles: imperative and specific ("Add a migration that creates the hosts table", not "Hosts DB stuff").
+Titles: imperative and specific ("Add a migration that creates the users table", not "Users DB stuff").
 
 ## 5. Report
 
-Keep it short. Show the tree (`bd list --parent <epic> --pretty`), mention any assumptions you made, list anything you deliberately left out or deferred, and name which children are ready to start. Do not commit; `.beads/issues.jsonl` is exported automatically.
+Keep it short. Show the tree (`bd list --parent <epic> --pretty`), mention any assumptions you made, list anything you deliberately left out or deferred, and name which children are ready to start. Do not commit. Run `bd dolt push` after creating the beads so other clones see them (on a rejection: `bd dolt pull`, then push again; report if it still fails). `.beads/issues.jsonl` is exported by the next `next-task-finish`.

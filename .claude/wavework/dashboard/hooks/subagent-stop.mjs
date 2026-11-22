@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findRunByCwd, recordEvent, resolveStoreDir } from '../record.mjs';
+import { findRunByCwd, findRunInText, recordEvent, resolveStoreDir } from '../record.mjs';
 
 const PRICING_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'pricing.json');
 const TOKEN_FIELDS = {
@@ -17,9 +17,9 @@ export function loadPricing(file = PRICING_FILE) {
   try { return JSON.parse(readFileSync(file, 'utf8')).models ?? {}; } catch { return {}; }
 }
 
-const BEAD = /\bbead\b\s*:?\s*([a-z][a-z0-9]*-[a-z0-9]+(?:\.[0-9]+)*)\b/i;
+export const BEAD = /\bbead\b\s*:?\s*([a-z][a-z0-9]*-[a-z0-9]+(?:\.[0-9]+)*)\b/i;
 
-function promptText(content) {
+export function promptText(content) {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) return content.map((c) => (typeof c?.text === 'string' ? c.text : '')).join('\n');
   return '';
@@ -91,7 +91,8 @@ export function handle(input, { env = process.env, pricing = loadPricing() } = {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
   const file = input.agent_transcript_path;
   if (typeof file !== 'string' || !file) return null;
-  const { fields, cwd: transcriptCwd } = summarizeTranscript(readFileSync(file, 'utf8'), pricing);
+  const text = readFileSync(file, 'utf8');
+  const { fields, cwd: transcriptCwd } = summarizeTranscript(text, pricing);
 
   let run = null;
   let storeDir = null;
@@ -102,6 +103,15 @@ export function handle(input, { env = process.env, pricing = loadPricing() } = {
       run = findRunByCwd(cwd, { storeDir });
     } catch { run = null; }
     if (run) break;
+  }
+  // Sub-agents usually start in the main checkout and `cd` into the worktree: find the run by the worktree path
+  // their prompt and commands name.
+  for (const cwd of [input.cwd, transcriptCwd]) {
+    if (run || typeof cwd !== 'string' || !cwd) continue;
+    try {
+      storeDir = resolveStoreDir({ cwd, env });
+      run = findRunInText(text, { storeDir });
+    } catch { run = null; }
   }
   if (!run) return null;
 
