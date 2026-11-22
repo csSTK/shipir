@@ -67,5 +67,31 @@
     "enabled": true,
     "port": 4690,
     "tokensFile": "frontend/src/shared/styles/tokens.css"
+  },
+  "review": {
+    "lenses": [
+      {
+        "name": "security",
+        "scope": "bead",
+        "when": "the diff touches auth, permissions, remote host access, the audit log, subprocess execution, path handling, streaming of logs or output, secrets or tokens",
+        "checklist": "authorization on every new endpoint; input validation and injection (command and argument injection, path traversal incl. symlinks and encoded variants); remote host access and SSH key handling; audit log entries for privileged actions; secrets in code, logs or tests; malicious-case tests exist for the security-relevant code (see next-task-write-tests)"
+      },
+      {
+        "name": "ui",
+        "scope": "bead",
+        "whenPaths": [
+          "frontend/"
+        ],
+        "checklist": "follows the apple-design skill (read .claude/skills/apple-design/SKILL.md): design tokens instead of literal values, spacing and typography, loading, empty, error and disabled states, both themes, accessibility (roles, labels, focus order, contrast)"
+      },
+      {
+        "name": "ux",
+        "scope": "branch",
+        "whenPaths": [
+          "frontend/"
+        ],
+        "checklist": "the user flows the work set adds work end to end across its beads: each new screen or action is reachable, navigation and wording are consistent, error and empty paths lead somewhere, no dead ends, and the e2e specs cover the main journey"
+      }
+    ]
   }
 }

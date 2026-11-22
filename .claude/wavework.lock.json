@@ -1,6 +1,6 @@
 {
   "lockVersion": 1,
-  "version": "0.2.0",
+  "version": "0.5.0",
   "files": {
     "agents/implementer-haiku.md": "16c20efc6c5792f5ba744814c54ec70a6b636c0d6b0d20dcc729f94e35a13cfa",
     "agents/implementer-sonnet.md": "5260c81ef2702cea5ea1cc6404d733e010223de08dc6f21f254952eaba23f395",
@@ -9,36 +9,37 @@
     "scripts/red-green-check.test.sh": "b82e337314218d9e9798ddccb6a1596bf8414aa25b6c059e38f7ee529e7b3f59",
     "skills/next-task-batch/SKILL.md": "29060e703502129e996b3199676e04cb6714f04c8e3547d67263f405ce6a15fc",
     "skills/next-task-beads/SKILL.md": "0229c68b2a5c77a84f64c4f953eac2e824da6bc72f789f71644a84eeb7de0fb0",
-    "skills/next-task-branch/SKILL.md": "09699e65df5f2f06be2eb3933d0d4f2128dd211d30904b285f7b74b5b3308c41",
+    "skills/next-task-branch/SKILL.md": "bd395e207811a588f42369b6adcd1acf43913783f66a8f154770258e9ba7ce37",
     "skills/next-task-code/SKILL.md": "636c85212fe7e644ac2881dace5a643489ff28f3a8b77ce0c40394c04d33c14e",
     "skills/next-task-deps/SKILL.md": "9da5a85f46e7206fc662e99161386651242507bedb82c759638aa74a02fef69d",
     "skills/next-task-e2e/SKILL.md": "1357f918edb9e7b5cc124c9ae573abfeae9791a3aa0c5c5451b2d252f35089c0",
-    "skills/next-task-findings/SKILL.md": "4c8f6697480a80a49a47830ec333c448172a98c4ca1e4def4641a191637f61e4",
-    "skills/next-task-finish/SKILL.md": "57af11e749720e7d1e03612362c1f19ebfc8c1596b4906c557aca08b82471587",
-    "skills/next-task-implement/SKILL.md": "24c0ee5826f1aa23befd155d2ffc2eadcaa86b220448113fb0c0b873c1a7b07e",
+    "skills/next-task-findings/SKILL.md": "8a9e3f29fa781bcf4574efdcea7b087eff90eb4b56184feb3dd73917470ce091",
+    "skills/next-task-finish/SKILL.md": "03705122f2fb10fd4d34700099aa40dc222bf5aa0407a2a815a8ae4e564c84b7",
+    "skills/next-task-implement/SKILL.md": "1ae1f1c1445ba1bbdb43bb97cd72fe77477a87dfa7be62c6eee094176c3f2ff7",
     "skills/next-task-plan/SKILL.md": "769feb13ac5b03a4ac1467b8dd72379a04d52020e3e99aafb90d4abbdc8af9cd",
-    "skills/next-task-review/SKILL.md": "168a9ae4ce60a5293508629a490c29b759b34b758299c800a17ce9d567f63694",
-    "skills/next-task-test/SKILL.md": "c83357d8abebd504f8344529047677886f51d92dbb073c5d4f286087c73a5654",
+    "skills/next-task-review/SKILL.md": "1789ee4f4d38c0c1cd4a5b5b58d32ae5109e736762ce3f2738e50a506f577a26",
+    "skills/next-task-test/SKILL.md": "b6cbfd46e76af3af7baaba000bc557d537af70e3f406b8f1265ea3b958ad5f97",
     "skills/next-task-write-tests/SKILL.md": "89f28e6b309d28296c2e5fb1591d9241c2f2f603f487c9b84b28537775fd5ab3",
-    "skills/next-task/SKILL.md": "94ab5969c4b9301b271e27a8e5b8c508d37648ab378e8234bf83ce81b2655c77",
-    "skills/text-to-task/SKILL.md": "a3830b592356111fae5de67780401159a45b7b185fc957ebeb0c1c8d4e4807f7",
+    "skills/next-task/SKILL.md": "0855497485e3ed94ff2d2efe7d02c4fd2e402232847ecccd481fd853b390d522",
+    "skills/text-to-task/SKILL.md": "483b7f1638a9aade6e4aa5e1d89cfdcc7eeba82e16334ac24c788c5305156b78",
     "skills/watch-ci/SKILL.md": "10a05fe25882d1ef2b270832297371fbfff78c650014de9eee3198df92729834",
-    "wavework/dashboard/README.md": "c834fa870b939dd4eecb1751e08dc9fd3e724c342fca4981a301a01db7d1bb88",
+    "wavework/dashboard/README.md": "6553cb763a85baaf7f99bc9473fa3ecdf403b9c865d01633ebe8fb1859426719",
     "wavework/dashboard/config.json": "6567107edc5263cdc85c3a2c2835cb422c9b054b2201d1ac3acb69805d3b1e6c",
-    "wavework/dashboard/hooks/session-start.mjs": "2e3f412bc5ef3303ccec5b921964633bd72fceb029b0b345e9d47f2de0300dfb",
-    "wavework/dashboard/hooks/subagent-stop.mjs": "8400cb20af108a7beefa5a2c2bee449cef97ada7f05c867d03777e41e07a2a48",
+    "wavework/dashboard/hooks/agent-step.mjs": "239a24cd9b966bf4352ac2e283d225dfb72b8e21bcbc8782b7a250bde649a52a",
+    "wavework/dashboard/hooks/session-start.mjs": "99e3c2baa7a515c769fe0a0f3384bf3ad66794d052079776c1e70ecc8dad17c0",
+    "wavework/dashboard/hooks/subagent-stop.mjs": "b1bac507ddc15ede489fb8c65310feaa5c5d2cef5d06381e12d69678dd1ff988",
     "wavework/dashboard/lib/ci.mjs": "70566fa9c296f1f76f08859af43a1e4b42e4a8036a0cc92c483aacced48fd8e2",
-    "wavework/dashboard/lib/derive.mjs": "7cc6be2494334f72c2f16e58b98ee767d79f10d572bf69cf9711f79562c7b972",
+    "wavework/dashboard/lib/derive.mjs": "9efbb2aed079868f57dce9cbe378561f9e2b2f2e37ac2072522138437f0f531d",
     "wavework/dashboard/lib/settings.mjs": "24306c1393fe544c2ee1f82ef0ac0814b1e7e485a05af12afcf72988d6307172",
     "wavework/dashboard/lib/tokens.mjs": "b99b99608924055c8778ef9644a56c5668d71566185bf1e21ab361fe9155cf04",
     "wavework/dashboard/pricing.json": "9535737a8d186efc13dbb53fd65a4b1d80a9c7cedc462d864f88ad07d3c91e8d",
-    "wavework/dashboard/public/app.css": "c2ab04859acde257b3b5c3b8e6c70c0300cf95a64ec8989d00cbc63eb400dcaa",
-    "wavework/dashboard/public/app.js": "8f8e4cab5e5c31abe70cf6f8ded42e185dfd90910c20c727a299e242147fcc6d",
-    "wavework/dashboard/public/default-theme.css": "8668bde2fee6a67822dac11d8fd113c43d7fedc74ed8fc1db9142d27f7ffeea8",
-    "wavework/dashboard/public/format.mjs": "f599d7dc611326c1bb2c771a6635a07f98609b9e425a88b3c621218aa65d1016",
+    "wavework/dashboard/public/app.css": "fb36637e3b27f2082a4226f7f24361a02233dc59392c518a4b98b00a58290f0e",
+    "wavework/dashboard/public/app.js": "b46cdaea019075db88ae8141c11481436365a2a1cd42b7e10469c6d434f11279",
+    "wavework/dashboard/public/default-theme.css": "62491dc9c452add70eea454f497b6f89f4a2744db9f85faec0749698dcb5efad",
+    "wavework/dashboard/public/format.mjs": "3c6e1025a3dbe2def868425dca3af639b3cbad556e5c0259051dbca3770e2fa2",
     "wavework/dashboard/public/index.html": "0499d36b6a522c05f5dd445425653d2ebf9f4f97461892074a14cb5d494535cb",
-    "wavework/dashboard/record.mjs": "9004ba6468b988ecda2024782dcac40b08f8045d86d852ded680e3064ab12d63",
-    "wavework/dashboard/server.mjs": "38f8b8ea52005607a84483cf460756020b4e8a94e5bb189f284e94b06661a295"
+    "wavework/dashboard/record.mjs": "2a6fd137e88ab4d1ddf046eea50cb42be898634b24a4d1845488c3da36bb93fc",
+    "wavework/dashboard/server.mjs": "10247d5e997810e9291e6f01009d2ac82033482b3e667dc9c6597728cd9785c0"
   },
   "hooks": [
     {
@@ -61,6 +62,19 @@
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/wavework/dashboard/hooks/subagent-stop.mjs\"",
             "timeout": 10
+          }
+        ]
+      }
+    },
+    {
+      "event": "PreToolUse",
+      "entry": {
+        "matcher": "Read|Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/wavework/dashboard/hooks/agent-step.mjs\"",
+            "timeout": 5
           }
         ]
       }

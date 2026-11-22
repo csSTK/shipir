@@ -1,6 +1,6 @@
 # Pipeline dashboard
 
-Installed by `wavework init` / `wavework update` into `.claude/wavework/dashboard/` (managed by the lock file: do not edit, change `dashboard` in `.claude/wavework.json` instead). Dev tooling (Node >= 22, built-ins only, no node_modules) that records and shows `/next-task*` runs. This folder holds the recorder (`record.mjs`), the SubagentStop and SessionStart hooks (`hooks/`), the server (`server.mjs`, `lib/`), the UI (`public/`) and `config.json` (port and tokensFile, written from the config).
+Installed by `wavework init` / `wavework update` into `.claude/wavework/dashboard/` (managed by the lock file: do not edit, change `dashboard` in `.claude/wavework.json` instead). Dev tooling (Node >= 22, built-ins only, no node_modules) that records and shows `/next-task*` runs. This folder holds the recorder (`record.mjs`), the SubagentStop, SessionStart and PreToolUse hooks (`hooks/`), the server (`server.mjs`, `lib/`), the UI (`public/`) and `config.json` (port and tokensFile, written from the config).
 
 ## Store
 
@@ -31,10 +31,11 @@ Every event has `ts` (ISO), `type` and `run`, plus:
 | `run-end` | `status` (`done` default, `blocked`, `failed`; updates `run.json`) |
 | `step-start`, `step-end` | `step` (`deps`, `plan`, `wave`, `review`, `finish`, `push`), `wave` (on `wave` steps; start and end are paired by step + wave), `sha` (on `step-end --step push`) |
 | `child-start`, `child-end` | `bead`, `model`, `wave`, `result`, `redBeforeGreen` (evidence) |
-| `review` | `verdict`, `mustFix` (count), `round` |
+| `review` | `verdict`, `mustFix` (count), `round`, `lenses` (comma-separated review lenses that ran, merged into this one verdict) |
 | `tests` | `scope`, `passed`, `failed`, `duration` |
 | `finding` | `bead` (id of the finding bead) |
 | `agent` | `agentId`, `agentType`, `bead` (from the first user prompt, after the word "bead"; absent if none), `model`, `durationMs`, `tokensIn`, `tokensOut`, `tokensCacheRead`, `tokensCacheWrite`, `cost` (estimate); written by the SubagentStop hook |
+| `agent-step` | `skill` (the step the agent enters), `agentId`, `agentType`, `model`, `bead` (all optional); written by the PreToolUse hook, and by `next-task-implement`'s Record lines (`--bead`, `--skill` only) |
 
 Other keys passed on the command line are stored as given, except `ts`, `type` and `run`, which are always set by the recorder.
 
@@ -50,14 +51,22 @@ The `agent` events come from the SubagentStop hook (`hooks/subagent-stop.mjs`, r
 
 `record.mjs` exports `resolveStoreDir`, `findRunByCwd`, `recordEvent`, `readRun`, `listRuns`, `parseArgs`, `main`, `EVENT_TYPES`, `RUN_ID`, so the server and hooks reuse store resolution and lookup.
 
+## Agent steps (PreToolUse hook)
+
+`hooks/agent-step.mjs` is registered for `PreToolUse` with matcher `Read|Skill`. When a tool call reads `<dir>/.claude/skills/<name>/SKILL.md` (or the Skill tool runs `<name>`), it appends an `agent-step` event with `skill: <name>` to the running run whose worktree contains `<dir>` (else the hook's `cwd`); nothing else is recorded and other reads exit at once, before any git call. Claude Code passes `agent_id`/`agent_type` when the call comes from a sub-agent. The model comes from the sub-agent's `<session>/subagents/agent-<id>.meta.json` (`model`), else the last assistant message of its transcript (`agent-<id>.jsonl`); for the session itself, from the last assistant message of `transcript_path` (only the last 256 KB are read). The bead is taken from the sub-agent's first prompt like in the SubagentStop hook. The hook always exits 0 and prints nothing.
+
+Agents do not always re-read every step's skill, so `next-task-implement` also records its steps 2–5 with `agent-step --bead <id> --skill <name>`.
+
+`timeline.agents` (in `GET /api/runs/:id`) groups these events into one lane per agent: `key` (`main` for the orchestrator, the agent id, or `bead:<id>` for an implementer known only from Record lines), `role` (`orchestrator`, `implementer`, `reviewer` = a sub-agent whose first step is `next-task-review`, `agent`), `agentId`, `agentType`, `model` (else the bead's `child-start` model), `bead`, `start`, `end`, `durationMs`, `running`, `cost`, `steps` (`skill`, `start`, `end`, `durationMs`; a re-read of the current skill is not a new step) and `current` (the open last step while it runs). A sub-agent ends at its `agent` event and runs again on a later `agent-step` (resumed with SendMessage); a `bead:` lane ends at the bead's `child-end`; every open lane ends with the run. The orchestrator's current step is the last skill it read.
+
 ## SessionStart hook
 
-`hooks/session-start.mjs` is registered in `.claude/settings.json` by wavework. At session start it checks `GET /api/health` on the dashboard port (`PIPELINE_DASHBOARD_PORT`, else `config.json`, else 4690) (300 ms timeout):
+`hooks/session-start.mjs` is registered in `.claude/settings.json` by wavework. Every repository uses the same configured port, so at session start it checks `GET /api/health` on the dashboard port (`PIPELINE_DASHBOARD_PORT`, else `config.json`, else 4690) and the next 9 ports in parallel (300 ms timeout), and classifies each: this repository's server (health `store` is this repo's store; servers that do not report `store` are matched by the store of their `root` checkout), a stale dashboard (its `root` no longer exists), another repository's dashboard, free, or a foreign process.
 
-- Health answers `{"ok":true, "root":"<dir>"}` and `root` exists: prints nothing.
-- Health answers but its `root` (the checkout `server.mjs` runs from) no longer exists, e.g. a deleted worktree: stops that server via `<store>/server.pid` and starts a fresh one. The pid file is `{"pid","port","root"}`. The hook kills the recorded pid only when port and root match the answering server and `lsof` lists that pid as the single listener on the port while `ps` shows that record's own `<root>/server.mjs` (so another repo's dashboard is never touched) (a recorded pid alone is not proof, pids get reused). If the record does not match or either check cannot run, it prints one warning and kills nothing.
-- Nothing listens: starts `server.mjs` detached (`stdio` to `<store>/server.log`, pid file `<store>/server.pid`) and prints `{"systemMessage":"Pipeline dashboard: http://127.0.0.1:<port>"}` once it answers. The server runs from the main checkout's `.claude/wavework/dashboard/server.mjs` (main checkout = parent of `git rev-parse --path-format=absolute --git-common-dir`) when that exists, else from the copy the hook belongs to. So the long-lived server does not depend on a worktree that `/next-task-finish` later deletes.
-- Another process holds the port: prints one `systemMessage` warning and starts nothing.
+- This repository's server answers on one of them: prints `{"systemMessage":"Pipeline dashboard: http://127.0.0.1:<port>"}` (with a note when it is not the configured port) and starts nothing.
+- A stale dashboard (its `root`, the checkout `server.mjs` runs from, no longer exists, e.g. a deleted worktree) that this repository recorded: stops that server via `<store>/server.pid` and starts a fresh one on its port. A stale dashboard it did not record is left alone and its port skipped. The pid file is `{"pid","port","root"}`. The hook kills the recorded pid only when port and root match the answering server and `lsof` lists that pid as the single listener on the port while `ps` shows that record's own `<root>/server.mjs` (so another repo's dashboard is never touched) (a recorded pid alone is not proof, pids get reused). If the record does not match or either check cannot run, it prints one warning and kills nothing.
+- Otherwise, on the first free port: starts `server.mjs` detached (`stdio` to `<store>/server.log`, pid file `<store>/server.pid`) and prints `{"systemMessage":"Pipeline dashboard: http://127.0.0.1:<port>"}` once it answers. The server runs from the main checkout's `.claude/wavework/dashboard/server.mjs` (main checkout = parent of `git rev-parse --path-format=absolute --git-common-dir`) when that exists, else from the copy the hook belongs to. So the long-lived server does not depend on a worktree that `/next-task-finish` later deletes.
+- No candidate port is free or replaceable (other processes or other repositories' dashboards on all 10): prints one `systemMessage` warning and starts nothing.
 - Nothing answers within the start wait (2 s) after the spawn: prints `{"systemMessage":"Pipeline dashboard: could not start, see <store>/server.log"}`. The spawned pid is recorded at spawn, so a server that is still starting stays stoppable.
 
 `PIPELINE_DASHBOARD_START_WAIT_MS` overrides the start wait. It is a test-only knob (tests set it near zero to force the "gave up waiting" path); do not set it in normal use.
@@ -72,7 +81,7 @@ Timing: the hook always exits 0 and has a worst case of about 1.5 s on the stale
 
 `wavework dashboard` (or `node .claude/wavework/dashboard/server.mjs`) binds `127.0.0.1` only, port `PIPELINE_DASHBOARD_PORT`, else `config.json` (`dashboard.port`), else 4690, reads the store via `resolveStoreDir`. `createServer({storeDir, port, publicDir, tokensPath, project, ghRunner, ciRefreshMs, watch, pollMs})` is the factory used by tests (`port: 0`, stubbed `ghRunner`; `await server.listen()`, `server.port`, `await server.close()`).
 
-- `GET /api/health`: `{ok:true, root}`; `root` is the directory `server.mjs` runs from (the SessionStart hook uses it to spot a server whose checkout is gone).
+- `GET /api/health`: `{ok:true, root, store}`; `root` is the directory `server.mjs` runs from (the SessionStart hook uses it to spot a server whose checkout is gone), `store` the run store it serves (so a hook in another repository does not take it for its own).
 - `GET /api/runs`: run summaries (`run.json` fields + `totals`), newest `started` first; batch members (runs whose `parent` is another run) are nested in the batch's `children`.
 - `GET /api/runs/:id`: `{run, events, timeline, ci}`. `timeline` = `steps` (paired step-start/end with `durationMs`, `sha` on push), `children` (per bead: model, wave, result, `redBeforeGreen`, `durationMs`, `agents` summed from `agent` events by `bead`, else by the child's time window), `reviews`, `tests`, `totals` (tokens, `cost`, `agents`, `durationMs`; `cost` is null when there are no agents or any agent has no cost, never 0 or a partial sum), `sha`. Invalid id (not the run-id pattern, `../`, encoded `%2e%2e%2f`, `%2F`, NUL) is 400, unknown id 404.
 - A batch that is still `running` but whose members have all ended is reported as ended (`blocked` if any member is blocked/failed, else `done`, `ended` = latest member end) in both endpoints.
@@ -87,10 +96,11 @@ Timing: the hook always exits 0 and has a worst case of about 1.5 s on the stale
 
 Open `http://127.0.0.1:4690/` (your port) after starting the server. Plain HTML/CSS/JS in `public/` (no build): `index.html`, `default-theme.css` (neutral tokens, light and dark), `app.css` (design tokens only, `prefers-reduced-motion`; the project's `/tokens.css` loads after the default theme and may override any token), `app.js` (hash routing, SSE) and `format.mjs` (pure helpers).
 
-- `#/` lists all runs: running first, then newest; batch members are nested under their batch. It refreshes on every `run-changed` SSE event, no reload. The header shows `Live` or `Reconnecting`.
-- `#/runs/<id>` is a deep link to a run: header stats, step timeline, children (model, wave, duration, tokens, cost, result, review verdict and rounds, red-before-green), reviews, tests, findings filed and CI links.
+- Stages (`pipelineView` in `format.mjs`, pure): Plan (sub-step Deps), one stage per wave (with its beads), Finish (sub-steps Review, Push), CI; a batch has one stage per member run, plus queued units not started yet. Statuses as in GitHub Actions: `success`, `failure`, `in_progress`, `queued` (not reached, run still running), `skipped` (not reached, run ended), `cancelled`, `unknown`. A wave with a blocked bead fails; a blocked or failed run fails the stage it stopped in. Problems: failed tests, `FIX` reviews (a warning once a later round passed or while the run runs, else a failure), blocked/failed beads, `redBeforeGreen exception`, where a blocked run stopped, failed CI workflows; each is tied to a stage (bead events to the bead's wave, others by time window).
+- `#/` lists all runs: running first, then newest; batch members are nested under their batch. Each row has a status icon, the stage strip, what the agents are doing now (running runs), the time since the last event (marked quiet after 20 minutes), failure and warning counts, duration, cost and CI. It refreshes on every `run-changed` SSE event, no reload; a run that appears in the store shows up at once. The header shows `Live` or `Reconnecting`.
+- `#/runs/<id>` is a deep link to a run: stage sidebar, a "Now" banner while running, header stats, the pipeline graph (stage cards with sub-steps and beads), Agents (one expandable lane per agent: role and bead, model, the step it is in now with its live duration, total time, and its steps; clicking a bead id in the graph or the Beads table shows only that bead's agents), Annotations (problems), beads (model, wave, duration, tokens, cost, result, review verdict and rounds, red-before-green), reviews, tests, findings filed and CI links.
 - Costs are estimates (marked as such); an unknown cost is shown as `—`, never `$0.00`.
-- The list view fetches `/api/runs/:id` per run to get the CI state (the list endpoint has no `ci`).
+- The UI fetches `/api/runs/:id` per run (the list endpoint has no events or `ci`): all once, then only runs that changed, are running, or whose CI is pending (polled every 10 s).
 - Untrusted strings are rendered with `textContent`; CI links must be http(s).
 
 Tests live in the wavework package (`test/dashboard/`), not in the target repository.

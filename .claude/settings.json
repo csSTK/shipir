@@ -56,6 +56,16 @@
             "statusMessage": "Checking for database writes"
           }
         ]
+      },
+      {
+        "matcher": "Read|Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/wavework/dashboard/hooks/agent-step.mjs\"",
+            "timeout": 5
+          }
+        ]
       }
     ]
   },
