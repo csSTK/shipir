@@ -183,8 +183,18 @@ class SystemManagedGuard {
         }
     }
 
-    /** Prune candidates without the images of system-managed projects (unchanged for ADMIN). */
+    /**
+     * Prune candidates without the images of system-managed projects (unchanged for ADMIN). Rule (shipr-kqbc.80): when
+     * a proxy compose image reference of the host cannot be resolved, the protected set is unknown, so ALL images are
+     * excluded (empty list, same fail-closed decision as {@link #requireNotSystemManagedImage}) and a WARN naming only
+     * the host is logged. Containers, networks and volumes are not affected. Resolvable references exclude only their
+     * own images.
+     */
     List<PruneCandidateDto> withoutRestrictedImages(UUID hostId, List<PruneCandidateDto> candidates) {
+        if (!restrictedProjects(hostId).isEmpty() && hasUnresolvedProxyImage(hostId)) {
+            log.warn("Image prune on host {} excludes all images: a managed proxy compose image reference is unresolved", hostId);
+            return List.of();
+        }
         Set<String> used = restrictedImageRefs(hostId);
         if (used.isEmpty()) {
             return candidates;

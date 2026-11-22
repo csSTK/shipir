@@ -6,6 +6,7 @@ import dev.bethge.shipir.docker.client.ImageService;
 import dev.bethge.shipir.docker.client.NetworkService;
 import dev.bethge.shipir.docker.client.VolumeService;
 import dev.bethge.shipir.docker.dto.ImageDto;
+import dev.bethge.shipir.docker.dto.PruneCandidateDto;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,8 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
+import org.springframework.http.MediaType;
 
 import java.util.List;
 import java.util.UUID;
@@ -25,6 +28,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -63,6 +68,9 @@ class HostSystemManagedUnresolvedProxyImageTest extends HostApiTestBase {
                 new ImageDto(VAR_ID, List.of("my-traefik:9.9"), 10L, null, false),
                 new ImageDto(OLD_ID, List.of("old-traefik:1"), 10L, null, false),
                 new ImageDto(PLAIN_ID, List.of("nginx:1"), 10L, null, false)));
+        when(images.listPrunable(any(), any(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(List.of(
+                new PruneCandidateDto(VAR_ID, "my-traefik:9.9", 5L, null),
+                new PruneCandidateDto(PLAIN_ID, "nginx:1", 5L, null)));
     }
 
     @AfterEach
@@ -117,5 +125,36 @@ class HostSystemManagedUnresolvedProxyImageTest extends HostApiTestBase {
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FORBIDDEN"));
         mvc.perform(login("operator").write(delete("/api/hosts/{h}/images/{i}", hostId, PLAIN_ID)))
                 .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void operatorImagePruneExcludesAllImagesWhenAProxyImageIsUnresolved(CapturedOutput out) throws Exception {
+        storeCompose("services:\n  proxy:\n    image: reg.example/${SECRET_IMG_VAR}:1\n", "");
+        mvc.perform(get("/api/hosts/{h}/prune/preview", hostId).param("images", "UNUSED")
+                        .session(login("operator").session()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.images.count").value(0));
+        mvc.perform(login("operator").write(post("/api/hosts/{h}/prune", hostId))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"images\":\"UNUSED\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.images.removed").value(0));
+        verify(images, never()).removeImage(any(), any(), any());
+        assertTrue(out.getAll().contains(hostId.toString()));
+        assertFalse(out.getAll().contains("reg.example"));
+    }
+
+    @Test
+    void adminImagePruneIsUnaffectedByAnUnresolvedProxyImage() throws Exception {
+        storeCompose("services:\n  proxy:\n    image: ${SECRET_IMG_VAR}\n", "");
+        mvc.perform(login("admin").write(post("/api/hosts/{h}/prune", hostId))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"images\":\"UNUSED\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.images.removed").value(2));
+    }
+
+    @Test
+    void resolvableProxyImageExcludesOnlyThatImageFromOperatorPrune() throws Exception {
+        storeCompose("services:\n  proxy:\n    image: ${IMG}\n", "IMG=my-traefik:9.9\n");
+        mvc.perform(login("operator").write(post("/api/hosts/{h}/prune", hostId))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"images\":\"UNUSED\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.images.removed").value(1));
+        verify(images, never()).removeImage(any(), any(), org.mockito.ArgumentMatchers.eq(VAR_ID));
     }
 }
