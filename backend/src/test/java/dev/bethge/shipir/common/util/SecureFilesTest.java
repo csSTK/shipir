@@ -432,10 +432,42 @@ class SecureFilesTest {
 
     @Test
     void lastModifiedDoesNotFollowALink() throws IOException {
-        Files.createSymbolicLink(root.resolve("l"), outside.resolve("f.txt"));
+        Path link = Files.createSymbolicLink(root.resolve("l"), outside.resolve("f.txt"));
         Files.setLastModifiedTime(outside.resolve("f.txt"), java.nio.file.attribute.FileTime.fromMillis(1000));
+        Files.getFileAttributeView(link, java.nio.file.attribute.BasicFileAttributeView.class, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                .setTimes(java.nio.file.attribute.FileTime.fromMillis(5000), null, null);
         try (SecureFiles.Parent p = SecureFiles.openParent(root, "x", false, null)) {
-            assertThat(p.dir().lastModified("l").toMillis()).isNotEqualTo(1000);
+            assertThat(p.dir().lastModified("l").toMillis()).isEqualTo(5000);
         }
+    }
+
+    @Test
+    void deleteTreeRefusesBeyondTheDocumentedDepthAndLeavesTheRestAlone() throws IOException {
+        Path deep = root.resolve("deep");
+        StringBuilder rel = new StringBuilder();
+        for (int i = 0; i < SecureFiles.MAX_DELETE_DEPTH + 5; i++) {
+            rel.append("d/");
+        }
+        Files.createDirectories(deep.resolve(rel.toString()));
+        try (SecureFiles.Parent p = SecureFiles.openParent(root, "deep", false, null)) {
+            assertThatThrownBy(() -> p.dir().deleteTree("deep"))
+                    .isInstanceOf(SecureFiles.TreeTooDeepException.class)
+                    .hasMessageContaining(String.valueOf(SecureFiles.MAX_DELETE_DEPTH));
+        }
+        assertThat(deep).exists();
+    }
+
+    @Test
+    void deleteTreeStillDeletesATreeAtTheDepthLimit() throws IOException {
+        Path deep = root.resolve("ok");
+        StringBuilder rel = new StringBuilder();
+        for (int i = 0; i < SecureFiles.MAX_DELETE_DEPTH - 1; i++) {
+            rel.append("d/");
+        }
+        Files.createDirectories(deep.resolve(rel.toString()));
+        try (SecureFiles.Parent p = SecureFiles.openParent(root, "ok", false, null)) {
+            p.dir().deleteTree("ok");
+        }
+        assertThat(deep).doesNotExist();
     }
 }

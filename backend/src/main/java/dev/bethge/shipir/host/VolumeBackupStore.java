@@ -45,6 +45,8 @@ import java.util.regex.Pattern;
 @Component
 class VolumeBackupStore {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(VolumeBackupStore.class);
+
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
 
     private static final Pattern PARTIAL = Pattern.compile("\\.backup-.*\\.part");
@@ -91,8 +93,8 @@ class VolumeBackupStore {
         // the volume directory again with a fresh no-follow handle to see the archive just moved into place.
         try (SecureFiles.Parent fresh = SecureFiles.openParent(base, hostId + "/" + volume + "/" + targetName, false, seam)) {
             prune(fresh.dir(), volume, keep);
-        } catch (PathValidationException swapped) {
-            // the directory became a link after the archive was stored: retention is skipped (next run), never followed
+        } catch (PathValidationException | NoSuchFileException swapped) {
+            // the directory became a link or vanished after the archive was stored: retention is skipped (next run), never followed
         }
         return dir.resolve(targetName);
     }
@@ -115,6 +117,9 @@ class VolumeBackupStore {
                 try {
                     attrs = parent.dir().attributes(file);
                 } catch (NoSuchFileException gone) {
+                    continue;
+                } catch (IOException unreadable) {
+                    log.warn("Skipping stored backup {} of volume {}: attributes unreadable ({})", file, volume, unreadable.toString());
                     continue;
                 }
                 StoredVolumeBackup backup = attrs.isRegularFile() ? toBackup(file, attrs.size(), volume) : null;
@@ -223,6 +228,9 @@ class VolumeBackupStore {
         Path base = properties.dir().toAbsolutePath().normalize();
         FileTime cutoff = FileTime.from(clock.instant().minus(minAge));
         int deleted = 0;
+        if (!Files.isDirectory(base)) {
+            return 0;
+        }
         try (SecureFiles.Parent root = SecureFiles.openParent(base, "x", false, seam)) {
             for (String host : root.dir().list()) {
                 try (SecureFiles.Dir hostDir = openRealDirectory(root.dir(), host)) {

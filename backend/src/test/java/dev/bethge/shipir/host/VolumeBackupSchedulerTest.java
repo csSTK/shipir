@@ -55,6 +55,9 @@ class VolumeBackupSchedulerTest extends HostApiTestBase {
     @Autowired
     VolumeBackupScheduler scheduler;
 
+    @Autowired
+    VolumeBackupService service;
+
     private UUID hostId;
 
     @BeforeEach
@@ -179,5 +182,23 @@ class VolumeBackupSchedulerTest extends HostApiTestBase {
         UUID id = schedule("data", 6, 3, Instant.now().minusSeconds(60));
         jdbc.update("DELETE FROM docker_hosts WHERE id = ?", hostId);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM volume_backup_schedules WHERE id = ?", Integer.class, id)).isZero();
+    }
+
+    @Test
+    void storeFailureFromASymlinkedHostDirectoryMapsToBackupStoreFailed() throws Exception {
+        Path outside = Files.createTempDirectory("shipir-outside");
+        Files.deleteIfExists(DIR.resolve(hostId.toString()));
+        Files.createSymbolicLink(DIR.resolve(hostId.toString()), outside);
+        try {
+            when(archives.backup(any(), any(), eq("data"), any(), anyLong())).thenReturn(new ByteArrayInputStream("x".getBytes()));
+
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.storeScheduledBackup(hostId, "data", 3))
+                    .isInstanceOfSatisfying(HostException.class, e -> assertThat(e.code()).isEqualTo("BACKUP_STORE_FAILED"));
+            try (Stream<Path> s = Files.list(outside)) {
+                assertThat(s.count()).isZero();
+            }
+        } finally {
+            Files.deleteIfExists(DIR.resolve(hostId.toString()));
+        }
     }
 }

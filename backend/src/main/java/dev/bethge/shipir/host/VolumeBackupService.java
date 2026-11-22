@@ -1,5 +1,6 @@
 package dev.bethge.shipir.host;
 
+import dev.bethge.shipir.common.util.PathValidationException;
 import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.common.security.EncryptionKeyMissingException;
 import dev.bethge.shipir.common.security.SecretDecryptionException;
@@ -114,7 +115,7 @@ public class VolumeBackupService {
         try (InputStream content = call(hostId, (id, endpoint) ->
                 archives.backup(id, endpoint, volume, properties.helperImage(), max))) {
             store.write(hostId, volume, content, clock.instant(), keep);
-        } catch (IOException e) {
+        } catch (IOException | PathValidationException e) {
             throw new HostException(HttpStatus.INTERNAL_SERVER_ERROR, "BACKUP_STORE_FAILED", "The backup could not be stored");
         }
     }

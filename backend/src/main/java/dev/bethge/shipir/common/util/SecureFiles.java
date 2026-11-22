@@ -51,7 +51,17 @@ public final class SecureFiles {
     /** Test observation only: the channel most recently handed over by a deadline open. */
     static volatile SeekableByteChannel lastDeliveredChannel;
 
+    /** Deepest directory nesting {@link Dir#deleteTree} descends into (each level holds a file descriptor); deeper is refused. */
+    public static final int MAX_DELETE_DEPTH = 64;
+
     private SecureFiles() {
+    }
+
+    /** A tree handed to {@link Dir#deleteTree} is nested deeper than {@link #MAX_DELETE_DEPTH}; nothing below the limit is guaranteed deleted. */
+    public static final class TreeTooDeepException extends IOException {
+        TreeTooDeepException(String name) {
+            super(name + " is nested deeper than " + MAX_DELETE_DEPTH + " directories");
+        }
     }
 
     /** True when the default file system offers {@link SecureDirectoryStream} (Linux, macOS); false e.g. on Windows. */
@@ -414,12 +424,16 @@ public final class SecureFiles {
         }
 
         /**
-         * Removes the entry {@code name} below this handle: a directory with everything in it, anything else (a symlink
+         * Removes the entry {@code name} below this handle: a directory with everything in it (at most {@link #MAX_DELETE_DEPTH} levels deep, else {@link TreeTooDeepException}), anything else (a symlink
          * included) as a single unlink. Every directory is opened relative to its held parent with NOFOLLOW, so a link
          * swapped in for a directory is refused ({@link PathValidationException}), never followed. A missing entry is a
          * no-op.
          */
         public void deleteTree(String name) throws IOException {
+            deleteTree(name, 1);
+        }
+
+        private void deleteTree(String name, int depth) throws IOException {
             validateSegment(name);
             BasicFileAttributes attrs;
             try {
@@ -431,9 +445,12 @@ public final class SecureFiles {
                 deleteFileIfExists(name);
                 return;
             }
+            if (depth > MAX_DELETE_DEPTH) {
+                throw new TreeTooDeepException(name);
+            }
             try (Dir sub = openSubdirectory(name)) {
                 for (String child : sub.list()) {
-                    sub.deleteTree(child);
+                    sub.deleteTree(child, depth + 1);
                 }
             }
             try {
