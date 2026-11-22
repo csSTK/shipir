@@ -178,8 +178,8 @@ final class ArchitectureRules {
                     + "reads and writes through SecureFiles"),
             Map.entry("compose.file.ComposeGraphHasher", "fingerprints a deployment dir without following links; "
                     + "rejects links leaving the dir"),
-            Map.entry("compose.validation.ComposeFilePolicy", "reads compose and include files after resolving them "
-                    + "to real paths inside the deployment dir"),
+            Map.entry("compose.validation.ComposeFilePolicy", "resolves include paths to real paths inside the deployment "
+                    + "dir (Path arithmetic); reads through SecureFiles (no-follow) after PathValidationUtil"),
             Map.entry("config_editor.ConfigFileService", "user-facing editor: PathValidationUtil, symlink rejection "
                     + "and SecureFiles for every read and write"),
             Map.entry("git.CloneGuard", "measures and deletes a clone dir the service created itself, never following "

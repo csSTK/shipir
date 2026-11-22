@@ -216,4 +216,64 @@ class ComposeFilePolicyTest {
         assertThat(ComposeSecurityPolicy.violationsOf(
                 tools.jackson.databind.json.JsonMapper.builder().build().readTree(ok), dir)).isEmpty();
     }
+
+    @Test
+    void rejectsComposeFileThatIsASymlinkLeavingTheDirectory() throws IOException {
+        Path outside = root.resolve("hostA/other/compose.yaml");
+        Files.writeString(outside, "services:\n  x:\n    image: a\n    env_file: ../other/.env\n");
+        Files.createSymbolicLink(dir.resolve("linked.yaml"), outside);
+        assertThat(ComposeFilePolicy.violations(dir.resolve("linked.yaml"), dir, true)).isNotEmpty();
+        // the content outside must not be read at all, so its own violations are not what is reported
+        assertThat(ComposeFilePolicy.violations(dir.resolve("linked.yaml"), dir, true))
+                .noneMatch(v -> v.contains("env_file"));
+    }
+
+    @Test
+    void rejectsIncludeThatIsASymlinkToAFileOutsideTheDirectory() throws IOException {
+        Path outside = root.resolve("hostA/other/compose.yaml");
+        Files.writeString(outside, "services: {}\n");
+        Files.createSymbolicLink(dir.resolve("inc.yaml"), outside);
+        assertThat(check("include:\n  - inc.yaml\nservices: {}\n")).singleElement()
+                .satisfies(v -> assertThat(v).contains("outside the deployment directory"));
+        Files.createSymbolicLink(dir.resolve("base.yaml"), outside);
+        assertThat(check("services:\n  x:\n    extends:\n      file: base.yaml\n      service: y\n")).singleElement()
+                .satisfies(v -> assertThat(v).contains("outside the deployment directory"));
+    }
+
+    @Test
+    void followsAnIncludeThroughASymlinkThatStaysInsideTheDirectory() throws IOException {
+        Files.writeString(dir.resolve("real.yaml"), "services:\n  y:\n    image: a\n    env_file: /etc/passwd\n");
+        Files.createSymbolicLink(dir.resolve("inc.yaml"), dir.resolve("real.yaml"));
+        assertThat(check("include:\n  - inc.yaml\nservices: {}\n")).isNotEmpty();
+    }
+
+    @Test
+    void reportsAnOversizedIncludeEvenWhenNotFailClosed() throws IOException {
+        Files.writeString(dir.resolve("big.yaml"), "# " + "x".repeat(1024 * 1024 + 10) + "\nservices: {}\n");
+        Files.writeString(compose, "include:\n  - big.yaml\nservices: {}\n");
+        assertThat(ComposeFilePolicy.violations(compose, dir, false)).anyMatch(v -> v.contains("cannot be analysed"));
+    }
+
+    @Test
+    void reportsAnIncludeWithPercentEncodingInItsNameEvenWhenNotFailClosed() throws IOException {
+        Files.writeString(dir.resolve("a%41.yaml"), "services:\n  y:\n    image: a\n    env_file: /etc/passwd\n");
+        Files.writeString(compose, "include:\n  - a%41.yaml\nservices: {}\n");
+        assertThat(ComposeFilePolicy.violations(compose, dir, false)).anyMatch(v -> v.contains("cannot be analysed"));
+    }
+
+    @Test
+    void reportsAnEntryComposeFileOutsideTheDirectoryEvenWhenNotFailClosed() throws IOException {
+        Path outside = root.resolve("hostA/other/compose.yaml");
+        Files.writeString(outside, "services: {}\n");
+        Files.createSymbolicLink(dir.resolve("linked.yaml"), outside);
+        assertThat(ComposeFilePolicy.violations(dir.resolve("linked.yaml"), dir, false))
+                .anyMatch(v -> v.contains("outside the deployment directory"));
+    }
+
+    @Test
+    void reportsADirectoryUsedAsIncludeEvenWhenNotFailClosed() throws IOException {
+        Files.createDirectories(dir.resolve("inc.d"));
+        Files.writeString(compose, "include:\n  - inc.d\nservices: {}\n");
+        assertThat(ComposeFilePolicy.violations(compose, dir, false)).anyMatch(v -> v.contains("cannot be analysed"));
+    }
 }

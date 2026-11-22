@@ -1,5 +1,9 @@
 package dev.bethge.shipir.compose.validation;
 
+import dev.bethge.shipir.common.util.PathValidationException;
+import dev.bethge.shipir.common.util.PathValidationUtil;
+import dev.bethge.shipir.common.util.SecureFiles;
+import dev.bethge.shipir.compose.file.ComposeFileRepository;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.dataformat.yaml.YAMLMapper;
 
@@ -13,7 +17,9 @@ import org.snakeyaml.engine.v2.events.ScalarEvent;
 import org.snakeyaml.engine.v2.events.SequenceEndEvent;
 import org.snakeyaml.engine.v2.events.SequenceStartEvent;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.nio.file.Files;
@@ -100,9 +106,14 @@ final class ComposeFilePolicy {
             violations.add("include nesting too deep");
             return;
         }
+        if (!real.startsWith(allowed) || real.equals(allowed)) {
+            // only the entry compose file can get here (checked references are inside already): never read it
+            violations.add("compose file " + display(file) + " is outside the deployment directory");
+            return;
+        }
         JsonNode root;
         try {
-            String text = Files.readString(file);
+            String text = read(real);
             java.util.Optional<List<String>> aliases = aliasViolations(text);
             aliases.ifPresent(list -> list.forEach(a -> violations.add(display(file) + ": " + a)));
             root = YAML.readTree(text);
@@ -110,6 +121,10 @@ final class ComposeFilePolicy {
                 // the event pass failed although Jackson parsed the file: never pass what could not be checked
                 violations.add(display(file) + ": YAML could not be checked for aliases");
             }
+        } catch (Refused e) {
+            // never accepted unscanned, whatever failClosed says: the file exists but the policy may not read it
+            violations.add("compose file " + display(file) + " cannot be analysed");
+            return;
         } catch (IOException | RuntimeException e) {
             if (failClosed && Files.exists(file)) {
                 violations.add("compose file " + display(file) + " cannot be analysed");
@@ -117,6 +132,34 @@ final class ComposeFilePolicy {
             return;
         }
         walk(root, file.getParent(), file, depth, true);
+    }
+
+    /**
+     * Reads {@code real} (a symlink-resolved path inside {@link #allowed}) through {@link SecureFiles}: containment is
+     * validated by {@link PathValidationUtil}, and the parents and the leaf are opened without following links, so a
+     * link swapped in after the resolution is refused instead of followed.
+     */
+    private String read(Path real) throws IOException {
+        String rel = allowed.relativize(real).toString().replace(File.separatorChar, '/');
+        try {
+            PathValidationUtil.resolve(allowed, rel);
+            try (SecureFiles.Parent parent = SecureFiles.openParent(allowed, rel, false, null)) {
+                byte[] bytes = parent.dir().readAll(parent.name(), ComposeFileRepository.MAX_FILE_BYTES);
+                if (bytes.length > ComposeFileRepository.MAX_FILE_BYTES) {
+                    throw new Refused(null);
+                }
+                return new String(bytes, StandardCharsets.UTF_8);
+            }
+        } catch (PathValidationException | SecureFiles.NotRegularFileException e) {
+            throw new Refused(e);
+        }
+    }
+
+    /** The read was refused (path rejected, link met, over the size cap): not a missing file, so never skipped silently. */
+    private static final class Refused extends IOException {
+        Refused(Throwable cause) {
+            super("read refused", cause);
+        }
     }
 
     private static final Set<String> PATH_KEYS = Set.of("env_file", "label_file", "include", "extends", "secrets",
@@ -271,7 +314,7 @@ final class ComposeFilePolicy {
     }
 
     private void follow(Path included, Path from, int depth) {
-        if (included != null && Files.isRegularFile(included)) {
+        if (included != null && Files.exists(included)) { // a non-regular file is reported by scan's read, not skipped
             scan(included, depth + 1);
         }
     }
@@ -292,7 +335,14 @@ final class ComposeFilePolicy {
         return paths;
     }
 
-    /** Records a violation unless the path stays in the allowed directory; returns the resolved path when it does. */
+    /**
+     * Containment is decided here on {@link ComposeSecurityPolicy#real} rather than {@link PathValidationUtil}: the
+     * resolution must follow {@code ..} after a symlink the way the OS does and accept a {@code ..} that lands inside the
+     * directory, which {@link PathValidationUtil} rejects outright. The read itself ({@link #read}) goes through
+     * PathValidationUtil and SecureFiles.
+     *
+     * <p>Records a violation unless the path stays in the allowed directory; returns the resolved path when it does.
+     */
     private Path check(String raw, Path baseDir, String what) {
         if (raw.isBlank()) {
             return null;
