@@ -3,6 +3,8 @@
 A web platform for managing Docker containers and Compose stacks. Think of it as a simplified Portainer, built so non-experts can use it: forms instead of mandatory YAML, with a raw editor for those who want one.
 
 > **Status:** in active development. The features listed below are implemented; the latest tagged release is `v0.1.0`.
+>
+> **Not production-hardened:** this is a learning and portfolio project without an external security audit. Run it only on hosts and networks you control. Known security findings and how to report new ones: [SECURITY.md](SECURITY.md). Licensed under [MIT](LICENSE).
 
 ## Screenshots
 

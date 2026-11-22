@@ -3,6 +3,7 @@
 Repo root: README, docker compose files, scripts/, config and top-level docs.
 
 - README.md, HANDOFF.md, BACKLOG.md: project overview and demo; remaining planning context and open decisions; Portainer features not yet planned as beads
+- LICENSE, SECURITY.md: MIT license; security status (not production-hardened), where known findings live, private vulnerability reporting
 - CLAUDE.md, AGENTS.md: agent instructions (project rules, beads workflow)
 - docs/code-map/: folder code map: `index.md` with rules and path prefix table, one file per module, checked by `.claude/scripts/code-map-check.mjs`
 - docs/sous-handoff.md: Sous Factory trial versus `/next-task*`: setup, runs, comparison, decision
