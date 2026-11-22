@@ -8,7 +8,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.security.SecureRandom;
 import java.time.Clock;
@@ -41,11 +43,13 @@ class UserAdminService {
     private final Clock clock;
     private final TotpService totp;
     private final dev.bethge.shipir.auth.token.ApiTokenService apiTokens;
+    private final TransactionTemplate tx;
     private final SecureRandom random = new SecureRandom();
 
     UserAdminService(UserRepository users, PasswordEncoder encoder, SessionInvalidator sessions, Clock clock,
                      TotpService totp, LastAdminGuard lastAdmin,
-                     dev.bethge.shipir.auth.token.ApiTokenService apiTokens) {
+                     dev.bethge.shipir.auth.token.ApiTokenService apiTokens, PlatformTransactionManager txManager) {
+        this.tx = new TransactionTemplate(txManager);
         this.apiTokens = apiTokens;
         this.lastAdmin = lastAdmin;
         this.totp = totp;
@@ -158,10 +162,22 @@ class UserAdminService {
 
     /**
      * Not transactional on purpose: a foreign-key violation (user owns records) must not leave a broken
-     * persistence context behind for the audit aspect, which looks the acting user up afterwards.
+     * persistence context behind for the audit aspect, which looks the acting user up afterwards. The last-ADMIN
+     * check and the delete run in their own short transaction so the guard's row lock covers both.
      */
     @Auditable(action = "USER_DELETE", targetType = "USER", targetId = "#id")
     void delete(UUID id, String actor) {
+        User user;
+        try {
+            user = tx.execute(status -> deleteInTransaction(id, actor));
+        } catch (DataIntegrityViolationException e) {
+            throw new UserAdminException(HttpStatus.CONFLICT, "USER_HAS_HISTORY",
+                    "This user owns environments, deployments or other records; disable the account instead");
+        }
+        sessions.expireSessionsOf(user.getUsername());
+    }
+
+    private User deleteInTransaction(UUID id, String actor) {
         User user = find(id);
         if (isSelf(user, actor)) {
             throw new UserAdminException(HttpStatus.BAD_REQUEST, "SELF_DELETE", "You cannot delete your own account");
@@ -169,13 +185,9 @@ class UserAdminService {
         if (user.getRole() == Role.ADMIN && !user.isDisabled()) {
             requireOtherActiveAdmin(user);
         }
-        try {
-            users.delete(user);
-        } catch (DataIntegrityViolationException e) {
-            throw new UserAdminException(HttpStatus.CONFLICT, "USER_HAS_HISTORY",
-                    "This user owns environments, deployments or other records; disable the account instead");
-        }
-        sessions.expireSessionsOf(user.getUsername());
+        users.delete(user);
+        users.flush();
+        return user;
     }
 
     private User find(UUID id) {

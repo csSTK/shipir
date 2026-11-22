@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,5 +25,12 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByExternalIssuerAndExternalSubject(String externalIssuer, String externalSubject);
 
-    long countByRoleAndDisabledAtIsNullAndIdNot(Role role, UUID id);
+    /**
+     * Row-locks every enabled ADMIN (ordered by id, so two lockers never deadlock). The last-ADMIN check runs on
+     * this result: Postgres re-evaluates the predicate after a wait, so an ADMIN removed by a concurrent
+     * transaction that committed meanwhile is no longer returned.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u.id from User u where u.role = dev.bethge.shipir.auth.Role.ADMIN and u.disabledAt is null order by u.id")
+    List<UUID> lockEnabledAdminIds();
 }
