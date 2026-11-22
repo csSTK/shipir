@@ -3,6 +3,7 @@ package dev.bethge.shipir.compose;
 import dev.bethge.shipir.audit.Auditable;
 import dev.bethge.shipir.common.util.PathValidationException;
 import dev.bethge.shipir.common.util.PathValidationUtil;
+import dev.bethge.shipir.common.util.SecureFiles;
 import dev.bethge.shipir.compose.dto.AdoptRequest;
 import dev.bethge.shipir.compose.dto.DeploymentDetailResponse;
 import dev.bethge.shipir.compose.dto.EnvEntry;
@@ -19,9 +20,10 @@ import dev.bethge.shipir.permission.CurrentAccess;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +33,7 @@ import java.util.UUID;
  * Brings a live Compose project that Shipir did not start under management. The project name is kept, so the containers
  * stay untouched and the next deploy reconciles them. The compose file is either pasted by the caller or, on a LOCAL host
  * only, read from the path in the containers' {@code config_files} label, and only when that path lies inside one of
- * {@code shipir.compose.adopt-allowed-dirs} (default none). Every read goes through {@link PathValidationUtil}.
+ * {@code shipir.compose.adopt-allowed-dirs} (default none). Every read is validated by {@link PathValidationUtil} and then done through {@link SecureFiles} (no-follow).
  * A file with relative bind mounts, env_file or build contexts is refused (422), see {@link RelativePathDetector}.
  */
 @Service
@@ -130,16 +132,18 @@ public class AdoptionService {
         if (configFiles.contains(",")) {
             throw yamlRequired("The project uses several compose files; paste the merged file");
         }
-        Path file = readable(configFiles.trim());
-        String yaml = readText(file);
+        Target file = guard(configFiles.trim());
+        String yaml = readText(file, true);
         List<EnvEntry> env = null;
         String workingDir = labels.get(WORKING_DIR_LABEL);
-        Path envFile = (workingDir == null || workingDir.isBlank()) ? file.resolveSibling(".env")
+        Path envFile = (workingDir == null || workingDir.isBlank())
+                ? Path.of(configFiles.trim()).resolveSibling(".env")
                 : Path.of(workingDir.trim()).resolve(".env");
         try {
-            Path guarded = guard(envFile.toString());
-            if (Files.isRegularFile(guarded)) {
-                env = EnvFile.parse(readText(guarded));
+            Target guarded = guard(envFile.toString());
+            String envText = readText(guarded, false);
+            if (envText != null) {
+                env = EnvFile.parse(envText);
             }
         } catch (DeploymentException e) {
             // an unreadable or disallowed .env is simply not adopted; the caller can paste env values
@@ -147,16 +151,8 @@ public class AdoptionService {
         return new Source(yaml, env);
     }
 
-    private Path readable(String label) {
-        Path file = guard(label);
-        if (!Files.isRegularFile(file)) {
-            throw yamlRequired("The recorded compose file is not available on this host; paste it");
-        }
-        return file;
-    }
-
     /** Resolves an absolute path from a label against the allow-list; anything outside, or an escape via symlink, is refused. */
-    private Path guard(String raw) {
+    private Target guard(String raw) {
         Path path;
         try {
             path = Path.of(raw);
@@ -171,8 +167,10 @@ public class AdoptionService {
             Path base = allowed.toAbsolutePath().normalize();
             if (normalized.startsWith(base) && !normalized.equals(base)) {
                 try {
-                    return PathValidationUtil.resolve(base, base.relativize(normalized).toString());
-                } catch (PathValidationException e) {
+                    String rel = base.relativize(normalized).toString().replace(File.separatorChar, '/');
+                    PathValidationUtil.resolve(base, rel);
+                    return new Target(base.toRealPath(), rel);
+                } catch (PathValidationException | IOException e) {
                     throw notAllowed();
                 }
             }
@@ -180,12 +178,34 @@ public class AdoptionService {
         throw notAllowed();
     }
 
-    private static String readText(Path file) {
-        try {
-            if (Files.size(file) > MAX_FILE_BYTES) {
+    /** A path already checked against the allow-list: the allowed base and the slash-separated rest below it. */
+    private record Target(Path base, String rel) { }
+
+    /**
+     * Reads the file through {@link SecureFiles}: the parent directories are walked and the leaf opened without following
+     * links, so a symlink swapped in after {@link #guard} is refused instead of followed. When {@code required} is false a
+     * missing or non-regular file yields null.
+     */
+    private static String readText(Target target, boolean required) {
+        try (SecureFiles.Parent parent = SecureFiles.openParent(target.base(), target.rel(), false, null)) {
+            if (!parent.dir().isRegularFile(parent.name())) {
+                if (required) {
+                    throw yamlRequired("The recorded compose file is not available on this host; paste it");
+                }
+                return null;
+            }
+            byte[] bytes = parent.dir().readAll(parent.name(), MAX_FILE_BYTES);
+            if (bytes.length > MAX_FILE_BYTES) {
                 throw yamlRequired("The compose file is too large to adopt; paste it");
             }
-            return Files.readString(file, StandardCharsets.UTF_8);
+            return new String(bytes, StandardCharsets.UTF_8);
+        } catch (PathValidationException e) {
+            throw notAllowed();
+        } catch (NoSuchFileException e) {
+            if (required) {
+                throw yamlRequired("The recorded compose file is not available on this host; paste it");
+            }
+            return null;
         } catch (IOException e) {
             throw yamlRequired("The recorded compose file could not be read; paste it");
         }

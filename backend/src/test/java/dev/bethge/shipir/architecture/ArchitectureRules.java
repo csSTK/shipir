@@ -166,8 +166,8 @@ final class ArchitectureRules {
     static final Map<String, String> RAW_FILE_IO_ALLOWLIST = Map.ofEntries(
             Map.entry("backup.BackupService", "export spools DB tables to a private temp file and tars the stacks dir "
                     + "walking without following links; no user-supplied path"),
-            Map.entry("compose.AdoptionService", "reads compose files of foreign projects only after PathValidationUtil "
-                    + "against the admin-configured adopt-allowed-dirs"),
+            Map.entry("compose.AdoptionService", "validates label paths with PathValidationUtil against the admin-configured "
+                    + "adopt-allowed-dirs, then reads through SecureFiles (no-follow); only Path arithmetic remains"),
             Map.entry("compose.DeploymentRunService", "lists the names in a deployment dir from ComposeFileRepository "
                     + "to see whether only Shipir-written files exist; no content is read"),
             Map.entry("compose.execution.CliPluginDirs", "reads the docker CLI config.json of the Shipir process "

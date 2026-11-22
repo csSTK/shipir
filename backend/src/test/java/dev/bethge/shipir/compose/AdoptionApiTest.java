@@ -42,9 +42,22 @@ class AdoptionApiTest extends DeploymentTestBase {
         }
     }
 
+    /** A second allowed dir that is itself a symlink (e.g. /srv -> /data): only the path below it is walked no-follow. */
+    static final Path SYMLINKED_REAL = createAllowedDir();
+    static final Path SYMLINKED_BASE = SYMLINKED_REAL.resolveSibling(SYMLINKED_REAL.getFileName() + "-link");
+
+    static {
+        try {
+            Files.createSymbolicLink(SYMLINKED_BASE, SYMLINKED_REAL);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     @DynamicPropertySource
     static void allowList(DynamicPropertyRegistry registry) {
         registry.add("shipir.compose.adopt-allowed-dirs[0]", ALLOWED::toString);
+        registry.add("shipir.compose.adopt-allowed-dirs[1]", SYMLINKED_BASE::toString);
     }
 
     @MockitoBean
@@ -172,6 +185,86 @@ class AdoptionApiTest extends DeploymentTestBase {
         mvc.perform(login("admin").write(post(url("evil"))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PATH_NOT_ALLOWED"));
+    }
+
+    @Test
+    void symlinkedComposeFileLeafIsNotFollowed() throws Exception {
+        Path outside = Files.createTempDirectory("shipir-adopt-outside-");
+        Files.writeString(outside.resolve("real.yaml"), YAML);
+        Path dir = Files.createDirectory(ALLOWED.resolve("leaf1"));
+        Files.createSymbolicLink(dir.resolve("compose.yaml"), outside.resolve("real.yaml"));
+        project("leaf1", dir.resolve("compose.yaml").toString(), dir.toString());
+
+        mvc.perform(login("admin").write(post(url("leaf1"))))
+                .andExpect(status().is4xxClientError())
+                .andExpect(jsonPath("$.code").value("PATH_NOT_ALLOWED"));
+        assertThat(adoptionRows()).isZero();
+    }
+
+    @Test
+    void symlinkedEnvFileIsNotAdopted() throws Exception {
+        Path outside = Files.createTempDirectory("shipir-adopt-outside-");
+        Files.writeString(outside.resolve("secret.env"), "STOLEN=1\n");
+        Path dir = Files.createDirectory(ALLOWED.resolve("envlink"));
+        Files.writeString(dir.resolve("compose.yaml"), YAML);
+        Files.createSymbolicLink(dir.resolve(".env"), outside.resolve("secret.env"));
+        project("envlink", dir.resolve("compose.yaml").toString(), dir.toString());
+
+        mvc.perform(login("admin").write(post(url("envlink"))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.envKeys").isEmpty());
+    }
+
+    @Test
+    void composeFileSymlinkedToSiblingInsideAllowListIsNotFollowed() throws Exception {
+        Path dir = Files.createDirectory(ALLOWED.resolve("sib1"));
+        Files.writeString(dir.resolve("real.yaml"), YAML);
+        Files.createSymbolicLink(dir.resolve("compose.yaml"), dir.resolve("real.yaml"));
+        project("sib1", dir.resolve("compose.yaml").toString(), dir.toString());
+
+        mvc.perform(login("admin").write(post(url("sib1"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("YAML_REQUIRED"));
+        assertThat(adoptionRows()).isZero();
+    }
+
+    @Test
+    void intermediateDirectorySymlinkInsideAllowListIsNotFollowed() throws Exception {
+        Path real = Files.createDirectory(ALLOWED.resolve("realdir"));
+        Files.writeString(real.resolve("compose.yaml"), YAML);
+        Path link = ALLOWED.resolve("dirlink");
+        Files.createSymbolicLink(link, real);
+        project("dirlink", link.resolve("compose.yaml").toString(), link.toString());
+
+        mvc.perform(login("admin").write(post(url("dirlink"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PATH_NOT_ALLOWED"));
+        assertThat(adoptionRows()).isZero();
+    }
+
+    @Test
+    void envFileSymlinkedInsideAllowListIsNotAdopted() throws Exception {
+        Path dir = Files.createDirectory(ALLOWED.resolve("envin"));
+        Files.writeString(dir.resolve("compose.yaml"), YAML);
+        Files.writeString(dir.resolve("real.env"), "TOKEN=abc\n");
+        Files.createSymbolicLink(dir.resolve(".env"), dir.resolve("real.env"));
+        project("envin", dir.resolve("compose.yaml").toString(), dir.toString());
+
+        mvc.perform(login("admin").write(post(url("envin"))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.envKeys").isEmpty());
+    }
+
+    @Test
+    void adoptsFromAllowedDirConfiguredViaSymlink() throws Exception {
+        Path dir = Files.createDirectory(SYMLINKED_REAL.resolve("viabase"));
+        Files.writeString(dir.resolve("compose.yaml"), YAML);
+        Path viaLink = SYMLINKED_BASE.resolve("viabase");
+        project("viabase", viaLink.resolve("compose.yaml").toString(), viaLink.toString());
+
+        mvc.perform(login("admin").write(post(url("viabase"))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.yaml").value(YAML));
     }
 
     @Test
