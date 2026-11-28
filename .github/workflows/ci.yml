@@ -34,6 +34,9 @@ jobs:
   # Decides what the test run has to cover, then runs the small checks (script tests, code map) on the same runner:
   # each as its own job cost a billed minute for a few seconds of work.
   changes:
+    # Skip the push run of a merged pull request (merge or squash commit made by GitHub, committer `web-flow`):
+    # the pull request already ran these checks. Direct pushes still run. Quoted: an unquoted ` #` starts a YAML comment.
+    if: "${{ github.event_name != 'push' || github.event.head_commit.committer.username != 'web-flow' || (!startsWith(github.event.head_commit.message, 'Merge pull request #') && !contains(github.event.head_commit.message, '(#')) }}"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
