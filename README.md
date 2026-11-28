@@ -366,7 +366,7 @@ pnpm e2e
 # Run the e2e tests in Playwright's UI mode
 pnpm e2e:ui
 
-# Screenshot regression tests (needs Docker): pixel-compare the main pages with the committed baselines in
+# Screenshot regression tests (needs Docker, except in the Taskpod sandbox): pixel-compare the main pages with the committed baselines in
 # e2e/visual-baselines/. Runs inside the official Playwright image (tag taken from pnpm-lock.yaml) so macOS and CI render
 # identically. Per page and viewport (375 and 1440 px) it captures the viewport as a user sees it (`<page>-<width>-<scheme>.png`,
 # shell included), plus `<page>-<width>-<scheme>-content.png`, the full-height main region, when the page scrolls. Not part of `pnpm e2e`.

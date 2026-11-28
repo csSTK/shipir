@@ -10,6 +10,15 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+
+# The Taskpod sandbox (sets TASKPOD_TASK_ID) has no Docker, but the same Ubuntu 24.04 libraries and fonts as the
+# Playwright image: run directly there, with the browser of the installed version.
+if [ -n "${TASKPOD_TASK_ID:-}" ] && ! command -v docker >/dev/null 2>&1; then
+  pnpm exec playwright install chromium
+  export CI=1 E2E_PORT=4173
+  exec pnpm exec playwright test -c playwright.visual.config.ts "$@"
+fi
+
 frontend=$PWD
 repo=$(dirname "$frontend")
 
